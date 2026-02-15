@@ -1,0 +1,147 @@
+@font-face {
+  font-family: 'Poppins';
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url('/fonts/Poppins-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  src: url('/fonts/Poppins-Medium.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+  src: url('/fonts/Poppins-SemiBold.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url('/fonts/Poppins-Bold.ttf') format('truetype');
+}
+
+:root {
+  --bg: #000000;
+  --text: #FFFFFF;
+  --text-50: rgba(255, 255, 255, 0.5);
+  --text-40: rgba(255, 255, 255, 0.4);
+  --text-30: rgba(255, 255, 255, 0.3);
+  --text-20: rgba(255, 255, 255, 0.2);
+  --card-bg: rgba(255, 255, 255, 0.06);
+  --card-border: rgba(255, 255, 255, 0.1);
+  --icon-bg: rgba(255, 255, 255, 0.08);
+  --green: #359033;
+  --gold: #DAA520;
+  --max-width: 720px;
+  --padding: 32px;
+  --radius-card: 16px;
+  --radius-sm: 10px;
+  --radius-btn: 40px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Poppins', -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+button {
+  font-family: inherit;
+  border: none;
+  cursor: pointer;
+}
+
+.container {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 var(--padding);
+}
+
+.cta-button {
+  display: block;
+  width: 100%;
+  padding: 16px 0;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 15px;
+  font-weight: 500;
+  text-align: center;
+  border-radius: var(--radius-btn);
+  transition: opacity 0.2s;
+  letter-spacing: -0.2px;
+}
+
+.cta-button:hover {
+  opacity: 0.9;
+}
+
+.section-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-30);
+  margin-bottom: 20px;
+}
+
+.section-gap {
+  padding: 56px 0;
+}
+
+/* ── Animations ── */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Desktop ── */
+@media (min-width: 768px) {
+  .cta-button {
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .section-gap {
+    padding: 72px 0;
+  }
+}
+
+@media (min-width: 1024px) {
+  .section-gap {
+    padding: 88px 0;
+  }
+}
