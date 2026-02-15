@@ -35,17 +35,17 @@ export default function Home() {
                 <Image
                   src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/white/en-us?size=250x83"
                   alt="Download on the App Store"
-                  width={120}
-                  height={40}
+                  width={145}
+                  height={48}
                   unoptimized
                 />
               </a>
               <a href={ANDROID_LINK} className={styles.storeBadge}>
                 <Image
-                  src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png"
+                  src="https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg"
                   alt="Get it on Google Play"
-                  width={135}
-                  height={40}
+                  width={145}
+                  height={48}
                   unoptimized
                 />
               </a>

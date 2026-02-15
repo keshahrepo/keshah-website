@@ -1,0 +1,156 @@
+.page {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--text-30);
+  line-height: 1.5;
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.layout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+}
+
+.aside {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.steps {
+  width: 100%;
+  list-style: none;
+  counter-reset: step;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.steps li {
+  counter-increment: step;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text-40);
+}
+
+.steps li::before {
+  content: counter(step);
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-50);
+  background: var(--icon-bg);
+  border-radius: 50%;
+}
+
+.phone {
+  width: 200px;
+  border-radius: 28px;
+  border: 3px solid rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 20px 60px rgba(0, 0, 0, 0.5);
+  flex-shrink: 0;
+}
+
+.screenshot {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.note {
+  font-size: 12px;
+  color: var(--text-20);
+}
+
+.link {
+  color: var(--text-30);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link:hover {
+  color: var(--text);
+}
+
+@media (min-width: 768px) {
+  .title {
+    font-size: 32px;
+    letter-spacing: -0.8px;
+    margin-bottom: 16px;
+  }
+
+  .subtitle {
+    font-size: 15px;
+    margin-bottom: 40px;
+  }
+
+  .layout {
+    flex-direction: row;
+    align-items: center;
+    gap: 48px;
+  }
+
+  .aside {
+    align-items: flex-start;
+  }
+
+  .phone {
+    width: 260px;
+    border-radius: 34px;
+    border-width: 4px;
+  }
+
+  .steps li {
+    font-size: 15px;
+    padding: 16px 20px;
+  }
+
+  .note {
+    font-size: 14px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .layout {
+    gap: 56px;
+  }
+
+  .phone {
+    width: 280px;
+    border-radius: 38px;
+  }
+}

@@ -83,7 +83,7 @@
 /* ── Store Buttons (mobile) ── */
 .storeButtons {
   display: flex;
-  gap: 6px;
+  gap: 10px;
   align-items: center;
   justify-content: center;
 }
@@ -121,17 +121,21 @@
   text-align: center;
 }
 
-/* ── Mobile: constrain phone so everything fits ── */
+/* ── Mobile: fit phone within viewport ── */
 @media (max-width: 767px) {
+  .layout {
+    max-height: calc(100dvh - 80px);
+  }
+
   .phone {
-    max-height: 55dvh;
-    overflow: hidden;
+    width: 50vw;
+    max-width: 240px;
+    min-height: 0;
   }
 
   .screenshot {
     height: 100%;
-    object-fit: cover;
-    object-position: top;
+    object-fit: contain;
   }
 }
 
