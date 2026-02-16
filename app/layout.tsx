@@ -22,11 +22,18 @@ export const metadata: Metadata = {
     url: "https://keshah.com",
     siteName: "KESHAH",
     type: "website",
+    images: [
+      {
+        url: "https://keshah.com/images/logo.png",
+        alt: "KESHAH",
+      },
+    ],
   },
   twitter: {
-    card: "summary_large_image",
+    card: "summary",
     title: "Stop Your Hair Loss in 60 Days",
     description: "Without drugs. Without surgery. Just 20 minutes a day.",
+    images: ["https://keshah.com/images/logo.png"],
   },
   robots: { index: true, follow: true },
 };
