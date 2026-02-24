@@ -375,15 +375,14 @@
       .stripe-wrap { max-width: 100%; margin-top: 20px; }
       .stripe-card { padding: 16px 20px; }
 
-      /* Proof wall → 2 cols */
+      /* Proof wall — keep 3 cols, shorter rows */
       .proof-grid {
-        grid-template-columns: repeat(2, 1fr);
-        grid-auto-rows: 16vh;
+        grid-auto-rows: 14vh;
         gap: 4px;
       }
 
-      /* Regrowth → 2 cols */
-      .regrowth-grid { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+      /* Regrowth — keep 3 cols, tighter */
+      .regrowth-grid { gap: 4px; }
 
       /* Product images */
       .product-row { height: 140px; max-width: 100%; margin-top: 16px; gap: 10px; }
@@ -432,7 +431,7 @@
       .phone-row-lg { height: 32vh; }
       .phone-frame { border-radius: 10px; }
 
-      .proof-grid { grid-auto-rows: 13vh; }
+      .proof-grid { grid-auto-rows: 12vh; }
       .team-avatar { width: 48px; height: 48px; }
       .team-member { padding: 12px 14px; gap: 12px; }
     }
