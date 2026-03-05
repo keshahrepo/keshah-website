@@ -5,6 +5,8 @@ export const maxDuration = 60;
 
 // Only count freev2 users created after direct purchase launched (no trial)
 const PAID_STOPPAGE_LAUNCH = new Date("2026-02-23T00:00:00Z");
+// Click tracking started — overview dashboard uses this as baseline
+const CLICK_TRACKING_START = new Date("2026-03-04T15:30:00Z");
 
 // 22 countries — must match kEligibleCountryTimezones in app_consts.dart
 const TIER_1_TIMEZONES = new Set([
@@ -54,6 +56,7 @@ const SELECTED_FIELDS = [
   "regrowth_consultation_completed", "regrowth_treatment_purchased",
   "inflammation_check_completed", "inflammation_check_result",
   "scalp_health_support_purchased", "completed_donation_amount",
+  "progress",
 ];
 
 export async function GET() {
@@ -61,10 +64,38 @@ export async function GET() {
     const { db } = getFirebaseAdmin();
     const today = new Date().toISOString().split("T")[0];
 
-    // 1. Try pre-computed metrics first (instant)
+    // Helper: fetch live click counts from Creators collection
+    async function fetchLiveClicks() {
+      let total = 0, today_clicks = 0, week_clicks = 0, month_clicks = 0;
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const weekAgo = new Date(todayStart.getTime() - 7 * 86400000);
+      const monthAgo = new Date(todayStart.getTime() - 30 * 86400000);
+      try {
+        const snap = await db.collection("Creators").where("is_active", "==", true).get();
+        const promises = snap.docs.map(async (doc) => {
+          total += doc.data().total_clicks || 0;
+          try {
+            const clicksSnap = await doc.ref.collection("clicks").where("timestamp", ">=", monthAgo).get();
+            clicksSnap.forEach((c) => {
+              month_clicks++;
+              const ts = c.data().timestamp?.toDate?.();
+              if (ts && ts >= weekAgo) week_clicks++;
+              if (ts && ts >= todayStart) today_clicks++;
+            });
+          } catch { /* no clicks */ }
+        });
+        await Promise.all(promises);
+      } catch { /* no creators */ }
+      return { today: today_clicks, week: week_clicks, month: month_clicks, total };
+    }
+
+    // 1. Try pre-computed metrics first, but always use live clicks
     const metricsDoc = await db.collection("DashboardMetrics").doc(`daily_${today}`).get();
     if (metricsDoc.exists) {
-      return NextResponse.json(metricsDoc.data());
+      const cached = metricsDoc.data();
+      const liveClicks = await fetchLiveClicks();
+      return NextResponse.json({ ...cached, creator_clicks: liveClicks });
     }
 
     // 2. Only fetch freev2 users created after paid stoppage launch (Feb 9, 2026)
@@ -84,6 +115,10 @@ export async function GET() {
     const usersByGeo: Record<string, number> = { tier_1: 0, india: 0, tier_2: 0 };
     const referralSources: Record<string, number> = {};
     let signedUp = 0, onboardingComplete = 0, paywallViewed = 0, purchased = 0;
+    let purchasedToday = 0, purchasedThisWeek = 0, purchasedThisMonth = 0;
+    let signupsSinceTracking = 0, purchasedSinceTracking = 0;
+    let trackedSignupsToday = 0, trackedSignupsWeek = 0, trackedSignupsMonth = 0;
+    let trackedPurchasedToday = 0, trackedPurchasedWeek = 0, trackedPurchasedMonth = 0;
 
     // Per-geo funnel tracking
     type GeoKey = "tier_1" | "india" | "tier_2";
@@ -104,6 +139,10 @@ export async function GET() {
     const checkInDay60: Record<string, number> = {};
     const regrowthFunnel = { education_started: 0, education_done: 0, consultation: 0, purchased: 0 };
     const inflammationFunnel = { check_completed: 0, positive: 0, kit_purchased: 0 };
+    // Day completion curve: dayCompletion[n] = users who completed day n, dayEligible[n] = users old enough to have reached day n
+    const dayCompletion: Record<number, number> = {};
+    const dayEligible: Record<number, number> = {};
+    let usersWithProgress = 0;
     let regrowthKits = 0, scalpHealthKits = 0, donations = 0;
 
     usersSnap.forEach((doc) => {
@@ -115,6 +154,20 @@ export async function GET() {
 
       totalUsers++;
       signedUp++;
+
+      // Since-tracking counts (for overview dashboard alignment)
+      if (createdAt >= CLICK_TRACKING_START) {
+        signupsSinceTracking++;
+        if (createdAt >= todayStart) trackedSignupsToday++;
+        if (createdAt >= weekAgo) trackedSignupsWeek++;
+        if (createdAt >= monthAgo) trackedSignupsMonth++;
+        if (d.start_date) {
+          purchasedSinceTracking++;
+          if (createdAt >= todayStart) trackedPurchasedToday++;
+          if (createdAt >= weekAgo) trackedPurchasedWeek++;
+          if (createdAt >= monthAgo) trackedPurchasedMonth++;
+        }
+      }
 
       // New user counts
       if (createdAt >= todayStart) newToday++;
@@ -153,7 +206,13 @@ export async function GET() {
       // Note: no reliable Firestore field for "paywall viewed" — that's tracked in Amplitude (~82%)
       if (d.hair_goal) { onboardingComplete++; geoFunnels[geo].onboarding_complete++; }
       if (d.commitment_answer) { paywallViewed++; geoFunnels[geo].paywall_viewed++; }
-      if (d.start_date) { purchased++; geoFunnels[geo].purchased++; }
+      if (d.start_date) {
+        purchased++; geoFunnels[geo].purchased++;
+        // Track purchase timing using created_at as proxy (start_date is a map, not timestamp)
+        if (createdAt >= todayStart) purchasedToday++;
+        if (createdAt >= weekAgo) purchasedThisWeek++;
+        if (createdAt >= monthAgo) purchasedThisMonth++;
+      }
 
       // Check-ins
       if (Array.isArray(d.hair_fall_check_ins)) {
@@ -175,17 +234,64 @@ export async function GET() {
       if (d.scalp_health_support_purchased) { inflammationFunnel.kit_purchased++; scalpHealthKits++; }
 
       if (d.completed_donation_amount) donations += d.completed_donation_amount;
+
+      // Day completion curve — only for purchased users
+      if (d.start_date) {
+        // Track eligibility: user is eligible for day N if they've been around N+ days
+        // ageDays+1 because a user who signed up today (ageDays=0) is eligible for day 1
+        for (let day = 1; day <= Math.min(ageDays + 1, 120); day++) {
+          dayEligible[day] = (dayEligible[day] || 0) + 1;
+        }
+
+        if (d.progress && typeof d.progress === "object") {
+          const completedDays = Object.keys(d.progress)
+            .map((k) => parseInt(k.replace("day", "")))
+            .filter((n) => !isNaN(n));
+          if (completedDays.length > 0) {
+            usersWithProgress++;
+            for (const day of completedDays) {
+              dayCompletion[day] = (dayCompletion[day] || 0) + 1;
+            }
+          }
+        }
+      }
     });
+
+    // Sum all creator clicks (total from docs, today/week/month from subcollections)
+    let totalCreatorClicks = 0;
+    let todayCreatorClicks = 0;
+    let weekCreatorClicks = 0;
+    let monthCreatorClicks = 0;
+    try {
+      const creatorsSnap = await db.collection("Creators").where("is_active", "==", true).get();
+      const clickPromises = creatorsSnap.docs.map(async (doc) => {
+        totalCreatorClicks += doc.data().total_clicks || 0;
+        try {
+          const monthClicksSnap = await doc.ref.collection("clicks").where("timestamp", ">=", monthAgo).get();
+          monthClicksSnap.forEach((c) => {
+            monthCreatorClicks++;
+            const ts = c.data().timestamp?.toDate?.();
+            if (ts && ts >= weekAgo) weekCreatorClicks++;
+            if (ts && ts >= todayStart) todayCreatorClicks++;
+          });
+        } catch { /* no clicks yet */ }
+      });
+      await Promise.all(clickPromises);
+    } catch { /* no creators yet */ }
 
     const metrics = {
       date: today,
       cohort_start: "2026-02-23",
+      creator_clicks: { today: todayCreatorClicks, week: weekCreatorClicks, month: monthCreatorClicks, total: totalCreatorClicks },
       total_users: totalUsers,
       new_users: { today: newToday, week: newThisWeek, month: newThisMonth },
       users_by_type: usersByType,
       users_by_stage: usersByStage,
       users_by_geo: usersByGeo,
       funnel: { signed_up: signedUp, onboarding_complete: onboardingComplete, paywall_viewed: paywallViewed, purchased },
+      purchased_by_period: { today: purchasedToday, week: purchasedThisWeek, month: purchasedThisMonth, total: purchased },
+      tracked_signups: { today: trackedSignupsToday, week: trackedSignupsWeek, month: trackedSignupsMonth, all: signupsSinceTracking },
+      tracked_purchased: { today: trackedPurchasedToday, week: trackedPurchasedWeek, month: trackedPurchasedMonth, all: purchasedSinceTracking },
       geo_funnels: geoFunnels,
       geo_referrals: geoReferrals,
       geo_stages: geoStages,
@@ -200,6 +306,9 @@ export async function GET() {
       check_in_day_60: checkInDay60,
       regrowth_funnel: regrowthFunnel,
       inflammation_funnel: inflammationFunnel,
+      day_completion: dayCompletion,
+      day_eligible: dayEligible,
+      users_with_progress: usersWithProgress,
       purchases: { regrowth_kits: regrowthKits, scalp_health_kits: scalpHealthKits, donations: Math.round(donations * 100) / 100 },
     };
 

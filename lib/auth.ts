@@ -4,8 +4,10 @@ import { cookies } from "next/headers";
 const COOKIE_NAME = "keshah_dash";
 const secret = new TextEncoder().encode(process.env.JWT_SECRET || "dev-secret-change-me");
 
-export async function createToken(): Promise<string> {
-  return new SignJWT({ role: "admin" })
+export type Role = "admin" | "marketing";
+
+export async function createToken(role: Role = "admin"): Promise<string> {
+  return new SignJWT({ role })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("30d")
@@ -18,6 +20,15 @@ export async function verifyToken(token: string): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+export async function getRoleFromToken(token: string): Promise<Role | null> {
+  try {
+    const { payload } = await jwtVerify(token, secret);
+    return (payload.role as Role) || "admin";
+  } catch {
+    return null;
   }
 }
 

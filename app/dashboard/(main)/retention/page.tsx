@@ -2,34 +2,14 @@
 
 import { useEffect, useState } from "react";
 import MetricCard from "@/components/MetricCard";
-import FunnelChart from "@/components/FunnelChart";
-import { ChartCard, DonutChart } from "@/components/SimpleChart";
 
 interface Metrics {
-  retention: {
-    day_7: { eligible: number; active: number; rate: number };
-    day_14?: { eligible: number; active: number; rate: number };
-    day_30: { eligible: number; active: number; rate: number };
-  };
-  routine: { completed_today: number; total_active: number };
-  check_in_day_30: Record<string, number>;
-  check_in_day_60: Record<string, number>;
-  regrowth_funnel: { education_started: number; education_done: number; consultation: number; purchased: number };
-  inflammation_funnel: { check_completed: number; positive: number; kit_purchased: number };
+  day_completion: Record<string, number>;
+  day_eligible: Record<string, number>;
+  users_with_progress: number;
+  funnel: { purchased: number };
+  regrowth_funnel: { consultation: number; purchased: number };
 }
-
-const CHECK_IN_LABELS: Record<string, string> = {
-  significantly_less: "Much Less",
-  slightly_less: "Slightly Less",
-  about_the_same: "Same",
-  slightly_more: "Slightly More",
-  significantly_more: "Much More",
-  none: "None",
-  few_strands: "Few Strands",
-  small_clump: "Small Clump",
-  large_clump: "Large Clump",
-  very_large_clump: "Very Large",
-};
 
 export default function RetentionPage() {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
@@ -61,148 +41,70 @@ export default function RetentionPage() {
     );
   }
 
-  const routineRate = metrics.routine.total_active > 0
-    ? Math.round((metrics.routine.completed_today / metrics.routine.total_active) * 100)
-    : 0;
+  const purchased = metrics.funnel?.purchased || 0;
+  const dayCompletionMap = metrics.day_completion || {};
+  const dayEligibleMap = metrics.day_eligible || {};
 
-  const day30Data = Object.entries(metrics.check_in_day_30)
-    .map(([name, value]) => ({
-      name: CHECK_IN_LABELS[name] || name.replace(/_/g, " "),
-      value,
-    }))
-    .sort((a, b) => b.value - a.value);
-
-  const day60Data = Object.entries(metrics.check_in_day_60)
-    .map(([name, value]) => ({
-      name: CHECK_IN_LABELS[name] || name.replace(/_/g, " "),
-      value,
-    }))
-    .sort((a, b) => b.value - a.value);
+  // Key milestone days — % of eligible users who completed that day
+  const milestones = [1, 2, 3, 7, 10, 15, 30, 45, 60]
+    .map((d) => {
+      const completed = dayCompletionMap[String(d)] || 0;
+      const eligible = dayEligibleMap[String(d)] || 0;
+      return { day: d, completed, eligible, pct: eligible > 0 ? Math.round((completed / eligible) * 100) : 0 };
+    })
+    .filter((m) => m.eligible > 0); // Only show days where we have eligible users
 
   return (
     <div>
       <div style={{ marginBottom: 32 }}>
         <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>In-App Retention</h2>
         <p style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>
-          Routine completion, check-ins, and product funnels
+          Day-by-day completion rates for purchased users ({purchased} total)
         </p>
       </div>
 
-      {/* Retention + Routine metrics */}
+      {/* Key milestone metrics */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+        gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
         gap: 12,
         marginBottom: 24,
       }}>
-        <MetricCard
-          label="Day 7"
-          value={`${metrics.retention.day_7.rate}%`}
-          subtitle={`${metrics.retention.day_7.active}/${metrics.retention.day_7.eligible}`}
-        />
-        <MetricCard
-          label="Day 14"
-          value={`${metrics.retention.day_14?.rate ?? 0}%`}
-          subtitle={`${metrics.retention.day_14?.active ?? 0}/${metrics.retention.day_14?.eligible ?? 0}`}
-        />
-        <MetricCard
-          label="Day 30"
-          value={`${metrics.retention.day_30.rate}%`}
-          subtitle={`${metrics.retention.day_30.active}/${metrics.retention.day_30.eligible}`}
-        />
-        <MetricCard
-          label="Routines Today"
-          value={metrics.routine.completed_today}
-          subtitle={`${routineRate}% of active`}
-        />
-        <MetricCard
-          label="Active Users"
-          value={metrics.routine.total_active}
-          subtitle="with any progress"
-        />
+        {milestones.map((m) => (
+          <MetricCard
+            key={m.day}
+            label={`Day ${m.day}`}
+            value={`${m.pct}%`}
+            subtitle={`${m.completed}/${m.eligible} eligible`}
+          />
+        ))}
+        <MetricCard label="Started" value={metrics.users_with_progress} subtitle={`of ${purchased} purchased`} />
       </div>
 
-      {/* Check-in responses */}
+      {/* Regrowth */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-        gap: 16,
+        gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+        gap: 12,
         marginBottom: 24,
       }}>
-        {day30Data.length > 0 ? (
-          <ChartCard title="Day 30 Check-in Responses">
-            <DonutChart data={day30Data} />
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 12 }}>
-              {day30Data.map((d) => (
-                <span key={d.name} style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>
-                  {d.name}: {d.value}
-                </span>
-              ))}
-            </div>
-          </ChartCard>
-        ) : (
-          <div style={{
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.08)",
-            borderRadius: 14,
-            padding: "40px 24px",
-            textAlign: "center",
-          }}>
-            <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 13 }}>No Day 30 check-in data yet</p>
-          </div>
-        )}
-
-        {day60Data.length > 0 ? (
-          <ChartCard title="Day 60 Check-in Responses">
-            <DonutChart data={day60Data} />
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 12 }}>
-              {day60Data.map((d) => (
-                <span key={d.name} style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>
-                  {d.name}: {d.value}
-                </span>
-              ))}
-            </div>
-          </ChartCard>
-        ) : (
-          <div style={{
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.08)",
-            borderRadius: 14,
-            padding: "40px 24px",
-            textAlign: "center",
-          }}>
-            <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 13 }}>No Day 60 check-in data yet</p>
-          </div>
-        )}
+        <MetricCard label="Consultation Done" value={metrics.regrowth_funnel.consultation} />
+        <MetricCard label="Regrowth Purchased" value={metrics.regrowth_funnel.purchased} />
       </div>
 
-      {/* Regrowth funnel */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-        gap: 16,
-        marginBottom: 24,
-      }}>
-        <FunnelChart
-          title="Regrowth Funnel"
-          steps={[
-            { label: "Education Started", value: metrics.regrowth_funnel.education_started, color: "#818cf8" },
-            { label: "Education Done", value: metrics.regrowth_funnel.education_done, color: "#a78bfa" },
-            { label: "Consultation Done", value: metrics.regrowth_funnel.consultation, color: "#c4b5fd" },
-            { label: "Kit Purchased", value: metrics.regrowth_funnel.purchased, color: "#4ade80" },
-          ]}
-        />
-
-        <FunnelChart
-          title="Inflammation Funnel"
-          steps={[
-            { label: "Check Completed", value: metrics.inflammation_funnel.check_completed, color: "#fbbf24" },
-            { label: "Positive Result", value: metrics.inflammation_funnel.positive, color: "#f59e0b" },
-            { label: "Kit Purchased", value: metrics.inflammation_funnel.kit_purchased, color: "#4ade80" },
-          ]}
-        />
-      </div>
-
+      {milestones.length === 0 && (
+        <div style={{
+          background: "rgba(255,255,255,0.04)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: 14,
+          padding: "40px 24px",
+          textAlign: "center",
+        }}>
+          <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 13 }}>
+            No retention data yet — milestone cards will appear as users age into each day.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

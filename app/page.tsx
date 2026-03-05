@@ -26,7 +26,7 @@ export default function Home() {
           <div className={styles.aside}>
             <p className={styles.proof}>
               <span className={styles.stars}>&#9733;&#9733;&#9733;&#9733;&#9733;</span>{" "}
-              4.8 &middot; 6,000+ members
+              4.8 &middot; 26,538 members
             </p>
 
             {/* Mobile: Store buttons */}

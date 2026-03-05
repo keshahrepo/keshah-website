@@ -6,7 +6,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "KESHAH — Stop Hair Loss in 60 Days Without Drugs",
   description:
-    "Daily scalp mechanotherapy exercises that stop hair loss in 60 days. 6 video-guided techniques, 20 minutes a day. Try free for 3 days.",
+    "Daily scalp mechanotherapy exercises that stop hair loss in 60 days. Video-guided techniques, 20 minutes a day.",
   keywords: [
     "hair loss",
     "stop hair loss",

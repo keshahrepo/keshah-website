@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
-const NAV_ITEMS = [
-  { href: "/dashboard", label: "Overview", icon: "grid" },
-  { href: "/dashboard/marketing", label: "Marketing", icon: "megaphone" },
-  { href: "/dashboard/onboarding", label: "Onboarding", icon: "funnel" },
-  { href: "/dashboard/retention", label: "Retention", icon: "repeat" },
+const ALL_NAV_ITEMS = [
+  { href: "/dashboard", label: "Overview", icon: "grid", adminOnly: true },
+  { href: "/dashboard/marketing", label: "Marketing", icon: "megaphone", adminOnly: false },
+  { href: "/dashboard/onboarding", label: "Onboarding", icon: "funnel", adminOnly: true },
+  { href: "/dashboard/retention", label: "Retention", icon: "repeat", adminOnly: true },
 ];
 
 function NavIcon({ icon, active }: { icon: string; active: boolean }) {
@@ -53,6 +55,18 @@ function NavIcon({ icon, active }: { icon: string; active: boolean }) {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [role, setRole] = useState<string>("admin");
+
+  useEffect(() => {
+    fetch("/api/auth/me").then((r) => r.json()).then((d) => {
+      if (d.role) setRole(d.role);
+    }).catch(() => {});
+  }, []);
+
+  const NAV_ITEMS = role === "marketing"
+    ? ALL_NAV_ITEMS.filter((item) => !item.adminOnly)
+    : ALL_NAV_ITEMS;
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#000" }}>
@@ -102,6 +116,28 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             );
           })}
         </nav>
+
+        <div style={{ marginTop: "auto", padding: "0 8px 16px" }}>
+          <button
+            onClick={() => {
+              fetch("/api/auth/logout", { method: "POST" }).then(() => router.push("/dashboard/login"));
+            }}
+            style={{
+              width: "100%",
+              padding: "10px 20px",
+              fontSize: 13,
+              fontWeight: 400,
+              color: "rgba(255,255,255,0.35)",
+              background: "transparent",
+              border: "none",
+              borderRadius: 8,
+              cursor: "pointer",
+              textAlign: "left",
+            }}
+          >
+            Log out
+          </button>
+        </div>
       </aside>
 
       {/* Main content */}

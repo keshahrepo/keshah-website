@@ -16,7 +16,14 @@ export async function middleware(req: NextRequest) {
     }
 
     try {
-      await jwtVerify(token, secret);
+      const { payload } = await jwtVerify(token, secret);
+      const role = payload.role as string;
+
+      // Marketing role can only access /dashboard/marketing
+      if (role === "marketing" && !pathname.startsWith("/dashboard/marketing")) {
+        return NextResponse.redirect(new URL("/dashboard/marketing", req.url));
+      }
+
       return NextResponse.next();
     } catch {
       return NextResponse.redirect(new URL("/dashboard/login", req.url));

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import MetricCard from "@/components/MetricCard";
 import FunnelChart from "@/components/FunnelChart";
-import { ChartCard, SimpleBarChart, DonutChart } from "@/components/SimpleChart";
+import { ChartCard, DonutChart } from "@/components/SimpleChart";
 
 type GeoKey = "all" | "tier_1" | "india" | "tier_2";
 
@@ -96,11 +96,6 @@ export default function OnboardingPage() {
       value,
     }));
 
-  const revenueByGeo = Object.entries(metrics.users_by_geo).map(([region, count]) => ({
-    label: region === "tier_1" ? "Tier 1" : region === "tier_2" ? "Tier 2" : "India",
-    users: count,
-  }));
-
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
@@ -185,18 +180,9 @@ export default function OnboardingPage() {
           ]}
         />
 
-        {/* Referral sources or region breakdown */}
-        {selectedGeo === "all" ? (
-          <ChartCard title="Users by Region">
-            <SimpleBarChart
-              data={revenueByGeo}
-              dataKey="users"
-              color="#fbbf24"
-              height={200}
-            />
-          </ChartCard>
-        ) : referralData.length > 0 ? (
-          <ChartCard title={`Referral Sources — ${GEO_LABELS[selectedGeo]}`}>
+        {/* Referral sources */}
+        {referralData.length > 0 ? (
+          <ChartCard title={`How They Heard — ${GEO_LABELS[selectedGeo]}`}>
             <DonutChart data={referralData} />
             <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 12 }}>
               {referralData.map((s) => (

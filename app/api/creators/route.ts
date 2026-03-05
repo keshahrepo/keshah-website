@@ -2,15 +2,34 @@ import { NextRequest, NextResponse } from "next/server";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 
-// GET — list all creators
+// GET — list all creators with weekly click counts
 export async function GET() {
   try {
     const { db } = getFirebaseAdmin();
     const snap = await db.collection("Creators").orderBy("created_at", "desc").get();
 
-    const creators = snap.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const monthAgo = new Date();
+    monthAgo.setDate(monthAgo.getDate() - 30);
+
+    const creators = await Promise.all(snap.docs.map(async (doc) => {
+      const data = doc.data();
+      let clicks_this_week = 0;
+      let clicks_this_month = 0;
+      try {
+        const clicksSnap = await doc.ref.collection("clicks")
+          .where("timestamp", ">=", monthAgo)
+          .get();
+        clicksSnap.forEach((c) => {
+          clicks_this_month++;
+          const ts = c.data().timestamp?.toDate?.();
+          if (ts && ts >= weekAgo) clicks_this_week++;
+        });
+      } catch {
+        // clicks subcollection may not exist yet
+      }
+      return { id: doc.id, ...data, clicks_this_week, clicks_this_month };
     }));
 
     return NextResponse.json(creators);
@@ -24,27 +43,57 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name, slug: customSlug, platforms, notes } = body;
+    const { name, slug: providedSlug, platforms, notes } = body;
 
     if (!name) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
-    // Use custom slug if provided, otherwise generate from name
-    const slug = (customSlug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-")).replace(/^-|-$/g, "");
+    const baseSlug = (providedSlug || name.split(/\s+/)[0].toLowerCase()).replace(/[^a-z0-9]/g, "");
 
     const { db } = getFirebaseAdmin();
 
-    // Check slug uniqueness
-    const existing = await db.collection("Creators").where("slug", "==", slug).limit(1).get();
-    if (!existing.empty) {
-      return NextResponse.json({ error: "A creator with this URL already exists" }, { status: 409 });
+    const PLATFORM_SUFFIX: Record<string, string> = {
+      instagram: "ig",
+      tiktok: "tt",
+      youtube: "yt",
+      other: "",
+    };
+
+    // Find unique base slug
+    let slug = baseSlug;
+    let suffix = 2;
+    while (true) {
+      const existing = await db.collection("Creators").where("slug", "==", slug).limit(1).get();
+      if (existing.empty) break;
+      slug = `${baseSlug}${suffix}`;
+      suffix++;
+      if (suffix > 20) {
+        return NextResponse.json({ error: "Too many creators with similar names" }, { status: 409 });
+      }
     }
+
+    // Generate per-platform slugs (sarahig, sarahtt, etc.)
+    const platformList = platforms || [];
+    const platformSlugs: Record<string, string> = {};
+    const platformClicks: Record<string, number> = {};
+    for (const p of platformList) {
+      const ps = PLATFORM_SUFFIX[p.platform] || p.platform.slice(0, 2);
+      const pSlug = platformList.length === 1 ? slug : `${slug}${ps}`;
+      platformSlugs[p.platform] = pSlug;
+      platformClicks[p.platform] = 0;
+    }
+
+    // Collect all slugs to store for lookup
+    const allSlugs = [slug, ...Object.values(platformSlugs)];
 
     const creatorData = {
       name,
       slug,
-      platforms: platforms || [],
+      platforms: platformList,
+      platform_slugs: platformSlugs,
+      platform_clicks: platformClicks,
+      all_slugs: [...new Set(allSlugs)],
       short_link: `https://keshah.com/${slug}`,
       total_clicks: 0,
       notes: notes || "",

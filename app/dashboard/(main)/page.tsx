@@ -2,25 +2,17 @@
 
 import { useEffect, useState } from "react";
 import MetricCard from "@/components/MetricCard";
-import FunnelChart from "@/components/FunnelChart";
-import { ChartCard, SimpleLineChart } from "@/components/SimpleChart";
 
 interface Metrics {
   date: string;
   cohort_start?: string;
   total_users: number;
   new_users: { today: number; week: number; month: number };
-  users_by_type: Record<string, number>;
-  users_by_geo: Record<string, number>;
+  creator_clicks: { today: number; week: number; month: number; total: number };
   funnel: { signed_up: number; onboarding_complete: number; paywall_viewed: number; purchased: number };
-  referral_sources: Record<string, number>;
-  retention: {
-    day_7: { eligible: number; active: number; rate: number };
-    day_14?: { eligible: number; active: number; rate: number };
-    day_30: { eligible: number; active: number; rate: number };
-  };
-  routine: { completed_today: number; total_active: number };
-  purchases: { regrowth_kits: number; scalp_health_kits: number; donations: number };
+  purchased_by_period: { today: number; week: number; month: number; total: number };
+  tracked_signups?: { today: number; week: number; month: number; all: number };
+  tracked_purchased?: { today: number; week: number; month: number; all: number };
 }
 
 interface RevenueData {
@@ -30,10 +22,20 @@ interface RevenueData {
   active_trials?: number;
 }
 
+type TimePeriod = "today" | "week" | "month" | "all";
+
+const PERIOD_LABELS: Record<TimePeriod, string> = {
+  today: "Today",
+  week: "This Week",
+  month: "This Month",
+  all: "All Time",
+};
+
 export default function DashboardPage() {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [revenue, setRevenue] = useState<RevenueData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState<TimePeriod>("all");
 
   useEffect(() => {
     Promise.all([
@@ -62,26 +64,66 @@ export default function DashboardPage() {
     );
   }
 
-  const retentionData = [
-    { label: "Day 7", value: metrics.retention.day_7.rate },
-    { label: "Day 14", value: metrics.retention.day_14?.rate ?? 0 },
-    { label: "Day 30", value: metrics.retention.day_30.rate },
-  ];
+  const clicks = {
+    today: metrics.creator_clicks?.today || 0,
+    week: metrics.creator_clicks?.week || 0,
+    month: metrics.creator_clicks?.month || 0,
+    all: metrics.creator_clicks?.total || 0,
+  }[period];
+
+  const signups = {
+    today: metrics.tracked_signups?.today ?? metrics.new_users.today,
+    week: metrics.tracked_signups?.week ?? metrics.new_users.week,
+    month: metrics.tracked_signups?.month ?? metrics.new_users.month,
+    all: metrics.tracked_signups?.all ?? metrics.total_users,
+  }[period];
+
+  const purchased = {
+    today: metrics.tracked_purchased?.today ?? metrics.purchased_by_period?.today ?? 0,
+    week: metrics.tracked_purchased?.week ?? metrics.purchased_by_period?.week ?? 0,
+    month: metrics.tracked_purchased?.month ?? metrics.purchased_by_period?.month ?? 0,
+    all: metrics.tracked_purchased?.all ?? metrics.funnel.purchased,
+  }[period];
+
+  const clickToSignup = clicks > 0 ? Math.round((signups / clicks) * 100) : 0;
+  const signupToPurchase = signups > 0 ? Math.round((purchased / signups) * 100) : 0;
 
   return (
     <div>
-      <div style={{ marginBottom: 32 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>
-          Good morning
-        </h2>
-        <p style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>
-          {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
-          {metrics.cohort_start && (
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div>
+          <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>
+            Good morning
+          </h2>
+          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>
+            {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
             <span style={{ marginLeft: 8, opacity: 0.6 }}>
-              &middot; Since {new Date(metrics.cohort_start + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+              &middot; Since Mar 4 (link tracking)
             </span>
-          )}
-        </p>
+          </p>
+        </div>
+
+        {/* Time period selector */}
+        <div style={{ display: "flex", gap: 4, background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: 3 }}>
+          {(["today", "week", "month", "all"] as TimePeriod[]).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPeriod(p)}
+              style={{
+                padding: "6px 12px",
+                fontSize: 12,
+                fontWeight: 500,
+                borderRadius: 8,
+                border: "none",
+                cursor: "pointer",
+                background: period === p ? "rgba(255,255,255,0.1)" : "transparent",
+                color: period === p ? "#fff" : "rgba(255,255,255,0.4)",
+              }}
+            >
+              {PERIOD_LABELS[p]}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Top metrics */}
@@ -92,160 +134,46 @@ export default function DashboardPage() {
         marginBottom: 24,
       }}>
         <MetricCard
-          label="Total Users"
-          value={metrics.total_users.toLocaleString()}
-          subtitle={`+${metrics.new_users.today} today`}
+          label="Clicks"
+          value={clicks.toLocaleString()}
+          subtitle={PERIOD_LABELS[period]}
+          color="#4ade80"
         />
         <MetricCard
-          label="New This Week"
-          value={metrics.new_users.week}
+          label="Signups"
+          value={signups.toLocaleString()}
+          subtitle={clicks > 0 ? `${clickToSignup}% of clicks` : PERIOD_LABELS[period]}
         />
         <MetricCard
-          label="New This Month"
-          value={metrics.new_users.month}
-        />
-        <MetricCard
-          label="Routines Today"
-          value={metrics.routine.completed_today}
-          subtitle={`of ${metrics.routine.total_active} active`}
+          label="Purchased"
+          value={purchased}
+          subtitle={`${signupToPurchase}% of signups`}
         />
       </div>
 
       {/* Revenue row */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-        gap: 12,
-        marginBottom: 24,
-      }}>
-        {revenue && (
-          <>
-            <MetricCard
-              label="MRR"
-              value={revenue.mrr ? `$${revenue.mrr.toLocaleString()}` : "—"}
-              color="#4ade80"
-            />
-            <MetricCard
-              label="Active Subscribers"
-              value={revenue.active_subscribers || "—"}
-            />
-            <MetricCard
-              label="Active Trials"
-              value={revenue.active_trials || "—"}
-            />
-          </>
-        )}
-        <MetricCard
-          label="Regrowth Kits"
-          value={metrics.purchases.regrowth_kits}
-        />
-        <MetricCard
-          label="Scalp Health Kits"
-          value={metrics.purchases.scalp_health_kits}
-        />
-      </div>
-
-      {/* Funnel + Retention row */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-        gap: 16,
-        marginBottom: 24,
-      }}>
-        <FunnelChart
-          title="Conversion Funnel"
-          steps={[
-            { label: "Signed Up", value: metrics.funnel.signed_up },
-            { label: "Onboarding Done", value: metrics.funnel.onboarding_complete },
-            { label: "Qualified", value: metrics.funnel.paywall_viewed },
-            { label: "Purchased", value: metrics.funnel.purchased, color: "#4ade80" },
-          ]}
-        />
-
-        <ChartCard title="Retention Rates">
-          <SimpleLineChart
-            data={retentionData}
-            dataKey="value"
-            color="#818cf8"
-          />
-        </ChartCard>
-      </div>
-
-      {/* Geo breakdown */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-        gap: 16,
-        marginBottom: 24,
-      }}>
+      {revenue && (
         <div style={{
-          background: "rgba(255,255,255,0.04)",
-          border: "1px solid rgba(255,255,255,0.08)",
-          borderRadius: 14,
-          padding: "20px 24px",
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+          gap: 12,
+          marginBottom: 24,
         }}>
-          <h3 style={{
-            fontSize: 13,
-            fontWeight: 600,
-            color: "rgba(255,255,255,0.5)",
-            marginBottom: 20,
-            letterSpacing: "0.3px",
-            textTransform: "uppercase",
-          }}>
-            Users by Geography
-          </h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {Object.entries(metrics.users_by_geo).map(([region, count]) => (
-              <div key={region}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                  <span style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", textTransform: "capitalize" }}>
-                    {region === "tier_1" ? "Tier 1" : region === "tier_2" ? "Tier 2" : "India"}
-                  </span>
-                  <span style={{ fontSize: 15, fontWeight: 600, color: "#fff" }}>
-                    {count.toLocaleString()}
-                  </span>
-                </div>
-                <div style={{
-                  height: 6,
-                  background: "rgba(255,255,255,0.06)",
-                  borderRadius: 3,
-                }}>
-                  <div style={{
-                    width: `${metrics.total_users > 0 ? (count / metrics.total_users) * 100 : 0}%`,
-                    height: "100%",
-                    background: region === "tier_1" ? "#818cf8" : region === "india" ? "#fbbf24" : "#38bdf8",
-                    borderRadius: 3,
-                  }} />
-                </div>
-              </div>
-            ))}
-          </div>
+          <MetricCard
+            label="MRR"
+            value={revenue.mrr ? `$${revenue.mrr.toLocaleString()}` : "—"}
+            color="#4ade80"
+          />
+          <MetricCard
+            label="Active Subscribers"
+            value={revenue.active_subscribers || "—"}
+          />
+          <MetricCard
+            label="Active Trials"
+            value={revenue.active_trials || "—"}
+          />
         </div>
-      </div>
-
-      {/* Retention breakdown */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(3, 1fr)",
-        gap: 12,
-        marginBottom: 24,
-      }}>
-        <MetricCard
-          label="Day 7 Retention"
-          value={`${metrics.retention.day_7.rate}%`}
-          subtitle={`${metrics.retention.day_7.active}/${metrics.retention.day_7.eligible}`}
-        />
-        <MetricCard
-          label="Day 14 Retention"
-          value={`${metrics.retention.day_14?.rate ?? 0}%`}
-          subtitle={`${metrics.retention.day_14?.active ?? 0}/${metrics.retention.day_14?.eligible ?? 0}`}
-        />
-        <MetricCard
-          label="Day 30 Retention"
-          value={`${metrics.retention.day_30.rate}%`}
-          subtitle={`${metrics.retention.day_30.active}/${metrics.retention.day_30.eligible}`}
-        />
-      </div>
+      )}
     </div>
   );
 }
