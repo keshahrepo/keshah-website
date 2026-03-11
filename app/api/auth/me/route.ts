@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRoleFromToken, COOKIE_NAME } from "@/lib/auth";
+import { getPayloadFromToken, COOKIE_NAME } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
   const token = req.cookies.get(COOKIE_NAME)?.value;
@@ -7,10 +7,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ role: null }, { status: 401 });
   }
 
-  const role = await getRoleFromToken(token);
-  if (!role) {
+  const payload = await getPayloadFromToken(token);
+  if (!payload) {
     return NextResponse.json({ role: null }, { status: 401 });
   }
 
-  return NextResponse.json({ role });
+  return NextResponse.json({
+    role: payload.role,
+    userId: payload.userId || null,
+    name: payload.name || null,
+  });
 }

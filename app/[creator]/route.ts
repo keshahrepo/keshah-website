@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { waitUntil } from "@vercel/functions";
 
 export async function GET(
   req: NextRequest,
@@ -14,14 +15,24 @@ export async function GET(
     return new NextResponse("Not Found", { status: 404 });
   }
 
+  // Track click in background — don't block the redirect
+  const userAgent = req.headers.get("user-agent") || "";
+  const referer = req.headers.get("referer") || "";
+  const ip = req.headers.get("x-forwarded-for") || "";
+
+  waitUntil(trackClick(creator, userAgent, referer, ip));
+
+  // Redirect immediately
+  return NextResponse.redirect(new URL("/", req.url), 302);
+}
+
+async function trackClick(creator: string, userAgent: string, referer: string, ip: string) {
   try {
     const { db } = getFirebaseAdmin();
 
-    // First try exact slug match
     let snap = await db.collection("Creators").where("slug", "==", creator).limit(1).get();
     let platform: string | null = null;
 
-    // If no direct match, search in all_slugs (platform-specific links)
     if (snap.empty) {
       snap = await db.collection("Creators").where("all_slugs", "array-contains", creator).limit(1).get();
     }
@@ -30,7 +41,6 @@ export async function GET(
       const doc = snap.docs[0];
       const data = doc.data();
 
-      // Determine which platform this slug belongs to
       if (data.platform_slugs) {
         for (const [p, s] of Object.entries(data.platform_slugs)) {
           if (s === creator) {
@@ -40,10 +50,7 @@ export async function GET(
         }
       }
 
-      // Increment total clicks
       const updates: Record<string, unknown> = { total_clicks: FieldValue.increment(1) };
-
-      // Increment platform-specific clicks
       if (platform) {
         updates[`platform_clicks.${platform}`] = FieldValue.increment(1);
       }
@@ -52,15 +59,12 @@ export async function GET(
       doc.ref.collection("clicks").add({
         timestamp: FieldValue.serverTimestamp(),
         platform: platform || "direct",
-        user_agent: req.headers.get("user-agent") || "",
-        referer: req.headers.get("referer") || "",
-        ip: req.headers.get("x-forwarded-for") || "",
+        user_agent: userAgent,
+        referer: referer,
+        ip: ip,
       });
     }
   } catch (e) {
     console.error("Creator click log error:", e);
   }
-
-  // Always redirect to landing page (has App Store buttons)
-  return NextResponse.redirect(new URL("/", req.url), 302);
 }

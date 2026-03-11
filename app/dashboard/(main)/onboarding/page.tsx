@@ -174,8 +174,6 @@ export default function OnboardingPage() {
           title={`Funnel — ${GEO_LABELS[selectedGeo]}`}
           steps={[
             { label: "Signed Up", value: funnel.signed_up },
-            { label: "Onboarding Done", value: funnel.onboarding_complete },
-            { label: "Qualified", value: funnel.paywall_viewed },
             { label: "Purchased", value: funnel.purchased, color: "#4ade80" },
           ]}
         />

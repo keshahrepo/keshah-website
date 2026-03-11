@@ -129,6 +129,22 @@ button {
   }
 }
 
+/* ── Dashboard mobile utilities ── */
+@media (max-width: 600px) {
+  .grid-responsive-3 {
+    grid-template-columns: 1fr !important;
+  }
+  .grid-responsive-2 {
+    grid-template-columns: 1fr !important;
+  }
+  .flex-stack-mobile {
+    flex-direction: column !important;
+  }
+  .hide-mobile {
+    display: none !important;
+  }
+}
+
 /* ── Desktop ── */
 @media (min-width: 768px) {
   .cta-button {

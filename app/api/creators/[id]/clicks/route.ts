@@ -18,7 +18,6 @@ export async function GET(
       .doc(id)
       .collection("clicks")
       .where("timestamp", ">=", thirtyDaysAgo)
-      .orderBy("timestamp", "asc")
       .get();
 
     // Group clicks by date
