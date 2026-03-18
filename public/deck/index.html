@@ -358,6 +358,27 @@
       pointer-events: none;
     }
 
+    /* Auto-scrolling GIF rows */
+    @keyframes scrollLeft {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+    @keyframes scrollRight {
+      0% { transform: translateX(-50%); }
+      100% { transform: translateX(0); }
+    }
+    .gif-scroll-row {
+      animation: scrollLeft 30s linear infinite;
+      will-change: transform;
+    }
+    .gif-scroll-row.reverse {
+      animation: scrollRight 35s linear infinite;
+    }
+    .gif-scroll-row .phone-frame {
+      flex-shrink: 0;
+      height: 100%;
+    }
+
     /* Green highlight text */
     .green { color: #4ade80; }
 
@@ -454,9 +475,9 @@
 
     <!-- 3. Side Effects -->
     <div class="slide txt-center">
-      <p class="headline">The side effects would've done more harm than good.</p>
+      <p class="headline">I was scared of the side effects.</p>
       <p class="supporting">Sexual dysfunction. Depression. Brain fog. Dependency for life. Heart palpitations.</p>
-      <p class="supporting" style="margin-top: 16px;">I bought a bottle of finasteride at Walgreens. Put it on my bedside table. I couldn't sleep that night.</p>
+      <p class="supporting" style="margin-top: 16px;">My cousins experienced side effects. Thousands of people online called it the worst decision they ever made. I bought a bottle of finasteride — but I couldn't get myself to take it.</p>
     </div>
 
     <!-- 4. The Discovery -->
@@ -639,22 +660,47 @@
       </div>
     </div>
 
-    <!-- 13. Close -->
-    <div class="slide slide-compact txt-center" style="justify-content: center;">
-      <p class="headline headline-xl" style="margin-bottom: 28px;">Join the future of drug-free healthcare.</p>
-      <div class="proof-grid" style="margin: 0 auto;">
-        <div class="proof-cell"><img src="/deck/img/proof_tiktok_stops_hair_loss.jpeg"></div>
-        <div class="proof-cell"><img src="/deck/img/proof_tiktok_it_works.jpeg"></div>
-        <div class="proof-cell"><img src="/deck/img/proof_reddit_30_days.jpeg"></div>
-        <div class="proof-cell"><img src="/deck/img/proof_tiktok_3_months.jpeg"></div>
-        <div class="proof-cell"><img src="/deck/img/proof_tiktok_finasteride_vs_keshah.jpeg"></div>
-        <div class="proof-cell"><img src="/deck/img/proof_whatsapp_hairline.jpeg"></div>
-        <div class="proof-cell"><img src="/deck/img/proof_tiktok_tension_reduced.jpeg"></div>
-        <div class="proof-cell"><img src="/deck/img/proof_reddit_worth_every_penny.jpeg"></div>
-        <div class="proof-cell"><img src="/deck/img/proof_reddit_105_days.jpeg"></div>
+    <!-- 13. Close — Auto-scrolling GIF results wall -->
+    <div class="slide slide-compact txt-center" style="justify-content: center; padding-left: 0 !important; padding-right: 0 !important;">
+      <p class="headline headline-xl" style="margin-bottom: 16px; padding: 0 40px;">Join the future of drug-free healthcare.</p>
+      <div style="overflow: hidden; width: 100%; margin-bottom: 8px;">
+        <div class="gif-scroll-row" id="gifRow1" style="display: flex; gap: 8px; height: 28vh;">
+          <div class="phone-frame"><img src="/deck/img/proof_clip_1.gif"></div>
+          <div class="phone-frame"><img src="/deck/img/women_clip_2.gif"></div>
+          <div class="phone-frame"><img src="/deck/img/proof_clip_4.gif"></div>
+          <div class="phone-frame"><img src="/deck/img/women_clip_6.gif"></div>
+          <div class="phone-frame"><img src="/deck/img/proof_clip_6.gif"></div>
+          <div class="phone-frame"><img src="/deck/img/women_clip_1.gif"></div>
+          <div class="phone-frame"><img src="/deck/img/proof_clip_3.gif"></div>
+          <!-- duplicates for seamless loop -->
+          <div class="phone-frame"><img src="/deck/img/proof_clip_1.gif"></div>
+          <div class="phone-frame"><img src="/deck/img/women_clip_2.gif"></div>
+          <div class="phone-frame"><img src="/deck/img/proof_clip_4.gif"></div>
+          <div class="phone-frame"><img src="/deck/img/women_clip_6.gif"></div>
+          <div class="phone-frame"><img src="/deck/img/proof_clip_6.gif"></div>
+          <div class="phone-frame"><img src="/deck/img/women_clip_1.gif"></div>
+          <div class="phone-frame"><img src="/deck/img/proof_clip_3.gif"></div>
+        </div>
       </div>
-      <p class="supporting" style="margin-top: 28px;">Beyond hair loss: skincare, gut health, stress, sleep — the drug-free wellness super app.</p>
-      <p style="font-size: 17px; font-weight: 500; margin-top: 24px;">aaditya@keshah.com</p>
+      <div style="overflow: hidden; width: 100%;">
+        <div class="gif-scroll-row" id="gifRow2" style="display: flex; gap: 8px; height: 28vh;">
+          <div class="phone-frame"><img src="/deck/img/women_clip_4.gif"></div>
+          <div class="phone-frame"><img src="/deck/img/proof_clip_2.gif"></div>
+          <div class="phone-frame"><img src="/deck/img/women_clip_3.gif"></div>
+          <div class="phone-frame"><img src="/deck/img/proof_clip_7.gif"></div>
+          <div class="phone-frame"><img src="/deck/img/women_clip_5.gif"></div>
+          <div class="phone-frame"><img src="/deck/img/proof_clip_5.gif"></div>
+          <!-- duplicates for seamless loop -->
+          <div class="phone-frame"><img src="/deck/img/women_clip_4.gif"></div>
+          <div class="phone-frame"><img src="/deck/img/proof_clip_2.gif"></div>
+          <div class="phone-frame"><img src="/deck/img/women_clip_3.gif"></div>
+          <div class="phone-frame"><img src="/deck/img/proof_clip_7.gif"></div>
+          <div class="phone-frame"><img src="/deck/img/women_clip_5.gif"></div>
+          <div class="phone-frame"><img src="/deck/img/proof_clip_5.gif"></div>
+        </div>
+      </div>
+      <p class="supporting" style="margin-top: 16px; padding: 0 40px;">Beyond hair loss: skincare, gut health, stress, sleep — the drug-free wellness super app.</p>
+      <p style="font-size: 17px; font-weight: 500; margin-top: 12px;">aaditya@keshah.com</p>
     </div>
 
   </div>
@@ -715,6 +761,10 @@
     }, { passive: true });
 
     show(0);
+
+    // Second GIF row scrolls in reverse direction
+    const gifRow2 = document.getElementById('gifRow2');
+    if (gifRow2) gifRow2.classList.add('reverse');
   </script>
 </body>
 </html>
