@@ -359,6 +359,24 @@
     }
 
     /* Auto-scrolling GIF rows */
+    .gif-scroll-wrap {
+      overflow: hidden;
+      width: 100%;
+    }
+    .gif-scroll-row {
+      display: flex;
+      gap: 8px;
+      width: max-content;
+      animation: scrollLeft 40s linear infinite;
+      will-change: transform;
+    }
+    .gif-scroll-row.reverse {
+      animation: scrollRight 45s linear infinite;
+    }
+    .gif-scroll-row .phone-frame {
+      flex-shrink: 0;
+      height: 100%;
+    }
     @keyframes scrollLeft {
       0% { transform: translateX(0); }
       100% { transform: translateX(-50%); }
@@ -366,17 +384,6 @@
     @keyframes scrollRight {
       0% { transform: translateX(-50%); }
       100% { transform: translateX(0); }
-    }
-    .gif-scroll-row {
-      animation: scrollLeft 30s linear infinite;
-      will-change: transform;
-    }
-    .gif-scroll-row.reverse {
-      animation: scrollRight 35s linear infinite;
-    }
-    .gif-scroll-row .phone-frame {
-      flex-shrink: 0;
-      height: 100%;
     }
 
     /* Green highlight text */
@@ -476,15 +483,21 @@
     <!-- 3. Side Effects -->
     <div class="slide txt-center">
       <p class="headline">I was scared of the side effects.</p>
-      <p class="supporting">Sexual dysfunction. Depression. Brain fog. Dependency for life. Heart palpitations.</p>
+      <p class="supporting">Sexual dysfunction. Depression. Brain fog. Dependency for life.</p>
       <p class="supporting" style="margin-top: 16px;">My cousins experienced side effects. Thousands of people online called it the worst decision they ever made. I bought a bottle of finasteride — but I couldn't get myself to take it.</p>
     </div>
 
-    <!-- 4. The Discovery -->
+    <!-- 4. Buildup — The Research -->
+    <div class="slide txt-center">
+      <p class="headline">I gave myself 6 months to find another way.</p>
+      <p class="supporting">Skipped my CS lectures. Read every study, Reddit post, and research paper I could find.</p>
+    </div>
+
+    <!-- 5. The Discovery — MechanoTherapy -->
     <div class="slide">
-      <p class="headline">I discovered a solution that no one was marketing: scalp massages.</p>
-      <p class="supporting">Not the kind most of us think of. Specific techniques performed rigorously. Think a workout — but for your hair.</p>
-      <p class="supporting" style="margin-top: 16px;">Tight scalp → choked blood vessels → hair can't grow. Minoxidil works by increasing blood flow. Physical techniques do the same thing — without the drugs.</p>
+      <p class="headline">I found that no one was talking about the mechanical aspect of hair loss.</p>
+      <p class="supporting">Tight scalp → choked blood vessels → hair can't grow. Minoxidil works by increasing blood flow. Physical techniques do the same thing — without the drugs.</p>
+      <p class="supporting" style="margin-top: 16px;">I called it: <strong>MechanoTherapy</strong>. Specific techniques performed rigorously. Think a workout — but for your hair.</p>
       <div class="research-grid">
         <div class="research-card"><img src="/deck/img/study_mechanical_stress.png"></div>
         <div class="research-card"><img src="/deck/img/study_hair_thickness.png"></div>
@@ -663,8 +676,8 @@
     <!-- 13. Close — Auto-scrolling GIF results wall -->
     <div class="slide slide-compact txt-center" style="justify-content: center; padding-left: 0 !important; padding-right: 0 !important;">
       <p class="headline headline-xl" style="margin-bottom: 16px; padding: 0 40px;">Join the future of drug-free healthcare.</p>
-      <div style="overflow: hidden; width: 100%; margin-bottom: 8px;">
-        <div class="gif-scroll-row" id="gifRow1" style="display: flex; gap: 8px; height: 28vh;">
+      <div class="gif-scroll-wrap" style="margin-bottom: 8px;">
+        <div class="gif-scroll-row" style="height: 28vh;">
           <div class="phone-frame"><img src="/deck/img/proof_clip_1.gif"></div>
           <div class="phone-frame"><img src="/deck/img/women_clip_2.gif"></div>
           <div class="phone-frame"><img src="/deck/img/proof_clip_4.gif"></div>
@@ -672,7 +685,6 @@
           <div class="phone-frame"><img src="/deck/img/proof_clip_6.gif"></div>
           <div class="phone-frame"><img src="/deck/img/women_clip_1.gif"></div>
           <div class="phone-frame"><img src="/deck/img/proof_clip_3.gif"></div>
-          <!-- duplicates for seamless loop -->
           <div class="phone-frame"><img src="/deck/img/proof_clip_1.gif"></div>
           <div class="phone-frame"><img src="/deck/img/women_clip_2.gif"></div>
           <div class="phone-frame"><img src="/deck/img/proof_clip_4.gif"></div>
@@ -682,15 +694,14 @@
           <div class="phone-frame"><img src="/deck/img/proof_clip_3.gif"></div>
         </div>
       </div>
-      <div style="overflow: hidden; width: 100%;">
-        <div class="gif-scroll-row" id="gifRow2" style="display: flex; gap: 8px; height: 28vh;">
+      <div class="gif-scroll-wrap">
+        <div class="gif-scroll-row reverse" style="height: 28vh;">
           <div class="phone-frame"><img src="/deck/img/women_clip_4.gif"></div>
           <div class="phone-frame"><img src="/deck/img/proof_clip_2.gif"></div>
           <div class="phone-frame"><img src="/deck/img/women_clip_3.gif"></div>
           <div class="phone-frame"><img src="/deck/img/proof_clip_7.gif"></div>
           <div class="phone-frame"><img src="/deck/img/women_clip_5.gif"></div>
           <div class="phone-frame"><img src="/deck/img/proof_clip_5.gif"></div>
-          <!-- duplicates for seamless loop -->
           <div class="phone-frame"><img src="/deck/img/women_clip_4.gif"></div>
           <div class="phone-frame"><img src="/deck/img/proof_clip_2.gif"></div>
           <div class="phone-frame"><img src="/deck/img/women_clip_3.gif"></div>
@@ -762,9 +773,6 @@
 
     show(0);
 
-    // Second GIF row scrolls in reverse direction
-    const gifRow2 = document.getElementById('gifRow2');
-    if (gifRow2) gifRow2.classList.add('reverse');
   </script>
 </body>
 </html>
