@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Get Keshah</title>
+  <script>
+    const ua = navigator.userAgent || '';
+    if (/iPhone|iPad|iPod/i.test(ua)) {
+      window.location.href = 'https://apps.apple.com/app/keshah/id6450676544';
+    } else if (/Android/i.test(ua)) {
+      window.location.href = 'https://play.google.com/store/apps/details?id=com.keshahapp.hair';
+    } else {
+      window.location.href = 'https://keshah.com';
+    }
+  </script>
+</head>
+<body style="background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;">
+  <p>Redirecting to Keshah...</p>
+</body>
+</html>
