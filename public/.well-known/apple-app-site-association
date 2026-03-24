@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "6MN2V7UKL9.com.keshah.app",
+        "paths": ["/app", "/app/*", "/trial", "/trial/*"]
+      }
+    ]
+  }
+}
