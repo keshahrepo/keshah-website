@@ -5,16 +5,21 @@
   <title>Get Keshah</title>
   <script>
     const ua = navigator.userAgent || '';
-    if (/iPhone|iPad|iPod/i.test(ua)) {
-      window.location.href = 'https://apps.apple.com/app/keshah/id6450676544';
-    } else if (/Android/i.test(ua)) {
-      window.location.href = 'https://play.google.com/store/apps/details?id=com.keshahapp.hair';
+    if (/Android/i.test(ua)) {
+      // Try to open app via intent, fallback to Play Store
+      window.location.href = 'intent://app#Intent;scheme=keshah;package=com.keshahapp.hair;S.browser_fallback_url=https://play.google.com/store/apps/details?id=com.keshahapp.hair;end';
+    } else if (/iPhone|iPad|iPod/i.test(ua)) {
+      // iOS universal link handles it if app is installed
+      // Fallback to App Store after short delay
+      setTimeout(function() {
+        window.location.href = 'https://apps.apple.com/app/keshah/id6450676544';
+      }, 500);
     } else {
       window.location.href = 'https://keshah.com';
     }
   </script>
 </head>
 <body style="background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;">
-  <p>Redirecting to Keshah...</p>
+  <p>Opening Keshah...</p>
 </body>
 </html>
