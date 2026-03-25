@@ -3,6 +3,9 @@ import { getFirebaseAdmin } from "@/lib/firebase-admin";
 
 export const maxDuration = 60;
 
+// Only count users after WhatsApp nurture + new paywall launched
+const WHATSAPP_LAUNCH_DATE = new Date("2026-03-25T00:00:00Z");
+
 // Must match app_consts.dart tier-1 timezones
 const TIER_1_TIMEZONES = new Set([
   "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
@@ -66,6 +69,13 @@ export async function GET(request: Request) {
       const geo = classifyGeo(tz);
 
       if (geoFilter !== "all" && geo !== geoFilter) continue;
+
+      // Skip users from before WhatsApp launch
+      const nurtureStart = data.nurture_started_at;
+      if (nurtureStart) {
+        const startMs = nurtureStart.toMillis ? nurtureStart.toMillis() : (nurtureStart._seconds || 0) * 1000;
+        if (startMs < WHATSAPP_LAUNCH_DATE.getTime()) continue;
+      }
 
       totalPaywallViewed++;
 
