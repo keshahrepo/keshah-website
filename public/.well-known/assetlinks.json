@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.keshahapp.hair",
+      "sha256_cert_fingerprints": ["A2:BD:1E:CC:75:8A:A7:87:83:A3:86:88:68:3D:34:FC:40:F0:F8:99:9C:3F:4A:61:6A:DA:42:14:91:51:4A:85"]
+    }
+  }
+]
