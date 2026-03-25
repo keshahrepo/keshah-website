@@ -34,19 +34,30 @@ interface WhatsAppMetrics {
   };
 }
 
+type GeoKey = "all" | "tier_1" | "india" | "tier_2";
+
+const GEO_LABELS: Record<GeoKey, string> = {
+  all: "All Users",
+  tier_1: "Tier 1",
+  india: "India",
+  tier_2: "Tier 2",
+};
+
 export default function WhatsAppPage() {
   const [metrics, setMetrics] = useState<WhatsAppMetrics | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedGeo, setSelectedGeo] = useState<GeoKey>("india");
 
   useEffect(() => {
-    fetch("/api/metrics/whatsapp")
+    setLoading(true);
+    fetch(`/api/metrics/whatsapp?geo=${selectedGeo}`)
       .then((r) => r.json())
       .then((data) => {
         setMetrics(data);
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, []);
+  }, [selectedGeo]);
 
   if (loading) {
     return (
@@ -76,13 +87,36 @@ export default function WhatsAppPage() {
 
   return (
     <div>
-      <div style={{ marginBottom: 24 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>
-          India WhatsApp Funnel
-        </h2>
-        <p style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>
-          WhatsApp nurture performance and conversion tracking
-        </p>
+      <div className="flex-stack-mobile" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, gap: 12 }}>
+        <div>
+          <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>
+            WhatsApp Funnel
+          </h2>
+          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>
+            WhatsApp nurture performance and conversion tracking
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {(["all", "tier_1", "india", "tier_2"] as GeoKey[]).map((geo) => (
+            <button
+              key={geo}
+              onClick={() => setSelectedGeo(geo)}
+              style={{
+                padding: "7px 14px",
+                fontSize: 12,
+                fontWeight: 500,
+                borderRadius: 20,
+                border: "none",
+                cursor: "pointer",
+                background: selectedGeo === geo ? "#fff" : "rgba(255,255,255,0.06)",
+                color: selectedGeo === geo ? "#000" : "rgba(255,255,255,0.5)",
+                transition: "all 0.15s",
+              }}
+            >
+              {GEO_LABELS[geo]}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Funnel overview */}

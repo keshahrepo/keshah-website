@@ -3,7 +3,26 @@ import { getFirebaseAdmin } from "@/lib/firebase-admin";
 
 export const maxDuration = 60;
 
-export async function GET() {
+// Must match app_consts.dart tier-1 timezones
+const TIER_1_TIMEZONES = new Set([
+  "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
+  "America/Toronto", "America/Vancouver", "Europe/London", "Europe/Dublin",
+  "Australia/Sydney", "Australia/Melbourne", "Pacific/Auckland",
+  "Europe/Berlin", "Europe/Amsterdam", "Europe/Stockholm", "Europe/Copenhagen",
+  "Europe/Oslo", "Europe/Zurich", "Europe/Vienna", "Europe/Brussels", "Europe/Helsinki", "Europe/Paris",
+  "Asia/Singapore", "Asia/Dubai", "Asia/Hong_Kong", "Asia/Kuwait", "Asia/Qatar", "Asia/Riyadh",
+]);
+const INDIA_TIMEZONES = new Set(["Asia/Kolkata", "Asia/Calcutta"]);
+
+function classifyGeo(tz: string): "tier_1" | "india" | "tier_2" {
+  if (TIER_1_TIMEZONES.has(tz)) return "tier_1";
+  if (INDIA_TIMEZONES.has(tz)) return "india";
+  return "tier_2";
+}
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const geoFilter = searchParams.get("geo") || "all"; // all, tier_1, india, tier_2
   try {
     const { db } = getFirebaseAdmin();
 
@@ -20,7 +39,8 @@ export async function GET() {
         "converted_at",
         "phone_number",
         "selected_gender",
-        "user_local_time_zone"
+        "user_local_time_zone",
+        "userLocalTimeZone"
       )
       .get();
 
@@ -42,6 +62,11 @@ export async function GET() {
 
     for (const doc of snapshot.docs) {
       const data = doc.data();
+      const tz = data.userLocalTimeZone || data.user_local_time_zone || "";
+      const geo = classifyGeo(tz);
+
+      if (geoFilter !== "all" && geo !== geoFilter) continue;
+
       totalPaywallViewed++;
 
       const hasPhone = !!data.phone_number?.complete_number;
