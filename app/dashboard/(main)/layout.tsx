@@ -26,6 +26,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/dashboard", label: "Overview", icon: "grid", roles: ["admin"] },
       { href: "/dashboard/marketing", label: "Marketing", icon: "megaphone", roles: ["admin", "marketing"] },
       { href: "/dashboard/onboarding", label: "Onboarding", icon: "funnel", roles: ["admin"] },
+      { href: "/dashboard/whatsapp", label: "WhatsApp", icon: "chat", roles: ["admin"] },
       { href: "/dashboard/retention", label: "Retention", icon: "repeat", roles: ["admin"] },
     ],
   },
@@ -68,6 +69,12 @@ function NavIcon({ icon, active }: { icon: string; active: boolean }) {
       return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2}>
           <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+        </svg>
+      );
+    case "chat":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2}>
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </svg>
       );
     case "repeat":
@@ -290,6 +297,34 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </Link>
           );
         })}
+        <button
+          onClick={() => {
+            fetch("/api/auth/logout", { method: "POST" }).then(() => router.push("/dashboard/login"));
+          }}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 2,
+            padding: "8px 4px",
+            fontSize: 10,
+            fontWeight: 500,
+            color: "rgba(255,255,255,0.35)",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            minWidth: 48,
+            minHeight: 44,
+            justifyContent: "center",
+          }}
+        >
+          <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth={2}>
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+          Log out
+        </button>
       </nav>
 
       <style>{`

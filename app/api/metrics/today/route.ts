@@ -57,6 +57,9 @@ const SELECTED_FIELDS = [
   "inflammation_check_completed", "inflammation_check_result",
   "scalp_health_support_purchased", "completed_donation_amount",
   "progress",
+  "conversion_source", "converted_at",
+  "nurture_whatsapp_sent", "whatsapp_converted",
+  "nurture_started_at", "phone_number",
 ];
 
 export async function GET() {
