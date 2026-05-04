@@ -20,6 +20,7 @@ interface VerifyPayload {
   razorpay_signature: string;
   firebaseUid: string;
   email?: string;
+  photoHeroOptIn?: boolean;
 }
 
 function verifySignature(orderId: string, paymentId: string, signature: string): boolean {
@@ -64,6 +65,9 @@ export async function POST(req: Request) {
       regrowth_kit_payment_provider: "razorpay",
       regrowth_kit_razorpay_order_id: razorpay_order_id,
       regrowth_kit_razorpay_payment_id: razorpay_payment_id,
+      // Photo Hero opt-in: drives the month-4 photo prompt + Aadi-side
+      // review tooling. Stored only when explicitly opted in.
+      ...(payload.photoHeroOptIn ? { photo_hero_opted_in: true } : {}),
       modified_at: FieldValue.serverTimestamp(),
     },
     { merge: true }

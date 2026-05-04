@@ -18,27 +18,35 @@ const razorpay = new Razorpay({
 // ₹19,000 = 1,900,000 paise. Hardcoded server-side so the client can't
 // forge a cheaper amount.
 const KIT_AMOUNT_PAISE = 1_900_000;
+// Photo Hero — 20% off in exchange for sharing before/after photos at
+// month 4. ₹15,200 = 1,520,000 paise. Server enforces the exact discount
+// (client just sends a flag, can't fake the amount).
+const KIT_AMOUNT_PAISE_PHOTO_HERO = 1_520_000;
 const KIT_CURRENCY = "INR";
 
 export async function POST(req: Request) {
   try {
-    const { uid, email } = (await req.json()) as {
+    const { uid, email, photoHeroOptIn } = (await req.json()) as {
       uid?: string;
       email?: string;
+      photoHeroOptIn?: boolean;
     };
 
     if (!uid) {
       return NextResponse.json({ ok: false, error: "missing_uid" }, { status: 400 });
     }
 
+    const amount = photoHeroOptIn ? KIT_AMOUNT_PAISE_PHOTO_HERO : KIT_AMOUNT_PAISE;
+
     const order = await razorpay.orders.create({
-      amount: KIT_AMOUNT_PAISE,
+      amount,
       currency: KIT_CURRENCY,
       receipt: `kit_${uid}_${Date.now()}`,
       notes: {
         product: "regrowth_kit",
         uid,
         ...(email ? { email } : {}),
+        ...(photoHeroOptIn ? { photo_hero: "true" } : {}),
         source: "mobile_india",
       },
     });
