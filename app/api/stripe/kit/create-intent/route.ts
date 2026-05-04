@@ -14,7 +14,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-11-20.acacia",
+  apiVersion: "2023-10-16",
 });
 
 // $495 = 49,500 cents. $396 with Photo Hero = 39,600 cents.
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
     //    mobile flutter_stripe expects.
     const ephemeralKey = await stripe.ephemeralKeys.create(
       { customer: customerId },
-      { apiVersion: "2024-11-20.acacia" }
+      { apiVersion: "2023-10-16" }
     );
 
     // 3. Create the payment intent for the kit.
