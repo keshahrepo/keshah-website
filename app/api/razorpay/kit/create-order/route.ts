@@ -15,13 +15,13 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET!,
 });
 
-// ₹19,000 = 1,900,000 paise. Hardcoded server-side so the client can't
+// ₹24,000 = 2,400,000 paise. Hardcoded server-side so the client can't
 // forge a cheaper amount.
-const KIT_AMOUNT_PAISE = 1_900_000;
-// Photo Hero — 20% off in exchange for sharing before/after photos at
-// month 4. ₹15,200 = 1,520,000 paise. Server enforces the exact discount
+const KIT_AMOUNT_PAISE = 2_400_000;
+// Photo Hero — 20% off in exchange for sharing an honest review at
+// month 4. ₹19,200 = 1,920,000 paise. Server enforces the exact discount
 // (client just sends a flag, can't fake the amount).
-const KIT_AMOUNT_PAISE_PHOTO_HERO = 1_520_000;
+const KIT_AMOUNT_PAISE_PHOTO_HERO = 1_920_000;
 const KIT_CURRENCY = "INR";
 
 export async function POST(req: Request) {
