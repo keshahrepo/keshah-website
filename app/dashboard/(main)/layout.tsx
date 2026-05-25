@@ -27,7 +27,12 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/dashboard/marketing", label: "Marketing", icon: "megaphone", roles: ["admin", "marketing"] },
       { href: "/dashboard/onboarding", label: "Onboarding", icon: "funnel", roles: ["admin"] },
       { href: "/dashboard/whatsapp", label: "WhatsApp", icon: "chat", roles: ["admin"] },
+      { href: "/dashboard/support", label: "Support", icon: "support", roles: ["admin"] },
       { href: "/dashboard/retention", label: "Retention", icon: "repeat", roles: ["admin"] },
+      { href: "/dashboard/successful-users", label: "Successful Users", icon: "users", roles: ["admin"] },
+      { href: "/dashboard/funnel", label: "Funnel · /startus3", icon: "funnel", roles: ["admin"] },
+      { href: "/dashboard/trials", label: "Trials", icon: "bolt", roles: ["admin"] },
+      { href: "/dashboard/affiliates", label: "Affiliates", icon: "link", roles: ["admin"] },
     ],
   },
   {
@@ -133,6 +138,19 @@ function NavIcon({ icon, active }: { icon: string; active: boolean }) {
           <circle cx="9" cy="7" r="4" />
           <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
           <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+      );
+    case "link":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </svg>
+      );
+    case "support":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
         </svg>
       );
     default:
