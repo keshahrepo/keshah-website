@@ -53,17 +53,17 @@ const CASE_STUDIES: CaseStudy[] = [
     location: "Markham, Ontario, Canada",
     hairLossType: "Androgenic Alopecia — Crown Thinning",
     regimen: [
-      "Standardized Scalp Massage",
-      "Neck Tension Release",
+      "KESHAH Mechanotherapy (Scalp + Neck)",
+      "Regrowth Microneedling (Added Sept 2025)",
       "KESHAH Oils",
     ],
     duration: "14 months",
     photo: "/start/results/regrowth/regrowth_crown.png",
     photoAlt: "Najinthan's crown regrowth after 14 months on the KESHAH routine",
     paragraphs: [
-      "Najinthan had years of progressive crown thinning. Before KESHAH he tried high-dose Omega-3 and biotin supplements — money wasted, no results. He wanted a natural approach that addressed the root cause, not another drug.",
-      "He started the routine in April 2025. Daily 20-45 minute sessions, no missed days. No drugs, no minoxidil, no finasteride — just the mechanical protocol.",
-      "14 months in, he's still consistent. Density has visibly returned in previously thinning areas.",
+      "Najinthan had noticed his crown thinning for years. He had tried high-dose Omega-3 and biotin supplements without any change to his hair. He wasn't willing to take finasteride or minoxidil.",
+      "He started the KESHAH routine in April 2025 with scalp and neck mechanotherapy — 20 to 45 minutes per day. In September 2025 he added regrowth microneedling to the protocol.",
+      "Fourteen months in, his hair fall has stopped and density has returned to previously thinning areas.",
     ],
     quote:
       "If I never started KESHAH, I'd have been almost bald by now. It's made a huge difference in my life and given me a lot of confidence.",
@@ -73,7 +73,7 @@ const CASE_STUDIES: CaseStudy[] = [
     location: "Bay Area, USA / India",
     hairLossType: "Androgenic Alopecia — Diffuse Thinning",
     regimen: [
-      "Standardized Scalp Massage",
+      "KESHAH Mechanotherapy (Scalp + Neck)",
       "Microneedling (0.7mm → 2mm depth)",
       "KESHAH Oils",
     ],
@@ -81,9 +81,9 @@ const CASE_STUDIES: CaseStudy[] = [
     photo: "/start/results/regrowth/regrowth_6.png",
     photoAlt: "Arush's hair regrowth after the KESHAH microneedling protocol",
     paragraphs: [
-      "Arush came to KESHAH with a scientist's skepticism. He knew the DHT-blocker landscape from his pharmaceutical background — and he specifically wanted a route that didn't touch that pathway. No finasteride, no minoxidil, no side-effect gamble.",
-      "He runs the advanced KESHAH protocol: dry massages plus microneedling. Biweekly at 0.7mm depth to start, working up to weekly at 2mm depth.",
-      "Every two months he documents visible density gains. His hair fall grinds to a halt when he stays consistent.",
+      "Arush came to KESHAH with a pharmaceutical background and specific concerns about DHT-blocker side effects. He wanted a route that didn't rely on finasteride or minoxidil.",
+      "He started the KESHAH regrowth protocol — daily mechanotherapy plus microneedling. Biweekly at 0.7mm depth to start, progressing to weekly at 2mm.",
+      "He has documented visible density gains at every two-month check-in.",
     ],
     quote:
       "Day to day hairfall basically grinds to a halt when I microneedle more. I had great growth even without DHT blockers.",
@@ -93,17 +93,17 @@ const CASE_STUDIES: CaseStudy[] = [
     location: "Paris, France",
     hairLossType: "Androgenic Alopecia — Early Stage",
     regimen: [
-      "Standardized Scalp Massage",
+      "KESHAH Mechanotherapy (Scalp + Neck)",
       "Microneedling (Weekly)",
       "KESHAH Oils",
     ],
     duration: "5 months",
-    photo: "/start/results/regrowth/regrowth_4.png",
-    photoAlt: "Théo's hair progression on the KESHAH routine",
+    photo: "/start/results/regrowth/theo/theo_composite.jpg",
+    photoAlt: "Théo — Day 1 (14 Dec) and Day 165 (27 May) on the KESHAH routine",
     paragraphs: [
-      "Théo started with the free KESHAH stoppage routine — daily scalp massages, no drugs. A few months in, his scalp had loosened and his hair fall had stopped.",
-      "But he wanted more than stopping. He wanted regrowth. He upgraded to the KESHAH regrowth kit: microneedling once a week, plus the oils and daily massages.",
-      "Still in progress — hair fall has stopped, regrowth is starting. He's the customer story most people are living through right now.",
+      "Théo started with the KESHAH stoppage routine — daily mechanotherapy, no drugs. A few months in, his scalp had loosened and his hair fall had stopped.",
+      "He then upgraded to the regrowth kit, adding weekly microneedling to the protocol.",
+      "Five months in, hair fall has stopped and regrowth is beginning to fill in the hairline.",
     ],
     quote: "My scalp is more flexible. I don't see hair loss anymore.",
   },
@@ -249,43 +249,6 @@ export default function ResultsPage() {
               />
             </div>
           ))}
-        </div>
-      </section>
-
-      {/* ── How this started (Aadi's brief story) ── */}
-      <section className={styles.founderSection}>
-        <div className={styles.founderInner}>
-          <p className={styles.eyebrow}>How this started</p>
-          <h2 className={styles.h2}>The founder&rsquo;s own journey</h2>
-          <div className={styles.founderBeforeAfter}>
-            <figure className={styles.founderFig}>
-              <Image
-                src="/start/story/before_hairline.jpg"
-                alt="Aadi's hairline before"
-                width={480}
-                height={480}
-                className={styles.founderImg}
-              />
-              <figcaption className={styles.founderLabel}>Before</figcaption>
-            </figure>
-            <figure className={styles.founderFig}>
-              <Image
-                src="/start/story/after_hairline.jpg"
-                alt="Aadi's hairline after"
-                width={480}
-                height={480}
-                className={styles.founderImg}
-              />
-              <figcaption className={styles.founderLabel}>After</figcaption>
-            </figure>
-          </div>
-          <p className={styles.founderText}>
-            KESHAH started with Aadi&rsquo;s own hair loss journey. After a
-            dermatologist told him he&rsquo;d be bald in two years without
-            finasteride, he refused. He spent the next four years figuring out
-            an alternative — scalp tension and blood flow — and built KESHAH
-            so others could follow the same protocol.
-          </p>
         </div>
       </section>
 
