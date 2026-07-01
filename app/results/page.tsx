@@ -129,7 +129,8 @@ const TESTIMONIALS = [
   { src: "/start/results/women_clip_5.mp4",  poster: "/start/results/women_clip_5_poster.jpg" },
   { src: "/start/results/proof_clip_6.mp4",  poster: "/start/results/proof_clip_6_poster.jpg" },
   { src: "/start/results/women_clip_6.mp4",  poster: "/start/results/women_clip_6_poster.jpg" },
-  { src: "/start/results/proof_clip_7.mp4",  poster: "/start/results/proof_clip_7_poster.jpg" },
+  // Trimmed from 13 → 12 so the grid rows are symmetric (3 rows of 4
+  // on desktop, 4 rows of 3 on tablet, 6 rows of 2 on mobile).
 ];
 
 // Note: Removed the standalone "Before & after" grid and "From the
@@ -150,7 +151,7 @@ export default function ResultsPage() {
             Real Results from<br />KESHAH Members
           </h1>
           <p className={styles.heroLead}>
-            Three members share their journey with the KESHAH routine — the
+            Members share their journey with the KESHAH routine — the
             protocol, the timeline, and what actually happened.
           </p>
           <p className={styles.heroByline}>
@@ -255,7 +256,7 @@ export default function ResultsPage() {
       {/* ── CTA (App Store + Play Store badges — matches /m and /women) ── */}
       <section className={styles.cta}>
         <div className={styles.ctaInner}>
-          <h2 className={styles.ctaHeadline}>Try the routine free</h2>
+          <h2 className={styles.ctaHeadline}>Stop your hair loss without drugs</h2>
           <div className={styles.storeButtons}>
             <a
               href="https://apps.apple.com/app/id6450676544"
