@@ -1,139 +1,139 @@
-/* KESHAH results page — mirrors the /start flow's cream + dark-text
-   aesthetic (Poppins, rounded cards, generous whitespace). Not using
-   start.module.css directly because that's built for full-screen quiz
-   steps; this is a scrollable marketing page. */
+/* KESHAH results page — dark editorial aesthetic to match /m and /women
+   landing pages. Generous vertical rhythm, minimal chrome, big imagery.
+   Colors mirror /m: black bg, white text, subtle white overlays for
+   cards + borders. */
 
 .root {
   min-height: 100vh;
-  background: var(--bg, #FAF7F2);
-  color: var(--text, #1A1A1A);
+  background: #000;
+  color: #fff;
   font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
 /* ── Hero ── */
 .hero {
-  padding: 56px 24px 32px;
-  border-bottom: 1px solid rgba(26, 26, 26, 0.06);
-}
-
-.heroInner {
-  max-width: 720px;
-  margin: 0 auto;
+  padding: 88px 24px 72px;
   text-align: center;
 }
 
+.heroInner {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
 .eyebrow {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
-  letter-spacing: 0.8px;
+  letter-spacing: 1.4px;
   text-transform: uppercase;
-  color: rgba(26, 26, 26, 0.55);
-  margin: 0 0 12px;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0 0 24px;
 }
 
 .headline {
-  font-size: clamp(32px, 7vw, 52px);
+  font-size: clamp(40px, 8vw, 72px);
   font-weight: 600;
-  letter-spacing: -1.5px;
-  line-height: 1.1;
+  letter-spacing: -2px;
+  line-height: 1.05;
   margin: 0 0 20px;
-  color: var(--text, #1A1A1A);
+  color: #fff;
 }
 
 .subhead {
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.5;
-  color: rgba(26, 26, 26, 0.65);
-  max-width: 560px;
-  margin: 0 auto 32px;
+  color: rgba(255, 255, 255, 0.55);
+  max-width: 520px;
+  margin: 0 auto;
+  letter-spacing: -0.1px;
+}
+
+.trustLine {
+  margin: 20px auto 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: -0.1px;
+}
+
+.stars {
+  color: #F5B84B;
+}
+
+.trustDot {
+  margin: 0 8px;
+  opacity: 0.4;
 }
 
 .beforeAfter {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin: 40px auto 0;
-  max-width: 600px;
+  gap: 10px;
+  margin: 56px auto 0;
+  max-width: 720px;
 }
 
 .baFig {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 .baImg {
   width: 100%;
   height: auto;
-  border-radius: 16px;
+  border-radius: 20px;
   object-fit: cover;
   aspect-ratio: 1 / 1;
-  background: rgba(26, 26, 26, 0.06);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .baLabel {
-  font-size: 13px;
-  font-weight: 500;
-  color: rgba(26, 26, 26, 0.65);
-  text-align: center;
-}
-
-/* ── Trust bar ── */
-.trust {
-  padding: 24px;
-  border-bottom: 1px solid rgba(26, 26, 26, 0.06);
-  background: rgba(26, 26, 26, 0.03);
-}
-
-.trustInner {
-  max-width: 720px;
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-}
-
-.trustCell {
-  text-align: center;
-}
-
-.trustNum {
-  font-size: clamp(20px, 4vw, 28px);
-  font-weight: 600;
-  letter-spacing: -0.5px;
-  color: var(--text, #1A1A1A);
-}
-
-.trustLabel {
   font-size: 12px;
   font-weight: 500;
+  letter-spacing: 1.2px;
   text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: rgba(26, 26, 26, 0.55);
-  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+}
+
+@media (min-width: 768px) {
+  .beforeAfter {
+    gap: 16px;
+    margin-top: 72px;
+  }
 }
 
 /* ── Section shell ── */
 .section {
-  padding: 56px 24px;
-  max-width: 1120px;
+  padding: 96px 24px;
+  max-width: 1200px;
   margin: 0 auto;
+}
+
+@media (max-width: 640px) {
+  .section {
+    padding: 72px 20px;
+  }
 }
 
 .sectionHeader {
   text-align: center;
-  margin-bottom: 32px;
+  margin-bottom: 48px;
+  max-width: 640px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .h2 {
-  font-size: clamp(24px, 5vw, 34px);
+  font-size: clamp(28px, 5vw, 40px);
   font-weight: 600;
-  letter-spacing: -1px;
-  line-height: 1.2;
-  margin: 0 0 12px;
-  color: var(--text, #1A1A1A);
+  letter-spacing: -1.2px;
+  line-height: 1.15;
+  margin: 0 0 16px;
+  color: #fff;
 }
 
 /* ── Video grid (testimonials + transformations) ── */
@@ -150,18 +150,25 @@
   }
 }
 
-@media (min-width: 960px) {
+@media (min-width: 1024px) {
   .videoGrid {
-    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
   }
 }
 
 .videoCard {
-  background: rgba(26, 26, 26, 0.06);
-  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
   overflow: hidden;
   aspect-ratio: 9 / 16;
   position: relative;
+  transition: transform 0.3s ease, border-color 0.3s ease;
+}
+
+.videoCard:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.14);
 }
 
 .video {
@@ -176,11 +183,11 @@
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 12px;
+  padding: 16px;
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0) 100%);
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0) 100%);
   color: #FFF;
   pointer-events: none;
 }
@@ -194,10 +201,12 @@
 .videoDay {
   font-size: 12px;
   font-weight: 500;
-  opacity: 0.85;
+  opacity: 0.7;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
 }
 
-/* ── Regrowth grid ── */
+/* ── Regrowth grid — bigger, more editorial than videos ── */
 .regrowthGrid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -211,19 +220,27 @@
   }
 }
 
-@media (min-width: 960px) {
+@media (min-width: 1024px) {
   .regrowthGrid {
     grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
   }
 }
 
 .regrowthCard {
   margin: 0;
-  background: rgba(26, 26, 26, 0.06);
-  border-radius: 16px;
+  border-radius: 20px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: transform 0.3s ease, border-color 0.3s ease;
+}
+
+.regrowthCard:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.14);
 }
 
 .regrowthImg {
@@ -235,14 +252,15 @@
 }
 
 .regrowthName {
-  padding: 10px 14px;
-  font-size: 13px;
+  padding: 14px 16px;
+  font-size: 12px;
   font-weight: 500;
-  color: rgba(26, 26, 26, 0.85);
-  background: rgba(26, 26, 26, 0.03);
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.6);
 }
 
-/* ── Screenshot grid (masonry-ish) ── */
+/* ── Screenshot grid (masonry) ── */
 .screenshotGrid {
   columns: 2;
   column-gap: 12px;
@@ -255,23 +273,31 @@
   }
 }
 
-@media (min-width: 960px) {
+@media (min-width: 1024px) {
   .screenshotGrid {
     columns: 4;
+    column-gap: 20px;
   }
 }
 
 .screenshotCard {
   break-inside: avoid;
   margin-bottom: 12px;
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
-  background: rgba(26, 26, 26, 0.06);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 @media (min-width: 640px) {
   .screenshotCard {
     margin-bottom: 16px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .screenshotCard {
+    margin-bottom: 20px;
   }
 }
 
@@ -281,12 +307,12 @@
   display: block;
 }
 
-/* ── Guarantee card ── */
+/* ── Guarantee card — cream-on-dark for contrast ── */
 .guaranteeCard {
-  background: #1A1A1A;
-  color: #FAF7F2;
-  border-radius: 20px;
-  padding: 32px;
+  background: #FAF7F2;
+  color: #1A1A1A;
+  border-radius: 24px;
+  padding: 40px 32px;
   max-width: 720px;
   margin: 0 auto;
 }
@@ -294,72 +320,84 @@
 .guaranteeInner {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 24px;
 }
 
 .guaranteeAvatar {
   border-radius: 50%;
   flex-shrink: 0;
   object-fit: cover;
+  border: 2px solid rgba(26, 26, 26, 0.08);
 }
 
 .guaranteeQuote {
-  font-size: 17px;
+  font-size: 18px;
   line-height: 1.5;
   font-weight: 500;
-  margin: 0 0 8px;
+  margin: 0 0 10px;
   letter-spacing: -0.3px;
 }
 
 .guaranteeName {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
-  opacity: 0.7;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: rgba(26, 26, 26, 0.55);
   margin: 0;
 }
 
-@media (max-width: 480px) {
+@media (max-width: 640px) {
+  .guaranteeCard {
+    padding: 32px 24px;
+  }
   .guaranteeInner {
     flex-direction: column;
     text-align: center;
-    gap: 16px;
+    gap: 20px;
   }
 }
 
 /* ── CTA ── */
 .cta {
-  padding: 64px 24px 96px;
-  background: rgba(26, 26, 26, 0.03);
-  border-top: 1px solid rgba(26, 26, 26, 0.06);
+  padding: 96px 24px 128px;
+  text-align: center;
 }
 
 .ctaInner {
   max-width: 560px;
   margin: 0 auto;
-  text-align: center;
 }
 
 .ctaHeadline {
-  font-size: clamp(28px, 6vw, 40px);
+  font-size: clamp(32px, 6vw, 48px);
   font-weight: 600;
-  letter-spacing: -1.2px;
-  line-height: 1.15;
-  margin: 0 0 12px;
+  letter-spacing: -1.4px;
+  line-height: 1.1;
+  margin: 0 0 16px;
+  color: #fff;
+}
+
+.ctaSubhead {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.55);
+  margin: 0 0 32px;
+  letter-spacing: -0.1px;
 }
 
 .ctaButtons {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin: 24px auto 0;
+  margin: 0 auto;
   max-width: 320px;
 }
 
 .btnPrimary {
   display: block;
   padding: 18px 24px;
-  background: #1A1A1A;
-  color: #FAF7F2;
+  background: #fff;
+  color: #000;
   font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.2px;
@@ -381,24 +419,25 @@
   display: block;
   padding: 18px 24px;
   background: transparent;
-  color: #1A1A1A;
-  border: 1px solid rgba(26, 26, 26, 0.2);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
   font-size: 15px;
   font-weight: 500;
   letter-spacing: -0.2px;
   text-align: center;
   border-radius: 12px;
   text-decoration: none;
-  transition: background 0.2s;
+  transition: background 0.2s, border-color 0.2s;
 }
 
 .btnSecondary:hover {
-  background: rgba(26, 26, 26, 0.04);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
 .ctaFinePrint {
-  margin-top: 20px;
+  margin-top: 24px;
   font-size: 12px;
-  color: rgba(26, 26, 26, 0.5);
-  letter-spacing: 0.2px;
+  color: rgba(255, 255, 255, 0.4);
+  letter-spacing: 0.3px;
 }

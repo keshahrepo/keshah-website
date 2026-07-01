@@ -77,9 +77,10 @@ const REGROWTH = [
   { name: "Member",    img: "/start/results/regrowth/regrowth_5.png" },
 ];
 
-// 15 social proof screenshots — TikTok / Reddit / iMessage / WhatsApp
+// 12 social proof screenshots — TikTok / Reddit / iMessage / WhatsApp
 // captures of users describing their results. Already public source
-// content (they were posted publicly on TikTok/Reddit originally).
+// content (posted publicly on those platforms originally). Trimmed from
+// 15 to 12 for a cleaner 3-column masonry (was overflowing on desktop).
 const SCREENSHOTS = [
   "/start/results/proof_tiktok_finasteride_vs_keshah.jpeg",
   "/start/results/proof_reddit_5_month.jpeg",
@@ -90,11 +91,8 @@ const SCREENSHOTS = [
   "/start/results/proof_whatsapp_hairline.jpeg",
   "/start/results/proof_tiktok_stops_hair_loss.jpeg",
   "/start/results/proof_reddit_worth_every_penny.jpeg",
-  "/start/results/proof_tiktok_it_works.jpeg",
   "/start/results/proof_imessage_grateful.jpeg",
-  "/start/results/proof_reddit_30_days.jpeg",
   "/start/results/proof_whatsapp_one_year.jpeg",
-  "/start/results/proof_tiktok_2_days_difference.jpeg",
   "/start/results/proof_women_zukie.jpeg",
 ];
 
@@ -104,13 +102,20 @@ export default function ResultsPage() {
       {/* ── Hero ── */}
       <section className={styles.hero}>
         <div className={styles.heroInner}>
-          <p className={styles.eyebrow}>Real people. Real results.</p>
+          <p className={styles.eyebrow}>Real people · Real results</p>
           <h1 className={styles.headline}>
             Stop your hair loss.<br />No drugs.
           </h1>
           <p className={styles.subhead}>
             Every photo, video, and story on this page is a real member
-            of KESHAH — sharing what happened when they fixed scalp tension.
+            of KESHAH.
+          </p>
+          <p className={styles.trustLine}>
+            <span className={styles.stars}>★</span> 4.8
+            <span className={styles.trustDot}>·</span>
+            35,000+ members
+            <span className={styles.trustDot}>·</span>
+            60-day guarantee
           </p>
 
           {/* Aadi's before/after — self-consented (founder). */}
@@ -123,7 +128,7 @@ export default function ResultsPage() {
                 height={480}
                 className={styles.baImg}
               />
-              <figcaption className={styles.baLabel}>Aadi — Before</figcaption>
+              <figcaption className={styles.baLabel}>Aadi · Before</figcaption>
             </figure>
             <figure className={styles.baFig}>
               <Image
@@ -133,26 +138,8 @@ export default function ResultsPage() {
                 height={480}
                 className={styles.baImg}
               />
-              <figcaption className={styles.baLabel}>Aadi — After</figcaption>
+              <figcaption className={styles.baLabel}>Aadi · After</figcaption>
             </figure>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Trust bar ── */}
-      <section className={styles.trust}>
-        <div className={styles.trustInner}>
-          <div className={styles.trustCell}>
-            <div className={styles.trustNum}>35,000+</div>
-            <div className={styles.trustLabel}>members</div>
-          </div>
-          <div className={styles.trustCell}>
-            <div className={styles.trustNum}>★ 4.8</div>
-            <div className={styles.trustLabel}>App Store</div>
-          </div>
-          <div className={styles.trustCell}>
-            <div className={styles.trustNum}>60 days</div>
-            <div className={styles.trustLabel}>guarantee</div>
           </div>
         </div>
       </section>
@@ -284,7 +271,7 @@ export default function ResultsPage() {
       <section className={styles.cta}>
         <div className={styles.ctaInner}>
           <h2 className={styles.ctaHeadline}>Try the routine free</h2>
-          <p className={styles.subhead}>
+          <p className={styles.ctaSubhead}>
             Start the 60-day stoppage treatment. No credit card.
           </p>
           <div className={styles.ctaButtons}>
