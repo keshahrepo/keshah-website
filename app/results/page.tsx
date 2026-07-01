@@ -1,11 +1,7 @@
-// Public results / social-proof landing page. Built to answer the "where
-// are the photos?" objection that dominates the Reddit thread ranking #1
-// for "keshah reviews". Content assembled from the existing consented
-// assets already displayed in the /start flow + the app's testimonial
-// videos. No user photos beyond what already has explicit public consent.
-//
-// UI mirrors the app aesthetic (dark cream palette, Poppins, rounded
-// cards) using shared start.module.css helpers where possible.
+// Public results / social-proof landing page. Dark editorial aesthetic
+// matching /m and /women. Minimal chrome — no section subtitles, no
+// guarantee copy, no fluff. Just: hero, scrolling video wall, scrolling
+// regrowth wall, screenshots, CTA.
 
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -14,40 +10,34 @@ import HLSVideo from "../start/components/HLSVideo";
 import styles from "./results.module.css";
 
 export const metadata: Metadata = {
-  title: "Real results — KESHAH",
+  title: "Results — KESHAH",
   description:
-    "Real people, real results. See what happens when you fix scalp tension. No drugs, no minoxidil, no finasteride.",
+    "Real people. Real results. See what happens when you fix scalp tension.",
   openGraph: {
-    title: "Real results — KESHAH",
-    description:
-      "Real people, real results. See what happens when you fix scalp tension.",
+    title: "Results — KESHAH",
+    description: "Real people. Real results.",
     images: ["/start/story/after_hairline.jpg"],
   },
 };
 
-// 12 curated testimonial videos — same set already shown to every user in
-// the app's PostAuthFlow2 onboarding + on /start for women. HLS streams
-// live on the shared CloudFront (dosm2lichqd6n.cloudfront.net) with
-// thumbnails on S3 (keshah-video.s3.ap-south-1.amazonaws.com). Source of
-// truth: KESHAH-Mobile-App/lib/screens/auth/post_auth_flow_2/pages/testimonial_videos.dart
+// 12 HLS testimonials — people talking. Source: KESHAH-Mobile-App
+// /lib/screens/auth/post_auth_flow_2/pages/testimonial_videos.dart
 const TESTIMONIALS = [
   { name: "Terrence",   day: 14, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/terrenceday14HLS.m3u8",   thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/terrenceday14_thumb.jpg" },
   { name: "Zahira",     day: 28, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/zahiraday28HLS.m3u8",     thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/zahiraday28_thumb.jpg" },
-  { name: "Kartik",     day: 7,  video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream3/kartikday07HLS.m3u8",     thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/kartikday07_thumb.jpg" },
-  { name: "Shivani",    day: 7,  video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/shivaniday07HLS.m3u8",     thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/shivaniday07_thumb.jpg" },
+  { name: "Kartik",     day: 7,  video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream3/kartikday07HLS.m3u8",    thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/kartikday07_thumb.jpg" },
+  { name: "Shivani",    day: 7,  video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/shivaniday07HLS.m3u8",    thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/shivaniday07_thumb.jpg" },
   { name: "Bharat",     day: 14, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/Bharatday14HLS.m3u8",     thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/Bharatday14_thumb.jpg" },
   { name: "Yajaira",    day: 14, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/Yajairaday14HLS.m3u8",    thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/Yajairaday14_thumb.jpg" },
   { name: "Kalpana",    day: 21, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/kalpanaday21HLS.m3u8",    thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/kalpanaday21_thumb.jpg" },
-  { name: "King",       day: 21, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream3/kingday21HLS.m3u8",       thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/kingday21_thumb.jpg" },
+  { name: "King",       day: 21, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream3/kingday21HLS.m3u8",      thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/kingday21_thumb.jpg" },
   { name: "Nisha",      day: 21, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/nishaday21HLS.m3u8",      thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/nishaday21_thumb.jpg" },
   { name: "Venkatesh",  day: 21, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/venkateshday21HLS.m3u8",  thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/venkateshday21_thumb.jpg" },
   { name: "Nestor",     day: 28, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/nestorday28HLS.m3u8",     thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/nestorday28_thumb.jpg" },
   { name: "Kwanele",    day: 35, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/kwaneleday35HLS.m3u8",    thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/kwaneleday35_thumb.jpg" },
 ];
 
-// 13 transformation clips — 7 male + 6 female. Same content shown on
-// /start ResultScreenshots step. Poster frames extracted at ~70% of each
-// clip so the "after" state is what the user sees before playback.
+// 13 short-form transformation clips — visual before/after. Same set on /start.
 const TRANSFORMATIONS = [
   { src: "/start/results/proof_clip_1.mp4", poster: "/start/results/proof_clip_1_poster.jpg" },
   { src: "/start/results/proof_clip_2.mp4", poster: "/start/results/proof_clip_2_poster.jpg" },
@@ -64,23 +54,20 @@ const TRANSFORMATIONS = [
   { src: "/start/results/women_clip_6.mp4", poster: "/start/results/women_clip_6_poster.jpg" },
 ];
 
-// 8 regrowth before/afters — 4-6 month treatment users. Same set shown in
-// the app's regrowth_plan_summary.dart. Copied to public/start/results/regrowth/.
+// 8 long-form regrowth photos — 4+ month results. Copied from Flutter app.
 const REGROWTH = [
-  { name: "Arush",     img: "/start/results/regrowth/regrowth_6.png" },
-  { name: "Joseph",    img: "/start/results/regrowth/regrowth_4.png" },
-  { name: "Najinthan", img: "/start/results/regrowth/regrowth_crown.png" },
-  { name: "Collin",    img: "/start/results/regrowth/regrowth_3.png" },
-  { name: "Bayal",     img: "/start/results/regrowth/regrowth_7.png" },
-  { name: "Vinnie",    img: "/start/results/regrowth/regrowth_2.png" },
-  { name: "Jonathon",  img: "/start/results/regrowth/regrowth_1.png" },
-  { name: "Member",    img: "/start/results/regrowth/regrowth_5.png" },
+  "/start/results/regrowth/regrowth_6.png",
+  "/start/results/regrowth/regrowth_4.png",
+  "/start/results/regrowth/regrowth_crown.png",
+  "/start/results/regrowth/regrowth_3.png",
+  "/start/results/regrowth/regrowth_7.png",
+  "/start/results/regrowth/regrowth_2.png",
+  "/start/results/regrowth/regrowth_1.png",
+  "/start/results/regrowth/regrowth_5.png",
 ];
 
-// 12 social proof screenshots — TikTok / Reddit / iMessage / WhatsApp
-// captures of users describing their results. Already public source
-// content (posted publicly on those platforms originally). Trimmed from
-// 15 to 12 for a cleaner 3-column masonry (was overflowing on desktop).
+// 12 social proof screenshots — public source content already posted to
+// TikTok / Reddit / iMessage / WhatsApp by members.
 const SCREENSHOTS = [
   "/start/results/proof_tiktok_finasteride_vs_keshah.jpeg",
   "/start/results/proof_reddit_5_month.jpeg",
@@ -96,24 +83,25 @@ const SCREENSHOTS = [
   "/start/results/proof_women_zukie.jpeg",
 ];
 
-// Interleave testimonials + transformations so the gallery has both
-// styles throughout (avoids "12 talking, then 13 visual" clumping).
-// Zip-merge: T1, X1, T2, X2, ... — leftovers appended at the end.
-type MergedVideo =
-  | { key: string; kind: "testimonial"; video: string; thumb: string; name: string; day: number }
-  | { key: string; kind: "transformation"; src: string; poster: string; name?: never; day?: never };
-
-const mergedVideos: MergedVideo[] = (() => {
-  const out: MergedVideo[] = [];
-  const maxLen = Math.max(TESTIMONIALS.length, TRANSFORMATIONS.length);
-  for (let i = 0; i < maxLen; i++) {
+// Interleave testimonials + transformations so both styles appear
+// throughout the scrolling row.
+const VIDEOS: Array<
+  | { key: string; kind: "t"; video: string; thumb: string; name: string; day: number }
+  | { key: string; kind: "x"; src: string; poster: string }
+> = (() => {
+  const out: Array<
+    | { key: string; kind: "t"; video: string; thumb: string; name: string; day: number }
+    | { key: string; kind: "x"; src: string; poster: string }
+  > = [];
+  const max = Math.max(TESTIMONIALS.length, TRANSFORMATIONS.length);
+  for (let i = 0; i < max; i++) {
     if (TESTIMONIALS[i]) {
       const t = TESTIMONIALS[i];
-      out.push({ key: `t-${t.name}`, kind: "testimonial", video: t.video, thumb: t.thumb, name: t.name, day: t.day });
+      out.push({ key: `t-${t.name}`, kind: "t", video: t.video, thumb: t.thumb, name: t.name, day: t.day });
     }
     if (TRANSFORMATIONS[i]) {
       const x = TRANSFORMATIONS[i];
-      out.push({ key: `x-${i}`, kind: "transformation", src: x.src, poster: x.poster });
+      out.push({ key: `x-${i}`, kind: "x", src: x.src, poster: x.poster });
     }
   }
   return out;
@@ -129,19 +117,13 @@ export default function ResultsPage() {
           <h1 className={styles.headline}>
             Stop your hair loss.<br />No drugs.
           </h1>
-          <p className={styles.subhead}>
-            Every photo, video, and story on this page is a real member
-            of KESHAH.
-          </p>
           <p className={styles.trustLine}>
             <span className={styles.stars}>★</span> 4.8
             <span className={styles.trustDot}>·</span>
             35,000+ members
-            <span className={styles.trustDot}>·</span>
-            60-day guarantee
           </p>
 
-          {/* Aadi's before/after — self-consented (founder). */}
+          {/* Aadi's before/after (self-consented) */}
           <div className={styles.beforeAfter}>
             <figure className={styles.baFig}>
               <Image
@@ -156,7 +138,7 @@ export default function ResultsPage() {
             <figure className={styles.baFig}>
               <Image
                 src="/start/story/after_hairline.jpg"
-                alt="Aadi's hairline after 60+ days of the KESHAH routine"
+                alt="Aadi's hairline after the KESHAH routine"
                 width={480}
                 height={480}
                 className={styles.baImg}
@@ -167,89 +149,68 @@ export default function ResultsPage() {
         </div>
       </section>
 
-      {/* ── Videos (merged testimonials + transformations) ──
-         Previously two sections but the grid + card styling looked
-         near-identical, reading as one wall shown twice. Merged into
-         a single "Real members. Real results." gallery — testimonials
-         (people talking) mixed with transformation clips (visual
-         before/after). Interleaving so the section has variety
-         throughout rather than "12 talking then 13 visual". */}
-      <section className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h2 className={styles.h2}>Real members. Real results.</h2>
-          <p className={styles.subhead}>
-            25 members sharing their journey — days 7–120 of the routine.
-          </p>
-        </div>
-        <div className={styles.videoGrid}>
-          {mergedVideos.map((v) => (
-            <div key={v.key} className={styles.videoCard}>
-              {v.kind === "testimonial" ? (
-                <HLSVideo
-                  src={v.video}
-                  poster={v.thumb}
-                  className={styles.video}
-                />
-              ) : (
-                <video
-                  src={v.src}
-                  poster={v.poster}
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                  preload="metadata"
-                  disablePictureInPicture
-                  className={styles.video}
-                  aria-label={`Transformation ${v.key}`}
-                />
-              )}
-              {v.name && (
-                <div className={styles.videoMeta}>
-                  <span className={styles.videoName}>{v.name}</span>
-                  {v.day != null && (
+      {/* ── Video row (marquee, both testimonials + transformations
+             interleaved). Track duplicated for seamless loop; keyframe
+             translates by -50% so second copy slides in as first exits.
+             Height fixed at 380px so keyframe math is deterministic
+             regardless of video load timing. Cards below get 210px width
+             (9:16 of 373px → ~210x373) to stay portrait. */}
+      <section className={styles.rowSection}>
+        <div className={styles.rowWrap}>
+          <div className={styles.track}>
+            {[...VIDEOS, ...VIDEOS].map((v, idx) => (
+              <div key={`${v.key}-${idx}`} className={styles.videoCard}>
+                {v.kind === "t" ? (
+                  <HLSVideo src={v.video} poster={v.thumb} className={styles.video} />
+                ) : (
+                  <video
+                    src={v.src}
+                    poster={v.poster}
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    preload="metadata"
+                    disablePictureInPicture
+                    className={styles.video}
+                  />
+                )}
+                {v.kind === "t" && (
+                  <div className={styles.videoMeta}>
+                    <span className={styles.videoName}>{v.name}</span>
                     <span className={styles.videoDay}>Day {v.day}</span>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* ── Regrowth (long-term users) ── */}
-      <section className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h2 className={styles.h2}>Regrowth after 4+ months</h2>
-          <p className={styles.subhead}>
-            Members on the full regrowth treatment. Results at 120+ days.
-          </p>
-        </div>
-        <div className={styles.regrowthGrid}>
-          {REGROWTH.map((r) => (
-            <figure key={r.name} className={styles.regrowthCard}>
-              <Image
-                src={r.img}
-                alt={`${r.name}'s hair regrowth results after the KESHAH treatment`}
-                width={800}
-                height={800}
-                className={styles.regrowthImg}
-              />
-              <figcaption className={styles.regrowthName}>{r.name}</figcaption>
-            </figure>
-          ))}
+      {/* ── Regrowth row (marquee, reverse direction so it's
+             visually distinct from the video row above). 8 photos ×2 for
+             seamless loop. */}
+      <section className={styles.rowSection}>
+        <div className={styles.rowWrap}>
+          <div className={`${styles.track} ${styles.trackReverse}`}>
+            {[...REGROWTH, ...REGROWTH].map((src, i) => (
+              <div key={`${src}-${i}`} className={styles.photoCard}>
+                <Image
+                  src={src}
+                  alt="Member regrowth result"
+                  width={800}
+                  height={800}
+                  className={styles.photoImg}
+                />
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* ── Screenshots ── */}
+      {/* ── Screenshots (static masonry, kept for text-based social proof
+             that scrolling wouldn't showcase well — captions matter here) */}
       <section className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h2 className={styles.h2}>What people are saying</h2>
-          <p className={styles.subhead}>
-            Real posts from TikTok, Reddit, iMessage, and WhatsApp — shared
-            publicly by KESHAH members.
-          </p>
-        </div>
         <div className={styles.screenshotGrid}>
           {SCREENSHOTS.map((src, i) => (
             <div key={src} className={styles.screenshotCard}>
@@ -265,35 +226,10 @@ export default function ResultsPage() {
         </div>
       </section>
 
-      {/* ── Guarantee ── */}
-      <section className={styles.section}>
-        <div className={styles.guaranteeCard}>
-          <div className={styles.guaranteeInner}>
-            <Image
-              src="/images/aadi.png"
-              alt="Aadi, KESHAH founder"
-              width={80}
-              height={80}
-              className={styles.guaranteeAvatar}
-            />
-            <div>
-              <p className={styles.guaranteeQuote}>
-                "Complete 60 days in the app. If your hair fall doesn't stop,
-                message me and I'll personally make sure you get a refund."
-              </p>
-              <p className={styles.guaranteeName}>— Aadi, KESHAH Founder</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* ── CTA ── */}
       <section className={styles.cta}>
         <div className={styles.ctaInner}>
           <h2 className={styles.ctaHeadline}>Try the routine free</h2>
-          <p className={styles.ctaSubhead}>
-            Start the 60-day stoppage treatment. No credit card.
-          </p>
           <div className={styles.ctaButtons}>
             <Link href="/start" className={styles.btnPrimary}>
               Start free →
@@ -307,9 +243,6 @@ export default function ResultsPage() {
               Follow @aadi.keshah on TikTok
             </a>
           </div>
-          <p className={styles.ctaFinePrint}>
-            Individual results vary. Consistency + time = results.
-          </p>
         </div>
       </section>
     </main>

@@ -1,7 +1,7 @@
-/* KESHAH results page — dark editorial aesthetic to match /m and /women
-   landing pages. Generous vertical rhythm, minimal chrome, big imagery.
-   Colors mirror /m: black bg, white text, subtle white overlays for
-   cards + borders. */
+/* KESHAH results page — dark editorial, minimal. Matches /m and /women
+   brand aesthetic. Two marquee rows (videos + regrowth) + a static
+   screenshot masonry + CTA. No section subtitles, no guarantee copy,
+   no fluff. */
 
 .root {
   min-height: 100vh;
@@ -9,11 +9,12 @@
   color: #fff;
   font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
 /* ── Hero ── */
 .hero {
-  padding: 88px 24px 72px;
+  padding: 88px 24px 56px;
   text-align: center;
 }
 
@@ -40,17 +41,8 @@
   color: #fff;
 }
 
-.subhead {
-  font-size: 15px;
-  line-height: 1.5;
-  color: rgba(255, 255, 255, 0.55);
-  max-width: 520px;
-  margin: 0 auto;
-  letter-spacing: -0.1px;
-}
-
 .trustLine {
-  margin: 20px auto 0;
+  margin: 0;
   font-size: 13px;
   color: rgba(255, 255, 255, 0.55);
   letter-spacing: -0.1px;
@@ -69,7 +61,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
-  margin: 56px auto 0;
+  margin: 48px auto 0;
   max-width: 720px;
 }
 
@@ -102,73 +94,72 @@
 @media (min-width: 768px) {
   .beforeAfter {
     gap: 16px;
-    margin-top: 72px;
+    margin-top: 64px;
   }
 }
 
-/* ── Section shell ── */
-.section {
-  padding: 96px 24px;
-  max-width: 1200px;
-  margin: 0 auto;
+/* ── Scrolling row shell — full-bleed marquee ──
+   Two rows on the page: videos (scrollLeft) + regrowth (scrollRight).
+   Track is duplicated in JSX; keyframe translates by -50% for a seamless
+   loop. Height fixed so the animation math is deterministic regardless
+   of video load timing. */
+.rowSection {
+  padding: 32px 0;
 }
 
-@media (max-width: 640px) {
-  .section {
-    padding: 72px 20px;
+.rowWrap {
+  height: 320px;
+  overflow: hidden;
+  display: flex;
+  position: relative;
+}
+
+@media (min-width: 768px) {
+  .rowSection {
+    padding: 40px 0;
+  }
+  .rowWrap {
+    height: 400px;
   }
 }
 
-.sectionHeader {
-  text-align: center;
-  margin-bottom: 48px;
-  max-width: 640px;
-  margin-left: auto;
-  margin-right: auto;
+.track {
+  display: flex;
+  height: 100%;
+  flex-shrink: 0;
+  animation-name: scrollLeft;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-duration: 90s;
+  will-change: transform;
 }
 
-.h2 {
-  font-size: clamp(28px, 5vw, 40px);
-  font-weight: 600;
-  letter-spacing: -1.2px;
-  line-height: 1.15;
-  margin: 0 0 16px;
-  color: #fff;
+.trackReverse {
+  animation-name: scrollRight;
+  animation-duration: 70s;
 }
 
-/* ── Video grid (testimonials + transformations) ── */
-.videoGrid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+@keyframes scrollLeft {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-50%, 0, 0); }
 }
 
-@media (min-width: 640px) {
-  .videoGrid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
-  }
+@keyframes scrollRight {
+  from { transform: translate3d(-50%, 0, 0); }
+  to   { transform: translate3d(0, 0, 0); }
 }
 
-@media (min-width: 1024px) {
-  .videoGrid {
-    gap: 20px;
-  }
-}
-
+/* ── Video cards (portrait 9:16) ── */
 .videoCard {
+  flex: none;
+  height: 100%;
+  aspect-ratio: 9 / 16;
+  margin-right: 12px;
+  border-radius: 16px;
+  overflow: hidden;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 20px;
-  overflow: hidden;
-  aspect-ratio: 9 / 16;
   position: relative;
-  transition: transform 0.3s ease, border-color 0.3s ease;
-}
-
-.videoCard:hover {
-  transform: translateY(-2px);
-  border-color: rgba(255, 255, 255, 0.14);
 }
 
 .video {
@@ -183,7 +174,7 @@
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 16px;
+  padding: 14px;
   display: flex;
   justify-content: space-between;
   align-items: baseline;
@@ -193,74 +184,54 @@
 }
 
 .videoName {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.2px;
 }
 
 .videoDay {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   opacity: 0.7;
   letter-spacing: 0.4px;
   text-transform: uppercase;
 }
 
-/* ── Regrowth grid — bigger, more editorial than videos ── */
-.regrowthGrid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-}
-
-@media (min-width: 640px) {
-  .regrowthGrid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
-  }
-}
-
-@media (min-width: 1024px) {
-  .regrowthGrid {
-    grid-template-columns: repeat(4, 1fr);
-    gap: 20px;
-  }
-}
-
-.regrowthCard {
-  margin: 0;
-  border-radius: 20px;
+/* ── Photo cards (square regrowth) ── */
+.photoCard {
+  flex: none;
+  height: 100%;
+  aspect-ratio: 1 / 1;
+  margin-right: 12px;
+  border-radius: 16px;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  transition: transform 0.3s ease, border-color 0.3s ease;
 }
 
-.regrowthCard:hover {
-  transform: translateY(-2px);
-  border-color: rgba(255, 255, 255, 0.14);
-}
-
-.regrowthImg {
+.photoImg {
   width: 100%;
-  height: auto;
-  aspect-ratio: 1 / 1;
+  height: 100%;
   object-fit: cover;
   display: block;
 }
 
-.regrowthName {
-  padding: 14px 16px;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.6);
+@media (min-width: 768px) {
+  .videoCard,
+  .photoCard {
+    margin-right: 16px;
+    border-radius: 20px;
+  }
 }
 
-/* ── Screenshot grid (masonry) ── */
+/* ── Section shell (screenshots + CTA) ── */
+.section {
+  padding: 72px 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* ── Screenshot masonry ── */
 .screenshotGrid {
   columns: 2;
   column-gap: 12px;
@@ -307,90 +278,30 @@
   display: block;
 }
 
-/* ── Guarantee card — cream-on-dark for contrast ── */
-.guaranteeCard {
-  background: #FAF7F2;
-  color: #1A1A1A;
-  border-radius: 24px;
-  padding: 40px 32px;
-  max-width: 720px;
-  margin: 0 auto;
-}
-
-.guaranteeInner {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-}
-
-.guaranteeAvatar {
-  border-radius: 50%;
-  flex-shrink: 0;
-  object-fit: cover;
-  border: 2px solid rgba(26, 26, 26, 0.08);
-}
-
-.guaranteeQuote {
-  font-size: 18px;
-  line-height: 1.5;
-  font-weight: 500;
-  margin: 0 0 10px;
-  letter-spacing: -0.3px;
-}
-
-.guaranteeName {
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
-  color: rgba(26, 26, 26, 0.55);
-  margin: 0;
-}
-
-@media (max-width: 640px) {
-  .guaranteeCard {
-    padding: 32px 24px;
-  }
-  .guaranteeInner {
-    flex-direction: column;
-    text-align: center;
-    gap: 20px;
-  }
-}
-
 /* ── CTA ── */
 .cta {
-  padding: 96px 24px 128px;
+  padding: 72px 24px 120px;
   text-align: center;
 }
 
 .ctaInner {
-  max-width: 560px;
+  max-width: 480px;
   margin: 0 auto;
 }
 
 .ctaHeadline {
-  font-size: clamp(32px, 6vw, 48px);
+  font-size: clamp(32px, 6vw, 44px);
   font-weight: 600;
   letter-spacing: -1.4px;
   line-height: 1.1;
-  margin: 0 0 16px;
-  color: #fff;
-}
-
-.ctaSubhead {
-  font-size: 15px;
-  color: rgba(255, 255, 255, 0.55);
   margin: 0 0 32px;
-  letter-spacing: -0.1px;
+  color: #fff;
 }
 
 .ctaButtons {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin: 0 auto;
-  max-width: 320px;
 }
 
 .btnPrimary {
@@ -433,11 +344,4 @@
 .btnSecondary:hover {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.28);
-}
-
-.ctaFinePrint {
-  margin-top: 24px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.4);
-  letter-spacing: 0.3px;
 }
