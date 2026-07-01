@@ -13,7 +13,6 @@
 
 import type { Metadata } from "next";
 import Image from "next/image";
-import HLSVideo from "../start/components/HLSVideo";
 import styles from "./results.module.css";
 
 export const metadata: Metadata = {
@@ -110,20 +109,27 @@ const CASE_STUDIES: CaseStudy[] = [
   },
 ];
 
-// ── Video testimonials — 12 HLS streams from the app's PostAuthFlow2 ──
+// ── Video testimonials ─────────────────────────────────────────────
+// Using the captioned transformation MP4s (proof_clip_X + women_clip_X)
+// instead of the HLS testimonial streams. Why: page videos autoplay
+// MUTED, so audio-only testimonials (the HLS set) can't communicate.
+// The proof_clip / women_clip MP4s have burned-in captions + before/
+// after overlays baked into the video — designed for silent viewing.
+// Same set already lives on /start SocialProof + ResultScreenshots.
 const TESTIMONIALS = [
-  { name: "Terrence",  day: 14, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/terrenceday14HLS.m3u8",   thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/terrenceday14_thumb.jpg" },
-  { name: "Zahira",    day: 28, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/zahiraday28HLS.m3u8",     thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/zahiraday28_thumb.jpg" },
-  { name: "Kartik",    day: 7,  video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream3/kartikday07HLS.m3u8",    thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/kartikday07_thumb.jpg" },
-  { name: "Shivani",   day: 7,  video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/shivaniday07HLS.m3u8",    thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/shivaniday07_thumb.jpg" },
-  { name: "Bharat",    day: 14, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/Bharatday14HLS.m3u8",     thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/Bharatday14_thumb.jpg" },
-  { name: "Yajaira",   day: 14, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/Yajairaday14HLS.m3u8",    thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/Yajairaday14_thumb.jpg" },
-  { name: "Kalpana",   day: 21, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/kalpanaday21HLS.m3u8",    thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/kalpanaday21_thumb.jpg" },
-  { name: "King",      day: 21, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream3/kingday21HLS.m3u8",      thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/kingday21_thumb.jpg" },
-  { name: "Nisha",     day: 21, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/nishaday21HLS.m3u8",      thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/nishaday21_thumb.jpg" },
-  { name: "Venkatesh", day: 21, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/venkateshday21HLS.m3u8",  thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/venkateshday21_thumb.jpg" },
-  { name: "Nestor",    day: 28, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/nestorday28HLS.m3u8",     thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/nestorday28_thumb.jpg" },
-  { name: "Kwanele",   day: 35, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/kwaneleday35HLS.m3u8",    thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/kwaneleday35_thumb.jpg" },
+  { src: "/start/results/proof_clip_1.mp4",  poster: "/start/results/proof_clip_1_poster.jpg" },
+  { src: "/start/results/women_clip_1.mp4",  poster: "/start/results/women_clip_1_poster.jpg" },
+  { src: "/start/results/proof_clip_2.mp4",  poster: "/start/results/proof_clip_2_poster.jpg" },
+  { src: "/start/results/women_clip_2.mp4",  poster: "/start/results/women_clip_2_poster.jpg" },
+  { src: "/start/results/proof_clip_3.mp4",  poster: "/start/results/proof_clip_3_poster.jpg" },
+  { src: "/start/results/women_clip_3.mp4",  poster: "/start/results/women_clip_3_poster.jpg" },
+  { src: "/start/results/proof_clip_4.mp4",  poster: "/start/results/proof_clip_4_poster.jpg" },
+  { src: "/start/results/women_clip_4.mp4",  poster: "/start/results/women_clip_4_poster.jpg" },
+  { src: "/start/results/proof_clip_5.mp4",  poster: "/start/results/proof_clip_5_poster.jpg" },
+  { src: "/start/results/women_clip_5.mp4",  poster: "/start/results/women_clip_5_poster.jpg" },
+  { src: "/start/results/proof_clip_6.mp4",  poster: "/start/results/proof_clip_6_poster.jpg" },
+  { src: "/start/results/women_clip_6.mp4",  poster: "/start/results/women_clip_6_poster.jpg" },
+  { src: "/start/results/proof_clip_7.mp4",  poster: "/start/results/proof_clip_7_poster.jpg" },
 ];
 
 // ── Before/after grid ──
@@ -235,20 +241,29 @@ export default function ResultsPage() {
         </section>
       ))}
 
-      {/* ── Video testimonials (static grid, no marquee) ── */}
+      {/* ── Video testimonials (static grid, no marquee) ──
+         Captioned MP4s (burned-in subtitles + before/after overlays)
+         so they communicate silently in the muted autoplay context. */}
       <section className={styles.section}>
         <div className={styles.sectionHeader}>
           <p className={styles.eyebrow}>More members</p>
           <h2 className={styles.h2}>Hear from members</h2>
         </div>
         <div className={styles.videoGrid}>
-          {TESTIMONIALS.map((t) => (
-            <div key={t.name} className={styles.videoCard}>
-              <HLSVideo src={t.video} poster={t.thumb} className={styles.video} />
-              <div className={styles.videoMeta}>
-                <span className={styles.videoName}>{t.name}</span>
-                <span className={styles.videoDay}>Day {t.day}</span>
-              </div>
+          {TESTIMONIALS.map((t, i) => (
+            <div key={t.src} className={styles.videoCard}>
+              <video
+                src={t.src}
+                poster={t.poster}
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="metadata"
+                disablePictureInPicture
+                className={styles.video}
+                aria-label={`Member testimonial ${i + 1}`}
+              />
             </div>
           ))}
         </div>
