@@ -54,7 +54,7 @@ const CASE_STUDIES: CaseStudy[] = [
     hairLossType: "Androgenic Alopecia — Crown Thinning",
     regimen: [
       "KESHAH Mechanotherapy (Scalp + Neck)",
-      "Regrowth Microneedling — 1x/week, 0.75–1.5mm, 2 passthroughs (Added Sept 2025)",
+      "KESHAH Microneedling (0.75–1.5mm, 1x/week, 2 passthroughs) — Added Sept 2025",
       "KESHAH Topicals",
     ],
     duration: "14 months",
@@ -73,8 +73,8 @@ const CASE_STUDIES: CaseStudy[] = [
     location: "Bay Area, USA / India",
     hairLossType: "Androgenic Alopecia — Diffuse Thinning",
     regimen: [
-      "KESHAH Mechanotherapy (Scalp + Neck)",
-      "Microneedling (0.7mm → 2mm depth)",
+      "KESHAH Mechanotherapy (Scalp + Neck) — From Day 1",
+      "KESHAH Microneedling (0.7mm → 2mm, biweekly progressing to weekly) — From Day 1",
       "KESHAH Topicals",
     ],
     duration: "6+ months documented",
@@ -94,15 +94,15 @@ const CASE_STUDIES: CaseStudy[] = [
     hairLossType: "Androgenic Alopecia — Early Stage",
     regimen: [
       "KESHAH Mechanotherapy (Scalp + Neck)",
-      "Microneedling (Weekly)",
+      "KESHAH Microneedling (0.75–1.5mm, 1x/week, 2 passthroughs) — Added Jan 2026",
       "KESHAH Topicals",
     ],
     duration: "5 months",
     photo: "/start/results/regrowth/theo/theo_composite.jpg",
     photoAlt: "Théo — Day 1 (14 Dec) and Day 165 (27 May) on the KESHAH routine",
     paragraphs: [
-      "Théo started with the KESHAH stoppage routine — daily mechanotherapy, no drugs. A few months in, his scalp had loosened and his hair fall had stopped.",
-      "He then upgraded to the regrowth kit, adding weekly microneedling to the protocol.",
+      "Théo started with the KESHAH stoppage routine in December 2025 — daily mechanotherapy, no drugs. A few months in, his scalp had loosened and his hair fall had stopped.",
+      "At the end of January 2026 he added weekly microneedling to the protocol — 0.75 to 1.5mm depth, two passthroughs, followed by application of KESHAH topicals.",
       "Five months in, hair fall has stopped and regrowth is beginning to fill in the hairline.",
     ],
     quote: "My scalp is more flexible. I don't see hair loss anymore.",
