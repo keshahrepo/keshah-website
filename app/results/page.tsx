@@ -54,15 +54,16 @@ const TRANSFORMATIONS = [
 ];
 
 // 8 long-form regrowth photos — 4+ month results. Copied from Flutter app.
+// Names from regrowth_plan_summary.dart (_resultCard entries).
 const REGROWTH = [
-  "/start/results/regrowth/regrowth_6.png",
-  "/start/results/regrowth/regrowth_4.png",
-  "/start/results/regrowth/regrowth_crown.png",
-  "/start/results/regrowth/regrowth_3.png",
-  "/start/results/regrowth/regrowth_7.png",
-  "/start/results/regrowth/regrowth_2.png",
-  "/start/results/regrowth/regrowth_1.png",
-  "/start/results/regrowth/regrowth_5.png",
+  { name: "Arush",     img: "/start/results/regrowth/regrowth_6.png" },
+  { name: "Joseph",    img: "/start/results/regrowth/regrowth_4.png" },
+  { name: "Najinthan", img: "/start/results/regrowth/regrowth_crown.png" },
+  { name: "Collin",    img: "/start/results/regrowth/regrowth_3.png" },
+  { name: "Bayal",     img: "/start/results/regrowth/regrowth_7.png" },
+  { name: "Vinnie",    img: "/start/results/regrowth/regrowth_2.png" },
+  { name: "Jonathon",  img: "/start/results/regrowth/regrowth_1.png" },
+  { name: "Member",    img: "/start/results/regrowth/regrowth_5.png" },
 ];
 
 // 12 social proof screenshots — public source content already posted to
@@ -148,12 +149,12 @@ export default function ResultsPage() {
         </div>
       </section>
 
-      {/* ── Video row (marquee, both testimonials + transformations
-             interleaved). Track duplicated for seamless loop; keyframe
-             translates by -50% so second copy slides in as first exits.
-             Height fixed at 380px so keyframe math is deterministic
-             regardless of video load timing. Cards below get 210px width
-             (9:16 of 373px → ~210x373) to stay portrait. */}
+      {/* ── Video row (marquee — testimonials + transformations
+             interleaved). Captions on BOTH types: testimonials get
+             name+day, transformations get 'Before → After'. Track
+             duplicated in JSX; keyframe translates -50% for seamless
+             loop. Row height fixed so animation math is deterministic
+             regardless of media load timing. */}
       <section className={styles.rowSection}>
         <div className={styles.rowWrap}>
           <div className={styles.track}>
@@ -174,36 +175,41 @@ export default function ResultsPage() {
                     className={styles.video}
                   />
                 )}
-                {v.kind === "t" && (
-                  <div className={styles.videoMeta}>
-                    <span className={styles.videoName}>{v.name}</span>
-                    <span className={styles.videoDay}>Day {v.day}</span>
-                  </div>
-                )}
+                <div className={styles.videoMeta}>
+                  {v.kind === "t" ? (
+                    <>
+                      <span className={styles.videoName}>{v.name}</span>
+                      <span className={styles.videoDay}>Day {v.day}</span>
+                    </>
+                  ) : (
+                    <span className={styles.videoName}>Before → After</span>
+                  )}
+                </div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── Regrowth row (marquee, reverse direction so it's
-             visually distinct from the video row above). 8 photos ×2 for
-             seamless loop. */}
-      <section className={styles.rowSection}>
-        <div className={styles.rowWrap}>
-          <div className={`${styles.track} ${styles.trackReverse}`}>
-            {[...REGROWTH, ...REGROWTH].map((src, i) => (
-              <div key={`${src}-${i}`} className={styles.photoCard}>
-                <Image
-                  src={src}
-                  alt="Member regrowth result"
-                  width={800}
-                  height={800}
-                  className={styles.photoImg}
-                />
-              </div>
-            ))}
-          </div>
+      {/* ── Regrowth grid (static — 4-col desktop, 2-col mobile).
+             Photos are the money-shot proof; scrolling made them
+             uninspectable + cropped side-by-side compositions.
+             Natural aspect ratio (no forced 1:1) so nothing gets cut. */}
+      <section className={styles.section}>
+        <div className={styles.regrowthGrid}>
+          {REGROWTH.map((r) => (
+            <figure key={r.img} className={styles.regrowthCard}>
+              <Image
+                src={r.img}
+                alt={`${r.name}'s hair regrowth after the KESHAH routine`}
+                width={800}
+                height={800}
+                sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
+                className={styles.regrowthImg}
+              />
+              <figcaption className={styles.regrowthName}>{r.name}</figcaption>
+            </figure>
+          ))}
         </div>
       </section>
 
