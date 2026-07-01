@@ -96,6 +96,29 @@ const SCREENSHOTS = [
   "/start/results/proof_women_zukie.jpeg",
 ];
 
+// Interleave testimonials + transformations so the gallery has both
+// styles throughout (avoids "12 talking, then 13 visual" clumping).
+// Zip-merge: T1, X1, T2, X2, ... — leftovers appended at the end.
+type MergedVideo =
+  | { key: string; kind: "testimonial"; video: string; thumb: string; name: string; day: number }
+  | { key: string; kind: "transformation"; src: string; poster: string; name?: never; day?: never };
+
+const mergedVideos: MergedVideo[] = (() => {
+  const out: MergedVideo[] = [];
+  const maxLen = Math.max(TESTIMONIALS.length, TRANSFORMATIONS.length);
+  for (let i = 0; i < maxLen; i++) {
+    if (TESTIMONIALS[i]) {
+      const t = TESTIMONIALS[i];
+      out.push({ key: `t-${t.name}`, kind: "testimonial", video: t.video, thumb: t.thumb, name: t.name, day: t.day });
+    }
+    if (TRANSFORMATIONS[i]) {
+      const x = TRANSFORMATIONS[i];
+      out.push({ key: `x-${i}`, kind: "transformation", src: x.src, poster: x.poster });
+    }
+  }
+  return out;
+})();
+
 export default function ResultsPage() {
   return (
     <main className={styles.root}>
@@ -144,54 +167,51 @@ export default function ResultsPage() {
         </div>
       </section>
 
-      {/* ── Video testimonials ── */}
+      {/* ── Videos (merged testimonials + transformations) ──
+         Previously two sections but the grid + card styling looked
+         near-identical, reading as one wall shown twice. Merged into
+         a single "Real members. Real results." gallery — testimonials
+         (people talking) mixed with transformation clips (visual
+         before/after). Interleaving so the section has variety
+         throughout rather than "12 talking then 13 visual". */}
       <section className={styles.section}>
         <div className={styles.sectionHeader}>
-          <h2 className={styles.h2}>Members share their results</h2>
+          <h2 className={styles.h2}>Real members. Real results.</h2>
           <p className={styles.subhead}>
-            Real videos from KESHAH members. Days 7–35 of the routine.
+            25 members sharing their journey — days 7–120 of the routine.
           </p>
         </div>
         <div className={styles.videoGrid}>
-          {TESTIMONIALS.map((t) => (
-            <div key={t.name} className={styles.videoCard}>
-              <HLSVideo
-                src={t.video}
-                poster={t.thumb}
-                className={styles.video}
-              />
-              <div className={styles.videoMeta}>
-                <span className={styles.videoName}>{t.name}</span>
-                <span className={styles.videoDay}>Day {t.day}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Transformations ── */}
-      <section className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h2 className={styles.h2}>Before &amp; after transformations</h2>
-          <p className={styles.subhead}>
-            Members who stuck with the routine for 60–120+ days.
-          </p>
-        </div>
-        <div className={styles.videoGrid}>
-          {TRANSFORMATIONS.map((v, i) => (
-            <div key={v.src} className={styles.videoCard}>
-              <video
-                src={v.src}
-                poster={v.poster}
-                autoPlay
-                muted
-                loop
-                playsInline
-                preload="metadata"
-                disablePictureInPicture
-                className={styles.video}
-                aria-label={`Transformation ${i + 1}`}
-              />
+          {mergedVideos.map((v) => (
+            <div key={v.key} className={styles.videoCard}>
+              {v.kind === "testimonial" ? (
+                <HLSVideo
+                  src={v.video}
+                  poster={v.thumb}
+                  className={styles.video}
+                />
+              ) : (
+                <video
+                  src={v.src}
+                  poster={v.poster}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  preload="metadata"
+                  disablePictureInPicture
+                  className={styles.video}
+                  aria-label={`Transformation ${v.key}`}
+                />
+              )}
+              {v.name && (
+                <div className={styles.videoMeta}>
+                  <span className={styles.videoName}>{v.name}</span>
+                  {v.day != null && (
+                    <span className={styles.videoDay}>Day {v.day}</span>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
