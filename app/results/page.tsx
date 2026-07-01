@@ -56,6 +56,7 @@ const CASE_STUDIES: CaseStudy[] = [
       "KESHAH Mechanotherapy (Scalp + Neck)",
       "KESHAH Microneedling (0.75–1.5mm, 1x/week, 2 passthroughs) — Added Sept 2025",
       "KESHAH Topicals",
+      "Castor Oil",
     ],
     duration: "14 months",
     photo: "/start/results/regrowth/regrowth_crown.png",
