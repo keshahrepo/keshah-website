@@ -4,7 +4,6 @@
 // regrowth wall, screenshots, CTA.
 
 import type { Metadata } from "next";
-import Link from "next/link";
 import Image from "next/image";
 import HLSVideo from "../start/components/HLSVideo";
 import styles from "./results.module.css";
@@ -226,21 +225,38 @@ export default function ResultsPage() {
         </div>
       </section>
 
-      {/* ── CTA ── */}
+      {/* ── CTA (App Store + Play Store badges, matches /m and /women) ── */}
       <section className={styles.cta}>
         <div className={styles.ctaInner}>
           <h2 className={styles.ctaHeadline}>Try the routine free</h2>
-          <div className={styles.ctaButtons}>
-            <Link href="/start" className={styles.btnPrimary}>
-              Start free →
-            </Link>
+          <div className={styles.storeButtons}>
             <a
-              href="https://www.tiktok.com/@aadi.keshah"
+              href="https://apps.apple.com/app/id6450676544"
+              className={styles.storeBadge}
               target="_blank"
               rel="noopener noreferrer"
-              className={styles.btnSecondary}
             >
-              Follow @aadi.keshah on TikTok
+              <Image
+                src="/images/app-store-white.svg"
+                alt="Download on the App Store"
+                width={145}
+                height={48}
+                unoptimized
+              />
+            </a>
+            <a
+              href="https://play.google.com/store/apps/details?id=com.keshahapp.hair"
+              className={styles.storeBadge}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Image
+                src="/images/google-play.svg"
+                alt="Get it on Google Play"
+                width={145}
+                height={48}
+                unoptimized
+              />
             </a>
           </div>
         </div>
