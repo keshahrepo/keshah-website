@@ -1,7 +1,15 @@
-// Public results / social-proof landing page. Dark editorial aesthetic
-// matching /m and /women. Minimal chrome — no section subtitles, no
-// guarantee copy, no fluff. Just: hero, scrolling video wall, scrolling
-// regrowth wall, screenshots, CTA.
+// Public results / social-proof page. Dark editorial aesthetic matching
+// /m and /women. Case-study-first structure (Hims/Ro pattern) — deep
+// individual member stories lead the page, then supporting proof
+// (videos, before/afters, screenshots). Aadi's own before/after moved
+// to a supporting section near the CTA so member results carry
+// the credibility.
+//
+// Consent notes:
+// - Najinthan: explicit yes (WhatsApp 11/30/25). Wants no face shown.
+// - Arush: pro-brand friend, promotes KESHAH publicly. Confirm before
+//   sharing the URL widely.
+// - Théo: consented to public IG reviews. Confirm before sharing the URL widely.
 
 import type { Metadata } from "next";
 import Image from "next/image";
@@ -11,101 +19,108 @@ import styles from "./results.module.css";
 export const metadata: Metadata = {
   title: "Results — KESHAH",
   description:
-    "Real people. Real results. See what happens when you fix scalp tension.",
+    "Real members. Real results. See what happens when you fix scalp tension.",
   openGraph: {
     title: "Results — KESHAH",
-    description: "Real people. Real results.",
-    images: ["/start/story/after_hairline.jpg"],
+    description: "Real members. Real results.",
+    images: ["/start/results/regrowth/regrowth_crown.png"],
   },
 };
 
-// 12 HLS testimonials — people talking. Source: KESHAH-Mobile-App
-// /lib/screens/auth/post_auth_flow_2/pages/testimonial_videos.dart
+// ── Case studies ─────────────────────────────────────────────────────
+// Each case study is an editorial block: big photo, backstory paragraphs,
+// pull quote. Written from real WhatsApp conversations (not synthesized),
+// which is why they read like reporting rather than marketing.
+
+type CaseStudy = {
+  name: string;
+  subtitle: string;
+  photo: string;
+  photoAlt: string;
+  paragraphs: string[];
+  quote: string;
+};
+
+const CASE_STUDIES: CaseStudy[] = [
+  {
+    name: "Najinthan",
+    subtitle: "Markham, Ontario · 14 months on the routine",
+    photo: "/start/results/regrowth/regrowth_crown.png",
+    photoAlt: "Najinthan's crown regrowth after 14 months on the KESHAH routine",
+    paragraphs: [
+      "Najinthan had years of progressive crown thinning. Before KESHAH he tried high-dose Omega-3 and biotin supplements — money wasted, no results. He wanted a natural approach that addressed the root cause, not another drug.",
+      "He started the routine in April 2025. Daily 20-45 minute sessions, no missed days. No drugs, no minoxidil, no finasteride — just the mechanical protocol.",
+      "14 months in, he's still consistent. Density has visibly returned in previously thinning areas.",
+    ],
+    quote:
+      "If I never started KESHAH, I'd have been almost bald by now. It's made a huge difference in my life and given me a lot of confidence.",
+  },
+  {
+    name: "Arush",
+    subtitle: "Berkeley grad · pharmaceutical background",
+    photo: "/start/results/regrowth/regrowth_6.png",
+    photoAlt: "Arush's hair regrowth after the KESHAH microneedling protocol",
+    paragraphs: [
+      "Arush came to KESHAH with a scientist's skepticism. He knew the DHT-blocker landscape from his pharmaceutical background — and he specifically wanted a route that didn't touch that pathway. No finasteride, no minoxidil, no side-effect gamble.",
+      "He runs the advanced KESHAH protocol: dry massages plus microneedling. Biweekly at 0.7mm depth to start, working up to weekly at 2mm depth.",
+      "Every two months he documents visible density gains. His hair fall grinds to a halt when he stays consistent.",
+    ],
+    quote:
+      "Day to day hairfall basically grinds to a halt when I microneedle more. I had great growth even without DHT blockers.",
+  },
+  {
+    name: "Théo",
+    subtitle: "Paris, France · 5 months in",
+    photo: "/start/results/regrowth/regrowth_4.png",
+    photoAlt: "Théo's hair progression on the KESHAH routine",
+    paragraphs: [
+      "Théo started with the free KESHAH stoppage routine — daily scalp massages, no drugs. A few months in, his scalp had loosened and his hair fall had stopped.",
+      "But he wanted more than stopping. He wanted regrowth. He upgraded to the KESHAH regrowth kit: microneedling once a week, plus the oils and daily massages.",
+      "Still in progress — hair fall has stopped, regrowth is starting. He's the customer story most people are living through right now.",
+    ],
+    quote: "My scalp is more flexible. I don't see hair loss anymore.",
+  },
+];
+
+// ── Video testimonials — 12 HLS streams from the app's PostAuthFlow2 ──
 const TESTIMONIALS = [
-  { name: "Terrence",   day: 14, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/terrenceday14HLS.m3u8",   thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/terrenceday14_thumb.jpg" },
-  { name: "Zahira",     day: 28, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/zahiraday28HLS.m3u8",     thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/zahiraday28_thumb.jpg" },
-  { name: "Kartik",     day: 7,  video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream3/kartikday07HLS.m3u8",    thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/kartikday07_thumb.jpg" },
-  { name: "Shivani",    day: 7,  video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/shivaniday07HLS.m3u8",    thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/shivaniday07_thumb.jpg" },
-  { name: "Bharat",     day: 14, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/Bharatday14HLS.m3u8",     thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/Bharatday14_thumb.jpg" },
-  { name: "Yajaira",    day: 14, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/Yajairaday14HLS.m3u8",    thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/Yajairaday14_thumb.jpg" },
-  { name: "Kalpana",    day: 21, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/kalpanaday21HLS.m3u8",    thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/kalpanaday21_thumb.jpg" },
-  { name: "King",       day: 21, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream3/kingday21HLS.m3u8",      thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/kingday21_thumb.jpg" },
-  { name: "Nisha",      day: 21, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/nishaday21HLS.m3u8",      thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/nishaday21_thumb.jpg" },
-  { name: "Venkatesh",  day: 21, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/venkateshday21HLS.m3u8",  thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/venkateshday21_thumb.jpg" },
-  { name: "Nestor",     day: 28, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/nestorday28HLS.m3u8",     thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/nestorday28_thumb.jpg" },
-  { name: "Kwanele",    day: 35, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/kwaneleday35HLS.m3u8",    thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/kwaneleday35_thumb.jpg" },
+  { name: "Terrence",  day: 14, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/terrenceday14HLS.m3u8",   thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/terrenceday14_thumb.jpg" },
+  { name: "Zahira",    day: 28, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/zahiraday28HLS.m3u8",     thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/zahiraday28_thumb.jpg" },
+  { name: "Kartik",    day: 7,  video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream3/kartikday07HLS.m3u8",    thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/kartikday07_thumb.jpg" },
+  { name: "Shivani",   day: 7,  video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/shivaniday07HLS.m3u8",    thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/shivaniday07_thumb.jpg" },
+  { name: "Bharat",    day: 14, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/Bharatday14HLS.m3u8",     thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/Bharatday14_thumb.jpg" },
+  { name: "Yajaira",   day: 14, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/Yajairaday14HLS.m3u8",    thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/Yajairaday14_thumb.jpg" },
+  { name: "Kalpana",   day: 21, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/kalpanaday21HLS.m3u8",    thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/kalpanaday21_thumb.jpg" },
+  { name: "King",      day: 21, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream3/kingday21HLS.m3u8",      thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/kingday21_thumb.jpg" },
+  { name: "Nisha",     day: 21, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/nishaday21HLS.m3u8",      thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/nishaday21_thumb.jpg" },
+  { name: "Venkatesh", day: 21, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/venkateshday21HLS.m3u8",  thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/venkateshday21_thumb.jpg" },
+  { name: "Nestor",    day: 28, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/nestorday28HLS.m3u8",     thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/nestorday28_thumb.jpg" },
+  { name: "Kwanele",   day: 35, video: "https://dosm2lichqd6n.cloudfront.net/testimonials-stoppage/stream/kwaneleday35HLS.m3u8",    thumb: "https://keshah-video.s3.ap-south-1.amazonaws.com/testimonials-stoppage/thumbnails/kwaneleday35_thumb.jpg" },
 ];
 
-// 13 short-form transformation clips — visual before/after. Same set on /start.
-const TRANSFORMATIONS = [
-  { src: "/start/results/proof_clip_1.mp4", poster: "/start/results/proof_clip_1_poster.jpg" },
-  { src: "/start/results/proof_clip_2.mp4", poster: "/start/results/proof_clip_2_poster.jpg" },
-  { src: "/start/results/proof_clip_3.mp4", poster: "/start/results/proof_clip_3_poster.jpg" },
-  { src: "/start/results/proof_clip_4.mp4", poster: "/start/results/proof_clip_4_poster.jpg" },
-  { src: "/start/results/proof_clip_5.mp4", poster: "/start/results/proof_clip_5_poster.jpg" },
-  { src: "/start/results/proof_clip_6.mp4", poster: "/start/results/proof_clip_6_poster.jpg" },
-  { src: "/start/results/proof_clip_7.mp4", poster: "/start/results/proof_clip_7_poster.jpg" },
-  { src: "/start/results/women_clip_1.mp4", poster: "/start/results/women_clip_1_poster.jpg" },
-  { src: "/start/results/women_clip_2.mp4", poster: "/start/results/women_clip_2_poster.jpg" },
-  { src: "/start/results/women_clip_3.mp4", poster: "/start/results/women_clip_3_poster.jpg" },
-  { src: "/start/results/women_clip_4.mp4", poster: "/start/results/women_clip_4_poster.jpg" },
-  { src: "/start/results/women_clip_5.mp4", poster: "/start/results/women_clip_5_poster.jpg" },
-  { src: "/start/results/women_clip_6.mp4", poster: "/start/results/women_clip_6_poster.jpg" },
+// ── Before/after grid ──
+// Long-form regrowth photos (4+ month users). Since case studies already
+// use regrowth_crown, regrowth_6, regrowth_4, we surface the OTHER five here
+// so viewers see fresh members in this section.
+const BEFORE_AFTERS = [
+  { name: "Collin",   img: "/start/results/regrowth/regrowth_3.png" },
+  { name: "Bayal",    img: "/start/results/regrowth/regrowth_7.png" },
+  { name: "Vinnie",   img: "/start/results/regrowth/regrowth_2.png" },
+  { name: "Jonathon", img: "/start/results/regrowth/regrowth_1.png" },
+  { name: "Member",   img: "/start/results/regrowth/regrowth_5.png" },
 ];
 
-// 8 long-form regrowth photos — 4+ month results. Copied from Flutter app.
-// Names from regrowth_plan_summary.dart (_resultCard entries).
-const REGROWTH = [
-  { name: "Arush",     img: "/start/results/regrowth/regrowth_6.png" },
-  { name: "Joseph",    img: "/start/results/regrowth/regrowth_4.png" },
-  { name: "Najinthan", img: "/start/results/regrowth/regrowth_crown.png" },
-  { name: "Collin",    img: "/start/results/regrowth/regrowth_3.png" },
-  { name: "Bayal",     img: "/start/results/regrowth/regrowth_7.png" },
-  { name: "Vinnie",    img: "/start/results/regrowth/regrowth_2.png" },
-  { name: "Jonathon",  img: "/start/results/regrowth/regrowth_1.png" },
-  { name: "Member",    img: "/start/results/regrowth/regrowth_5.png" },
-];
-
-// 12 social proof screenshots — public source content already posted to
-// TikTok / Reddit / iMessage / WhatsApp by members.
+// ── Screenshots (public-source TikTok / Reddit / iMessage / WhatsApp) ──
 const SCREENSHOTS = [
   "/start/results/proof_tiktok_finasteride_vs_keshah.jpeg",
   "/start/results/proof_reddit_5_month.jpeg",
-  "/start/results/proof_tiktok_growing_back.jpeg",
-  "/start/results/proof_tiktok_tension_reduced.jpeg",
   "/start/results/proof_reddit_105_days.jpeg",
   "/start/results/proof_tiktok_3_months.jpeg",
   "/start/results/proof_whatsapp_hairline.jpeg",
   "/start/results/proof_tiktok_stops_hair_loss.jpeg",
   "/start/results/proof_reddit_worth_every_penny.jpeg",
-  "/start/results/proof_imessage_grateful.jpeg",
   "/start/results/proof_whatsapp_one_year.jpeg",
-  "/start/results/proof_women_zukie.jpeg",
 ];
-
-// Interleave testimonials + transformations so both styles appear
-// throughout the scrolling row.
-const VIDEOS: Array<
-  | { key: string; kind: "t"; video: string; thumb: string; name: string; day: number }
-  | { key: string; kind: "x"; src: string; poster: string }
-> = (() => {
-  const out: Array<
-    | { key: string; kind: "t"; video: string; thumb: string; name: string; day: number }
-    | { key: string; kind: "x"; src: string; poster: string }
-  > = [];
-  const max = Math.max(TESTIMONIALS.length, TRANSFORMATIONS.length);
-  for (let i = 0; i < max; i++) {
-    if (TESTIMONIALS[i]) {
-      const t = TESTIMONIALS[i];
-      out.push({ key: `t-${t.name}`, kind: "t", video: t.video, thumb: t.thumb, name: t.name, day: t.day });
-    }
-    if (TRANSFORMATIONS[i]) {
-      const x = TRANSFORMATIONS[i];
-      out.push({ key: `x-${i}`, kind: "x", src: x.src, poster: x.poster });
-    }
-  }
-  return out;
-})();
 
 export default function ResultsPage() {
   return (
@@ -113,7 +128,7 @@ export default function ResultsPage() {
       {/* ── Hero ── */}
       <section className={styles.hero}>
         <div className={styles.heroInner}>
-          <p className={styles.eyebrow}>Real people · Real results</p>
+          <p className={styles.eyebrow}>Real members · Real results</p>
           <h1 className={styles.headline}>
             Stop your hair loss.<br />No drugs.
           </h1>
@@ -122,100 +137,93 @@ export default function ResultsPage() {
             <span className={styles.trustDot}>·</span>
             35,000+ members
           </p>
-
-          {/* Aadi's before/after (self-consented) */}
-          <div className={styles.beforeAfter}>
-            <figure className={styles.baFig}>
-              <Image
-                src="/start/story/before_hairline.jpg"
-                alt="Aadi's hairline before starting KESHAH"
-                width={480}
-                height={480}
-                className={styles.baImg}
-              />
-              <figcaption className={styles.baLabel}>Aadi · Before</figcaption>
-            </figure>
-            <figure className={styles.baFig}>
-              <Image
-                src="/start/story/after_hairline.jpg"
-                alt="Aadi's hairline after the KESHAH routine"
-                width={480}
-                height={480}
-                className={styles.baImg}
-              />
-              <figcaption className={styles.baLabel}>Aadi · After</figcaption>
-            </figure>
-          </div>
         </div>
       </section>
 
-      {/* ── Video row (marquee — testimonials + transformations
-             interleaved). Captions on BOTH types: testimonials get
-             name+day, transformations get 'Before → After'. Track
-             duplicated in JSX; keyframe translates -50% for seamless
-             loop. Row height fixed so animation math is deterministic
-             regardless of media load timing. */}
-      <section className={styles.rowSection}>
-        <div className={styles.rowWrap}>
-          <div className={styles.track}>
-            {[...VIDEOS, ...VIDEOS].map((v, idx) => (
-              <div key={`${v.key}-${idx}`} className={styles.videoCard}>
-                {v.kind === "t" ? (
-                  <HLSVideo src={v.video} poster={v.thumb} className={styles.video} />
-                ) : (
-                  <video
-                    src={v.src}
-                    poster={v.poster}
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                    preload="metadata"
-                    disablePictureInPicture
-                    className={styles.video}
-                  />
-                )}
-                <div className={styles.videoMeta}>
-                  {v.kind === "t" ? (
-                    <>
-                      <span className={styles.videoName}>{v.name}</span>
-                      <span className={styles.videoDay}>Day {v.day}</span>
-                    </>
-                  ) : (
-                    <span className={styles.videoName}>Before → After</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* ── Case studies ──
+         Editorial blocks (Hims/Ro pattern). Each: big image, name, subtitle,
+         3-paragraph story, pull quote. Reads like reporting, not marketing. */}
+      {CASE_STUDIES.map((cs, i) => (
+        <section key={cs.name} className={styles.caseSection}>
+          <article className={styles.caseInner}>
+            <div className={styles.caseNumber}>0{i + 1}</div>
+            <h2 className={styles.caseName}>{cs.name}</h2>
+            <p className={styles.caseSubtitle}>{cs.subtitle}</p>
 
-      {/* ── Regrowth grid (static — 4-col desktop, 2-col mobile).
-             Photos are the money-shot proof; scrolling made them
-             uninspectable + cropped side-by-side compositions.
-             Natural aspect ratio (no forced 1:1) so nothing gets cut. */}
+            <div className={styles.casePhotoWrap}>
+              <Image
+                src={cs.photo}
+                alt={cs.photoAlt}
+                width={1200}
+                height={800}
+                sizes="(min-width: 960px) 720px, 100vw"
+                className={styles.casePhoto}
+                priority={i === 0}
+              />
+            </div>
+
+            <div className={styles.caseBody}>
+              {cs.paragraphs.map((p, idx) => (
+                <p key={idx} className={styles.caseParagraph}>{p}</p>
+              ))}
+            </div>
+
+            <blockquote className={styles.caseQuote}>
+              &ldquo;{cs.quote}&rdquo;
+              <cite className={styles.caseQuoteCite}>— {cs.name}</cite>
+            </blockquote>
+          </article>
+        </section>
+      ))}
+
+      {/* ── Video testimonials (static grid, no marquee) ── */}
       <section className={styles.section}>
-        <div className={styles.regrowthGrid}>
-          {REGROWTH.map((r) => (
-            <figure key={r.img} className={styles.regrowthCard}>
+        <div className={styles.sectionHeader}>
+          <p className={styles.eyebrow}>More members</p>
+          <h2 className={styles.h2}>Hear from members</h2>
+        </div>
+        <div className={styles.videoGrid}>
+          {TESTIMONIALS.map((t) => (
+            <div key={t.name} className={styles.videoCard}>
+              <HLSVideo src={t.video} poster={t.thumb} className={styles.video} />
+              <div className={styles.videoMeta}>
+                <span className={styles.videoName}>{t.name}</span>
+                <span className={styles.videoDay}>Day {t.day}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Before / after grid (static, natural aspect ratio) ── */}
+      <section className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <p className={styles.eyebrow}>Long-term results</p>
+          <h2 className={styles.h2}>Before &amp; after</h2>
+        </div>
+        <div className={styles.beforeAfterGrid}>
+          {BEFORE_AFTERS.map((r) => (
+            <figure key={r.img} className={styles.beforeAfterCard}>
               <Image
                 src={r.img}
-                alt={`${r.name}'s hair regrowth after the KESHAH routine`}
-                width={800}
+                alt={`${r.name}'s regrowth on the KESHAH routine`}
+                width={1200}
                 height={800}
-                sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
-                className={styles.regrowthImg}
+                sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                className={styles.beforeAfterImg}
               />
-              <figcaption className={styles.regrowthName}>{r.name}</figcaption>
+              <figcaption className={styles.beforeAfterName}>{r.name}</figcaption>
             </figure>
           ))}
         </div>
       </section>
 
-      {/* ── Screenshots (static masonry, kept for text-based social proof
-             that scrolling wouldn't showcase well — captions matter here) */}
+      {/* ── From the community (screenshots — public source content) ── */}
       <section className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <p className={styles.eyebrow}>From the community</p>
+          <h2 className={styles.h2}>What people are saying</h2>
+        </div>
         <div className={styles.screenshotGrid}>
           {SCREENSHOTS.map((src, i) => (
             <div key={src} className={styles.screenshotCard}>
@@ -231,7 +239,44 @@ export default function ResultsPage() {
         </div>
       </section>
 
-      {/* ── CTA (App Store + Play Store badges, matches /m and /women) ── */}
+      {/* ── How this started (Aadi's brief story) ── */}
+      <section className={styles.founderSection}>
+        <div className={styles.founderInner}>
+          <p className={styles.eyebrow}>How this started</p>
+          <h2 className={styles.h2}>The founder&rsquo;s own journey</h2>
+          <div className={styles.founderBeforeAfter}>
+            <figure className={styles.founderFig}>
+              <Image
+                src="/start/story/before_hairline.jpg"
+                alt="Aadi's hairline before"
+                width={480}
+                height={480}
+                className={styles.founderImg}
+              />
+              <figcaption className={styles.founderLabel}>Before</figcaption>
+            </figure>
+            <figure className={styles.founderFig}>
+              <Image
+                src="/start/story/after_hairline.jpg"
+                alt="Aadi's hairline after"
+                width={480}
+                height={480}
+                className={styles.founderImg}
+              />
+              <figcaption className={styles.founderLabel}>After</figcaption>
+            </figure>
+          </div>
+          <p className={styles.founderText}>
+            KESHAH started with Aadi&rsquo;s own hair loss journey. After a
+            dermatologist told him he&rsquo;d be bald in two years without
+            finasteride, he refused. He spent the next four years figuring out
+            an alternative — scalp tension and blood flow — and built KESHAH
+            so others could follow the same protocol.
+          </p>
+        </div>
+      </section>
+
+      {/* ── CTA (App Store + Play Store badges — matches /m and /women) ── */}
       <section className={styles.cta}>
         <div className={styles.ctaInner}>
           <h2 className={styles.ctaHeadline}>Try the routine free</h2>

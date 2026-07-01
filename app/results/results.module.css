@@ -1,7 +1,8 @@
-/* KESHAH results page — dark editorial, minimal. Matches /m and /women
-   brand aesthetic. Two marquee rows (videos + regrowth) + a static
-   screenshot masonry + CTA. No section subtitles, no guarantee copy,
-   no fluff. */
+/* KESHAH results page — dark editorial, case-study-first (Hims pattern).
+   Long-form magazine style. Big imagery, generous whitespace, single
+   column flow. Reads like reporting, not a landing page.
+
+   Palette + type match /m and /women (black bg, white text, Poppins). */
 
 .root {
   min-height: 100vh;
@@ -24,12 +25,12 @@
 }
 
 .eyebrow {
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 1.4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.6px;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.5);
-  margin: 0 0 24px;
+  color: rgba(255, 255, 255, 0.4);
+  margin: 0 0 20px;
 }
 
 .headline {
@@ -37,14 +38,14 @@
   font-weight: 600;
   letter-spacing: -2px;
   line-height: 1.05;
-  margin: 0 0 20px;
+  margin: 0 0 24px;
   color: #fff;
 }
 
 .trustLine {
   margin: 0;
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(255, 255, 255, 0.5);
   letter-spacing: -0.1px;
 }
 
@@ -57,109 +58,180 @@
   opacity: 0.4;
 }
 
-.beforeAfter {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin: 48px auto 0;
-  max-width: 720px;
+/* ── Case studies (editorial magazine style) ──
+   Each case study is a full section with generous vertical padding.
+   Layout is single-column (max 720px reading width). Photo is big
+   and full-width within that column. Text has editorial leading. */
+
+.caseSection {
+  padding: 88px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.baFig {
+.caseSection:first-of-type {
+  border-top: none;
+  padding-top: 32px;
+}
+
+@media (min-width: 768px) {
+  .caseSection {
+    padding: 128px 24px;
+  }
+}
+
+.caseInner {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.caseNumber {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1.6px;
+  color: rgba(255, 255, 255, 0.35);
+  margin: 0 0 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.caseName {
+  font-size: clamp(36px, 6vw, 56px);
+  font-weight: 600;
+  letter-spacing: -1.6px;
+  line-height: 1.05;
+  margin: 0 0 10px;
+  color: #fff;
+}
+
+.caseSubtitle {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.55);
+  margin: 0 0 40px;
+  letter-spacing: -0.1px;
+}
+
+.casePhotoWrap {
+  border-radius: 20px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  margin: 0 0 40px;
+}
+
+.casePhoto {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.caseBody {
+  margin: 0 0 40px;
+}
+
+.caseParagraph {
+  font-size: 17px;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.82);
+  margin: 0 0 20px;
+  letter-spacing: -0.1px;
+}
+
+.caseParagraph:last-child {
+  margin-bottom: 0;
+}
+
+@media (min-width: 768px) {
+  .caseParagraph {
+    font-size: 19px;
+    line-height: 1.6;
+  }
+}
+
+.caseQuote {
   margin: 0;
-  display: flex;
-  flex-direction: column;
+  padding: 32px 0 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: -0.5px;
+  color: #fff;
+  font-style: italic;
+}
+
+@media (min-width: 768px) {
+  .caseQuote {
+    font-size: 28px;
+    letter-spacing: -0.8px;
+  }
+}
+
+.caseQuoteCite {
+  display: block;
+  margin-top: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  font-style: normal;
+}
+
+/* ── Section shell (video / before-after / screenshots) ── */
+.section {
+  padding: 96px 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sectionHeader {
+  text-align: center;
+  margin-bottom: 56px;
+}
+
+.h2 {
+  font-size: clamp(28px, 5vw, 40px);
+  font-weight: 600;
+  letter-spacing: -1.2px;
+  line-height: 1.15;
+  margin: 0;
+  color: #fff;
+}
+
+/* ── Video grid (static, 3-4 cols) ── */
+.videoGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 12px;
 }
 
-.baImg {
-  width: 100%;
-  height: auto;
-  border-radius: 20px;
-  object-fit: cover;
-  aspect-ratio: 1 / 1;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.baLabel {
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.5);
-  text-align: center;
-}
-
-@media (min-width: 768px) {
-  .beforeAfter {
+@media (min-width: 640px) {
+  .videoGrid {
+    grid-template-columns: repeat(3, 1fr);
     gap: 16px;
-    margin-top: 64px;
   }
 }
 
-/* ── Scrolling row shell — full-bleed marquee ──
-   Two rows on the page: videos (scrollLeft) + regrowth (scrollRight).
-   Track is duplicated in JSX; keyframe translates by -50% for a seamless
-   loop. Height fixed so the animation math is deterministic regardless
-   of video load timing. */
-.rowSection {
-  padding: 32px 0;
-}
-
-.rowWrap {
-  height: 320px;
-  overflow: hidden;
-  display: flex;
-  position: relative;
-}
-
-@media (min-width: 768px) {
-  .rowSection {
-    padding: 40px 0;
-  }
-  .rowWrap {
-    height: 400px;
+@media (min-width: 1024px) {
+  .videoGrid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
   }
 }
 
-.track {
-  display: flex;
-  height: 100%;
-  flex-shrink: 0;
-  animation-name: scrollLeft;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
-  animation-duration: 90s;
-  will-change: transform;
-}
-
-.trackReverse {
-  animation-name: scrollRight;
-  animation-duration: 70s;
-}
-
-@keyframes scrollLeft {
-  from { transform: translate3d(0, 0, 0); }
-  to   { transform: translate3d(-50%, 0, 0); }
-}
-
-@keyframes scrollRight {
-  from { transform: translate3d(-50%, 0, 0); }
-  to   { transform: translate3d(0, 0, 0); }
-}
-
-/* ── Video cards (portrait 9:16) ── */
 .videoCard {
-  flex: none;
-  height: 100%;
-  aspect-ratio: 9 / 16;
-  margin-right: 12px;
-  border-radius: 16px;
-  overflow: hidden;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  overflow: hidden;
+  aspect-ratio: 9 / 16;
   position: relative;
+  transition: border-color 0.3s ease;
+}
+
+.videoCard:hover {
+  border-color: rgba(255, 255, 255, 0.14);
 }
 
 .video {
@@ -179,7 +251,7 @@
   justify-content: space-between;
   align-items: baseline;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0) 100%);
-  color: #FFF;
+  color: #fff;
   pointer-events: none;
 }
 
@@ -197,39 +269,30 @@
   text-transform: uppercase;
 }
 
-@media (min-width: 768px) {
-  .videoCard {
-    margin-right: 16px;
-    border-radius: 20px;
-  }
-}
-
-/* ── Regrowth static grid — natural aspect ratio, no crop. Side-by-side
-   before/after PNGs vary in aspect (some 2:1, some 1:1). Letting the
-   image size the card naturally preserves the full composition. */
-.regrowthGrid {
+/* ── Before / after grid (static, natural aspect ratio) ── */
+.beforeAfterGrid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  grid-template-columns: 1fr;
+  gap: 16px;
 }
 
 @media (min-width: 640px) {
-  .regrowthGrid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
-  }
-}
-
-@media (min-width: 1024px) {
-  .regrowthGrid {
-    grid-template-columns: repeat(4, 1fr);
+  .beforeAfterGrid {
+    grid-template-columns: repeat(2, 1fr);
     gap: 20px;
   }
 }
 
-.regrowthCard {
+@media (min-width: 1024px) {
+  .beforeAfterGrid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+}
+
+.beforeAfterCard {
   margin: 0;
-  border-radius: 16px;
+  border-radius: 20px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -238,37 +301,23 @@
   transition: border-color 0.3s ease;
 }
 
-.regrowthCard:hover {
+.beforeAfterCard:hover {
   border-color: rgba(255, 255, 255, 0.14);
 }
 
-.regrowthImg {
+.beforeAfterImg {
   width: 100%;
   height: auto;
   display: block;
-  /* No object-fit / no forced aspect-ratio — full image shows */
 }
 
-.regrowthName {
-  padding: 14px 16px;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 1.2px;
+.beforeAfterName {
+  padding: 14px 18px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1.4px;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.55);
-}
-
-@media (min-width: 1024px) {
-  .regrowthCard {
-    border-radius: 20px;
-  }
-}
-
-/* ── Section shell (screenshots + CTA) ── */
-.section {
-  padding: 72px 24px;
-  max-width: 1200px;
-  margin: 0 auto;
 }
 
 /* ── Screenshot masonry ── */
@@ -318,10 +367,63 @@
   display: block;
 }
 
-/* ── CTA ── */
-.cta {
-  padding: 72px 24px 120px;
+/* ── Founder section (supporting — Aadi's brief story near bottom) ── */
+.founderSection {
+  padding: 96px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.founderInner {
+  max-width: 720px;
+  margin: 0 auto;
   text-align: center;
+}
+
+.founderBeforeAfter {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 40px auto;
+  max-width: 480px;
+}
+
+.founderFig {
+  margin: 0;
+}
+
+.founderImg {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.founderLabel {
+  display: block;
+  margin-top: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.founderText {
+  font-size: 16px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0;
+  letter-spacing: -0.1px;
+}
+
+/* ── CTA (App Store + Play Store badges) ── */
+.cta {
+  padding: 96px 24px 128px;
+  text-align: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .ctaInner {
@@ -338,7 +440,6 @@
   color: #fff;
 }
 
-/* App Store + Play Store badge row (mirrors /m and /women pages) */
 .storeButtons {
   display: flex;
   gap: 10px;
