@@ -54,15 +54,15 @@ const CASE_STUDIES: CaseStudy[] = [
     hairLossType: "Androgenic Alopecia — Crown Thinning",
     regimen: [
       "KESHAH Mechanotherapy (Scalp + Neck)",
-      "Regrowth Microneedling (Added Sept 2025)",
-      "KESHAH Oils",
+      "Regrowth Microneedling — 1x/week, 0.75–1.5mm, 2 passthroughs (Added Sept 2025)",
+      "KESHAH Topicals",
     ],
     duration: "14 months",
     photo: "/start/results/regrowth/regrowth_crown.png",
     photoAlt: "Najinthan's crown regrowth after 14 months on the KESHAH routine",
     paragraphs: [
       "Najinthan had noticed his crown thinning for years. He had tried high-dose Omega-3 and biotin supplements without any change to his hair. He wasn't willing to take finasteride or minoxidil.",
-      "He started the KESHAH routine in April 2025 with scalp and neck mechanotherapy — 20 to 45 minutes per day. In September 2025 he added regrowth microneedling to the protocol.",
+      "He started the KESHAH routine in April 2025 with scalp and neck mechanotherapy — 20 to 45 minutes per day. In September 2025 he added regrowth microneedling to the protocol: once per week, 0.75 to 1.5mm depth, two passthroughs, followed by application of KESHAH topicals.",
       "Fourteen months in, his hair fall has stopped and density has returned to previously thinning areas.",
     ],
     quote:
@@ -75,7 +75,7 @@ const CASE_STUDIES: CaseStudy[] = [
     regimen: [
       "KESHAH Mechanotherapy (Scalp + Neck)",
       "Microneedling (0.7mm → 2mm depth)",
-      "KESHAH Oils",
+      "KESHAH Topicals",
     ],
     duration: "6+ months documented",
     photo: "/start/results/regrowth/regrowth_6.png",
@@ -95,7 +95,7 @@ const CASE_STUDIES: CaseStudy[] = [
     regimen: [
       "KESHAH Mechanotherapy (Scalp + Neck)",
       "Microneedling (Weekly)",
-      "KESHAH Oils",
+      "KESHAH Topicals",
     ],
     duration: "5 months",
     photo: "/start/results/regrowth/theo/theo_composite.jpg",
