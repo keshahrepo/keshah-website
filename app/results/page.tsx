@@ -132,29 +132,12 @@ const TESTIMONIALS = [
   { src: "/start/results/proof_clip_7.mp4",  poster: "/start/results/proof_clip_7_poster.jpg" },
 ];
 
-// ── Before/after grid ──
-// Long-form regrowth photos (4+ month users). Since case studies already
-// use regrowth_crown, regrowth_6, regrowth_4, we surface the OTHER five here
-// so viewers see fresh members in this section.
-const BEFORE_AFTERS = [
-  { name: "Collin",   img: "/start/results/regrowth/regrowth_3.png" },
-  { name: "Bayal",    img: "/start/results/regrowth/regrowth_7.png" },
-  { name: "Vinnie",   img: "/start/results/regrowth/regrowth_2.png" },
-  { name: "Jonathon", img: "/start/results/regrowth/regrowth_1.png" },
-  { name: "Member",   img: "/start/results/regrowth/regrowth_5.png" },
-];
-
-// ── Screenshots (public-source TikTok / Reddit / iMessage / WhatsApp) ──
-const SCREENSHOTS = [
-  "/start/results/proof_tiktok_finasteride_vs_keshah.jpeg",
-  "/start/results/proof_reddit_5_month.jpeg",
-  "/start/results/proof_reddit_105_days.jpeg",
-  "/start/results/proof_tiktok_3_months.jpeg",
-  "/start/results/proof_whatsapp_hairline.jpeg",
-  "/start/results/proof_tiktok_stops_hair_loss.jpeg",
-  "/start/results/proof_reddit_worth_every_penny.jpeg",
-  "/start/results/proof_whatsapp_one_year.jpeg",
-];
+// Note: Removed the standalone "Before & after" grid and "From the
+// community" screenshots section. The video testimonials already have
+// before/after visual overlays baked into them (see proof_clip_X and
+// women_clip_X — verified via frame extraction), so the static grid was
+// duplicating that content. Screenshots didn't match the editorial tone.
+// Final page = hero + 3 case studies + captioned videos + founder note + CTA.
 
 export default function ResultsPage() {
   return (
@@ -263,50 +246,6 @@ export default function ResultsPage() {
                 disablePictureInPicture
                 className={styles.video}
                 aria-label={`Member testimonial ${i + 1}`}
-              />
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Before / after grid (static, natural aspect ratio) ── */}
-      <section className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <p className={styles.eyebrow}>Long-term results</p>
-          <h2 className={styles.h2}>Before &amp; after</h2>
-        </div>
-        <div className={styles.beforeAfterGrid}>
-          {BEFORE_AFTERS.map((r) => (
-            <figure key={r.img} className={styles.beforeAfterCard}>
-              <Image
-                src={r.img}
-                alt={`${r.name}'s regrowth on the KESHAH routine`}
-                width={1200}
-                height={800}
-                sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-                className={styles.beforeAfterImg}
-              />
-              <figcaption className={styles.beforeAfterName}>{r.name}</figcaption>
-            </figure>
-          ))}
-        </div>
-      </section>
-
-      {/* ── From the community (screenshots — public source content) ── */}
-      <section className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <p className={styles.eyebrow}>From the community</p>
-          <h2 className={styles.h2}>What people are saying</h2>
-        </div>
-        <div className={styles.screenshotGrid}>
-          {SCREENSHOTS.map((src, i) => (
-            <div key={src} className={styles.screenshotCard}>
-              <Image
-                src={src}
-                alt={`Member testimonial ${i + 1}`}
-                width={600}
-                height={800}
-                className={styles.screenshot}
               />
             </div>
           ))}
