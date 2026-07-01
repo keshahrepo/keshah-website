@@ -32,9 +32,16 @@ export const metadata: Metadata = {
 // pull quote. Written from real WhatsApp conversations (not synthesized),
 // which is why they read like reporting rather than marketing.
 
+// Editorial case studies (Perfect Hair Health + Hims pattern). Each entry
+// has structured metadata that renders as a data-driven "attribute footer"
+// beneath the story — reads like reporting, not a landing page.
+
 type CaseStudy = {
   name: string;
-  subtitle: string;
+  location: string;                 // "Markham, Ontario, Canada"
+  hairLossType: string;             // e.g. "Androgenic Alopecia — Crown Thinning"
+  regimen: string[];                // list of protocol components
+  duration: string;                 // "14 months"
   photo: string;
   photoAlt: string;
   paragraphs: string[];
@@ -44,7 +51,14 @@ type CaseStudy = {
 const CASE_STUDIES: CaseStudy[] = [
   {
     name: "Najinthan",
-    subtitle: "Markham, Ontario · 14 months on the routine",
+    location: "Markham, Ontario, Canada",
+    hairLossType: "Androgenic Alopecia — Crown Thinning",
+    regimen: [
+      "Standardized Scalp Massage",
+      "Neck Tension Release",
+      "KESHAH Oils",
+    ],
+    duration: "14 months",
     photo: "/start/results/regrowth/regrowth_crown.png",
     photoAlt: "Najinthan's crown regrowth after 14 months on the KESHAH routine",
     paragraphs: [
@@ -57,7 +71,14 @@ const CASE_STUDIES: CaseStudy[] = [
   },
   {
     name: "Arush",
-    subtitle: "Berkeley grad · pharmaceutical background",
+    location: "Bay Area, USA / India",
+    hairLossType: "Androgenic Alopecia — Diffuse Thinning",
+    regimen: [
+      "Standardized Scalp Massage",
+      "Microneedling (0.7mm → 2mm depth)",
+      "KESHAH Oils",
+    ],
+    duration: "6+ months documented",
     photo: "/start/results/regrowth/regrowth_6.png",
     photoAlt: "Arush's hair regrowth after the KESHAH microneedling protocol",
     paragraphs: [
@@ -70,7 +91,14 @@ const CASE_STUDIES: CaseStudy[] = [
   },
   {
     name: "Théo",
-    subtitle: "Paris, France · 5 months in",
+    location: "Paris, France",
+    hairLossType: "Androgenic Alopecia — Early Stage",
+    regimen: [
+      "Standardized Scalp Massage",
+      "Microneedling (Weekly)",
+      "KESHAH Oils",
+    ],
+    duration: "5 months",
     photo: "/start/results/regrowth/regrowth_4.png",
     photoAlt: "Théo's hair progression on the KESHAH routine",
     paragraphs: [
@@ -125,30 +153,35 @@ const SCREENSHOTS = [
 export default function ResultsPage() {
   return (
     <main className={styles.root}>
-      {/* ── Hero ── */}
+      {/* ── Hero (editorial, not marketing) ── */}
       <section className={styles.hero}>
         <div className={styles.heroInner}>
-          <p className={styles.eyebrow}>Real members · Real results</p>
+          <p className={styles.eyebrow}>KESHAH Case Studies</p>
           <h1 className={styles.headline}>
-            Stop your hair loss.<br />No drugs.
+            Real Results from<br />KESHAH Members
           </h1>
-          <p className={styles.trustLine}>
-            <span className={styles.stars}>★</span> 4.8
-            <span className={styles.trustDot}>·</span>
-            35,000+ members
+          <p className={styles.heroLead}>
+            Three members share their journey with the KESHAH routine — the
+            protocol, the timeline, and what actually happened.
+          </p>
+          <p className={styles.heroByline}>
+            Written by the KESHAH Editorial Team · Updated July 2026
           </p>
         </div>
       </section>
 
-      {/* ── Case studies ──
-         Editorial blocks (Hims/Ro pattern). Each: big image, name, subtitle,
-         3-paragraph story, pull quote. Reads like reporting, not marketing. */}
+      {/* ── Case studies (editorial + structured metadata footer) ──
+         Perfect Hair Health pattern: quote-driven narrative, then a
+         data-block with hair loss type + regimen + duration. Reads
+         like a journal case report rather than a testimonial card. */}
       {CASE_STUDIES.map((cs, i) => (
         <section key={cs.name} className={styles.caseSection}>
           <article className={styles.caseInner}>
-            <div className={styles.caseNumber}>0{i + 1}</div>
+            <div className={styles.caseNumber}>Case 0{i + 1}</div>
             <h2 className={styles.caseName}>{cs.name}</h2>
-            <p className={styles.caseSubtitle}>{cs.subtitle}</p>
+            <p className={styles.caseSubtitle}>
+              {cs.location} · {cs.duration} on the routine
+            </p>
 
             <div className={styles.casePhotoWrap}>
               <Image
@@ -170,8 +203,34 @@ export default function ResultsPage() {
 
             <blockquote className={styles.caseQuote}>
               &ldquo;{cs.quote}&rdquo;
-              <cite className={styles.caseQuoteCite}>— {cs.name}</cite>
+              <cite className={styles.caseQuoteCite}>
+                — {cs.name}, {cs.location}
+              </cite>
             </blockquote>
+
+            {/* Structured metadata footer — Perfect Hair Health pattern.
+                Positions the case as reported data, not a testimonial. */}
+            <dl className={styles.caseMeta}>
+              <div className={styles.caseMetaRow}>
+                <dt className={styles.caseMetaLabel}>Hair Loss Type</dt>
+                <dd className={styles.caseMetaValue}>{cs.hairLossType}</dd>
+              </div>
+              <div className={styles.caseMetaRow}>
+                <dt className={styles.caseMetaLabel}>Regimen</dt>
+                <dd className={styles.caseMetaValue}>
+                  {cs.regimen.map((r, idx) => (
+                    <span key={r} className={styles.caseRegimenItem}>
+                      {r}
+                      {idx < cs.regimen.length - 1 && <br />}
+                    </span>
+                  ))}
+                </dd>
+              </div>
+              <div className={styles.caseMetaRow}>
+                <dt className={styles.caseMetaLabel}>Duration</dt>
+                <dd className={styles.caseMetaValue}>{cs.duration}</dd>
+              </div>
+            </dl>
           </article>
         </section>
       ))}

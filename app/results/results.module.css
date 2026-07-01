@@ -42,20 +42,28 @@
   color: #fff;
 }
 
-.trustLine {
-  margin: 0;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.5);
+.heroLead {
+  font-size: 17px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.65);
+  max-width: 560px;
+  margin: 0 auto 32px;
   letter-spacing: -0.1px;
 }
 
-.stars {
-  color: #F5B84B;
+@media (min-width: 768px) {
+  .heroLead {
+    font-size: 19px;
+  }
 }
 
-.trustDot {
-  margin: 0 8px;
-  opacity: 0.4;
+.heroByline {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.4);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
 }
 
 /* ── Case studies (editorial magazine style) ──
@@ -175,6 +183,49 @@
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.5);
   font-style: normal;
+}
+
+/* ── Structured metadata footer (Perfect Hair Health pattern) ── */
+.caseMeta {
+  margin: 40px 0 0;
+  padding: 24px 0 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+
+@media (min-width: 640px) {
+  .caseMeta {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px;
+  }
+}
+
+.caseMetaRow {
+  margin: 0;
+}
+
+.caseMetaLabel {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
+  margin: 0 0 8px;
+}
+
+.caseMetaValue {
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0;
+  letter-spacing: -0.1px;
+}
+
+.caseRegimenItem {
+  display: block;
 }
 
 /* ── Section shell (video / before-after / screenshots) ── */
