@@ -143,19 +143,15 @@ const TESTIMONIALS = [
 export default function ResultsPage() {
   return (
     <main className={styles.root}>
-      {/* ── Hero (editorial, not marketing) ── */}
+      {/* ── Hero (headline + lead only — no eyebrow or byline) ── */}
       <section className={styles.hero}>
         <div className={styles.heroInner}>
-          <p className={styles.eyebrow}>KESHAH Case Studies</p>
           <h1 className={styles.headline}>
             Real Results from<br />KESHAH Members
           </h1>
           <p className={styles.heroLead}>
             Members share their journey with the KESHAH routine — the
             protocol, the timeline, and what actually happened.
-          </p>
-          <p className={styles.heroByline}>
-            Written by the KESHAH Editorial Team · Updated July 2026
           </p>
         </div>
       </section>
