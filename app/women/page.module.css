@@ -1,0 +1,273 @@
+/* keshah.com/women — mirrors app/page.module.css 1:1 but on a pure
+   white background with dark text/borders. Overrides the dark theme
+   on this route only (the rest of the site stays dark). */
+
+.page {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  /* No overflow:hidden — narrow browser windows on desktop had the
+     headline clipped off the top because the fixed 100dvh height
+     truncated the content. Now the page scrolls gracefully if the
+     viewport is too short to fit everything. */
+  background: #FFFFFF;
+  color: #1A1A1A;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ── Staggered entrance ── */
+.content > * {
+  animation: fadeUp 0.7s ease-out both;
+}
+.content > *:nth-child(1) { animation-delay: 0ms; }
+.content > *:nth-child(2) { animation-delay: 120ms; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Layout: vertical on mobile, horizontal on desktop ── */
+.layout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+/* ── Phone Mockup — dark border on white bg ── */
+.phone {
+  width: 220px;
+  border-radius: 28px;
+  border: 3px solid rgba(26, 26, 26, 0.12);
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgba(26, 26, 26, 0.06),
+    0 20px 60px rgba(0, 0, 0, 0.12);
+  flex-shrink: 0;
+  position: relative;
+}
+
+.screenshot {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Overlay that covers the in-screenshot "Continue" button area with
+   the actual landing-page value prop. Sits absolutely positioned at
+   the bottom of the .phone container; black gradient fade behind the
+   text so it blends into the screenshot's dark background. */
+.overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 26%;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 0.95) 60%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 12px 14px;
+  pointer-events: none;
+}
+
+.overlayText {
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  letter-spacing: -0.2px;
+  line-height: 1.3;
+  margin: 0;
+}
+
+/* ── Headline — outcome promise above the phone mockup.
+   White background variant, dark text. Mirrors /m's structure. ── */
+.headline {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.6px;
+  line-height: 1.2;
+  color: #1A1A1A;
+  text-align: center;
+  margin: 0 0 10px;
+  max-width: 22ch;
+  padding: 0 12px;
+}
+
+/* ── Subheadline — gendered social proof under the headline. ── */
+.subhead {
+  font-size: 13px;
+  color: rgba(26, 26, 26, 0.55);
+  margin: 0 0 18px;
+  letter-spacing: -0.1px;
+  text-align: center;
+}
+
+/* ── Right side ── */
+.aside {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ── Social Proof ── */
+.proof {
+  font-size: 13px;
+  color: rgba(26, 26, 26, 0.55);
+  margin-bottom: 16px;
+  letter-spacing: -0.1px;
+}
+
+.stars {
+  color: #DAA520;
+}
+
+/* ── Store Buttons (mobile) ── */
+.storeButtons {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+}
+
+.storeBadge {
+  display: block;
+  transition: opacity 0.2s;
+}
+
+.storeBadge:hover {
+  opacity: 0.8;
+}
+
+/* ── QR Code (desktop only) ── */
+.qrSection {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.qrBox {
+  width: 120px;
+  height: 120px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(26, 26, 26, 0.08);
+}
+
+.qrLabel {
+  font-size: 13px;
+  color: #1A1A1A;
+  letter-spacing: -0.2px;
+  line-height: 1.4;
+  max-width: 140px;
+  text-align: center;
+}
+
+/* ── Mobile: fit phone within viewport ── */
+@media (max-width: 767px) {
+  .layout {
+    max-height: calc(100dvh - 80px);
+  }
+
+  .phone {
+    width: 50vw;
+    max-width: 240px;
+    min-height: 0;
+  }
+
+  .screenshot {
+    height: 100%;
+    object-fit: contain;
+  }
+}
+
+/* ── Desktop ── */
+@media (min-width: 768px) {
+  .content {
+    align-items: center;
+  }
+
+  .headline {
+    font-size: 32px;
+    letter-spacing: -0.8px;
+    margin-bottom: 12px;
+    max-width: 26ch;
+  }
+
+  .subhead {
+    font-size: 14px;
+    margin-bottom: 28px;
+  }
+
+  .layout {
+    flex-direction: row;
+    align-items: center;
+    gap: 48px;
+  }
+
+  .phone {
+    width: 260px;
+    border-radius: 34px;
+    border-width: 4px;
+  }
+
+  .aside {
+    align-items: flex-start;
+  }
+
+  .proof {
+    font-size: 14px;
+    margin-bottom: 24px;
+  }
+
+  .storeButtons {
+    display: none;
+  }
+
+  .qrSection {
+    display: flex;
+    align-items: flex-start;
+  }
+
+  .qrLabel {
+    text-align: left;
+  }
+}
+
+@media (min-width: 1024px) {
+  .headline {
+    font-size: 36px;
+    letter-spacing: -1px;
+    max-width: 26ch;
+  }
+
+  .layout {
+    gap: 56px;
+  }
+
+  .phone {
+    width: 280px;
+    border-radius: 38px;
+  }
+
+  .qrBox {
+    width: 140px;
+    height: 140px;
+    border-radius: 12px;
+  }
+}

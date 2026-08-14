@@ -1,208 +1,135 @@
-.page {
-  height: 100dvh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  overflow: hidden;
-}
+/* Mirrors the mobile app's GenderSelectionPage exactly.
+   App reference: lib/screens/gender/select_gender_page.dart
+                  lib/screens/gender/widgets/gender_selection_content.dart
+   Colors: kBlack #000 bg, kWhite #fff fg.
+   Title:  Poppins SemiBold 28pt, letter-spacing -1.2, line-height 1.25.
+   Cards:  14px radius, 20/16 padding, white-15% border, white-100% selected.
+   Next:   white background, 40px-ish radius (KeshahButton), full width. */
 
-.content {
+.page {
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
+  background: #000;
+  color: #fff;
+  font-family: "Poppins", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  /* No overflow:hidden — short desktop viewports had content clipped
+     off the top when it didn't fit. Page now scrolls gracefully on
+     narrow windows. */
+}
+
+.header {
+  padding: 20px 32px 0;
+  display: flex;
   align-items: center;
 }
 
-/* ── Staggered entrance ── */
-.content > * {
-  animation: fadeUp 0.7s ease-out both;
-}
-.content > *:nth-child(1) { animation-delay: 0ms; }
-.content > *:nth-child(2) { animation-delay: 120ms; }
-
-/* ── Logo ── */
 .logo {
-  margin-bottom: 20px;
+  display: block;
+  width: 36px;
+  height: 36px;
   object-fit: contain;
 }
 
-/* ── Layout: vertical on mobile, horizontal on desktop ── */
-.layout {
+.body {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 16px;
+  padding: 24px 0 0;
+  min-height: 0;
 }
 
-/* ── Phone Mockup ── */
-.phone {
-  width: 220px;
-  border-radius: 28px;
-  border: 3px solid rgba(255, 255, 255, 0.12);
-  overflow: hidden;
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.06),
-    0 20px 60px rgba(0, 0, 0, 0.5);
-  flex-shrink: 0;
-}
-
-.screenshot {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-/* ── Right side ── */
-.aside {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-/* ── Headline ── */
-.headline {
-  font-size: 22px;
+.title {
+  font-family: "Poppins", sans-serif;
+  font-size: 28px;
   font-weight: 600;
-  letter-spacing: -0.5px;
-  line-height: 1.3;
-  margin-bottom: 8px;
+  color: #fff;
+  letter-spacing: -1.2px;
+  line-height: 1.25;
+  margin: 0 0 32px;
+  padding: 0 32px;
 }
 
-/* ── Social Proof ── */
-.proof {
-  font-size: 13px;
-  color: var(--text-40);
-  margin-bottom: 16px;
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 32px;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: border-color 120ms ease, transform 120ms ease;
+  -webkit-tap-highlight-color: transparent;
+  appearance: none;
+  width: 100%;
+  font-family: inherit;
+}
+
+.option:active {
+  transform: scale(0.99);
+}
+
+.optionSelected {
+  border: 1.5px solid #fff;
+}
+
+.optionLabel {
+  font-family: "Poppins", sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: left;
   letter-spacing: -0.1px;
 }
 
-.stars {
-  color: var(--gold);
+.optionLabelSelected {
+  color: #fff;
 }
 
-/* ── Store Buttons (mobile) ── */
-.storeButtons {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  justify-content: center;
-}
-
-.storeBadge {
-  display: block;
-  transition: opacity 0.2s;
-}
-
-.storeBadge:hover {
-  opacity: 0.8;
-}
-
-/* ── QR Code (desktop only) ── */
-.qrSection {
-  display: none;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-}
-
-.qrBox {
-  width: 120px;
-  height: 120px;
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.qrLabel {
-  font-size: 13px;
-  color: var(--text);
-  letter-spacing: -0.2px;
-  line-height: 1.4;
-  max-width: 140px;
-  text-align: center;
-}
-
-/* ── Mobile: fit phone within viewport ── */
-@media (max-width: 767px) {
-  .layout {
-    max-height: calc(100dvh - 80px);
-  }
-
-  .phone {
-    width: 50vw;
-    max-width: 240px;
-    min-height: 0;
-  }
-
-  .screenshot {
-    height: 100%;
-    object-fit: contain;
-  }
-}
-
-/* ── Desktop ── */
+/* Desktop polish — the app is mobile-only, so on web we keep the splash
+   centered with a phone-screen-sized max width so it doesn't sprawl
+   across a 1440px monitor. */
 @media (min-width: 768px) {
-  .content {
+  .page {
     align-items: center;
+    justify-content: center;
   }
 
-  .logo {
-    margin-bottom: 32px;
+  .header,
+  .body {
+    width: 100%;
+    max-width: 440px;
   }
 
-  .layout {
-    flex-direction: row;
-    align-items: center;
-    gap: 48px;
+  .header {
+    padding: 24px 32px 0;
   }
 
-  .phone {
-    width: 260px;
-    border-radius: 34px;
-    border-width: 4px;
+  .body {
+    padding: 32px 0 0;
+    flex: 0 0 auto;
   }
 
-  .aside {
-    align-items: flex-start;
+  .title {
+    font-size: 32px;
+    letter-spacing: -1.3px;
+    margin-bottom: 36px;
   }
 
-  .headline {
-    font-size: 28px;
-    letter-spacing: -0.8px;
+  .option {
+    padding: 18px 22px;
   }
 
-  .proof {
-    font-size: 14px;
-    margin-bottom: 24px;
-  }
-
-  .storeButtons {
-    display: none;
-  }
-
-  .qrSection {
-    display: flex;
-    align-items: flex-start;
-  }
-
-  .qrLabel {
-    text-align: left;
-  }
-
-}
-
-@media (min-width: 1024px) {
-  .layout {
-    gap: 56px;
-  }
-
-  .phone {
-    width: 280px;
-    border-radius: 38px;
-  }
-
-  .qrBox {
-    width: 140px;
-    height: 140px;
-    border-radius: 12px;
+  .optionLabel {
+    font-size: 16px;
   }
 }
