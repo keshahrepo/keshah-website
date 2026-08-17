@@ -133,6 +133,13 @@ export default function SignUp() {
           paymentProvider: isIndia ? "razorpay" : "rc_billing",
           signupSource: isStartFree ? "startfree_us_trial" : undefined,
           trialDays: isStartFree ? 3 : undefined,
+          // Browser timezone — server uses this to set userLocalTimeZone
+          // (which the mobile app reads for tier-1 vs tier-2 classification)
+          // and to compute start_date.date in the user's local day boundary.
+          // Date.getTimezoneOffset returns minutes WEST of UTC; flip the sign
+          // to get east-of-UTC, matching the mobile app's convention.
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          timezoneOffsetInMins: -new Date().getTimezoneOffset(),
         }),
         keepalive: true,
       });

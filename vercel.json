@@ -17,6 +17,14 @@
     {
       "path": "/api/support/draft",
       "schedule": "0 */12 * * *"
+    },
+    {
+      "path": "/api/support/learn",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/rc/sync-attributes",
+      "schedule": "0 4 * * *"
     }
   ]
 }

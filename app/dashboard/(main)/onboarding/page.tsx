@@ -14,6 +14,19 @@ interface GeoFunnel {
   purchased: number;
 }
 
+interface GenderBucket {
+  signups: number;
+  converted: number;
+}
+
+interface ReferralByGender {
+  male: GenderBucket;
+  female: GenderBucket;
+  unknown: GenderBucket;
+}
+
+type TimeRange = "today" | "week" | "month" | "all";
+
 interface Metrics {
   total_users: number;
   funnel: GeoFunnel;
@@ -23,8 +36,16 @@ interface Metrics {
   users_by_type: Record<string, number>;
   users_by_geo: Record<string, number>;
   referral_sources: Record<string, number>;
+  referral_by_gender?: Record<TimeRange, Record<string, ReferralByGender>>;
   purchases: { regrowth_kits: number; scalp_health_kits: number; donations: number };
 }
+
+const RANGE_LABELS: Record<TimeRange, string> = {
+  today: "Today",
+  week: "7 days",
+  month: "30 days",
+  all: "All time",
+};
 
 const GEO_LABELS: Record<GeoKey, string> = {
   all: "All Users",
@@ -207,6 +228,18 @@ export default function OnboardingPage() {
         )}
       </div>
 
+      {/* Referral × Gender crosstab — paid breakdown by source AND gender.
+          "Converted" uses start_date (set when user finishes onboarding —
+          paid or trial) so this works for both iOS and web buyers, unlike
+          extra_user_tags.paidStoppage which only catches web purchases.
+          Defaults to "today" so we can monitor new builds' referral
+          attribution as it rolls out. */}
+      {metrics.referral_by_gender && (
+        <div style={{ marginBottom: 24 }}>
+          <ReferralGenderTable buckets={metrics.referral_by_gender} />
+        </div>
+      )}
+
       {/* Bottom metrics */}
       <div style={{
         display: "grid",
@@ -221,5 +254,139 @@ export default function OnboardingPage() {
         <MetricCard label="Donations" value={`$${metrics.purchases.donations}`} />
       </div>
     </div>
+  );
+}
+
+// Renders a crosstab of (referral_source × gender) with signup count,
+// converted count and conversion %. Single-row header + tabular-numeric
+// columns to avoid the colSpan-misalignment that overlapped on mobile
+// before. Range toggle defaults to "today" so we can monitor new builds
+// rolling out without having to dig past historical noise.
+function ReferralGenderTable({
+  buckets,
+}: {
+  buckets: Record<TimeRange, Record<string, ReferralByGender>>;
+}) {
+  const [range, setRange] = useState<TimeRange>("today");
+  const data = buckets[range] || {};
+
+  const rows = Object.entries(data)
+    .map(([source, g]) => {
+      const totalSignups = g.male.signups + g.female.signups + g.unknown.signups;
+      const totalConverted = g.male.converted + g.female.converted + g.unknown.converted;
+      return { source, g, totalSignups, totalConverted };
+    })
+    .sort((a, b) => b.totalSignups - a.totalSignups);
+
+  const fmtPct = (num: number, den: number) =>
+    den === 0 ? "—" : `${((num / den) * 100).toFixed(1)}%`;
+
+  const cell: React.CSSProperties = {
+    padding: "8px 10px",
+    fontSize: 12,
+    color: "rgba(255,255,255,0.85)",
+    borderBottom: "1px solid rgba(255,255,255,0.06)",
+    fontVariantNumeric: "tabular-nums",
+    whiteSpace: "nowrap",
+  };
+  const head: React.CSSProperties = {
+    padding: "8px 10px",
+    fontSize: 10,
+    fontWeight: 600,
+    color: "rgba(255,255,255,0.45)",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+    borderBottom: "1px solid rgba(255,255,255,0.12)",
+    textAlign: "right",
+    whiteSpace: "nowrap",
+  };
+  const headLeft: React.CSSProperties = { ...head, textAlign: "left" };
+  const numCell: React.CSSProperties = { ...cell, textAlign: "right" };
+  const pctCell: React.CSSProperties = { ...numCell, color: "#4ade80", fontWeight: 600 };
+  const dividerCol: React.CSSProperties = { ...cell, borderRight: "1px solid rgba(255,255,255,0.08)" };
+  const dividerHead: React.CSSProperties = { ...head, borderRight: "1px solid rgba(255,255,255,0.12)" };
+
+  return (
+    <ChartCard title="Conversion by Referral Source × Gender">
+      {/* Range toggle */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+        {(["today", "week", "month", "all"] as TimeRange[]).map((r) => (
+          <button
+            key={r}
+            onClick={() => setRange(r)}
+            style={{
+              padding: "5px 11px",
+              fontSize: 11,
+              fontWeight: 500,
+              borderRadius: 18,
+              border: "none",
+              cursor: "pointer",
+              background: range === r ? "#fff" : "rgba(255,255,255,0.06)",
+              color: range === r ? "#000" : "rgba(255,255,255,0.55)",
+              transition: "all 0.15s",
+            }}
+          >
+            {RANGE_LABELS[r]}
+          </button>
+        ))}
+      </div>
+
+      <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", margin: "0 0 12px", lineHeight: 1.5 }}>
+        Converted = user finished onboarding (trial or paid). Works for App
+        Store + web buyers. Sorted by signup volume.
+      </p>
+
+      {rows.length === 0 ? (
+        <div style={{
+          padding: "32px 16px",
+          textAlign: "center",
+          color: "rgba(255,255,255,0.35)",
+          fontSize: 12,
+        }}>
+          No signups with referral attribution in this range yet.
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto", margin: "0 -8px" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 580 }}>
+            <thead>
+              <tr>
+                <th style={headLeft}>Source</th>
+                <th style={head}>M Sign</th>
+                <th style={head}>M Conv</th>
+                <th style={dividerHead}>M %</th>
+                <th style={head}>F Sign</th>
+                <th style={head}>F Conv</th>
+                <th style={dividerHead}>F %</th>
+                <th style={head}>Total</th>
+                <th style={head}>Conv</th>
+                <th style={head}>%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(({ source, g, totalSignups, totalConverted }) => (
+                <tr key={source}>
+                  <td style={{ ...cell, fontWeight: 500, textTransform: "capitalize" }}>
+                    {source.replace(/_/g, " ")}
+                  </td>
+                  <td style={numCell}>{g.male.signups}</td>
+                  <td style={numCell}>{g.male.converted}</td>
+                  <td style={{ ...pctCell, borderRight: "1px solid rgba(255,255,255,0.08)" }}>
+                    {fmtPct(g.male.converted, g.male.signups)}
+                  </td>
+                  <td style={numCell}>{g.female.signups}</td>
+                  <td style={numCell}>{g.female.converted}</td>
+                  <td style={{ ...pctCell, borderRight: "1px solid rgba(255,255,255,0.08)" }}>
+                    {fmtPct(g.female.converted, g.female.signups)}
+                  </td>
+                  <td style={numCell}>{totalSignups}</td>
+                  <td style={numCell}>{totalConverted}</td>
+                  <td style={pctCell}>{fmtPct(totalConverted, totalSignups)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </ChartCard>
   );
 }

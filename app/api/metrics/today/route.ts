@@ -48,7 +48,7 @@ function classifyGeo(tz: string): "tier_1" | "india" | "tier_2" {
 
 const SELECTED_FIELDS = [
   "created_at", "user_type", "treatment_stage", "userLocalTimeZone",
-  "is_deleted", "referral_source", "start_date",
+  "is_deleted", "referral_source", "selected_gender", "start_date",
   "hair_goal", "quiz_answers", "commitment_answer",
   "open_account", "extra_user_tags",
   "hair_fall_check_ins",
@@ -61,6 +61,17 @@ const SELECTED_FIELDS = [
   "nurture_whatsapp_sent", "whatsapp_converted",
   "nurture_started_at", "phone_number",
 ];
+
+// Bucket key for the referral × gender crosstab. start_date is set when a
+// user finishes onboarding (paid or trial), so it's a reliable "intent to
+// pay" proxy for App Store + web buyers alike — RC subscription state
+// lives outside Firestore so we'd otherwise undercount iOS.
+type GenderBucket = "male" | "female" | "unknown";
+function genderBucket(g: unknown): GenderBucket {
+  if (g === "male") return "male";
+  if (g === "female") return "female";
+  return "unknown";
+}
 
 export async function GET() {
   try {
@@ -117,6 +128,23 @@ export async function GET() {
     const usersByStage: Record<string, number> = {};
     const usersByGeo: Record<string, number> = { tier_1: 0, india: 0, tier_2: 0 };
     const referralSources: Record<string, number> = {};
+    // Crosstab: referral_source → gender → { signups, converted }
+    // "converted" = start_date is set (finished onboarding, started trial
+    // or paid). Solid proxy that works for both iOS App Store and web
+    // purchases, unlike has_paid which only catches web.
+    //
+    // Bucketed by signup date so the dashboard can default to "today"
+    // (most useful for monitoring new app builds' referral attribution
+    // as they roll out) and still allow week/month/all comparison.
+    const emptyBucket = () => ({
+      male: { signups: 0, converted: 0 },
+      female: { signups: 0, converted: 0 },
+      unknown: { signups: 0, converted: 0 },
+    });
+    const referralByGenderToday: Record<string, Record<GenderBucket, { signups: number; converted: number }>> = {};
+    const referralByGenderWeek: Record<string, Record<GenderBucket, { signups: number; converted: number }>> = {};
+    const referralByGenderMonth: Record<string, Record<GenderBucket, { signups: number; converted: number }>> = {};
+    const referralByGenderAll: Record<string, Record<GenderBucket, { signups: number; converted: number }>> = {};
     let signedUp = 0, onboardingComplete = 0, paywallViewed = 0, purchased = 0;
     let purchasedToday = 0, purchasedThisWeek = 0, purchasedThisMonth = 0;
     let signupsSinceTracking = 0, purchasedSinceTracking = 0;
@@ -200,6 +228,20 @@ export async function GET() {
       if (d.referral_source) {
         referralSources[d.referral_source] = (referralSources[d.referral_source] || 0) + 1;
         geoReferrals[geo][d.referral_source] = (geoReferrals[geo][d.referral_source] || 0) + 1;
+
+        // Referral × gender × conversion crosstab — bucketed by signup
+        // date so we can show today/week/month/all on the dashboard.
+        const gb = genderBucket(d.selected_gender);
+        const converted = !!d.start_date;
+        const bumpInto = (bucket: typeof referralByGenderAll) => {
+          if (!bucket[d.referral_source]) bucket[d.referral_source] = emptyBucket();
+          bucket[d.referral_source][gb].signups++;
+          if (converted) bucket[d.referral_source][gb].converted++;
+        };
+        bumpInto(referralByGenderAll);
+        if (createdAt >= monthAgo) bumpInto(referralByGenderMonth);
+        if (createdAt >= weekAgo) bumpInto(referralByGenderWeek);
+        if (createdAt >= todayStart) bumpInto(referralByGenderToday);
       }
 
       // Treatment stage per geo
@@ -299,6 +341,12 @@ export async function GET() {
       geo_referrals: geoReferrals,
       geo_stages: geoStages,
       referral_sources: referralSources,
+      referral_by_gender: {
+        today: referralByGenderToday,
+        week: referralByGenderWeek,
+        month: referralByGenderMonth,
+        all: referralByGenderAll,
+      },
       retention: {
         day_7: { ...retention.day7, rate: retention.day7.eligible > 0 ? Math.round((retention.day7.active / retention.day7.eligible) * 100) : 0 },
         day_14: { ...retention.day14, rate: retention.day14.eligible > 0 ? Math.round((retention.day14.active / retention.day14.eligible) * 100) : 0 },

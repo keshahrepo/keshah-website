@@ -113,15 +113,98 @@ export async function POST(req: Request) {
   if (!firebaseUid) {
     // Anonymous purchase, no Firebase UID resolved.
     //
-    // For INITIAL_PURCHASE this is EXPECTED — on /start, payment happens
-    // before SignUp, so the RC customer is anonymous. The TRANSFER event
-    // that fires after `aliasToUser(firebaseUid)` is what carries the UID.
-    // Don't treat this as an orphan; treat it as "waiting for alias."
-    //
-    // If the user closes the browser between payment and SignUp, no
-    // TRANSFER will ever fire — the entitlement stays on the anon ID, and
-    // a support ticket is the only path. Logged distinctively so we can
-    // grep these out later.
+    // Auto-recovery: if RC sent us $email in subscriber_attributes (Stripe
+    // attaches it on checkout), look up the matching Firebase user. If the
+    // user exists, alias the anonymous RC customer to their Firebase UID
+    // server-side. This catches the case where the user closed the browser
+    // before reaching SignUp on web — alias still happens once they (or
+    // anyone) signs up with the same email later.
+
+    if (email) {
+      try {
+        const { db } = getFirebaseAdmin();
+        const byEmail = await db
+          .collection("Users")
+          .where("email", "==", email)
+          .limit(1)
+          .get();
+
+        if (!byEmail.empty) {
+          const targetUid = byEmail.docs[0].id;
+          const rcKey = process.env.RC_API_SECRET_KEY;
+          if (rcKey) {
+            // POST /v1/subscribers/{anon_id}/alias (SINGULAR) with
+            // new_app_user_id = Firebase UID. RC merges them server-side;
+            // the entitlement becomes visible on both IDs.
+            //
+            // CRITICAL: endpoint is /alias singular, NOT /aliases. The
+            // plural form returns 405 Method Not Allowed silently — this
+            // bug shipped here for weeks before being caught when a
+            // customer (Nicholas Tapp, 2026-05-08) reported their paid
+            // status not showing on mobile. The auto-recovery never
+            // actually recovered anyone until this fix.
+            const aliasResp = await fetch(
+              `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(evt.app_user_id)}/alias`,
+              {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${rcKey}`,
+                  "Content-Type": "application/json",
+                  "X-Platform": "stripe",
+                },
+                body: JSON.stringify({ new_app_user_id: targetUid }),
+              }
+            );
+            if (aliasResp.ok) {
+              // eslint-disable-next-line no-console
+              console.log(
+                `[rc/webhook] AUTO_ALIAS: anon=${evt.app_user_id} → ${targetUid} (email=${email})`
+              );
+              // Fall through and reconcile Firestore on the recovered UID.
+              // Re-resolve so the rest of this handler updates the right doc.
+              return reconcileFirestoreDoc(targetUid, email, evt);
+            }
+            const errText = await aliasResp.text().catch(() => "");
+            // eslint-disable-next-line no-console
+            console.error(
+              `[rc/webhook] AUTO_ALIAS failed status=${aliasResp.status} body=${errText.slice(0, 200)}`
+            );
+          }
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(`[rc/webhook] AUTO_ALIAS exception:`, err);
+      }
+    }
+
+    // No matching Firebase user yet — store the orphan in
+    // PendingRcAliases so save-profile can pick it up when the user
+    // eventually signs up. This handles the race where the user pays,
+    // closes the browser, signs up minutes/hours/days later. The pending
+    // record carries enough data to alias once a Firebase UID exists.
+    if (email) {
+      try {
+        const { db } = getFirebaseAdmin();
+        await db
+          .collection("PendingRcAliases")
+          .doc(evt.app_user_id)
+          .set(
+            {
+              email,
+              anonAppUserId: evt.app_user_id,
+              eventType: evt.type,
+              productId: evt.product_id ?? null,
+              transactionId: evt.transaction_id ?? null,
+              createdAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          );
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(`[rc/webhook] PendingRcAliases write failed:`, err);
+      }
+    }
+
     const isLikelyOrphan = evt.type !== "INITIAL_PURCHASE";
     // eslint-disable-next-line no-console
     console[isLikelyOrphan ? "error" : "log"](
@@ -136,14 +219,23 @@ export async function POST(req: Request) {
     });
   }
 
+  return reconcileFirestoreDoc(firebaseUid, email, evt);
+}
+
+// Reconciles the Firestore Users/{uid} doc with paid-user state. Used both
+// in the normal happy path (alias resolved firebaseUid) AND after the
+// auto-recovery alias above. Idempotent — only writes fields that are
+// missing or wrong.
+async function reconcileFirestoreDoc(
+  firebaseUid: string,
+  email: string | undefined,
+  evt: RcWebhookEvent["event"]
+): Promise<NextResponse> {
   const { db } = getFirebaseAdmin();
   const docRef = db.collection("Users").doc(firebaseUid);
   const snap = await docRef.get();
   const existing = snap.exists ? (snap.data() ?? {}) : {};
 
-  // Backfill the FreeV2 paid-user state. Mirrors save-profile/route.ts so
-  // the Firestore doc looks identical whether SignUp finished or the
-  // webhook had to recover. Only writes fields that are missing/wrong.
   const updates: Record<string, unknown> = {};
 
   // The discriminator the app uses for "this user is paid" is
@@ -167,7 +259,26 @@ export async function POST(req: Request) {
   if (existing.is_deleted === undefined) updates.is_deleted = false;
 
   // First-time-only fields. Don't overwrite real values; only set if missing.
-  if (!existing.first_paid_at) updates.first_paid_at = FieldValue.serverTimestamp();
+  if (!existing.first_paid_at) {
+    updates.first_paid_at = FieldValue.serverTimestamp();
+
+    // First paid event → snapshot the last nurture click so we can attribute
+    // this conversion to a specific email/SMS/WhatsApp touch. 7-day window.
+    // Anything longer is too noisy to attribute cleanly.
+    const lastClick = existing.nurture_last_click as
+      | { day?: number; channel?: string; dest?: string; at?: FirebaseFirestore.Timestamp }
+      | undefined;
+    if (lastClick?.at) {
+      const clickMs = lastClick.at.toMillis?.() ?? 0;
+      const withinWindow = Date.now() - clickMs <= 7 * 86_400_000;
+      if (withinWindow) {
+        updates.nurture_conversion_channel = lastClick.channel ?? "unknown";
+        updates.nurture_conversion_day = lastClick.day ?? null;
+        updates.nurture_conversion_dest = lastClick.dest ?? null;
+        updates.nurture_conversion_captured_at = FieldValue.serverTimestamp();
+      }
+    }
+  }
   if (!existing.created_at) updates.created_at = FieldValue.serverTimestamp();
 
   // wp_user.ID must equal the Firebase UID — the app keys identity off

@@ -29,6 +29,7 @@ export type DraftRecord = {
   generated_at: Timestamp;
   category: DraftCategory;
   model: string;
+  prompt_version?: number;
 };
 
 export type AwaitingConversation = {
@@ -186,7 +187,7 @@ export async function sampleAadiVoiceExamples(count = 12): Promise<string[]> {
   return examples.slice(0, count);
 }
 
-export async function saveDraft(userId: string, draft: { content: string; category: DraftCategory; model: string }): Promise<void> {
+export async function saveDraft(userId: string, draft: { content: string; category: DraftCategory; model: string; promptVersion?: number }): Promise<void> {
   const { db } = getFirebaseAdmin();
   await db.collection(SUPPORT_COLLECTION).doc(userId).update({
     last_draft: {
@@ -194,6 +195,7 @@ export async function saveDraft(userId: string, draft: { content: string; catego
       generated_at: Timestamp.now(),
       category: draft.category,
       model: draft.model,
+      prompt_version: draft.promptVersion ?? null,
     },
   });
 }
@@ -208,9 +210,34 @@ export async function clearDraft(userId: string): Promise<void> {
 // Send a reply as Aadi (fromId='0'). Mirrors DirectSupportChatRepo.sendMessage
 // in keshah_admin/lib/data/repos/direct_support_chat_repo.dart so that messages
 // produced here are indistinguishable from messages produced by the Flutter app.
+//
+// Before clearing last_draft, we snapshot (draft, sent) into the learning
+// pairs collection so the daily learning cron can analyse how much Aadi
+// edits the draft. The snapshot runs after Firestore write succeeds and
+// failures inside recordLearningPair() are swallowed there — sending the
+// reply must never be blocked by the learning sidecar.
 export async function sendReply(userId: string, content: string): Promise<void> {
   const { db } = getFirebaseAdmin();
   const supportDoc = db.collection(SUPPORT_COLLECTION).doc(userId);
+
+  // Read the draft + its prompt version BEFORE we delete it, so the learning
+  // snapshot has the original draft text to compare against.
+  let draftContent: string | null = null;
+  let draftCategory: string | null = null;
+  let draftPromptVersion: number | null = null;
+  try {
+    const before = await supportDoc.get();
+    const data = before.data() as Record<string, unknown> | undefined;
+    const draft = (data?.last_draft ?? null) as Record<string, unknown> | null;
+    if (draft) {
+      draftContent = ((draft.content as string) ?? "").trim() || null;
+      draftCategory = (draft.category as string) ?? null;
+      draftPromptVersion = (draft.prompt_version as number | null) ?? null;
+    }
+  } catch (e) {
+    console.error("[sendReply] failed to read draft for learning snapshot", e instanceof Error ? e.message : e);
+  }
+
   const messageJson = {
     fromId: AADI_FROM_ID,
     content,
@@ -223,6 +250,16 @@ export async function sendReply(userId: string, content: string): Promise<void> 
     last_draft: FieldValue.delete(),
   });
   await supportDoc.collection("messages").add(messageJson);
+
+  // Fire-and-forget snapshot for the learning loop.
+  const { recordLearningPair } = await import("./learning");
+  await recordLearningPair({
+    userId,
+    draft: draftContent,
+    sent: content,
+    promptVersion: draftPromptVersion,
+    category: draftCategory,
+  });
 }
 
 // Defer a conversation for N hours — it won't appear in the queue until

@@ -29,6 +29,8 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/dashboard/outreach", label: "Outreach", icon: "chat", roles: ["admin"] },
       { href: "/dashboard/marketing", label: "Marketing", icon: "megaphone", roles: ["admin", "marketing"] },
       { href: "/dashboard/masterclass", label: "Masterclass", icon: "bolt", roles: ["admin"] },
+      { href: "/dashboard/onboarding-call", label: "Onboarding call", icon: "chat", roles: ["admin"] },
+      { href: "/dashboard/regrowth-consultation", label: "Regrowth call", icon: "chat", roles: ["admin"] },
       { href: "/dashboard/scalp-check-ins", label: "Scalp check-ins", icon: "grid", roles: ["admin"] },
       { href: "/dashboard/onboarding", label: "Onboarding", icon: "funnel", roles: ["admin"] },
       { href: "/dashboard/whatsapp", label: "WhatsApp", icon: "chat", roles: ["admin"] },

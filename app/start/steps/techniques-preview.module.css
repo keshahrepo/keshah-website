@@ -1,0 +1,142 @@
+.root {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  font-family: 'Poppins', -apple-system, sans-serif;
+}
+
+.scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px 32px 200px;
+  max-width: 560px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.header {
+  margin-bottom: 32px;
+  animation: fadeIn 800ms ease-out both;
+}
+
+.headline {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -1.2px;
+  line-height: 1.25;
+  margin-bottom: 12px;
+}
+
+.subtitle {
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--text-50);
+  line-height: 1.4;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.card {
+  position: relative;
+  aspect-ratio: 0.85;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--card-bg);
+  opacity: 0;
+  animation: cardIn 500ms ease-out forwards;
+}
+
+.cardImage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cardOverlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.7) 0%,
+    transparent 50%
+  );
+}
+
+.cardLabel {
+  position: absolute;
+  bottom: 14px;
+  left: 14px;
+  right: 14px;
+  font-size: 14px;
+  font-weight: 600;
+  /* Always white — sits over the dark cardOverlay gradient, so it stays
+     legible regardless of theme. Was var(--text) which rendered dark on
+     the women's light theme and disappeared into the overlay. */
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 30px 25px 35px;
+  background: linear-gradient(to top, var(--bg) 60%, transparent);
+}
+
+.button {
+  display: block;
+  max-width: 560px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 18px 0;
+  background: var(--text);
+  color: var(--bg);
+  border: none;
+  border-radius: 40px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+  animation: fadeIn 600ms ease-out 2200ms both;
+}
+
+.button:hover {
+  opacity: 0.92;
+}
+
+.button:active {
+  transform: scale(0.98);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes cardIn {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

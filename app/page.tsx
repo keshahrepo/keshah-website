@@ -1,70 +1,99 @@
+"use client";
+
+// keshah.com — gender splash. Mirrors the mobile app's
+// GenderSelectionContent UI (title + outlined option cards), but
+// auto-advances on tap instead of using a Continue button. The app
+// pattern of "select then tap Next" doesn't pay off on a 2-option
+// marketing splash where the goal is to minimize taps before the user
+// hits the gendered landing.
+//
+// Routing on tap:
+//   - Male   → /m       (was previously keshah.com/)
+//   - Female → /women   (existing women's landing — unchanged)
+// Existing /women links from creator bios keep working; old /-only bios
+// now hit this splash and route both genders to the right landing
+// instead of dropping the wrong-gender visitor on the wrong page.
+
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import Image from "next/image";
 import styles from "./page.module.css";
 
-const IOS_LINK = "https://apps.apple.com/app/id6450676544";
-const ANDROID_LINK =
-  "https://play.google.com/store/apps/details?id=com.keshahapp.hair";
+type Gender = "male" | "female";
 
-export default function Home() {
+const OPTIONS: { value: Gender; label: string; href: string }[] = [
+  { value: "male", label: "Male", href: "/m" },
+  { value: "female", label: "Female", href: "/women" },
+];
+
+// Short delay between tap and route so the selected state is visually
+// confirmed (white border + checkmark flashes) before the page changes.
+// Without it the splash feels twitchy — the user taps and is gone
+// before they see anything register.
+const AUTO_ADVANCE_DELAY_MS = 180;
+
+export default function Splash() {
+  const router = useRouter();
+  const [selected, setSelected] = useState<Gender | null>(null);
+
+  const onSelect = (gender: Gender, href: string) => {
+    if (selected) return; // guard against double-tap during the delay
+    setSelected(gender);
+    setTimeout(() => {
+      router.push(href);
+    }, AUTO_ADVANCE_DELAY_MS);
+  };
+
   return (
     <main className={styles.page}>
-      <div className={styles.content}>
-        <div className={styles.layout}>
-          {/* Phone mockup */}
-          <div className={styles.phone}>
-            <Image
-              src="/images/app-screenshot.png"
-              alt="KESHAH app — Day 1 of 60"
-              width={280}
-              height={606}
-              className={styles.screenshot}
-              priority
-            />
-          </div>
+      <div className={styles.header}>
+        <Image
+          src="/images/logo.png"
+          alt="KESHAH"
+          width={40}
+          height={40}
+          className={styles.logo}
+          priority
+        />
+      </div>
 
-          {/* Right side: proof + download */}
-          <div className={styles.aside}>
-            <p className={styles.proof}>
-              <span className={styles.stars}>&#9733;&#9733;&#9733;&#9733;&#9733;</span>{" "}
-              4.8 &middot; 26,538 members
-            </p>
+      <div className={styles.body}>
+        <h1 className={styles.title}>What&apos;s your gender?</h1>
 
-            {/* Mobile: Store buttons */}
-            <div className={styles.storeButtons}>
-              <a href={IOS_LINK} className={styles.storeBadge}>
-                <Image
-                  src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/white/en-us?size=250x83"
-                  alt="Download on the App Store"
-                  width={145}
-                  height={48}
-                  unoptimized
-                />
-              </a>
-              <a href={ANDROID_LINK} className={styles.storeBadge}>
-                <Image
-                  src="https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg"
-                  alt="Get it on Google Play"
-                  width={145}
-                  height={48}
-                  unoptimized
-                />
-              </a>
-            </div>
-
-            {/* Desktop: QR code */}
-            <div className={styles.qrSection}>
-              <div className={styles.qrBox}>
-                <Image
-                  src="/images/qr-code.png"
-                  alt="Scan to download KESHAH"
-                  width={140}
-                  height={140}
-                  unoptimized
-                />
-              </div>
-              <p className={styles.qrLabel}>Scan to stop your hair loss without drugs</p>
-            </div>
-          </div>
+        <div className={styles.options}>
+          {OPTIONS.map(({ value, label, href }) => {
+            const isSelected = selected === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => onSelect(value, href)}
+                className={`${styles.option} ${isSelected ? styles.optionSelected : ""}`}
+                aria-pressed={isSelected}
+              >
+                <span className={`${styles.optionLabel} ${isSelected ? styles.optionLabelSelected : ""}`}>
+                  {label}
+                </span>
+                {isSelected && (
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    aria-hidden
+                  >
+                    <path
+                      d="M5 12l4.5 4.5L19 7"
+                      stroke="#fff"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
     </main>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { listAwaitingConversations, getRecentMessages, getUserProfile, sampleAadiVoiceExamples, saveDraft } from "@/lib/support/repo";
 import { generateDraft } from "@/lib/support/draft";
+import { getActivePrompts } from "@/lib/support/prompts";
 import { requireCronSecret } from "@/lib/support/auth";
 
 // Long-running route — cron iterates over every awaiting conversation
@@ -18,9 +19,13 @@ export async function POST(req: Request) {
   }
 
   const awaiting = await listAwaitingConversations({ limit: 200 });
-  // Sample voice examples once and reuse across all drafts in this batch —
-  // cheaper, and gives the model a consistent style baseline per run.
-  const voiceExamples = await sampleAadiVoiceExamples(12);
+  // Sample voice examples and load prompts once, reuse across all drafts in
+  // this batch — cheaper, and gives the model a consistent style baseline
+  // per cron run. Prompts come from Firestore so they update without redeploy.
+  const [voiceExamples, prompts] = await Promise.all([
+    sampleAadiVoiceExamples(12),
+    getActivePrompts(),
+  ]);
 
   const freshCutoff = Date.now() - DRAFT_FRESH_HOURS * 3600_000;
   const results: { userId: string; ok: boolean; error?: string; category?: string }[] = [];
@@ -48,6 +53,7 @@ export async function POST(req: Request) {
         profile,
         conversation: messages,
         voiceExamples,
+        prompts,
       });
 
       await saveDraft(convo.userId, draft);

@@ -1,0 +1,264 @@
+/* Shared styles for the /start funnel.
+   Pulls colors / radii / typography from globals.css :root variables. */
+
+.shell {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.stepBody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.stepInner {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 32px 32px;
+  max-width: 560px;
+  width: 100%;
+  margin: 0 auto;
+  /* Allow scrolling when option lists exceed viewport height (e.g.
+     TreatmentsTried with 8 options, SupportNeeds with 6). Without
+     min-height: 0, flex children won't shrink below their content size and
+     overflow gets clipped by the parent's overflow: hidden, hiding the
+     Continue button. */
+  overflow-y: auto;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+.headline {
+  font-family: 'Poppins', -apple-system, sans-serif;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -1.2px;
+  line-height: 1.25;
+  color: var(--text);
+  white-space: pre-line;
+  /* Staggered fade-in so the step doesn't pop in cold after the previous
+     step's fade-out. Mirrors Flutter's per-page AnimationController pattern. */
+  animation: stepFadeIn 600ms cubic-bezier(0.215, 0.61, 0.355, 1) 100ms both;
+}
+
+.headlineLarge {
+  font-size: 32px;
+  letter-spacing: -1.4px;
+}
+
+.subtitle {
+  font-family: 'Poppins', -apple-system, sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--text-50);
+  margin-top: 12px;
+  white-space: pre-line;
+}
+
+.button {
+  width: 100%;
+  padding: 18px 0;
+  background: var(--text);
+  color: var(--bg);
+  font-family: 'Poppins', -apple-system, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+  border: none;
+  border-radius: var(--radius-btn);
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+  letter-spacing: -0.2px;
+}
+
+.button:hover:not(:disabled) {
+  opacity: 0.92;
+}
+
+.button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.buttonOutline {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--text-30);
+}
+
+.buttonOutline:hover:not(:disabled) {
+  background: var(--button-outline-hover-bg);
+  opacity: 1;
+}
+
+.buttonRow {
+  flex-shrink: 0;
+  padding: 16px 32px calc(env(safe-area-inset-bottom) + 28px);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: stepFadeIn 600ms cubic-bezier(0.215, 0.61, 0.355, 1) 400ms both;
+}
+
+/* Step entrance animation — used by .headline, .optionList, .buttonRow so
+   each quiz step's content cascades in instead of popping. Matches the
+   staggered fade pattern Flutter uses with per-page AnimationControllers. */
+@keyframes stepFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.optionList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 32px;
+  animation: stepFadeIn 600ms cubic-bezier(0.215, 0.61, 0.355, 1) 250ms both;
+}
+
+.option {
+  width: 100%;
+  padding: 18px 20px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: 'Poppins', -apple-system, sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.option:hover {
+  background: var(--option-hover-bg);
+}
+
+.optionSelected {
+  background: var(--option-selected-bg);
+  border-color: var(--text);
+}
+
+.optionCheck {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-30);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.optionCheckActive {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--bg);
+}
+
+.input {
+  width: 100%;
+  padding: 18px 20px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: 'Poppins', -apple-system, sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  margin-top: 24px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.input::placeholder {
+  color: var(--text-30);
+}
+
+.input:focus {
+  border-color: var(--text);
+}
+
+.progressBar {
+  width: 100%;
+  height: 3px;
+  display: flex;
+  gap: 4px;
+  padding: 16px 32px 0;
+  flex-shrink: 0;
+}
+
+.progressSegment {
+  flex: 1;
+  height: 3px;
+  background: var(--text-20);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progressSegmentFilled {
+  background: var(--text);
+}
+
+.headerBar {
+  display: flex;
+  align-items: center;
+  padding: 16px 24px;
+  flex-shrink: 0;
+}
+
+.backButton {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  margin-left: -8px;
+}
+
+.backButton:hover {
+  background: var(--back-button-hover-bg);
+}
+
+.disqualified {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  text-align: center;
+  gap: 16px;
+}

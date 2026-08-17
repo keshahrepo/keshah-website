@@ -1,0 +1,383 @@
+/* Founder story — full-bleed beats with tap-to-advance */
+
+.root {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  font-family: 'Poppins', -apple-system, sans-serif;
+}
+
+.fullBg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
+
+.fullBgGradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.55) 0%,
+    rgba(0, 0, 0, 0.05) 30%,
+    rgba(0, 0, 0, 0.05) 55%,
+    rgba(0, 0, 0, 0.65) 100%
+  );
+  z-index: 1;
+}
+
+.layer {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  padding-top: env(safe-area-inset-top);
+}
+
+/* Progress bar */
+.progressRow {
+  display: flex;
+  gap: 4px;
+  padding: 12px 16px 0;
+  flex-shrink: 0;
+}
+
+.progressSeg {
+  flex: 1;
+  height: 2.5px;
+  background: var(--fg-15);
+  border-radius: 2px;
+}
+
+.progressSegActive {
+  background: var(--fg-80);
+}
+
+.loginRow {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 16px 0;
+}
+
+.loginLink {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--fg-30);
+  text-decoration: underline;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* Tap zones */
+.tapZones {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.tapBack,
+.tapForward {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 10;
+}
+
+.tapBack {
+  left: 0;
+  width: 25%;
+}
+
+.tapForward {
+  left: 25%;
+  right: 0;
+}
+
+/* Standard text beat */
+.standard {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 0 28px;
+}
+
+.standardTextWrap {
+  margin-top: auto;
+  margin-bottom: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.standardText {
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--text);
+  letter-spacing: -0.4px;
+  text-align: left;
+  white-space: pre-line;
+}
+
+.standardTextCenter {
+  text-align: center;
+}
+
+.italic {
+  font-style: italic;
+}
+
+/* Full-screen image overlay text */
+.fullOverlay {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 0 28px 40px;
+}
+
+.fullOverlayText {
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--text);
+  letter-spacing: -0.4px;
+  white-space: pre-line;
+}
+
+/* Image caption */
+.caption {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--fg-35);
+  margin-top: 10px;
+  line-height: 1.4;
+}
+
+.captionLight {
+  color: var(--fg-50);
+}
+
+/* Single image (e.g. study diagram) */
+.singleImageWrap {
+  display: flex;
+  flex-direction: column;
+  margin-top: 24px;
+}
+
+.singleImage {
+  width: 100%;
+  height: auto;
+  max-height: 50vh;
+  object-fit: contain;
+  border-radius: 12px;
+  display: block;
+}
+
+/* Constrained variant — for small visual proofs (e.g. "One of the 160" GIF)
+   that shouldn't dominate the screen. Centered horizontally. */
+.singleImageWrapSmall {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 24px;
+}
+
+.singleImageSmall {
+  width: 100%;
+  max-width: 200px;
+  height: auto;
+  max-height: 36vh;
+  object-fit: contain;
+  border-radius: 12px;
+  display: block;
+}
+
+.captionCentered {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--fg-50);
+  margin-top: 10px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+/* Stacked images (Reddit screenshots) */
+.stackedWrap {
+  margin-top: 24px;
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.stackedImage {
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+  display: block;
+}
+
+/* Side by side (before/after) */
+.sideBySideWrap {
+  margin-top: 24px;
+  flex: 2;
+  display: flex;
+  gap: 10px;
+}
+
+.sideBySideItem {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 0;
+}
+
+.sideBySideImage {
+  flex: 1;
+  width: 100%;
+  border-radius: 10px;
+  object-fit: cover;
+  min-height: 0;
+}
+
+.sideBySideLabel {
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg-60);
+}
+
+/* Video block (Huberman) */
+.videoWrap {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.videoFrame {
+  width: 100%;
+  border-radius: 12px;
+  background: #111;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.videoCaption {
+  margin-top: 10px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--fg-40);
+  line-height: 1.4;
+  white-space: pre-line;
+}
+
+/* Bottom bar — "Tap to continue" hint or final CTA */
+.bottomBar {
+  padding: 0 25px 20px;
+  flex-shrink: 0;
+}
+
+.tapHint {
+  text-align: center;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--fg-50);
+  padding: 16px 0;
+}
+
+.ctaBtn {
+  width: 100%;
+  padding: 18px 0;
+  background: var(--text);
+  color: var(--bg);
+  border: none;
+  border-radius: 40px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+}
+
+.ctaBtn:hover {
+  opacity: 0.92;
+}
+
+.ctaBtn:active {
+  transform: scale(0.98);
+}
+
+/* Animations */
+@keyframes textIn {
+  from {
+    opacity: 0;
+    transform: translateY(8%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes imageIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ctaIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animateText {
+  animation: textIn 700ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
+  animation-delay: 50ms;
+}
+
+.animateImage {
+  animation: imageIn 600ms ease-out both;
+  animation-delay: 200ms;
+}
+
+.animateCta {
+  animation: ctaIn 500ms ease-out both;
+  animation-delay: 600ms;
+}
+
+/* Blood vessel SVG container */
+.bloodVesselWrap {
+  margin-top: 32px;
+  display: flex;
+  justify-content: center;
+}
+
+.bloodVessel {
+  width: 100%;
+  max-width: 320px;
+  height: 200px;
+}

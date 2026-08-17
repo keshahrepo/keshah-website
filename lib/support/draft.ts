@@ -1,34 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { DraftCategory, SupportMessage, UserProfile } from "./repo";
+import type { SupportPrompts } from "./prompts";
 
 const MODEL = "claude-sonnet-4-6";
 
-// Hard voice/safety rules that go into every draft request. These reflect
-// patterns Aadi has corrected for in past TikTok/funnel copy: no em dashes,
-// conversational not bullet-y, simple words, never give medical advice as
-// fact. The safety guardrails are non-negotiable — for anything risky
-// the model produces an empathetic holding reply only.
-const VOICE_RULES = `
-KESHAH SUPPORT — Aadi voice rules:
-- Sound like Aadi talking, not writing. Full sentences, no bullet labels.
-- No em dashes. Use periods or commas.
-- Simple words. Avoid "follicle starves" / "your hair is leaving" / poetic phrasing.
-- Keep replies short. 1-4 sentences is usually right.
-- Never auto-give medical advice. No dosing, no drug interactions, no side-effect predictions.
-- For anything you don't know for certain about this user's account or data, say "let me look into this, I'll reply within 24 hours" rather than guessing.
-- Don't make claims about specific timelines for results ("you'll see hair in X weeks") — hedge with "generally" or "for most people".
-- Sign off naturally. No "Best, Aadi" — Aadi signs by tone, not signature.
-`.trim();
-
-const CATEGORY_RULES = `
-CATEGORY — set this in the output:
-- "answerable": routine question about routine, app navigation, where to find pinned video, motivational reply, simple FAQ. Safe to draft a real answer.
-- "investigation": user reports a bug or data issue (streak broken, blank screen, missing day, payment not reflected, calendar wrong). Draft = empathetic holding reply. Tell them you're looking into it personally and will reply within 24h. Do not guess at causes.
-- "account_change": refund, plan switch, cancel subscription, change email, delete account. Draft = empathetic holding reply only. Tell them you'll handle it personally and reply within 24h.
-- "medical": dosing, drug interactions, "is this shedding normal", side effects, hair products to use, medication questions. Draft = empathetic ack + redirect to pinned video for the routine. Do NOT give medical claims.
-- "thanks": user said thanks / closed-out / sent positive update. Draft = short warm close-out (1-2 sentences).
-`.trim();
-
+// Output schema instruction stays hardcoded — it's a structural constraint,
+// not a voice/framing choice that anyone would want to tweak from the
+// dashboard. Everything else (voice rules, canonical answers, category
+// rules) is now Firestore-backed and passed in by the caller.
 const OUTPUT_FORMAT = `
 Output a single JSON object, no prose, no code fence:
 {
@@ -41,6 +20,7 @@ export type DraftResult = {
   category: DraftCategory;
   content: string;
   model: string;
+  promptVersion: number;
 };
 
 function formatProfile(p: UserProfile): string {
@@ -86,7 +66,6 @@ function parseModelOutput(raw: string): { category: DraftCategory; content: stri
         content: ct[1].replace(/\\n/g, "\n").replace(/\\"/g, '"'),
       };
     }
-    // If parsing fails entirely we surface a safe holding reply.
     return {
       category: "investigation",
       content: "Thanks for the message. Let me look into this and I'll reply within 24 hours.",
@@ -109,6 +88,7 @@ export async function generateDraft(opts: {
   profile: UserProfile;
   conversation: SupportMessage[];
   voiceExamples: string[];
+  prompts: SupportPrompts;
 }): Promise<DraftResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set");
@@ -119,9 +99,11 @@ export async function generateDraft(opts: {
     "You are drafting a support reply from Aadi (founder of KESHAH, a hair-loss app) to a paying user.",
     "Your output will be reviewed by Aadi on his phone before it's sent — so the goal is a draft he can hit Send on with minimal editing.",
     "",
-    VOICE_RULES,
+    opts.prompts.voiceRules,
     "",
-    CATEGORY_RULES,
+    opts.prompts.canonicalAnswers,
+    "",
+    opts.prompts.categoryRules,
     "",
     "Below are real past replies from Aadi. Match this tone, length, and rhythm:",
     "",
@@ -147,9 +129,8 @@ export async function generateDraft(opts: {
     messages: [{ role: "user", content: userPrompt }],
   });
 
-  // Take the first text block from the response.
   const textBlock = resp.content.find((b) => b.type === "text");
   const raw = textBlock && textBlock.type === "text" ? textBlock.text : "";
   const { category, content } = parseModelOutput(raw);
-  return { category, content, model: MODEL };
+  return { category, content, model: MODEL, promptVersion: opts.prompts.version };
 }

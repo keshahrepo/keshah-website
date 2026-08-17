@@ -39,6 +39,43 @@
   --card-bg: rgba(255, 255, 255, 0.06);
   --card-border: rgba(255, 255, 255, 0.1);
   --icon-bg: rgba(255, 255, 255, 0.08);
+  /* Surfaces tinted in the foreground color — used for hover/selected states
+     on options, outline buttons, etc. In dark mode these are white-tinted;
+     in light mode they flip to dark-tinted via .funnel-theme-light below. */
+  --option-hover-bg: rgba(255, 255, 255, 0.1);
+  --option-selected-bg: rgba(255, 255, 255, 0.12);
+  --button-outline-hover-bg: rgba(255, 255, 255, 0.05);
+  --back-button-hover-bg: rgba(255, 255, 255, 0.06);
+  /* Foreground tint ladder — used for borders, subtle surfaces, muted text.
+     Kept as a flat opacity scale (--fg-N = N% opacity of foreground) so
+     CSS modules can reach for the closest tint instead of inventing a new
+     hardcoded rgba. The cream theme below replaces the white base with
+     #1A1A1A so every reference flips automatically. */
+  --fg-2: rgba(255, 255, 255, 0.02);
+  --fg-3: rgba(255, 255, 255, 0.03);
+  --fg-4: rgba(255, 255, 255, 0.04);
+  --fg-5: rgba(255, 255, 255, 0.05);
+  --fg-6: rgba(255, 255, 255, 0.06);
+  --fg-7: rgba(255, 255, 255, 0.07);
+  --fg-8: rgba(255, 255, 255, 0.08);
+  --fg-10: rgba(255, 255, 255, 0.1);
+  --fg-12: rgba(255, 255, 255, 0.12);
+  --fg-15: rgba(255, 255, 255, 0.15);
+  --fg-18: rgba(255, 255, 255, 0.18);
+  --fg-20: rgba(255, 255, 255, 0.2);
+  --fg-25: rgba(255, 255, 255, 0.25);
+  --fg-30: rgba(255, 255, 255, 0.3);
+  --fg-35: rgba(255, 255, 255, 0.35);
+  --fg-40: rgba(255, 255, 255, 0.4);
+  --fg-45: rgba(255, 255, 255, 0.45);
+  --fg-50: rgba(255, 255, 255, 0.5);
+  --fg-55: rgba(255, 255, 255, 0.55);
+  --fg-60: rgba(255, 255, 255, 0.6);
+  --fg-65: rgba(255, 255, 255, 0.65);
+  --fg-70: rgba(255, 255, 255, 0.7);
+  --fg-75: rgba(255, 255, 255, 0.75);
+  --fg-80: rgba(255, 255, 255, 0.8);
+  --fg-85: rgba(255, 255, 255, 0.85);
   --green: #359033;
   --gold: #DAA520;
   --max-width: 720px;
@@ -46,6 +83,54 @@
   --radius-card: 16px;
   --radius-sm: 10px;
   --radius-btn: 40px;
+}
+
+/* Cream/light theme — applied to <html> + <body> when the funnel config
+   opts in (audience: women, theme: light). Overrides the foreground/
+   background tokens so every CSS module that reads var(--bg) / var(--text)
+   flips automatically. The class lives on both elements so iOS safe-area
+   regions (which paint the html background) don't peek through black.
+   WhyItHappens has its own inline cream styles and is unaffected. */
+html.funnel-theme-light,
+body.funnel-theme-light {
+  --bg: #FAF7F2;
+  --text: #1A1A1A;
+  --text-50: rgba(26, 26, 26, 0.55);
+  --text-40: rgba(26, 26, 26, 0.45);
+  --text-30: rgba(26, 26, 26, 0.32);
+  --text-20: rgba(26, 26, 26, 0.18);
+  --card-bg: rgba(26, 26, 26, 0.04);
+  --card-border: rgba(26, 26, 26, 0.12);
+  --icon-bg: rgba(26, 26, 26, 0.06);
+  --option-hover-bg: rgba(26, 26, 26, 0.06);
+  --option-selected-bg: rgba(26, 26, 26, 0.08);
+  --button-outline-hover-bg: rgba(26, 26, 26, 0.04);
+  --back-button-hover-bg: rgba(26, 26, 26, 0.05);
+  --fg-2: rgba(26, 26, 26, 0.03);
+  --fg-3: rgba(26, 26, 26, 0.04);
+  --fg-4: rgba(26, 26, 26, 0.05);
+  --fg-5: rgba(26, 26, 26, 0.06);
+  --fg-6: rgba(26, 26, 26, 0.07);
+  --fg-7: rgba(26, 26, 26, 0.08);
+  --fg-8: rgba(26, 26, 26, 0.09);
+  --fg-10: rgba(26, 26, 26, 0.11);
+  --fg-12: rgba(26, 26, 26, 0.13);
+  --fg-15: rgba(26, 26, 26, 0.16);
+  --fg-18: rgba(26, 26, 26, 0.2);
+  --fg-20: rgba(26, 26, 26, 0.22);
+  --fg-25: rgba(26, 26, 26, 0.28);
+  --fg-30: rgba(26, 26, 26, 0.34);
+  --fg-35: rgba(26, 26, 26, 0.4);
+  --fg-40: rgba(26, 26, 26, 0.45);
+  --fg-45: rgba(26, 26, 26, 0.5);
+  --fg-50: rgba(26, 26, 26, 0.55);
+  --fg-55: rgba(26, 26, 26, 0.6);
+  --fg-60: rgba(26, 26, 26, 0.65);
+  --fg-65: rgba(26, 26, 26, 0.7);
+  --fg-70: rgba(26, 26, 26, 0.75);
+  --fg-75: rgba(26, 26, 26, 0.8);
+  --fg-80: rgba(26, 26, 26, 0.85);
+  --fg-85: rgba(26, 26, 26, 0.9);
 }
 
 * {

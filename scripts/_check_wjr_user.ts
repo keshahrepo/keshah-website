@@ -1,0 +1,68 @@
+import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
+if (!getApps().length) {
+  const sa = JSON.parse(Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT || "", "base64").toString());
+  initializeApp({ credential: cert(sa) });
+}
+const db = getFirestore();
+const EMAIL = "wjrxrmczv5@privaterelay.appleid.com";
+(async () => {
+  const snap = await db.collection("Users").where("email", "==", EMAIL).limit(1).get();
+  if (snap.empty) { console.log("NOT FOUND in Users by email"); process.exit(0); }
+  const d = snap.docs[0];
+  const u: any = d.data();
+  console.log("uid:", d.id);
+  console.log("");
+  console.log("=== IDENTITY ===");
+  console.log("email:", u.email);
+  console.log("displayName:", u.wp_user?.displayName);
+  console.log("providerId:", u.providerId);
+  console.log("");
+  console.log("=== ONBOARDING / TYPE ===");
+  console.log("user_type:", u.user_type);
+  console.log("selected_gender:", u.selected_gender);
+  console.log("treatment_stage:", u.treatment_stage);
+  console.log("extra_user_tags:", u.extra_user_tags);
+  console.log("eligible_for_special_regrowth_features:", u.eligible_for_special_regrowth_features);
+  console.log("starter_photos_submit_submitted_once:", u.starter_photos_submit_submitted_once);
+  console.log("onboarding_flow_version:", u.onboarding_flow_version);
+  console.log("first_time:", u.first_time);
+  console.log("");
+  console.log("=== QUIZ / FUNNEL ===");
+  console.log("hair_loss_location:", u.hair_loss_location);
+  console.log("hair_goal:", u.hair_goal);
+  console.log("commitment_answer:", u.commitment_answer);
+  console.log("referral_source:", u.referral_source);
+  console.log("support_needs:", u.support_needs);
+  console.log("");
+  console.log("=== ACCESS / PURCHASE ===");
+  console.log("pro:", u.pro);
+  console.log("open_account:", u.open_account);
+  console.log("stripe_customer_id:", u.stripe_customer_id);
+  console.log("scalp_health_support_purchased:", u.scalp_health_support_purchased);
+  console.log("regrowth_treatment_purchased:", u.regrowth_treatment_purchased);
+  console.log("");
+  console.log("=== DATES ===");
+  console.log("created_at:", new Date((u.created_at?._seconds || 0) * 1000).toISOString());
+  console.log("modified_at:", new Date((u.modified_at?._seconds || 0) * 1000).toISOString());
+  console.log("start_date:", JSON.stringify(u.start_date));
+  console.log("free_stoppage_switched_at_date:", u.free_stoppage_switched_at_date);
+  console.log("user_local_time_zone:", u.user_local_time_zone);
+  console.log("");
+  console.log("=== PROGRESS ===");
+  const progressKeys = Object.keys(u.progress || {});
+  console.log("progress keys count:", progressKeys.length);
+  console.log("progress keys sample:", progressKeys.slice(0, 5).join(", "), "...", progressKeys.slice(-3).join(", "));
+  console.log("");
+  console.log("=== SUPPORT MESSAGES ===");
+  const msgs = await db.collection("support").doc(d.id).collection("messages").orderBy("created_at", "desc").limit(20).get();
+  console.log("message count:", msgs.size);
+  msgs.docs.reverse().forEach((m, i) => {
+    const x: any = m.data();
+    const ts = x.created_at?._seconds ? new Date(x.created_at._seconds * 1000).toISOString() : "?";
+    const from = x.sender_id === "0" ? "ADMIN" : (x.sender_id === d.id ? "USER" : x.sender_id);
+    const body = (x.message || x.text || JSON.stringify(x)).slice(0, 500);
+    console.log(`  [${i + 1}] ${ts} ${from}: ${body}`);
+  });
+  process.exit(0);
+})().catch((e:any)=>{console.error(e); process.exit(1);});
