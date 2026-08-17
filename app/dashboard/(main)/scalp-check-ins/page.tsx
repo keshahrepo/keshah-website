@@ -1,7 +1,7 @@
 // Scalp check-in analytics — how many users answer yes/no/not_sure on
-// Days 3, 6, and 13 of the routine. Reads scalp_check_answers directly
-// off each user doc (no aggregation collection yet — scans Users once
-// per page load, fine at current scale).
+// Days 3, 6, and 13 of the routine. Single query across all Users,
+// reads scalp_check_answers directly (no aggregation collection yet —
+// fine at current scale).
 
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 
@@ -17,69 +17,33 @@ interface DayCounts {
   total: number;
 }
 
-interface Segment {
-  key: string;
-  label: string;
-  counts: Record<number, DayCounts>;
-  userTotal: number;
-}
-
 const EMPTY_COUNTS = (): DayCounts => ({ yes: 0, no: 0, not_sure: 0, total: 0 });
 
 export default async function ScalpCheckInsPage() {
   const { db } = getFirebaseAdmin();
 
-  const [freev2Snap, freeSnap, vipSnap] = await Promise.all([
-    db.collection("Users").where("user_type", "==", "freev2").select("scalp_check_answers").get(),
-    db.collection("Users").where("user_type", "==", "free").select("scalp_check_answers").get(),
-    db.collection("Users").where("user_type", "==", "vip").select("scalp_check_answers").get(),
-  ]);
+  // Only pull docs that have the field — Firestore lets us cheaply
+  // filter to just the users who've actually answered a check-in.
+  const snap = await db
+    .collection("Users")
+    .where("scalp_check_answers", "!=", null)
+    .select("scalp_check_answers")
+    .get();
 
-  const segments: Segment[] = [
-    { key: "freev2", label: "FreeV2", counts: {}, userTotal: freev2Snap.size },
-    { key: "free", label: "Free (legacy)", counts: {}, userTotal: freeSnap.size },
-    { key: "vip", label: "VIP", counts: {}, userTotal: vipSnap.size },
-  ];
-  for (const s of segments) {
-    for (const day of CHECK_IN_DAYS) s.counts[day] = EMPTY_COUNTS();
-  }
+  const counts: Record<number, DayCounts> = {};
+  for (const day of CHECK_IN_DAYS) counts[day] = EMPTY_COUNTS();
 
-  const tally = (segmentIdx: number, snap: FirebaseFirestore.QuerySnapshot) => {
-    for (const doc of snap.docs) {
-      const answers = doc.data().scalp_check_answers as Record<string, string> | undefined;
-      if (!answers) continue;
-      for (const day of CHECK_IN_DAYS) {
-        const raw = answers[String(day)];
-        if (raw !== "yes" && raw !== "no" && raw !== "not_sure") continue;
-        const bucket = segments[segmentIdx].counts[day];
-        bucket[raw as Answer]++;
-        bucket.total++;
-      }
+  for (const doc of snap.docs) {
+    const answers = doc.data().scalp_check_answers as Record<string, string> | undefined;
+    if (!answers) continue;
+    for (const day of CHECK_IN_DAYS) {
+      const raw = answers[String(day)];
+      if (raw !== "yes" && raw !== "no" && raw !== "not_sure") continue;
+      const bucket = counts[day];
+      bucket[raw as Answer]++;
+      bucket.total++;
     }
-  };
-  tally(0, freev2Snap);
-  tally(1, freeSnap);
-  tally(2, vipSnap);
-
-  const totalSegment: Segment = {
-    key: "all",
-    label: "All users",
-    counts: {},
-    userTotal: segments.reduce((sum, s) => sum + s.userTotal, 0),
-  };
-  for (const day of CHECK_IN_DAYS) {
-    const merged = EMPTY_COUNTS();
-    for (const s of segments) {
-      const c = s.counts[day];
-      merged.yes += c.yes;
-      merged.no += c.no;
-      merged.not_sure += c.not_sure;
-      merged.total += c.total;
-    }
-    totalSegment.counts[day] = merged;
   }
-
-  const displaySegments = [totalSegment, ...segments.filter((s) => s.userTotal > 0)];
 
   return (
     <div>
@@ -94,24 +58,11 @@ export default async function ScalpCheckInsPage() {
         </p>
       </header>
 
-      {displaySegments.map((seg) => (
-        <section key={seg.key} style={{ marginBottom: 40 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 16 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 600, color: "#fff", margin: 0 }}>
-              {seg.label}
-            </h2>
-            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>
-              {seg.userTotal.toLocaleString()} users in segment
-            </span>
-          </div>
-
-          <div style={{ display: "grid", gap: 12 }}>
-            {CHECK_IN_DAYS.map((day) => (
-              <DayCard key={day} day={day} counts={seg.counts[day]} />
-            ))}
-          </div>
-        </section>
-      ))}
+      <div style={{ display: "grid", gap: 12 }}>
+        {CHECK_IN_DAYS.map((day) => (
+          <DayCard key={day} day={day} counts={counts[day]} />
+        ))}
+      </div>
     </div>
   );
 }
