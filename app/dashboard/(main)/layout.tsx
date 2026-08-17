@@ -24,7 +24,12 @@ const NAV_SECTIONS: NavSection[] = [
     roles: ["admin"],
     items: [
       { href: "/dashboard", label: "Overview", icon: "grid", roles: ["admin"] },
+      { href: "/dashboard/attribution", label: "Attribution", icon: "funnel", roles: ["admin"] },
+      { href: "/dashboard/nurture", label: "Nurture", icon: "chat", roles: ["admin"] },
+      { href: "/dashboard/outreach", label: "Outreach", icon: "chat", roles: ["admin"] },
       { href: "/dashboard/marketing", label: "Marketing", icon: "megaphone", roles: ["admin", "marketing"] },
+      { href: "/dashboard/masterclass", label: "Masterclass", icon: "bolt", roles: ["admin"] },
+      { href: "/dashboard/scalp-check-ins", label: "Scalp check-ins", icon: "grid", roles: ["admin"] },
       { href: "/dashboard/onboarding", label: "Onboarding", icon: "funnel", roles: ["admin"] },
       { href: "/dashboard/whatsapp", label: "WhatsApp", icon: "chat", roles: ["admin"] },
       { href: "/dashboard/support", label: "Support", icon: "support", roles: ["admin"] },
@@ -277,7 +282,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </main>
 
-      {/* Mobile bottom tabs */}
+      {/* Mobile bottom tabs — horizontally scrollable so 15+ items still
+          fit cleanly on a phone width without squeezing each tab to 18px
+          and overflowing the row. Items are flex-shrink: 0 so they keep
+          their natural width; the row scrolls if it doesn't fit. */}
       <nav className="dash-bottom-tabs" style={{
         position: "fixed",
         bottom: 0,
@@ -287,9 +295,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         backdropFilter: "blur(20px)",
         borderTop: "1px solid rgba(255,255,255,0.08)",
         display: "flex",
-        justifyContent: "space-around",
-        padding: "8px 0 env(safe-area-inset-bottom, 8px)",
+        gap: 4,
+        padding: "8px 8px env(safe-area-inset-bottom, 8px)",
         zIndex: 10,
+        overflowX: "auto",
+        overflowY: "hidden",
+        scrollbarWidth: "none",
+        WebkitOverflowScrolling: "touch",
       }}>
         {allNavItems.map((item) => {
           const active = item.href === "/dashboard"
@@ -306,9 +318,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               fontWeight: 500,
               color: active ? "#fff" : "rgba(255,255,255,0.35)",
               textDecoration: "none",
-              minWidth: 48,
+              minWidth: 64,
               minHeight: 44,
               justifyContent: "center",
+              flexShrink: 0,
             }}>
               <NavIcon icon={item.icon} active={active} />
               {item.label}
@@ -355,6 +368,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           .dash-bottom-tabs { display: none !important; }
           .dash-main { margin-left: 220px !important; }
         }
+        /* Hide the WebKit scrollbar on the horizontal bottom-tab row so it
+           reads as a clean swipeable strip on iOS Safari, not a UI bar
+           with a visible scroll thumb. */
+        .dash-bottom-tabs::-webkit-scrollbar { display: none; }
       `}</style>
     </div>
   );
