@@ -99,8 +99,35 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, skipped: "no_event_type" });
   }
 
-  // Skip events we don't act on (CANCELLATION, EXPIRATION, BILLING_ISSUE,
-  // SUBSCRIBER_ALIAS, etc.). Just log + 200 so RC doesn't retry.
+  // CANCELLATION is handled separately — no paid-user reconciliation, just
+  // stamp subscription_cancelled_at + subscription_status so the trial funnel
+  // can count cancels. Fires whenever a user cancels their subscription
+  // (before or after billing) — the entitlement stays active until the
+  // period end (EXPIRATION), so this is a "will not renew" signal.
+  if (evt.type === "CANCELLATION") {
+    const uidForCancel = resolveFirebaseUid(evt);
+    if (!uidForCancel) {
+      // eslint-disable-next-line no-console
+      console.log(`[rc/webhook] CANCELLATION for anonymous id=${evt.app_user_id} — skipping (no fb uid)`);
+      return NextResponse.json({ ok: true, skipped: "cancellation_anonymous" });
+    }
+    const { db } = getFirebaseAdmin();
+    await db.collection("Users").doc(uidForCancel).set(
+      {
+        subscription_status: "cancelled",
+        subscription_cancelled_at: FieldValue.serverTimestamp(),
+        subscription_cancelled_product_id: evt.product_id ?? null,
+        modified_at: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    // eslint-disable-next-line no-console
+    console.log(`[rc/webhook] CANCELLATION recorded for ${uidForCancel} (product=${evt.product_id ?? "-"})`);
+    return NextResponse.json({ ok: true, uid: uidForCancel, event_type: "CANCELLATION" });
+  }
+
+  // Skip events we don't act on (EXPIRATION, BILLING_ISSUE, SUBSCRIBER_ALIAS,
+  // etc.). Just log + 200 so RC doesn't retry.
   if (!PAID_EVENT_TYPES.has(evt.type)) {
     // eslint-disable-next-line no-console
     console.log(`[rc/webhook] Skipping event type: ${evt.type} (id=${evt.id})`);
@@ -258,6 +285,41 @@ async function reconcileFirestoreDoc(
   }
   if (existing.is_deleted === undefined) updates.is_deleted = false;
 
+  // ── Clean lifecycle signals (dedicated fields with unambiguous
+  // semantics — see AppConsts.startedTrialFieldName in mobile).
+  //
+  // started_trial fires for any INITIAL_PURCHASE (safety net — mobile
+  // paywall writes it too, but this catches orphan/aliased purchases
+  // where the client write never lands). Idempotent: only set if
+  // missing. Object shape mirrors mobile: { at, product_id, source }.
+  const isInitialPurchase = evt.type === "INITIAL_PURCHASE";
+  if (isInitialPurchase && !existing.started_trial) {
+    updates.started_trial = {
+      at: FieldValue.serverTimestamp(),
+      product_id: evt.product_id ?? null,
+      source: "webhook_initial_purchase",
+    };
+  }
+
+  // converted_trial fires when the trial converts to a real billing
+  // event. Two cases:
+  //   1. RENEWAL — trial ended, first paid period started billing
+  //   2. INITIAL_PURCHASE with period_type=NORMAL — direct paid,
+  //      no free trial phase, they converted the moment they subscribed
+  // Both write once (idempotent). PRODUCT_CHANGE / UNCANCELLATION do
+  // NOT count — they act on already-active subscriptions and would
+  // muddy the "trial → paid conversion" definition.
+  const isRenewal = evt.type === "RENEWAL";
+  const isDirectPaid =
+    isInitialPurchase && evt.period_type && evt.period_type.toUpperCase() === "NORMAL";
+  if ((isRenewal || isDirectPaid) && !existing.converted_trial) {
+    updates.converted_trial = {
+      at: FieldValue.serverTimestamp(),
+      product_id: evt.product_id ?? null,
+      source: isRenewal ? "webhook_renewal" : "webhook_direct_paid",
+    };
+  }
+
   // First-time-only fields. Don't overwrite real values; only set if missing.
   if (!existing.first_paid_at) {
     updates.first_paid_at = FieldValue.serverTimestamp();
@@ -295,6 +357,14 @@ async function reconcileFirestoreDoc(
   }
 
   if (email && !existing.email) updates.email = email;
+
+  // UNCANCELLATION means the user reactivated after cancelling — clear the
+  // cancelled fields so the trial funnel doesn't double-count them.
+  if (evt.type === "UNCANCELLATION" && existing.subscription_status === "cancelled") {
+    updates.subscription_status = "active";
+    updates.subscription_cancelled_at = FieldValue.delete();
+    updates.subscription_cancelled_product_id = FieldValue.delete();
+  }
 
   // Always touch paid_at so analytics see latest paid event.
   updates.paid_at = FieldValue.serverTimestamp();

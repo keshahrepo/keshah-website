@@ -10,6 +10,11 @@ interface NavItem {
   label: string;
   icon: string;
   roles: string[];
+  // Extra path prefixes that should also mark this item active.
+  // Used by the "Calls" item so it stays highlighted when the user
+  // is on /dashboard/onboarding-call, /dashboard/regrowth-consultation,
+  // or /dashboard/masterclass (all reachable via the Calls landing).
+  extraActivePrefixes?: string[];
 }
 
 interface NavSection {
@@ -18,40 +23,32 @@ interface NavSection {
   items: NavItem[];
 }
 
+// Trimmed to the 4 tabs Aadi actively uses. The remaining admin pages
+// (Attribution, Nurture, Marketing, Successful Users, Funnel, Trials,
+// Affiliates, Today, Hooks, Managers, Resources, etc.) still exist at
+// their URLs — they're just not surfaced in the sidebar to reduce
+// visual noise. Add them back here if you need them again.
 const NAV_SECTIONS: NavSection[] = [
   {
-    title: "App",
+    title: "",
     roles: ["admin"],
     items: [
-      { href: "/dashboard", label: "Overview", icon: "grid", roles: ["admin"] },
-      { href: "/dashboard/attribution", label: "Attribution", icon: "funnel", roles: ["admin"] },
-      { href: "/dashboard/nurture", label: "Nurture", icon: "chat", roles: ["admin"] },
-      { href: "/dashboard/outreach", label: "Outreach", icon: "chat", roles: ["admin"] },
-      { href: "/dashboard/marketing", label: "Marketing", icon: "megaphone", roles: ["admin", "marketing"] },
-      { href: "/dashboard/masterclass", label: "Masterclass", icon: "bolt", roles: ["admin"] },
-      { href: "/dashboard/onboarding-call", label: "Onboarding call", icon: "chat", roles: ["admin"] },
-      { href: "/dashboard/regrowth-consultation", label: "Regrowth call", icon: "chat", roles: ["admin"] },
-      { href: "/dashboard/scalp-check-ins", label: "Scalp check-ins", icon: "grid", roles: ["admin"] },
-      { href: "/dashboard/onboarding", label: "Onboarding", icon: "funnel", roles: ["admin"] },
-      { href: "/dashboard/whatsapp", label: "WhatsApp", icon: "chat", roles: ["admin"] },
       { href: "/dashboard/support", label: "Support", icon: "support", roles: ["admin"] },
+      { href: "/dashboard/onboarding", label: "Onboarding", icon: "funnel", roles: ["admin"] },
+      { href: "/dashboard/trial", label: "Trial", icon: "funnel2", roles: ["admin"] },
+      {
+        href: "/dashboard/calls",
+        label: "Calls",
+        icon: "chat",
+        roles: ["admin"],
+        // Landing page + the 3 sub-pages all highlight this item.
+        extraActivePrefixes: [
+          "/dashboard/onboarding-call",
+          "/dashboard/regrowth-consultation",
+          "/dashboard/masterclass",
+        ],
+      },
       { href: "/dashboard/retention", label: "Retention", icon: "repeat", roles: ["admin"] },
-      { href: "/dashboard/successful-users", label: "Successful Users", icon: "users", roles: ["admin"] },
-      { href: "/dashboard/funnel", label: "Funnel · /startus3", icon: "funnel", roles: ["admin"] },
-      { href: "/dashboard/trials", label: "Trials", icon: "bolt", roles: ["admin"] },
-      { href: "/dashboard/affiliates", label: "Affiliates", icon: "link", roles: ["admin"] },
-    ],
-  },
-  {
-    title: "Content",
-    roles: ["admin", "manager"],
-    items: [
-      { href: "/dashboard/today", label: "Today", icon: "sun", roles: ["admin", "manager"] },
-      { href: "/dashboard/recruit", label: "Recruit", icon: "funnel2", roles: ["manager"] },
-      { href: "/dashboard/manage", label: "Manage", icon: "clipboard", roles: ["manager"] },
-      { href: "/dashboard/hooks", label: "Hooks", icon: "bolt", roles: ["admin"] },
-      { href: "/dashboard/managers", label: "Managers", icon: "users", roles: ["admin"] },
-      { href: "/dashboard/resources", label: "Resources", icon: "book", roles: ["admin", "manager"] },
     ],
   },
 ];
@@ -227,9 +224,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </p>
               )}
               {section.items.map((item) => {
+                // Prefix match with a "/" boundary so /dashboard/onboarding
+                // doesn't also highlight when we're on /dashboard/onboarding-call.
+                const matchesPrefix = (p: string) => pathname === p || pathname.startsWith(p + "/");
                 const active = item.href === "/dashboard"
                   ? pathname === "/dashboard"
-                  : pathname.startsWith(item.href);
+                  : matchesPrefix(item.href) ||
+                    (item.extraActivePrefixes ?? []).some(matchesPrefix);
                 return (
                   <Link key={item.href} href={item.href} style={{
                     display: "flex",
@@ -306,9 +307,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         WebkitOverflowScrolling: "touch",
       }}>
         {allNavItems.map((item) => {
+          const matchesPrefix = (p: string) => pathname === p || pathname.startsWith(p + "/");
           const active = item.href === "/dashboard"
             ? pathname === "/dashboard"
-            : pathname.startsWith(item.href);
+            : matchesPrefix(item.href) ||
+              (item.extraActivePrefixes ?? []).some(matchesPrefix);
           return (
             <Link key={item.href} href={item.href} style={{
               display: "flex",

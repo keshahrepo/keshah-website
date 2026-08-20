@@ -170,6 +170,88 @@ export default function RetentionPage() {
           </p>
         </div>
       )}
+
+      <DayCheckInCard day={13} title="Day 13 scalp check-in" subtitle='Post-trial engagement signal — "no" / "not sure" routes to support.' />
+    </div>
+  );
+}
+
+type Answer = "yes" | "no" | "not_sure";
+interface CheckInApiResponse { ok: boolean; day: number; yes: number; no: number; not_sure: number; total: number }
+
+function DayCheckInCard({ day, title, subtitle }: { day: number; title: string; subtitle: string }) {
+  const [data, setData] = useState<CheckInApiResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/dashboard/day-check-in?day=${day}`)
+      .then((r) => r.json())
+      .then((json: CheckInApiResponse) => { if (json.ok) setData(json); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [day]);
+
+  const total = data?.total ?? 0;
+  interface Row { key: Answer; label: string; color: string; count: number; pct: number }
+  const rows: Row[] = [
+    { key: "yes",      label: "Yes — looser",     color: "#359033", count: data?.yes ?? 0,      pct: 0 },
+    { key: "not_sure", label: "Not sure",         color: "#DAA520", count: data?.not_sure ?? 0, pct: 0 },
+    { key: "no",       label: "No — still tight", color: "#C03E06", count: data?.no ?? 0,       pct: 0 },
+  ];
+  for (const r of rows) r.pct = total === 0 ? 0 : (r.count / total) * 100;
+  const sorted = [...rows].sort((a, b) => b.count - a.count);
+  const maxCount = sorted[0]?.count || 1;
+
+  return (
+    <div
+      style={{
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        borderRadius: 12,
+        padding: 18,
+        marginTop: 24,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          marginBottom: 6,
+          gap: 12,
+        }}
+      >
+        <div style={{ fontSize: 15, fontWeight: 600, color: "#fff" }}>{title}</div>
+        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>
+          {loading ? "…" : (<><span style={{ color: "#fff", fontWeight: 600 }}>{total.toLocaleString()}</span> answered</>)}
+        </div>
+      </div>
+      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 14 }}>{subtitle}</div>
+
+      {loading ? null : total === 0 ? (
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>No responses yet.</div>
+      ) : (
+        <div style={{ display: "grid", gap: 10 }}>
+          {sorted.map((r) => (
+            <div key={r.key} style={{ display: "grid", gap: 5 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "rgba(255,255,255,0.9)" }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: r.color, display: "inline-block" }} />
+                  <span>{r.label}</span>
+                </div>
+                <div style={{ fontSize: 13, fontVariantNumeric: "tabular-nums", color: "#fff", fontWeight: 500, display: "flex", gap: 8 }}>
+                  <span>{r.pct.toFixed(1)}%</span>
+                  <span style={{ color: "rgba(255,255,255,0.4)", fontWeight: 400 }}>{r.count.toLocaleString()}</span>
+                </div>
+              </div>
+              <div style={{ height: 6, background: "rgba(255,255,255,0.05)", borderRadius: 3, overflow: "hidden" }}>
+                <div style={{ width: `${Math.max((r.count / maxCount) * 100, r.count > 0 ? 2 : 0)}%`, height: "100%", background: r.color, borderRadius: 3 }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
