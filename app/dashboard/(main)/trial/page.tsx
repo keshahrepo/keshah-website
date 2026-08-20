@@ -171,9 +171,11 @@ export default async function TrialPage({
 
   // ── Per-day completion (heatmap) ───────────────────────────────
   // For day N: numerator = users who completed day N, denominator =
-  // users whose trial is at least N days old (had time to reach it).
-  // Users without a startedAtMs are excluded from the denominator so
-  // an unparseable trial doesn't skew the base.
+  // users whose trial has aged into having day N available. Day 1
+  // is available the moment the trial starts (tenureDays >= 0), Day 2
+  // after 1 calendar day, ..., Day 7 after 6 calendar days — hence
+  // the "day - 1" threshold. Users without a startedAtMs are excluded
+  // so an unparseable trial doesn't skew the base.
   const now = Date.now();
   const perDayCounts: number[] = new Array(TRIAL_DAYS).fill(0);
   const perDayEligible: number[] = new Array(TRIAL_DAYS).fill(0);
@@ -182,7 +184,7 @@ export default async function TrialPage({
     const tenureDays = Math.floor((now - u.startedAtMs) / DAY_MS);
     for (let i = 0; i < TRIAL_DAYS; i++) {
       const day = i + 1;
-      if (tenureDays >= day) {
+      if (tenureDays >= day - 1) {
         perDayEligible[i]++;
         if (u.perDay[i]) perDayCounts[i]++;
       }
