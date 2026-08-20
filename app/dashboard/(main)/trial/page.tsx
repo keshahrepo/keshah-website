@@ -13,6 +13,7 @@
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import Link from "next/link";
+import { Day1HoverRow } from "./Day1HoverRow";
 
 export const dynamic = "force-dynamic";
 
@@ -49,8 +50,10 @@ const emptyCheckIn = (): CheckInCounts => ({ yes: 0, no: 0, not_sure: 0, total: 
 interface TrialUser {
   gender: string | undefined;
   startedAtMs: number | null;       // ms since epoch when the trial started — used for eligibility
-  daysCompleted: number;            // 0..TRIAL_DAYS — how many progress.dayN.is_completed = true
+  daysCompleted: number;            // 0..TRIAL_DAYS — how many progress.dayN had ≥1 is_completed:true
   perDay: boolean[];                // length = TRIAL_DAYS, true if that specific day was completed
+  day1Done: number;                 // # of exercises this user completed on Day 1 (0..N)
+  day1Total: number;                // # of exercises Day 1 has in this user's routine (0 if never opened)
   checkIn3: Answer | null;
   checkIn6: Answer | null;
   converted: boolean;
@@ -123,11 +126,19 @@ export default async function TrialPage({
     const progress = (d.progress as Record<string, Array<{ is_completed?: boolean }> | undefined> | undefined) ?? {};
     const perDay: boolean[] = [];
     let daysCompleted = 0;
+    let day1Done = 0;
+    let day1Total = 0;
     for (let day = 1; day <= TRIAL_DAYS; day++) {
       const entries = progress[`day${day}`];
-      const done = Array.isArray(entries) && entries.some((e) => e?.is_completed === true);
+      const opened = Array.isArray(entries) && entries.length > 0;
+      const doneCount = opened ? entries!.filter((e) => e?.is_completed === true).length : 0;
+      const done = doneCount > 0;
       perDay.push(done);
       if (done) daysCompleted++;
+      if (day === 1) {
+        day1Total = opened ? entries!.length : 0;
+        day1Done = doneCount;
+      }
     }
 
     // Check-in answers live in scalp_check_answers as string-keyed map.
@@ -145,6 +156,8 @@ export default async function TrialPage({
       startedAtMs,
       daysCompleted,
       perDay,
+      day1Done,
+      day1Total,
       checkIn3: parseAns(answers["3"]),
       checkIn6: parseAns(answers["6"]),
       converted: !!d.converted_trial,
@@ -191,6 +204,25 @@ export default async function TrialPage({
     }
   }
 
+  // ── Day 1 breakdown (for hover) ────────────────────────────────
+  // Distribution across Day-1-eligible users: how many did 0/1/2/.../all
+  // exercises. Day 1 exercise count can vary by routine (men vs women,
+  // etc.) — we take the max total any user saw as "the" exercise count
+  // for display purposes.
+  let day1MaxTotal = 0;
+  for (const u of users) if (u.day1Total > day1MaxTotal) day1MaxTotal = u.day1Total;
+  const day1Distribution: number[] = new Array(day1MaxTotal + 1).fill(0);
+  let day1EligibleUsers = 0;
+  let day1NeverOpened = 0;
+  for (const u of users) {
+    if (u.startedAtMs === null) continue;
+    const tenureDays = Math.floor((now - u.startedAtMs) / DAY_MS);
+    if (tenureDays < 0) continue; // eligible from tenure day 0
+    day1EligibleUsers++;
+    if (u.day1Total === 0) { day1NeverOpened++; continue; }
+    day1Distribution[u.day1Done] = (day1Distribution[u.day1Done] ?? 0) + 1;
+  }
+
   // ── Check-in tallies ────────────────────────────────────────────
   const checkIn3 = emptyCheckIn();
   const checkIn6 = emptyCheckIn();
@@ -220,7 +252,15 @@ export default async function TrialPage({
         cancelled={cancelledCount}
       />
       <FunnelPanel rows={funnel} />
-      <PerDayPanel counts={perDayCounts} eligible={perDayEligible} />
+      <PerDayPanel
+        counts={perDayCounts}
+        eligible={perDayEligible}
+        day1={{
+          distribution: day1Distribution,
+          neverOpened: day1NeverOpened,
+          maxTotal: day1MaxTotal,
+        }}
+      />
 
       <div style={{ display: "grid", gap: 12 }}>
         <CheckInCard day={3} counts={checkIn3} />
@@ -458,7 +498,15 @@ function FunnelPanel({ rows }: { rows: Array<{ key: string; label: string; count
 
 // ── Per-day heatmap — where do people bail? ────────────────────────
 
-function PerDayPanel({ counts, eligible }: { counts: number[]; eligible: number[] }) {
+function PerDayPanel({
+  counts,
+  eligible,
+  day1,
+}: {
+  counts: number[];
+  eligible: number[];
+  day1: { distribution: number[]; neverOpened: number; maxTotal: number };
+}) {
   return (
     <div
       style={{
@@ -480,6 +528,21 @@ function PerDayPanel({ counts, eligible }: { counts: number[]; eligible: number[
           const day = i + 1;
           const elig = eligible[i];
           const pct = elig === 0 ? 0 : (count / elig) * 100;
+
+          // Day 1 gets an interactive row with a hover breakdown.
+          if (day === 1) {
+            return (
+              <Day1HoverRow
+                key={day}
+                count={count}
+                eligible={elig}
+                distribution={day1.distribution}
+                neverOpened={day1.neverOpened}
+                maxTotal={day1.maxTotal}
+              />
+            );
+          }
+
           return (
             <div
               key={day}
