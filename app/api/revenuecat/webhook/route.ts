@@ -83,6 +83,11 @@ export async function POST(req: Request) {
   if (expectedAuth) {
     const provided = req.headers.get("authorization") ?? "";
     if (provided !== expectedAuth && provided !== `Bearer ${expectedAuth}`) {
+      // TEMP DIAGNOSTIC (remove after fixing) — logs redacted samples so we
+      // can compare what RC is sending against what Vercel env holds.
+      const redact = (s: string) => s.length <= 8 ? "***" : `${s.slice(0, 4)}…${s.slice(-4)} (len=${s.length})`;
+      // eslint-disable-next-line no-console
+      console.error(`[rc/webhook] AUTH_MISMATCH provided=${redact(provided)} expected=${redact(expectedAuth)}`);
       return NextResponse.json({ ok: false, error: "invalid_auth" }, { status: 401 });
     }
   }
