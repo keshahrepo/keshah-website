@@ -135,7 +135,9 @@ export default async function TrialPage({
 
   const total = users.length;
 
-  // ── Funnel (cumulative days completed) ─────────────────────────
+  // ── Funnel (cumulative days completed → conversion) ────────────
+  // Only strict-subset stages belong here. Check-ins are engagement
+  // signals (below), cancelled is a parallel outcome (also below).
   interface FunnelRow { key: string; label: string; count: number }
   const funnel: FunnelRow[] = [
     { key: "started",    label: "Trial started",           count: total },
@@ -143,11 +145,10 @@ export default async function TrialPage({
     { key: "day_gte_3",  label: "Did ≥ 3 days",            count: users.filter((u) => u.daysCompleted >= 3).length },
     { key: "day_gte_5",  label: "Did ≥ 5 days",            count: users.filter((u) => u.daysCompleted >= 5).length },
     { key: "day_all",    label: `Did all ${TRIAL_DAYS} days`, count: users.filter((u) => u.daysCompleted >= TRIAL_DAYS).length },
-    { key: "checkin_3",  label: "Answered Day 3 check-in", count: users.filter((u) => u.checkIn3 !== null).length },
-    { key: "checkin_6",  label: "Answered Day 6 check-in", count: users.filter((u) => u.checkIn6 !== null).length },
     { key: "converted",  label: "Converted to paid",       count: users.filter((u) => u.converted).length },
-    { key: "cancelled",  label: "Cancelled trial",         count: users.filter((u) => u.cancelled).length },
   ];
+
+  const cancelledCount = users.filter((u) => u.cancelled).length;
 
   // ── Per-day completion (heatmap) ───────────────────────────────
   const perDayCounts: number[] = new Array(TRIAL_DAYS).fill(0);
@@ -178,6 +179,11 @@ export default async function TrialPage({
 
       <GenderTabs selected={gender} totals={{ all: allTrialsCount, male: genderMale, female: genderFemale }} />
 
+      <OutcomesStrip
+        total={total}
+        converted={funnel.find((r) => r.key === "converted")?.count ?? 0}
+        cancelled={cancelledCount}
+      />
       <FunnelPanel rows={funnel} />
       <PerDayPanel counts={perDayCounts} total={total} />
 
@@ -243,6 +249,97 @@ function GenderTabs({
             {t.label}{" "}
             <span style={{ opacity: 0.5, marginLeft: 4 }}>{count.toLocaleString()}</span>
           </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Outcomes strip — parallel outcomes (converted / cancelled) that
+// don't belong in the funnel because they're not strict-subset stages.
+
+function OutcomesStrip({
+  total,
+  converted,
+  cancelled,
+}: {
+  total: number;
+  converted: number;
+  cancelled: number;
+}) {
+  const base = total || 1;
+  const still =
+    total - converted - cancelled >= 0 ? total - converted - cancelled : 0;
+  const items = [
+    { label: "Converted", count: converted, color: "#359033" },
+    { label: "Cancelled", count: cancelled, color: "#C03E06" },
+    { label: "Still in trial", count: still, color: "rgba(255,255,255,0.55)" },
+  ];
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+        gap: 10,
+        marginBottom: 20,
+      }}
+    >
+      {items.map((it) => {
+        const pct = (it.count / base) * 100;
+        return (
+          <div
+            key={it.label}
+            style={{
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderRadius: 12,
+              padding: "14px 16px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 11,
+                fontWeight: 600,
+                letterSpacing: 1.2,
+                textTransform: "uppercase",
+                color: "rgba(255,255,255,0.55)",
+                marginBottom: 8,
+              }}
+            >
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 2,
+                  background: it.color,
+                }}
+              />
+              {it.label}
+            </div>
+            <div
+              style={{
+                fontSize: 22,
+                fontWeight: 600,
+                color: "#fff",
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {it.count.toLocaleString()}
+              <span
+                style={{
+                  fontSize: 13,
+                  color: "rgba(255,255,255,0.4)",
+                  fontWeight: 400,
+                  marginLeft: 8,
+                }}
+              >
+                {pct.toFixed(1)}%
+              </span>
+            </div>
+          </div>
         );
       })}
     </div>
