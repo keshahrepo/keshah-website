@@ -48,12 +48,25 @@ const emptyCheckIn = (): CheckInCounts => ({ yes: 0, no: 0, not_sure: 0, total: 
 
 interface TrialUser {
   gender: string | undefined;
+  startedAtMs: number | null;       // ms since epoch when the trial started — used for eligibility
   daysCompleted: number;            // 0..TRIAL_DAYS — how many progress.dayN.is_completed = true
   perDay: boolean[];                // length = TRIAL_DAYS, true if that specific day was completed
   checkIn3: Answer | null;
   checkIn6: Answer | null;
   converted: boolean;
   cancelled: boolean;
+}
+
+const DAY_MS = 86_400_000;
+
+// Firestore returns Timestamps as objects with either toMillis() or
+// _seconds/seconds depending on the SDK layer. Handle both defensively.
+function tsToMs(raw: unknown): number | null {
+  if (!raw || typeof raw !== "object") return null;
+  const t = raw as { toMillis?: () => number; _seconds?: number; seconds?: number };
+  if (typeof t.toMillis === "function") return t.toMillis();
+  const s = t._seconds ?? t.seconds;
+  return typeof s === "number" ? s * 1000 : null;
 }
 
 export default async function TrialPage({
@@ -122,8 +135,14 @@ export default async function TrialPage({
     const parseAns = (raw: string | undefined): Answer | null =>
       raw === "yes" || raw === "no" || raw === "not_sure" ? raw : null;
 
+    // started_trial is an object { at, product_id, source } — see the RC
+    // webhook writer at revenuecat/webhook/route.ts:270.
+    const startedTrial = d.started_trial as { at?: unknown } | undefined;
+    const startedAtMs = tsToMs(startedTrial?.at);
+
     users.push({
       gender: docGender,
+      startedAtMs,
       daysCompleted,
       perDay,
       checkIn3: parseAns(answers["3"]),
@@ -151,9 +170,23 @@ export default async function TrialPage({
   const cancelledCount = users.filter((u) => u.cancelled).length;
 
   // ── Per-day completion (heatmap) ───────────────────────────────
+  // For day N: numerator = users who completed day N, denominator =
+  // users whose trial is at least N days old (had time to reach it).
+  // Users without a startedAtMs are excluded from the denominator so
+  // an unparseable trial doesn't skew the base.
+  const now = Date.now();
   const perDayCounts: number[] = new Array(TRIAL_DAYS).fill(0);
+  const perDayEligible: number[] = new Array(TRIAL_DAYS).fill(0);
   for (const u of users) {
-    for (let i = 0; i < TRIAL_DAYS; i++) if (u.perDay[i]) perDayCounts[i]++;
+    if (u.startedAtMs === null) continue;
+    const tenureDays = Math.floor((now - u.startedAtMs) / DAY_MS);
+    for (let i = 0; i < TRIAL_DAYS; i++) {
+      const day = i + 1;
+      if (tenureDays >= day) {
+        perDayEligible[i]++;
+        if (u.perDay[i]) perDayCounts[i]++;
+      }
+    }
   }
 
   // ── Check-in tallies ────────────────────────────────────────────
@@ -185,7 +218,7 @@ export default async function TrialPage({
         cancelled={cancelledCount}
       />
       <FunnelPanel rows={funnel} />
-      <PerDayPanel counts={perDayCounts} total={total} />
+      <PerDayPanel counts={perDayCounts} eligible={perDayEligible} />
 
       <div style={{ display: "grid", gap: 12 }}>
         <CheckInCard day={3} counts={checkIn3} />
@@ -423,8 +456,7 @@ function FunnelPanel({ rows }: { rows: Array<{ key: string; label: string; count
 
 // ── Per-day heatmap — where do people bail? ────────────────────────
 
-function PerDayPanel({ counts, total }: { counts: number[]; total: number }) {
-  const base = total || 1;
+function PerDayPanel({ counts, eligible }: { counts: number[]; eligible: number[] }) {
   return (
     <div
       style={{
@@ -437,19 +469,21 @@ function PerDayPanel({ counts, total }: { counts: number[]; total: number }) {
     >
       <SectionTitle>Per-day completion</SectionTitle>
       <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 14 }}>
-        % of trials that completed each specific day. Order-independent —
-        someone can appear on Day 4 without Day 3.
+        % of trials that completed each specific day, over trials old
+        enough to have reached it. Order-independent — someone can appear
+        on Day 4 without Day 3.
       </div>
       <div style={{ display: "grid", gap: 6 }}>
         {counts.map((count, i) => {
           const day = i + 1;
-          const pct = (count / base) * 100;
+          const elig = eligible[i];
+          const pct = elig === 0 ? 0 : (count / elig) * 100;
           return (
             <div
               key={day}
               style={{
                 display: "grid",
-                gridTemplateColumns: "80px 1fr 110px",
+                gridTemplateColumns: "80px 1fr 140px",
                 alignItems: "center",
                 gap: 12,
                 padding: "6px 0",
@@ -470,7 +504,7 @@ function PerDayPanel({ counts, total }: { counts: number[]; total: number }) {
                   style={{
                     width: `${Math.min(pct, 100)}%`,
                     height: "100%",
-                    background: "#fff",
+                    background: elig === 0 ? "rgba(255,255,255,0.2)" : "#fff",
                   }}
                 />
               </div>
@@ -482,10 +516,16 @@ function PerDayPanel({ counts, total }: { counts: number[]; total: number }) {
                   textAlign: "right",
                 }}
               >
-                {pct.toFixed(1)}%
-                <span style={{ color: "rgba(255,255,255,0.35)", marginLeft: 8 }}>
-                  {count.toLocaleString()}
-                </span>
+                {elig === 0 ? (
+                  <span style={{ color: "rgba(255,255,255,0.35)" }}>—</span>
+                ) : (
+                  <>
+                    {pct.toFixed(1)}%
+                    <span style={{ color: "rgba(255,255,255,0.35)", marginLeft: 8 }}>
+                      {count}/{elig}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
           );
