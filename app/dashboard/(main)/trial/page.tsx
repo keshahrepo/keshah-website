@@ -103,14 +103,16 @@ export default async function TrialPage({
     if (gender === "male" && docGender !== "male") continue;
     if (gender === "female" && docGender !== "female") continue;
 
-    // Days completed — count progress.day1..day7 with is_completed === true.
-    // The `is_completed` bool matters (not just presence) because opening
-    // the day screen pre-populates the entry as is_completed:false.
-    const progress = (d.progress as Record<string, { is_completed?: boolean }> | undefined) ?? {};
+    // Days completed — progress.dayN is an ARRAY of exercise entries;
+    // day counts as done if ≥1 entry has is_completed:true. Opening the
+    // day screen pre-populates entries as is_completed:false, so mere
+    // presence of the array doesn't mean the user did anything.
+    const progress = (d.progress as Record<string, Array<{ is_completed?: boolean }> | undefined> | undefined) ?? {};
     const perDay: boolean[] = [];
     let daysCompleted = 0;
     for (let day = 1; day <= TRIAL_DAYS; day++) {
-      const done = progress[`day${day}`]?.is_completed === true;
+      const entries = progress[`day${day}`];
+      const done = Array.isArray(entries) && entries.some((e) => e?.is_completed === true);
       perDay.push(done);
       if (done) daysCompleted++;
     }
