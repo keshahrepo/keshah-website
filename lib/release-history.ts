@@ -18,23 +18,14 @@ export interface Release {
   outcome?: string;         // filled in AFTER data lands: what actually moved
 }
 
-// Ordered newest first. The "baseline" for a selected release auto-defaults
-// to the release immediately before it in this list.
+// Only real MOBILE APP releases go here — things that change what users
+// see. Backend integrations (Sendblue webhook, RC webhook auth fix, etc.)
+// don't get their own entry because they don't shift the in-app cohort.
+//
+// Ordered newest first. Trial page ALWAYS treats +162 as baseline (the
+// first build with the new-onboarding data model). Future builds become
+// selectable in the "new" dropdown as we ship them.
 export const RELEASES: Release[] = [
-  {
-    slug: "sendblue_live",
-    label: "Sendblue live",
-    date: "2026-08-21",
-    description:
-      "iMessage abandonment nurture for US leads — fires 5 min after " +
-      "contact captured if no trial started. RC webhook CANCELLATION " +
-      "now writes subscription_status.",
-    tracks: [
-      "outcome_cancelled",
-      "outcome_converted",
-      "funnel_started",
-    ],
-  },
   {
     slug: "162_launch",
     label: "+162 launch",

@@ -35,6 +35,7 @@ export function CohortPicker({
 
   const baseline = getRelease(baselineSlug);
   const newRel = getRelease(newSlug);
+  const onlyOneRelease = RELEASES.length < 2;
 
   return (
     <div style={{ marginBottom: 20 }}>
@@ -61,12 +62,29 @@ export function CohortPicker({
         />
       </div>
 
-      {/* Banner */}
-      <HypothesisBanner
-        baseline={baseline}
-        newRel={newRel}
-        labelForKey={labelForKey}
-      />
+      {onlyOneRelease ? (
+        <div
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderLeft: "3px solid rgba(255,255,255,0.25)",
+            borderRadius: 10,
+            padding: "12px 14px",
+            fontSize: 12,
+            color: "rgba(255,255,255,0.6)",
+          }}
+        >
+          Only one release logged so far. Add a new entry to{" "}
+          <code style={{ color: "rgba(255,255,255,0.8)" }}>lib/release-history.ts</code>{" "}
+          after your next ship to unlock comparison.
+        </div>
+      ) : (
+        <HypothesisBanner
+          baseline={baseline}
+          newRel={newRel}
+          labelForKey={labelForKey}
+        />
+      )}
     </div>
   );
 }
