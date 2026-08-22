@@ -1,35 +1,37 @@
-// Trial funnel — engagement + outcome for every user who started a trial
-// since build +162 (2026-08-18). Answers "of people who started a trial,
-// how many actually engage, and how many convert?"
+// Trial funnel — engagement + outcome for every trial-starter. Now
+// renders two cohorts side-by-side (baseline vs new release) with
+// tracked-metric highlights driven by lib/release-history.ts.
 //
-// The funnel is cumulative on days completed rather than sequential (a
-// user can do Day 2 without Day 3, so "did ≥N days" is the natural bucket).
-// Check-ins live inside the trial window (Day 3 + Day 6). Day 13 is post-
-// trial and lives on the retention page.
-//
-// Cancelled bar depends on the RC webhook writing subscription_status
-// (added 2026-08-19). Old cancels won't appear here; going-forward only.
+// URL params:
+//   ?baseline=<slug>  — release to use as baseline (default: 2nd newest)
+//   ?new=<slug>       — release to compare (default: newest)
+//   ?g=male|female    — gender filter (applies to both cohorts)
 
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import Link from "next/link";
-import { Day1HoverRow } from "./Day1HoverRow";
+// Note: Day1HoverRow was used in single-cohort mode to show exercise-completion
+// distribution on hover. Not integrated in the side-by-side view for now — the
+// cohort comparison delta is more useful than the exercise-count breakdown.
+// Re-add later if the breakdown matters more than the compare.
+import { CohortPicker } from "../_lib/CohortPicker";
+import {
+  RELEASES,
+  METRIC_KEYS,
+  METRIC_DIRECTIONS,
+  getRelease,
+  getReleaseWindow,
+  getPreviousRelease,
+} from "@/lib/release-history";
 
 export const dynamic = "force-dynamic";
-
-// Same cohort marker as the onboarding page — build +162 shipped on this
-// date with started_trial writes. Anything older is legacy data with no
-// trial signals.
-const RELEASE_CUTOFF = new Date("2026-08-18T00:00:00Z");
 
 const TEST_EMAIL_REGEX = /^test\d+@test\.com$/i;
 const isTestEmail = (email: unknown): boolean =>
   typeof email === "string" && TEST_EMAIL_REGEX.test(email);
 
-// Trial length in days. If this ever changes, only edit the constant —
-// per-day heatmap, cumulative buckets, and check-in placement all key
-// off it.
 const TRIAL_DAYS = 7;
+const DAY_MS = 86_400_000;
 
 type GenderFilter = "all" | "male" | "female";
 const GENDER_TABS: Array<{ key: GenderFilter; label: string }> = [
@@ -39,31 +41,23 @@ const GENDER_TABS: Array<{ key: GenderFilter; label: string }> = [
 ];
 
 type Answer = "yes" | "no" | "not_sure";
-interface CheckInCounts {
-  yes: number;
-  no: number;
-  not_sure: number;
-  total: number;
-}
+interface CheckInCounts { yes: number; no: number; not_sure: number; total: number }
 const emptyCheckIn = (): CheckInCounts => ({ yes: 0, no: 0, not_sure: 0, total: 0 });
 
 interface TrialUser {
+  createdMs: number;
   gender: string | undefined;
-  startedAtMs: number | null;       // ms since epoch when the trial started — used for eligibility
-  daysCompleted: number;            // 0..TRIAL_DAYS — how many progress.dayN had ≥1 is_completed:true
-  perDay: boolean[];                // length = TRIAL_DAYS, true if that specific day was completed
-  day1Done: number;                 // # of exercises this user completed on Day 1 (0..N)
-  day1Total: number;                // # of exercises Day 1 has in this user's routine (0 if never opened)
+  startedAtMs: number | null;
+  daysCompleted: number;
+  perDay: boolean[];
+  day1Done: number;
+  day1Total: number;
   checkIn3: Answer | null;
   checkIn6: Answer | null;
   converted: boolean;
   cancelled: boolean;
 }
 
-const DAY_MS = 86_400_000;
-
-// Firestore returns Timestamps as objects with either toMillis() or
-// _seconds/seconds depending on the SDK layer. Handle both defensively.
 function tsToMs(raw: unknown): number | null {
   if (!raw || typeof raw !== "object") return null;
   const t = raw as { toMillis?: () => number; _seconds?: number; seconds?: number };
@@ -72,10 +66,92 @@ function tsToMs(raw: unknown): number | null {
   return typeof s === "number" ? s * 1000 : null;
 }
 
+// ── Metric computation for one cohort ────────────────────────────────
+
+interface CohortMetrics {
+  total: number;               // trials started in this cohort
+  allSignups: number;          // all signups in this cohort (denominator for started rate)
+  perDayCounts: number[];
+  perDayEligible: number[];
+  checkIn3: CheckInCounts;
+  checkIn6: CheckInCounts;
+  outcomes: { converted: number; cancelled: number; stillInTrial: number };
+  funnel: Array<{ key: string; label: string; count: number }>;
+  day1Distribution: number[];
+  day1NeverOpened: number;
+  day1MaxTotal: number;
+  genderMale: number;
+  genderFemale: number;
+}
+
+function computeMetrics(users: TrialUser[], allSignupsInCohort: number, now: number): CohortMetrics {
+  const total = users.length;
+  const converted = users.filter((u) => u.converted).length;
+  const cancelled = users.filter((u) => u.cancelled).length;
+  const stillInTrial = Math.max(0, total - converted - cancelled);
+
+  const funnel = [
+    { key: "funnel_started",    label: "Trial started",           count: total },
+    { key: "funnel_day_gte_1",  label: "Did ≥ 1 day",             count: users.filter((u) => u.daysCompleted >= 1).length },
+    { key: "funnel_day_gte_3",  label: "Did ≥ 3 days",            count: users.filter((u) => u.daysCompleted >= 3).length },
+    { key: "funnel_day_gte_5",  label: "Did ≥ 5 days",            count: users.filter((u) => u.daysCompleted >= 5).length },
+    { key: "funnel_day_all",    label: `Did all ${TRIAL_DAYS} days`, count: users.filter((u) => u.daysCompleted >= TRIAL_DAYS).length },
+    { key: "funnel_converted",  label: "Converted to paid",       count: converted },
+  ];
+
+  const perDayCounts = new Array(TRIAL_DAYS).fill(0);
+  const perDayEligible = new Array(TRIAL_DAYS).fill(0);
+  for (const u of users) {
+    if (u.startedAtMs === null) continue;
+    const tenureDays = Math.floor((now - u.startedAtMs) / DAY_MS);
+    for (let i = 0; i < TRIAL_DAYS; i++) {
+      if (tenureDays >= i) {
+        perDayEligible[i]++;
+        if (u.perDay[i]) perDayCounts[i]++;
+      }
+    }
+  }
+
+  let day1MaxTotal = 0;
+  for (const u of users) if (u.day1Total > day1MaxTotal) day1MaxTotal = u.day1Total;
+  const day1Distribution = new Array(day1MaxTotal + 1).fill(0);
+  let day1NeverOpened = 0;
+  for (const u of users) {
+    if (u.startedAtMs === null) continue;
+    if (u.day1Total === 0) { day1NeverOpened++; continue; }
+    day1Distribution[u.day1Done] = (day1Distribution[u.day1Done] ?? 0) + 1;
+  }
+
+  const checkIn3 = emptyCheckIn();
+  const checkIn6 = emptyCheckIn();
+  for (const u of users) {
+    if (u.checkIn3) { checkIn3[u.checkIn3]++; checkIn3.total++; }
+    if (u.checkIn6) { checkIn6[u.checkIn6]++; checkIn6.total++; }
+  }
+
+  return {
+    total,
+    allSignups: allSignupsInCohort,
+    perDayCounts,
+    perDayEligible,
+    checkIn3,
+    checkIn6,
+    outcomes: { converted, cancelled, stillInTrial },
+    funnel,
+    day1Distribution,
+    day1NeverOpened,
+    day1MaxTotal,
+    genderMale: users.filter((u) => u.gender === "male").length,
+    genderFemale: users.filter((u) => u.gender === "female").length,
+  };
+}
+
+// ── Page ─────────────────────────────────────────────────────────────
+
 export default async function TrialPage({
   searchParams,
 }: {
-  searchParams: Promise<{ g?: string }>;
+  searchParams: Promise<{ g?: string; baseline?: string; new?: string }>;
 }) {
   const { db } = getFirebaseAdmin();
   const params = await searchParams;
@@ -83,13 +159,33 @@ export default async function TrialPage({
   const gender: GenderFilter =
     genderRaw === "male" || genderRaw === "female" ? genderRaw : "all";
 
-  // Base cohort: every user who created their account since +162.
-  // We in-memory filter to `started_trial != null` because Firestore
-  // can't compound `created_at >=` with `started_trial != null` without
-  // an extra index. Cheap tradeoff at this volume.
+  // Resolve which two releases we're comparing. Defaults: newest as "new",
+  // second-newest as "baseline". If only one release exists, both point at it.
+  const newSlug = params.new ?? RELEASES[0]?.slug ?? "";
+  const baselineSlug =
+    params.baseline ??
+    getPreviousRelease(newSlug)?.slug ??
+    RELEASES[RELEASES.length - 1]?.slug ??
+    newSlug;
+
+  const baselineRel = getRelease(baselineSlug);
+  const newRel = getRelease(newSlug);
+  const baselineWin = getReleaseWindow(baselineSlug);
+  const newWin = getReleaseWindow(newSlug);
+
+  // Union query — pull all users created between the earliest and latest
+  // window boundary, then split in-memory into the two cohorts.
+  const earliestFrom = new Date(
+    Math.min(baselineWin?.from.getTime() ?? Infinity, newWin?.from.getTime() ?? Infinity),
+  );
+  const latestTo = new Date(
+    Math.max(baselineWin?.to.getTime() ?? 0, newWin?.to.getTime() ?? 0),
+  );
+
   const snap = await db
     .collection("Users")
-    .where("created_at", ">=", Timestamp.fromDate(RELEASE_CUTOFF))
+    .where("created_at", ">=", Timestamp.fromDate(earliestFrom))
+    .where("created_at", "<=", Timestamp.fromDate(latestTo))
     .select(
       "started_trial",
       "converted_trial",
@@ -98,31 +194,39 @@ export default async function TrialPage({
       "scalp_check_answers",
       "selected_gender",
       "email",
+      "created_at",
     )
     .get();
 
-  const users: TrialUser[] = [];
-  let allTrialsCount = 0;   // total trials regardless of gender — for the "All" tab count
-  let genderMale = 0;
-  let genderFemale = 0;
+  const baselineUsers: TrialUser[] = [];
+  const newUsers: TrialUser[] = [];
+  let baselineSignups = 0;
+  let newSignups = 0;
 
   for (const doc of snap.docs) {
     const d = doc.data();
     if (isTestEmail(d.email)) continue;
-    if (!d.started_trial) continue;      // trial funnel — only people who started
 
-    allTrialsCount++;
     const docGender = d.selected_gender as string | undefined;
-    if (docGender === "male") genderMale++;
-    else if (docGender === "female") genderFemale++;
-
     if (gender === "male" && docGender !== "male") continue;
     if (gender === "female" && docGender !== "female") continue;
 
-    // Days completed — progress.dayN is an ARRAY of exercise entries;
-    // day counts as done if ≥1 entry has is_completed:true. Opening the
-    // day screen pre-populates entries as is_completed:false, so mere
-    // presence of the array doesn't mean the user did anything.
+    const createdMs = tsToMs(d.created_at);
+    if (createdMs === null) continue;
+
+    const inBaseline =
+      baselineWin && createdMs >= baselineWin.from.getTime() && createdMs < baselineWin.to.getTime();
+    const inNew =
+      newWin && createdMs >= newWin.from.getTime() && createdMs < newWin.to.getTime();
+
+    if (!inBaseline && !inNew) continue;
+
+    // Count all signups (denominator for "trial started rate")
+    if (inBaseline) baselineSignups++;
+    if (inNew) newSignups++;
+
+    if (!d.started_trial) continue;
+
     const progress = (d.progress as Record<string, Array<{ is_completed?: boolean }> | undefined> | undefined) ?? {};
     const perDay: boolean[] = [];
     let daysCompleted = 0;
@@ -132,28 +236,21 @@ export default async function TrialPage({
       const entries = progress[`day${day}`];
       const opened = Array.isArray(entries) && entries.length > 0;
       const doneCount = opened ? entries!.filter((e) => e?.is_completed === true).length : 0;
-      const done = doneCount > 0;
-      perDay.push(done);
-      if (done) daysCompleted++;
-      if (day === 1) {
-        day1Total = opened ? entries!.length : 0;
-        day1Done = doneCount;
-      }
+      perDay.push(doneCount > 0);
+      if (doneCount > 0) daysCompleted++;
+      if (day === 1) { day1Total = opened ? entries!.length : 0; day1Done = doneCount; }
     }
 
-    // Check-in answers live in scalp_check_answers as string-keyed map.
     const answers = (d.scalp_check_answers as Record<string, string> | undefined) ?? {};
     const parseAns = (raw: string | undefined): Answer | null =>
       raw === "yes" || raw === "no" || raw === "not_sure" ? raw : null;
 
-    // started_trial is an object { at, product_id, source } — see the RC
-    // webhook writer at revenuecat/webhook/route.ts:270.
     const startedTrial = d.started_trial as { at?: unknown } | undefined;
-    const startedAtMs = tsToMs(startedTrial?.at);
 
-    users.push({
+    const user: TrialUser = {
+      createdMs,
       gender: docGender,
-      startedAtMs,
+      startedAtMs: tsToMs(startedTrial?.at),
       daysCompleted,
       perDay,
       day1Done,
@@ -162,110 +259,52 @@ export default async function TrialPage({
       checkIn6: parseAns(answers["6"]),
       converted: !!d.converted_trial,
       cancelled: d.subscription_status === "cancelled",
-    });
+    };
+
+    if (inBaseline) baselineUsers.push(user);
+    if (inNew) newUsers.push(user);
   }
 
-  const total = users.length;
-
-  // ── Funnel (cumulative days completed → conversion) ────────────
-  // Only strict-subset stages belong here. Check-ins are engagement
-  // signals (below), cancelled is a parallel outcome (also below).
-  interface FunnelRow { key: string; label: string; count: number }
-  const funnel: FunnelRow[] = [
-    { key: "started",    label: "Trial started",           count: total },
-    { key: "day_gte_1",  label: "Did ≥ 1 day",             count: users.filter((u) => u.daysCompleted >= 1).length },
-    { key: "day_gte_3",  label: "Did ≥ 3 days",            count: users.filter((u) => u.daysCompleted >= 3).length },
-    { key: "day_gte_5",  label: "Did ≥ 5 days",            count: users.filter((u) => u.daysCompleted >= 5).length },
-    { key: "day_all",    label: `Did all ${TRIAL_DAYS} days`, count: users.filter((u) => u.daysCompleted >= TRIAL_DAYS).length },
-    { key: "converted",  label: "Converted to paid",       count: users.filter((u) => u.converted).length },
-  ];
-
-  const cancelledCount = users.filter((u) => u.cancelled).length;
-
-  // ── Per-day completion (heatmap) ───────────────────────────────
-  // For day N: numerator = users who completed day N, denominator =
-  // users whose trial has aged into having day N available. Day 1
-  // is available the moment the trial starts (tenureDays >= 0), Day 2
-  // after 1 calendar day, ..., Day 7 after 6 calendar days — hence
-  // the "day - 1" threshold. Users without a startedAtMs are excluded
-  // so an unparseable trial doesn't skew the base.
   const now = Date.now();
-  const perDayCounts: number[] = new Array(TRIAL_DAYS).fill(0);
-  const perDayEligible: number[] = new Array(TRIAL_DAYS).fill(0);
-  for (const u of users) {
-    if (u.startedAtMs === null) continue;
-    const tenureDays = Math.floor((now - u.startedAtMs) / DAY_MS);
-    for (let i = 0; i < TRIAL_DAYS; i++) {
-      const day = i + 1;
-      if (tenureDays >= day - 1) {
-        perDayEligible[i]++;
-        if (u.perDay[i]) perDayCounts[i]++;
-      }
-    }
-  }
+  const baseM = computeMetrics(baselineUsers, baselineSignups, now);
+  const newM = computeMetrics(newUsers, newSignups, now);
 
-  // ── Day 1 breakdown (for hover) ────────────────────────────────
-  // Distribution across Day-1-eligible users: how many did 0/1/2/.../all
-  // exercises. Day 1 exercise count can vary by routine (men vs women,
-  // etc.) — we take the max total any user saw as "the" exercise count
-  // for display purposes.
-  let day1MaxTotal = 0;
-  for (const u of users) if (u.day1Total > day1MaxTotal) day1MaxTotal = u.day1Total;
-  const day1Distribution: number[] = new Array(day1MaxTotal + 1).fill(0);
-  let day1EligibleUsers = 0;
-  let day1NeverOpened = 0;
-  for (const u of users) {
-    if (u.startedAtMs === null) continue;
-    const tenureDays = Math.floor((now - u.startedAtMs) / DAY_MS);
-    if (tenureDays < 0) continue; // eligible from tenure day 0
-    day1EligibleUsers++;
-    if (u.day1Total === 0) { day1NeverOpened++; continue; }
-    day1Distribution[u.day1Done] = (day1Distribution[u.day1Done] ?? 0) + 1;
-  }
-
-  // ── Check-in tallies ────────────────────────────────────────────
-  const checkIn3 = emptyCheckIn();
-  const checkIn6 = emptyCheckIn();
-  for (const u of users) {
-    if (u.checkIn3) { checkIn3[u.checkIn3]++; checkIn3.total++; }
-    if (u.checkIn6) { checkIn6[u.checkIn6]++; checkIn6.total++; }
-  }
+  const tracks = new Set(newRel?.tracks ?? []);
 
   return (
     <div>
-      <header style={{ marginBottom: 24 }}>
+      <header style={{ marginBottom: 20 }}>
         <h1 style={{ fontSize: 22, fontWeight: 600, color: "#fff", margin: 0 }}>
           Trial
         </h1>
         <p style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", margin: "4px 0 0" }}>
-          {total.toLocaleString()} trials started since build 162 (2026-08-18).
-          Cancelled bar excludes anyone who cancelled before 2026-08-19 (RC
-          webhook didn't record cancellations before that date).
+          Two cohorts side-by-side. Yellow left-border = metric this release is
+          tracking. Green = improved in the right direction, red = regressed.
         </p>
       </header>
 
-      <GenderTabs selected={gender} totals={{ all: allTrialsCount, male: genderMale, female: genderFemale }} />
-
-      <OutcomesStrip
-        total={total}
-        converted={funnel.find((r) => r.key === "converted")?.count ?? 0}
-        cancelled={cancelledCount}
+      <CohortPicker
+        baselineSlug={baselineSlug}
+        newSlug={newSlug}
+        labelForKey={METRIC_KEYS.trial}
       />
-      <FunnelPanel rows={funnel} />
-      <PerDayPanel
-        counts={perDayCounts}
-        eligible={perDayEligible}
-        day1={{
-          distribution: day1Distribution,
-          neverOpened: day1NeverOpened,
-          maxTotal: day1MaxTotal,
+
+      <GenderTabs
+        selected={gender}
+        totals={{
+          all: baseM.total + newM.total,
+          male: baseM.genderMale + newM.genderMale,
+          female: baseM.genderFemale + newM.genderFemale,
         }}
       />
 
-      <div style={{ display: "grid", gap: 12 }}>
-        <CheckInCard day={3} counts={checkIn3} />
-        <CheckInCard day={6} counts={checkIn6} />
-      </div>
+      <TwoCohortView
+        baselineLabel={baselineRel?.label ?? "baseline"}
+        newLabel={newRel?.label ?? "new"}
+        baseM={baseM}
+        newM={newM}
+        tracks={tracks}
+      />
 
       <p style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 24 }}>
         Day 13 check-in is post-trial — see{" "}
@@ -278,7 +317,355 @@ export default async function TrialPage({
   );
 }
 
-// ── Gender tab strip ───────────────────────────────────────────────
+// ── Side-by-side view ───────────────────────────────────────────────
+
+function TwoCohortView({
+  baselineLabel,
+  newLabel,
+  baseM,
+  newM,
+  tracks,
+}: {
+  baselineLabel: string;
+  newLabel: string;
+  baseM: CohortMetrics;
+  newM: CohortMetrics;
+  tracks: Set<string>;
+}) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: 16,
+      }}
+    >
+      <CohortColumn
+        label={baselineLabel}
+        m={baseM}
+        tracks={tracks}
+        compareAgainst={null}
+        isBaseline
+      />
+      <CohortColumn
+        label={newLabel}
+        m={newM}
+        tracks={tracks}
+        compareAgainst={baseM}
+        isBaseline={false}
+      />
+    </div>
+  );
+}
+
+function CohortColumn({
+  label,
+  m,
+  tracks,
+  compareAgainst,
+  isBaseline,
+}: {
+  label: string;
+  m: CohortMetrics;
+  tracks: Set<string>;
+  compareAgainst: CohortMetrics | null;
+  isBaseline: boolean;
+}) {
+  return (
+    <div>
+      <div
+        style={{
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: 1.2,
+          textTransform: "uppercase",
+          color: isBaseline ? "rgba(255,255,255,0.4)" : "#DAA520",
+          marginBottom: 8,
+        }}
+      >
+        {label}
+        <span
+          style={{
+            marginLeft: 8,
+            color: "rgba(255,255,255,0.55)",
+            fontWeight: 500,
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {m.total.toLocaleString()} trials · {m.allSignups.toLocaleString()} signups
+        </span>
+      </div>
+
+      {/* Outcomes strip — one row per outcome */}
+      <Panel title="Outcomes">
+        <ComparisonRow
+          metricKey="outcome_converted"
+          label="Converted"
+          count={m.outcomes.converted}
+          base={m.total}
+          color="#359033"
+          compare={compareAgainst ? { count: compareAgainst.outcomes.converted, base: compareAgainst.total } : null}
+          tracks={tracks}
+        />
+        <ComparisonRow
+          metricKey="outcome_cancelled"
+          label="Cancelled"
+          count={m.outcomes.cancelled}
+          base={m.total}
+          color="#C03E06"
+          compare={compareAgainst ? { count: compareAgainst.outcomes.cancelled, base: compareAgainst.total } : null}
+          tracks={tracks}
+        />
+        <ComparisonRow
+          metricKey="outcome_still_in_trial"
+          label="Still in trial"
+          count={m.outcomes.stillInTrial}
+          base={m.total}
+          color="rgba(255,255,255,0.55)"
+          compare={compareAgainst ? { count: compareAgainst.outcomes.stillInTrial, base: compareAgainst.total } : null}
+          tracks={tracks}
+        />
+      </Panel>
+
+      <Panel title="Funnel">
+        {m.funnel.map((r) => (
+          <ComparisonRow
+            key={r.key}
+            metricKey={r.key}
+            label={r.label}
+            count={r.count}
+            base={m.total || 1}
+            color="#fff"
+            compare={
+              compareAgainst
+                ? {
+                    count: compareAgainst.funnel.find((f) => f.key === r.key)?.count ?? 0,
+                    base: compareAgainst.total || 1,
+                  }
+                : null
+            }
+            tracks={tracks}
+          />
+        ))}
+      </Panel>
+
+      <Panel title="Per-day completion">
+        {m.perDayCounts.map((cnt, i) => (
+          <ComparisonRow
+            key={i}
+            metricKey={`perday_day${i + 1}`}
+            label={`Day ${i + 1}`}
+            count={cnt}
+            base={m.perDayEligible[i] || 0}
+            color="#fff"
+            compare={
+              compareAgainst
+                ? {
+                    count: compareAgainst.perDayCounts[i] ?? 0,
+                    base: compareAgainst.perDayEligible[i] || 0,
+                  }
+                : null
+            }
+            tracks={tracks}
+          />
+        ))}
+      </Panel>
+
+      <Panel title="Check-ins">
+        <CheckInSummary label="Day 3" counts={m.checkIn3} />
+        <CheckInSummary label="Day 6" counts={m.checkIn6} />
+      </Panel>
+    </div>
+  );
+}
+
+// ── Reusable pieces ─────────────────────────────────────────────────
+
+function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        borderRadius: 12,
+        padding: 14,
+        marginBottom: 12,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 10,
+          fontWeight: 600,
+          letterSpacing: 1.2,
+          color: "rgba(255,255,255,0.55)",
+          textTransform: "uppercase",
+          marginBottom: 10,
+        }}
+      >
+        {title}
+      </div>
+      <div style={{ display: "grid", gap: 6 }}>{children}</div>
+    </div>
+  );
+}
+
+function ComparisonRow({
+  metricKey,
+  label,
+  count,
+  base,
+  color,
+  compare,
+  tracks,
+}: {
+  metricKey: string;
+  label: string;
+  count: number;
+  base: number;
+  color: string;
+  compare: { count: number; base: number } | null;
+  tracks: Set<string>;
+}) {
+  const pct = base === 0 ? 0 : (count / base) * 100;
+  const comparePct =
+    compare && compare.base > 0 ? (compare.count / compare.base) * 100 : null;
+  const deltaPp = comparePct !== null ? pct - comparePct : null;
+  const isTracked = tracks.has(metricKey);
+  const direction = METRIC_DIRECTIONS[metricKey] ?? "higher_better";
+
+  // Border color logic — only on tracked metrics in the NEW column (where `compare` is set)
+  let borderColor: string | null = null;
+  if (isTracked && compare !== null) {
+    if (deltaPp === null || Math.abs(deltaPp) < 0.5) {
+      borderColor = "#DAA520"; // tracked but no change yet
+    } else {
+      const improved =
+        direction === "higher_better" ? deltaPp > 0 : deltaPp < 0;
+      borderColor = improved ? "#359033" : "#C03E06";
+    }
+  } else if (isTracked && compare === null) {
+    // Baseline column: subtle yellow tint so eye still lands there
+    borderColor = "rgba(218,165,32,0.4)";
+  }
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr auto",
+        alignItems: "center",
+        gap: 8,
+        padding: "5px 0 5px 8px",
+        borderLeft: borderColor ? `3px solid ${borderColor}` : "3px solid transparent",
+      }}
+    >
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {label}
+        </div>
+        <div
+          style={{
+            height: 4,
+            background: "rgba(255,255,255,0.06)",
+            borderRadius: 2,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              width: `${Math.min(pct, 100)}%`,
+              height: "100%",
+              background: color,
+            }}
+          />
+        </div>
+      </div>
+      <div
+        style={{
+          fontSize: 12,
+          fontVariantNumeric: "tabular-nums",
+          textAlign: "right",
+          minWidth: 90,
+        }}
+      >
+        <div style={{ color: "#fff", fontWeight: 500 }}>
+          {base === 0 ? (
+            <span style={{ color: "rgba(255,255,255,0.35)" }}>—</span>
+          ) : (
+            <>
+              {pct.toFixed(1)}%
+              <span style={{ color: "rgba(255,255,255,0.4)", marginLeft: 6, fontWeight: 400 }}>
+                {count}/{base}
+              </span>
+            </>
+          )}
+        </div>
+        {deltaPp !== null && Math.abs(deltaPp) >= 0.5 && (
+          <div
+            style={{
+              fontSize: 10,
+              marginTop: 2,
+              color:
+                (METRIC_DIRECTIONS[metricKey] === "lower_better" ? deltaPp < 0 : deltaPp > 0)
+                  ? "#5AB758"
+                  : "#E06A3F",
+            }}
+          >
+            {deltaPp > 0 ? "+" : ""}{deltaPp.toFixed(1)}pp
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CheckInSummary({ label, counts }: { label: string; counts: CheckInCounts }) {
+  const total = counts.total;
+  if (total === 0) {
+    return (
+      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", padding: "4px 8px" }}>
+        {label}: no answers yet.
+      </div>
+    );
+  }
+  const rows = [
+    { key: "yes", label: "Yes — looser", color: "#359033", count: counts.yes },
+    { key: "not_sure", label: "Not sure", color: "#DAA520", count: counts.not_sure },
+    { key: "no", label: "No — still tight", color: "#C03E06", count: counts.no },
+  ];
+  return (
+    <div style={{ padding: "6px 0" }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "#fff", marginBottom: 6 }}>
+        {label}{" "}
+        <span style={{ color: "rgba(255,255,255,0.5)", fontWeight: 400 }}>
+          ({total} answered)
+        </span>
+      </div>
+      {rows.map((r) => {
+        const pct = (r.count / total) * 100;
+        return (
+          <div
+            key={r.key}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "10px 1fr auto",
+              gap: 6,
+              alignItems: "center",
+              padding: "2px 0",
+              fontSize: 11,
+            }}
+          >
+            <span style={{ width: 6, height: 6, background: r.color, borderRadius: 1 }} />
+            <span style={{ color: "rgba(255,255,255,0.85)" }}>{r.label}</span>
+            <span style={{ color: "rgba(255,255,255,0.7)", fontVariantNumeric: "tabular-nums" }}>
+              {pct.toFixed(0)}% ({r.count})
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function GenderTabs({
   selected,
@@ -296,7 +683,7 @@ function GenderTabs({
         border: "1px solid rgba(255,255,255,0.08)",
         borderRadius: 999,
         padding: 3,
-        marginBottom: 20,
+        marginBottom: 16,
       }}
     >
       {GENDER_TABS.map((t) => {
@@ -326,413 +713,6 @@ function GenderTabs({
           </Link>
         );
       })}
-    </div>
-  );
-}
-
-// ── Outcomes strip — parallel outcomes (converted / cancelled) that
-// don't belong in the funnel because they're not strict-subset stages.
-
-function OutcomesStrip({
-  total,
-  converted,
-  cancelled,
-}: {
-  total: number;
-  converted: number;
-  cancelled: number;
-}) {
-  const base = total || 1;
-  const still =
-    total - converted - cancelled >= 0 ? total - converted - cancelled : 0;
-  const items = [
-    { label: "Converted", count: converted, color: "#359033" },
-    { label: "Cancelled", count: cancelled, color: "#C03E06" },
-    { label: "Still in trial", count: still, color: "rgba(255,255,255,0.55)" },
-  ];
-  return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-        gap: 10,
-        marginBottom: 20,
-      }}
-    >
-      {items.map((it) => {
-        const pct = (it.count / base) * 100;
-        return (
-          <div
-            key={it.label}
-            style={{
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.08)",
-              borderRadius: 12,
-              padding: "14px 16px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                fontSize: 11,
-                fontWeight: 600,
-                letterSpacing: 1.2,
-                textTransform: "uppercase",
-                color: "rgba(255,255,255,0.55)",
-                marginBottom: 8,
-              }}
-            >
-              <span
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: 2,
-                  background: it.color,
-                }}
-              />
-              {it.label}
-            </div>
-            <div
-              style={{
-                fontSize: 22,
-                fontWeight: 600,
-                color: "#fff",
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
-              {it.count.toLocaleString()}
-              <span
-                style={{
-                  fontSize: 13,
-                  color: "rgba(255,255,255,0.4)",
-                  fontWeight: 400,
-                  marginLeft: 8,
-                }}
-              >
-                {pct.toFixed(1)}%
-              </span>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Funnel panel (cumulative rows) ─────────────────────────────────
-
-function FunnelPanel({ rows }: { rows: Array<{ key: string; label: string; count: number }> }) {
-  const baseline = rows[0].count || 1;
-
-  return (
-    <div
-      style={{
-        background: "rgba(255,255,255,0.04)",
-        border: "1px solid rgba(255,255,255,0.08)",
-        borderRadius: 12,
-        padding: 16,
-        marginBottom: 20,
-      }}
-    >
-      <SectionTitle>Funnel</SectionTitle>
-      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 14 }}>
-        % of {baseline.toLocaleString()} trials that reached each stage.
-      </div>
-      <div style={{ display: "grid", gap: 6 }}>
-        {rows.map((r) => {
-          const pct = (r.count / baseline) * 100;
-          const isNegative = r.key === "cancelled";
-          const barColor = isNegative ? "#C03E06" : r.key === "converted" ? "#359033" : "#fff";
-          return (
-            <div
-              key={r.key}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "160px 1fr 110px",
-                alignItems: "center",
-                gap: 12,
-                padding: "6px 0",
-              }}
-            >
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)" }}>
-                {r.label}
-              </div>
-              <div
-                style={{
-                  height: 6,
-                  background: "rgba(255,255,255,0.06)",
-                  borderRadius: 3,
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    width: `${Math.min(pct, 100)}%`,
-                    height: "100%",
-                    background: barColor,
-                  }}
-                />
-              </div>
-              <div
-                style={{
-                  fontSize: 13,
-                  color: "rgba(255,255,255,0.75)",
-                  fontVariantNumeric: "tabular-nums",
-                  textAlign: "right",
-                }}
-              >
-                {pct.toFixed(1)}%
-                <span style={{ color: "rgba(255,255,255,0.35)", marginLeft: 8 }}>
-                  {r.count.toLocaleString()}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ── Per-day heatmap — where do people bail? ────────────────────────
-
-function PerDayPanel({
-  counts,
-  eligible,
-  day1,
-}: {
-  counts: number[];
-  eligible: number[];
-  day1: { distribution: number[]; neverOpened: number; maxTotal: number };
-}) {
-  return (
-    <div
-      style={{
-        background: "rgba(255,255,255,0.04)",
-        border: "1px solid rgba(255,255,255,0.08)",
-        borderRadius: 12,
-        padding: 16,
-        marginBottom: 20,
-      }}
-    >
-      <SectionTitle>Per-day completion</SectionTitle>
-      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 14 }}>
-        % of trials that completed each specific day, over trials old
-        enough to have reached it. Order-independent — someone can appear
-        on Day 4 without Day 3.
-      </div>
-      <div style={{ display: "grid", gap: 6 }}>
-        {counts.map((count, i) => {
-          const day = i + 1;
-          const elig = eligible[i];
-          const pct = elig === 0 ? 0 : (count / elig) * 100;
-
-          // Day 1 gets an interactive row with a hover breakdown.
-          if (day === 1) {
-            return (
-              <Day1HoverRow
-                key={day}
-                count={count}
-                eligible={elig}
-                distribution={day1.distribution}
-                neverOpened={day1.neverOpened}
-                maxTotal={day1.maxTotal}
-              />
-            );
-          }
-
-          return (
-            <div
-              key={day}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "80px 1fr 140px",
-                alignItems: "center",
-                gap: 12,
-                padding: "6px 0",
-              }}
-            >
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)" }}>
-                Day {day}
-              </div>
-              <div
-                style={{
-                  height: 6,
-                  background: "rgba(255,255,255,0.06)",
-                  borderRadius: 3,
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    width: `${Math.min(pct, 100)}%`,
-                    height: "100%",
-                    background: elig === 0 ? "rgba(255,255,255,0.2)" : "#fff",
-                  }}
-                />
-              </div>
-              <div
-                style={{
-                  fontSize: 13,
-                  color: "rgba(255,255,255,0.75)",
-                  fontVariantNumeric: "tabular-nums",
-                  textAlign: "right",
-                }}
-              >
-                {elig === 0 ? (
-                  <span style={{ color: "rgba(255,255,255,0.35)" }}>—</span>
-                ) : (
-                  <>
-                    {pct.toFixed(1)}%
-                    <span style={{ color: "rgba(255,255,255,0.35)", marginLeft: 8 }}>
-                      {count}/{elig}
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ── Check-in cards (Day 3, Day 6) — same layout as scalp-check-ins ─
-
-function CheckInCard({ day, counts }: { day: number; counts: CheckInCounts }) {
-  const total = counts.total;
-  interface Row { key: Answer; label: string; color: string; count: number; pct: number }
-  const rows: Row[] = [
-    { key: "yes",      label: "Yes — looser",     color: "#359033", count: counts.yes,      pct: 0 },
-    { key: "not_sure", label: "Not sure",         color: "#DAA520", count: counts.not_sure, pct: 0 },
-    { key: "no",       label: "No — still tight", color: "#C03E06", count: counts.no,       pct: 0 },
-  ];
-  for (const r of rows) r.pct = total === 0 ? 0 : (r.count / total) * 100;
-  rows.sort((a, b) => b.count - a.count);
-  const maxCount = rows[0]?.count || 1;
-
-  return (
-    <div
-      style={{
-        background: "rgba(255,255,255,0.04)",
-        border: "1px solid rgba(255,255,255,0.08)",
-        borderRadius: 12,
-        padding: 18,
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "baseline",
-          marginBottom: 16,
-          gap: 12,
-        }}
-      >
-        <div style={{ fontSize: 15, fontWeight: 600, color: "#fff" }}>
-          Day {day} check-in
-        </div>
-        <div
-          style={{
-            fontSize: 11,
-            color: "rgba(255,255,255,0.55)",
-            fontVariantNumeric: "tabular-nums",
-            fontWeight: 500,
-          }}
-        >
-          <span style={{ color: "#fff", fontWeight: 600 }}>
-            {total.toLocaleString()}
-          </span>{" "}
-          answered
-        </div>
-      </div>
-
-      {total === 0 ? (
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>
-          No responses yet.
-        </div>
-      ) : (
-        <div style={{ display: "grid", gap: 10 }}>
-          {rows.map((r) => (
-            <div key={r.key} style={{ display: "grid", gap: 5 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    fontSize: 13,
-                    color: "rgba(255,255,255,0.9)",
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: 2,
-                      background: r.color,
-                      display: "inline-block",
-                    }}
-                  />
-                  <span>{r.label}</span>
-                </div>
-                <div
-                  style={{
-                    fontSize: 13,
-                    fontVariantNumeric: "tabular-nums",
-                    color: "#fff",
-                    fontWeight: 500,
-                    display: "flex",
-                    gap: 8,
-                  }}
-                >
-                  <span>{r.pct.toFixed(1)}%</span>
-                  <span style={{ color: "rgba(255,255,255,0.4)", fontWeight: 400 }}>
-                    {r.count.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-              <div
-                style={{
-                  height: 6,
-                  background: "rgba(255,255,255,0.05)",
-                  borderRadius: 3,
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    width: `${Math.max((r.count / maxCount) * 100, r.count > 0 ? 2 : 0)}%`,
-                    height: "100%",
-                    background: r.color,
-                    borderRadius: 3,
-                  }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        fontSize: 11,
-        fontWeight: 600,
-        letterSpacing: 1.2,
-        color: "rgba(255,255,255,0.55)",
-        textTransform: "uppercase",
-        marginBottom: 4,
-      }}
-    >
-      {children}
     </div>
   );
 }
