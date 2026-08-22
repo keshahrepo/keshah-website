@@ -67,6 +67,43 @@ function isAnonymousId(id: string | undefined): boolean {
   return !!id && id.startsWith("$RCAnonymousID:");
 }
 
+// Match /api/funnel/save-profile — the format the mobile app expects for
+// its FreeV2 day calculation. Uses browser-style locale APIs (available
+// in Node 22 runtime). Offset computed from the timezone; if the tz is
+// unknown, both time formatting and offset fall back to UTC (offset 0).
+function buildStartDate(now: Date, timezone: string): {
+  date: string;
+  time: string;
+  timezone: string;
+  timeZoneOffsetInMins: number;
+} {
+  let date: string;
+  let time: string;
+  let offsetInMins = 0;
+  try {
+    date = now.toLocaleDateString("en-GB", { timeZone: timezone });
+    time = now
+      .toLocaleTimeString("en-US", {
+        timeZone: timezone,
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      })
+      .toUpperCase();
+    // Derive offset from the tz: compare "as-if-in-tz" epoch vs actual epoch.
+    const asTz = new Date(now.toLocaleString("en-US", { timeZone: timezone }));
+    const asUtc = new Date(now.toLocaleString("en-US", { timeZone: "UTC" }));
+    offsetInMins = Math.round((asTz.getTime() - asUtc.getTime()) / 60000);
+  } catch {
+    date = now.toLocaleDateString("en-GB", { timeZone: "UTC" });
+    time = now
+      .toLocaleTimeString("en-US", { timeZone: "UTC", hour: "2-digit", minute: "2-digit", hour12: true })
+      .toUpperCase();
+    timezone = "UTC";
+  }
+  return { date, time, timezone, timeZoneOffsetInMins: offsetInMins };
+}
+
 // Pick the first non-anonymous ID across (app_user_id, aliases). That's the
 // Firebase UID after `aliasToUser` ran on web. If everything is anonymous,
 // the user closed the browser before signup — we can't auto-recover.
@@ -283,6 +320,18 @@ async function reconcileFirestoreDoc(
   if (existing.starter_photos_submit_submitted_once !== true) {
     updates.starter_photos_submit_submitted_once = true;
     updates.starter_photos_submit_showed_once = true;
+  }
+  // Splash routing considers onboarding done when EITHER
+  // starter_photos_submit_submitted_once OR start_date is present. If
+  // we set the flag above without also seeding start_date, users who
+  // close the app mid-onboarding get sent straight to the dashboard,
+  // which then can't compute their day and renders a blank screen.
+  // Backfilling start_date here matches the pattern used by
+  // /api/funnel/save-profile for web purchasers. Uses the timezone
+  // stored on the user doc (or UTC as a safe fallback).
+  if (!existing.start_date) {
+    const tz = (existing.userLocalTimeZone as string | undefined) ?? "UTC";
+    updates.start_date = buildStartDate(new Date(), tz);
   }
   if (existing.is_deleted === undefined) updates.is_deleted = false;
 
