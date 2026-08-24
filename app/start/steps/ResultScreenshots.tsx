@@ -1,11 +1,17 @@
 "use client";
 
 // Direct port of result_screenshots.dart — full-screen tap-through.
-// Slide 0: intro headline
-// Slides 1..N (gif slides): full-bleed transformation GIFs (gender-aware)
-// Slides N+1..M (screenshot slides): tap-through testimonial JPEGs
-import { useMemo, useState } from "react";
+// Slides 0..N-1 (gif slides): full-bleed transformation GIFs (gender-aware)
+// Slides N..M (screenshot slides): tap-through testimonial JPEGs
+//
+// Intro slide ("This is what happens when your scalp loosens...") removed —
+// the cinematic beat momentHereIsWhatHappens now delivers that message right
+// before this page, so keeping an intro headline here would repeat the same
+// line back-to-back.
+import { useEffect, useMemo, useState } from "react";
+import { doc, getFirestore, serverTimestamp, setDoc } from "firebase/firestore";
 import { useFlow } from "../lib/flow-context";
+import { currentUser } from "../lib/firebase-client";
 import { lightHaptic, mediumHaptic } from "../lib/haptics";
 import styles from "./result-screenshots.module.css";
 
@@ -24,12 +30,15 @@ const MALE_GIFS = [
   "/start/results/proof_clip_6.mp4", // Venkatesh
 ];
 
+// Deliberate ordering: clips 5 / 1 / 4 lead because those are the strongest
+// visible transformations — the female funnel needs its best proof up front,
+// so we don't open on a weaker clip. Matches _femaleGifClips in mobile.
 const FEMALE_GIFS = [
+  "/start/results/women_clip_5.mp4",
   "/start/results/women_clip_1.mp4",
+  "/start/results/women_clip_4.mp4",
   "/start/results/women_clip_2.mp4",
   "/start/results/women_clip_3.mp4",
-  "/start/results/women_clip_4.mp4",
-  "/start/results/women_clip_5.mp4",
   "/start/results/women_clip_6.mp4",
 ];
 
@@ -98,11 +107,29 @@ export default function ResultScreenshots() {
     );
   }, [answers.gender]);
 
-  const totalSlides = 1 + gifs.length + screenshots.length;
-  const isIntro = index === 0;
-  const isGif = index >= 1 && index <= gifs.length;
-  const gifIndex = index - 1;
-  const screenshotIndex = index - 1 - gifs.length;
+  const totalSlides = gifs.length + screenshots.length;
+  const isGif = index < gifs.length;
+  const gifIndex = index;
+  const screenshotIndex = index - gifs.length;
+
+  // Milestone write — records when the user first landed on this step.
+  // Mirrors mobile's initState write to Users/{uid}. Merged, so re-entering
+  // this step (back-nav / resume) doesn't overwrite the original timestamp.
+  // Guarded: web /start (US) has no auth yet at this stage; /startindia has
+  // an anonymous UID from PhoneNumber. Skip silently when no user exists.
+  useEffect(() => {
+    const u = currentUser();
+    if (!u) return;
+    const db = getFirestore();
+    setDoc(
+      doc(db, "Users", u.uid),
+      { results_screenshots_started_at: serverTimestamp() },
+      { merge: true },
+    ).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.warn("[result-screenshots] milestone write failed", err);
+    });
+  }, []);
 
   const advance = () => {
     if (index >= totalSlides - 1) {
@@ -137,19 +164,8 @@ export default function ResultScreenshots() {
         />
       )}
 
-      {/* Intro slide */}
-      {isIntro && (
-        <div className={`${styles.intro} ${styles.fadeIn}`}>
-          <h1 className={styles.introHeadline}>
-            {answers.gender === "female"
-              ? "This is what happens with daily scalp massages..."
-              : "This is what happens with daily scalp exercises..."}
-          </h1>
-        </div>
-      )}
-
       {/* Screenshot slide */}
-      {!isIntro && !isGif && (
+      {!isGif && (
         <div className={`${styles.screenshotWrap} ${styles.fadeIn}`} key={`shot-${screenshotIndex}`}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -186,7 +202,7 @@ export default function ResultScreenshots() {
       )}
 
       {/* Bottom hint */}
-      <div className={styles.hint}>{isIntro ? "Tap to see" : "Tap to continue"}</div>
+      <div className={styles.hint}>Tap to continue</div>
     </div>
   );
 }

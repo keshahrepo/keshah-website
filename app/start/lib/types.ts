@@ -9,6 +9,8 @@ export type StartStep =
   | "firstName"
   | "phoneNumber"
   | "quizGender"
+  | "age"
+  | "referralSource"
   | "qualification"
   | "qualificationResponse"
   | "hairSituation"
@@ -21,15 +23,24 @@ export type StartStep =
   | "hairSymptoms"
   | "triggerContext"
   | "familyHistory"
+  | "familyHistoryMenResponse"
+  | "hardestPart"
+  | "hardestPartResponse"
   | "stressFrequency"
   | "stressFrequencyResponse"
   | "recentStressEvent"
+  | "hormonalChanges"
+  | "hormonalChangesResponse"
+  | "tightHairstyles"
+  | "tightHairstylesResponse"
   | "agitateInterstitial"
   | "phaseTransition"
   | "treatmentsTried"
   | "treatmentsResponse"
   | "hairGoal"
   | "goalResponse"
+  | "hairLossMedicationMen"
+  | "hairLossMedicationMenResponse"
   | "customerResults"
   | "commitment"
   | "supportNeeds"
@@ -44,12 +55,17 @@ export type StartStep =
   | "dailyRoutinePreview"
   | "videoSessionPreview"
   | "learningsPreview"
+  | "outcomePreview"
   | "guidesPreview"
   | "regrowthKitPreview"
   | "resultScreenshots"
   | "socialProof"
   | "treatmentReady"
   | "whyItHappens"
+  | "momentCheckYourScalp"
+  | "momentHereIsWhatHappens"
+  | "momentBuildYourPlan"
+  | "momentFounderFlashback"
   | "trialPaywall"
   | "signUp"
   | "purchaseSuccess"
@@ -64,10 +80,20 @@ export type StartStep =
 export const STEP_ORDER: StartStep[] = [
   "hook",
   "pinchTest",
+  // Cinematic auto-advancing beat right after the pinch test — primes the
+  // "here's why your scalp being tight matters" mechanism reveal.
+  "momentHereIsWhatHappens",
   "whyItHappens",
   "founderStory",
+  // Cinematic auto-advancing beat right before the quiz proper — reframes
+  // the transition into "let's check your scalp".
+  "momentCheckYourScalp",
   "quizIntro",
   "quizGender",
+  // Facebook-ad-targeting-aligned age bucket, then referral-source
+  // attribution capture. Both shared across genders.
+  "age",
+  "referralSource",
   // Quiz section — most steps gender-branch internally. Qualification +
   // Commitment are the universal hard gates. Severity / FamilyHistory /
   // StressFrequency are men-specific (auto-skip on women). HairSymptoms /
@@ -87,12 +113,32 @@ export const STEP_ORDER: StartStep[] = [
   "hairSymptoms",
   "triggerContext",
   "familyHistory",
+  // Universal reframe interstitial after familyHistory — auto-skips on
+  // no / not_sure so we don't argue against a non-belief.
+  "familyHistoryMenResponse",
+  // Universal empathy beat + personalized response. Shared step per task
+  // override even though the mobile filename says men-only.
+  "hardestPart",
+  "hardestPartResponse",
   "stressFrequency",
   // Educational interstitial after stressFrequency (cortisol mechanism).
   "stressFrequencyResponse",
   // Women-only acute-stress screen, auto-skips on men.
   "recentStressEvent",
+  // Women-only hormonal-shifts single-pick + conditional reassurance
+  // interstitial (only fires for postpartum / menopause / birth_control).
+  "hormonalChanges",
+  "hormonalChangesResponse",
+  // Women-only traction / tight-hairstyles single-pick + conditional
+  // reassurance interstitial (only fires for daily / sometimes).
+  "tightHairstyles",
+  "tightHairstylesResponse",
   "hairGoal",
+  // Universal medication yes/no question + reassurance interstitial
+  // (mobile filename kept the historical `_men` suffix but the step is
+  // now shared across genders).
+  "hairLossMedicationMen",
+  "hairLossMedicationMenResponse",
   // CustomerResults removed from the flow for now — placeholder
   // testimonials weren't landing. Step registry/types still exist so we
   // can re-enable later without re-wiring.
@@ -112,8 +158,18 @@ export const STEP_ORDER: StartStep[] = [
   "dailyRoutinePreview",
   "videoSessionPreview",
   "learningsPreview",
+  // Dashboard-preview outcome anchor — dates the 60-day promise and shows
+  // the app the user is signing up for. Sits between plan preview and
+  // results / social proof / paywall.
+  "outcomePreview",
   "resultScreenshots",
+  // Cinematic transition beat right before social proof — "let's build
+  // your plan".
+  "momentBuildYourPlan",
   "socialProof",
+  // Cinematic 3-beat founder flashback — replays the founder-story emotional
+  // callback right before the trial paywall.
+  "momentFounderFlashback",
   // 5-guide swipeable preview — sits as the last step before the paywall
   // so the offer's bonus reveal is top-of-mind when the user lands on
   // pricing. Only renders on Us3-pricing funnels (/startus3, /mandy, /f/);
@@ -221,4 +277,36 @@ export interface QuizAnswers {
   /** Phone number in E.164 format (e.g., +919999999999). Collected on
    *  /startindia for WhatsApp nurture. Required for India funnel. */
   phoneNumber?: string;
+  /** Age bucket — matches Facebook ad-targeting slices ("18-24", "25-34",
+   *  "35-44", "45-54", "55+"). Persisted to Firestore field `age_range`
+   *  (AppConsts.ageRangeFieldName on mobile). */
+  ageRange?: string;
+  /** Attribution — how the user heard about KESHAH. Stable ids
+   *  ('healthcare_professional' / 'founder_aadi' / 'educator_jennifer' /
+   *  'educator_donna' / 'friend_or_family' / 'other'). Persisted to
+   *  Firestore field `referral_source`. */
+  referralSource?: string;
+  /** Medication yes/no. Universal question (mobile step is still named
+   *  `_men` for legacy reasons). Persisted to Firestore field
+   *  `hair_loss_medication`. Values: 'yes' | 'no'. */
+  hairLossMedication?: string;
+  /** Legacy alias read by the response step from the same question — the
+   *  response step reads via type-cast under this key. Kept for forward
+   *  compatibility with any resume state that stored the answer under the
+   *  legacy `_men` suffix. */
+  hairLossMedicationMen?: string;
+  /** Women-only — hormonal changes single-pick. Ids: 'postpartum' /
+   *  'menopause' / 'birth_control' / 'none' / 'not_sure'. Persisted to
+   *  Firestore field `hormonal_changes`. Only the first three ids fire
+   *  the follow-up reassurance interstitial. */
+  hormonalChanges?: string;
+  /** Women-only — traction / tight-hairstyle frequency. Ids: 'daily' /
+   *  'sometimes' / 'rarely'. Persisted to Firestore field `tight_hairstyles`.
+   *  Only 'daily' / 'sometimes' fire the follow-up reassurance. */
+  tightHairstyles?: string;
+  /** Universal empathy single-pick — most challenging part of the user's
+   *  hair-loss journey. Ids: 'nothing_works' / 'dont_know' /
+   *  'seeing_worse' / 'hiding'. Persisted to Firestore field
+   *  `hardest_part`. Drives the personalized empathy interstitial. */
+  hardestPart?: string;
 }

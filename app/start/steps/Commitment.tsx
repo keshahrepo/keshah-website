@@ -45,7 +45,7 @@ export default function Commitment() {
   return (
     <div className={styles.root}>
       <div className={styles.body}>
-        <h1 className={styles.headline}>{`Can you commit 20 minutes to ${term} daily?`}</h1>
+        <h1 className={styles.headline}>KESHAH is not a quick fix. Can you commit 20 minutes a day?</h1>
       </div>
 
       <div className={styles.footer}>
@@ -54,7 +54,7 @@ export default function Commitment() {
         </button>
         <button type="button" className={styles.outline} onClick={handleNo}>
           <span className={styles.outlineMain}>No, I can&apos;t</span>
-          <span className={styles.outlineSub}>{`${Term} may not be the right fit for you`}</span>
+          <span className={styles.outlineSub}>KESHAH may not be the right fit for you</span>
         </button>
       </div>
     </div>

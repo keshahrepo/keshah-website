@@ -14,6 +14,8 @@ import QuizIntro from "../steps/QuizIntro";
 import FirstName from "../steps/FirstName";
 import PhoneNumber from "../steps/PhoneNumber";
 import QuizGender from "../steps/QuizGender";
+import Age from "../steps/Age";
+import ReferralSource from "../steps/ReferralSource";
 import Qualification from "../steps/Qualification";
 import QualificationResponse from "../steps/QualificationResponse";
 import PinchTest from "../steps/PinchTest";
@@ -27,9 +29,16 @@ import HairLossRateResponse from "../steps/HairLossRateResponse";
 import HairSymptoms from "../steps/HairSymptoms";
 import TriggerContext from "../steps/TriggerContext";
 import FamilyHistory from "../steps/FamilyHistory";
+import FamilyHistoryMenResponse from "../steps/FamilyHistoryMenResponse";
+import HardestPart from "../steps/HardestPart";
+import HardestPartResponse from "../steps/HardestPartResponse";
 import StressFrequency from "../steps/StressFrequency";
 import StressFrequencyResponse from "../steps/StressFrequencyResponse";
 import RecentStressEvent from "../steps/RecentStressEvent";
+import HormonalChanges from "../steps/HormonalChanges";
+import HormonalChangesResponse from "../steps/HormonalChangesResponse";
+import TightHairstyles from "../steps/TightHairstyles";
+import TightHairstylesResponse from "../steps/TightHairstylesResponse";
 import AgitateInterstitial from "../steps/AgitateInterstitial";
 import PhaseTransition from "../steps/PhaseTransition";
 import ScalpTightAck from "../steps/ScalpTightAck";
@@ -38,6 +47,8 @@ import TreatmentsTried from "../steps/TreatmentsTried";
 import TreatmentsResponse from "../steps/TreatmentsResponse";
 import HairGoal from "../steps/HairGoal";
 import GoalResponse from "../steps/GoalResponse";
+import HairLossMedicationMen from "../steps/HairLossMedicationMen";
+import HairLossMedicationMenResponse from "../steps/HairLossMedicationMenResponse";
 import CustomerResults from "../steps/CustomerResults";
 import Commitment from "../steps/Commitment";
 import SupportNeeds from "../steps/SupportNeeds";
@@ -49,6 +60,7 @@ import TechniquesPreview from "../steps/TechniquesPreview";
 import DailyRoutinePreview from "../steps/DailyRoutinePreview";
 import VideoSessionPreview from "../steps/VideoSessionPreview";
 import LearningsPreview from "../steps/LearningsPreview";
+import OutcomePreview from "../steps/OutcomePreview";
 import GuidesPreview from "../steps/GuidesPreview";
 import RegrowthKitPreview from "../steps/RegrowthKitPreview";
 import ResultScreenshots from "../steps/ResultScreenshots";
@@ -57,6 +69,10 @@ import TreatmentReady from "../steps/TreatmentReady";
 import TrialPaywall from "../steps/TrialPaywall";
 import PurchaseSuccess from "../steps/PurchaseSuccess";
 import WhyItHappens from "../steps/WhyItHappens";
+import MomentCheckYourScalp from "../steps/MomentCheckYourScalp";
+import MomentHereIsWhatHappens from "../steps/MomentHereIsWhatHappens";
+import MomentBuildYourPlan from "../steps/MomentBuildYourPlan";
+import MomentFounderFlashback from "../steps/MomentFounderFlashback";
 
 // Step components may return null when they auto-skip themselves
 // (e.g. TreatmentsResponse skipping when no branch matches the user's
@@ -70,6 +86,8 @@ const STEP_COMPONENTS: Partial<Record<StartStep, () => React.ReactElement | null
   firstName: FirstName,
   phoneNumber: PhoneNumber,
   quizGender: QuizGender,
+  age: Age,
+  referralSource: ReferralSource,
   qualification: Qualification,
   qualificationResponse: QualificationResponse,
   hairSituation: HairSituation,
@@ -82,15 +100,24 @@ const STEP_COMPONENTS: Partial<Record<StartStep, () => React.ReactElement | null
   hairSymptoms: HairSymptoms,
   triggerContext: TriggerContext,
   familyHistory: FamilyHistory,
+  familyHistoryMenResponse: FamilyHistoryMenResponse,
+  hardestPart: HardestPart,
+  hardestPartResponse: HardestPartResponse,
   stressFrequency: StressFrequency,
   stressFrequencyResponse: StressFrequencyResponse,
   recentStressEvent: RecentStressEvent,
+  hormonalChanges: HormonalChanges,
+  hormonalChangesResponse: HormonalChangesResponse,
+  tightHairstyles: TightHairstyles,
+  tightHairstylesResponse: TightHairstylesResponse,
   agitateInterstitial: AgitateInterstitial,
   phaseTransition: PhaseTransition,
   treatmentsTried: TreatmentsTried,
   treatmentsResponse: TreatmentsResponse,
   hairGoal: HairGoal,
   goalResponse: GoalResponse,
+  hairLossMedicationMen: HairLossMedicationMen,
+  hairLossMedicationMenResponse: HairLossMedicationMenResponse,
   customerResults: CustomerResults,
   commitment: Commitment,
   supportNeeds: SupportNeeds,
@@ -105,6 +132,7 @@ const STEP_COMPONENTS: Partial<Record<StartStep, () => React.ReactElement | null
   dailyRoutinePreview: DailyRoutinePreview,
   videoSessionPreview: VideoSessionPreview,
   learningsPreview: LearningsPreview,
+  outcomePreview: OutcomePreview,
   guidesPreview: GuidesPreview,
   regrowthKitPreview: RegrowthKitPreview,
   resultScreenshots: ResultScreenshots,
@@ -112,6 +140,10 @@ const STEP_COMPONENTS: Partial<Record<StartStep, () => React.ReactElement | null
   signUp: SignUp,
   treatmentReady: TreatmentReady,
   whyItHappens: WhyItHappens,
+  momentCheckYourScalp: MomentCheckYourScalp,
+  momentHereIsWhatHappens: MomentHereIsWhatHappens,
+  momentBuildYourPlan: MomentBuildYourPlan,
+  momentFounderFlashback: MomentFounderFlashback,
   trialPaywall: TrialPaywall,
   purchaseSuccess: PurchaseSuccess,
 };
@@ -161,7 +193,7 @@ export default function StartFlow() {
     if (pathname?.startsWith("/startus3")) {
       return {
         stepOrder: STEP_ORDER.filter((s) => s !== "signUp"),
-        storageKey: "keshah_start_state_us3_v1",
+        storageKey: "keshah_start_state_us3_v2",
       };
     }
     return { stepOrder: undefined, storageKey: undefined };

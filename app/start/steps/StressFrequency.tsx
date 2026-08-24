@@ -1,11 +1,16 @@
 "use client";
 
-// Men's stress frequency question with the under-question educational box
-// naming telogen effluvium. Trust escalation moment — most men have heard
-// "stress causes hair loss" but never seen the medical term, so naming it
-// here positions KESHAH as the people who actually know what's happening.
+// Men's belief question — do you think stress is contributing to your hair
+// loss? Self-diagnosis / attribution, not a frequency scale. Trust escalation
+// moment paired with the under-question educational box naming telogen
+// effluvium — most men have heard "stress causes hair loss" but never seen
+// the medical term, so naming it here positions KESHAH as the people who
+// actually know what's happening.
 //
-// Auto-skips on women.
+// Auto-skips on women (men-only beat per mobile source of truth).
+// "No" answer skips the stressFrequencyResponse interstitial — if the user
+// doesn't think stress is the cause, the cortisol-mechanism explainer isn't
+// relevant to them.
 
 import { useEffect } from "react";
 import { useFlow } from "../lib/flow-context";
@@ -15,19 +20,39 @@ import StepHeader from "../components/StepHeader";
 import { lightHaptic } from "../lib/haptics";
 import styles from "../start.module.css";
 
-const OPTIONS = ["All the time", "Sometimes", "Rarely", "Not sure"];
+const OPTIONS = [
+  { id: "yes", label: "Yes" },
+  { id: "maybe", label: "Maybe" },
+  { id: "no", label: "No" },
+];
 
 export default function StressFrequency() {
-  const { answers, updateAnswers, next, back } = useFlow();
-  // Renders for both genders — stress affects female hair cycles via
-  // cortisol/telogen effluvium and is a primary Hers diagnostic question.
-  void useFunnelConfig();
+  const { answers, updateAnswers, next, goTo, back } = useFlow();
+  const config = useFunnelConfig();
+  const isWomen = config.audience === "women" || answers.gender === "female";
+
+  useEffect(() => {
+    if (isWomen) next();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isWomen]);
+
+  if (isWomen) return null;
 
   const selected = answers.stressFrequency ?? "";
 
-  const handlePick = (label: string) => {
+  const handlePick = (id: string) => {
     lightHaptic();
-    updateAnswers({ stressFrequency: label });
+    updateAnswers({ stressFrequency: id });
+  };
+
+  const handleContinue = () => {
+    // "No" — user doesn't think stress is contributing. Skip past the
+    // cortisol-mechanism interstitial straight to the next question.
+    if (selected === "no") {
+      goTo("recentStressEvent");
+      return;
+    }
+    next();
   };
 
   return (
@@ -35,18 +60,18 @@ export default function StressFrequency() {
       <StepHeader onBack={back} />
       <div className={styles.stepInner}>
         <h1 className={styles.headline}>
-          How often do you experience stress?
+          Do you feel that stress could be contributing to your hair loss?
         </h1>
         <div className={styles.optionList}>
-          {OPTIONS.map((label) => {
-            const isSelected = selected === label;
+          {OPTIONS.map((opt) => {
+            const isSelected = selected === opt.id;
             return (
               <button
-                key={label}
+                key={opt.id}
                 className={`${styles.option} ${isSelected ? styles.optionSelected : ""}`}
-                onClick={() => handlePick(label)}
+                onClick={() => handlePick(opt.id)}
               >
-                <span>{label}</span>
+                <span>{opt.label}</span>
                 <span className={`${styles.optionCheck} ${isSelected ? styles.optionCheckActive : ""}`}>
                   {isSelected ? "✓" : ""}
                 </span>
@@ -56,7 +81,7 @@ export default function StressFrequency() {
         </div>
       </div>
       <div className={styles.buttonRow}>
-        <Button disabled={!selected} onClick={next}>
+        <Button disabled={!selected} onClick={handleContinue}>
           Continue
         </Button>
       </div>

@@ -69,10 +69,10 @@ export default function Qualification() {
   return (
     <div className={styles.root}>
       <div className={styles.body}>
-        <h1 className={styles.headline}>{`Are ${term}\nright for you?`}</h1>
+        <h1 className={styles.headline}>{`Is KESHAH right\nfor you?`}</h1>
 
         <div className={styles.lists}>
-          <div className={styles.sectionLabel}>{`${Term} work for:`}</div>
+          <div className={styles.sectionLabel}>KESHAH is for:</div>
           {forItems.map((item) => (
             <div key={item} className={styles.row}>
               <CheckIcon />
@@ -80,7 +80,7 @@ export default function Qualification() {
             </div>
           ))}
 
-          <div className={styles.sectionLabelGap}>Not for:</div>
+          <div className={styles.sectionLabelGap}>KESHAH is NOT for:</div>
           {NOT_FOR_ITEMS.map((item) => (
             <div key={item} className={styles.row}>
               <XIcon />
@@ -92,11 +92,11 @@ export default function Qualification() {
 
       <div className={styles.footer}>
         <button type="button" className={styles.primary} onClick={handleYes}>
-          Yes, this is right for me
+          KESHAH is right for me
         </button>
         <button type="button" className={styles.outline} onClick={handleNo}>
           <span className={styles.outlineMain}>Not right for me</span>
-          <span className={styles.outlineSub}>{`${Term} may not be the right fit for you`}</span>
+          <span className={styles.outlineSub}>KESHAH may not be the right fit for you</span>
         </button>
       </div>
     </div>

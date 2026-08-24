@@ -1,13 +1,13 @@
 "use client";
 
-// Men's family history question with the under-question "Why we ask" box —
-// builds clinical credibility mid-quiz by naming hereditary hair loss as
-// the most common cause. Hims-style trust escalation.
+// Post-familyHistoryMenResponse empathy beat. The answer picks which
+// personalized empathy message the user sees on the follow-up response
+// page — no branching skip, every answer gets a response.
 //
-// Auto-skips on women (whose triggerContext step covers genetic/hormonal
-// context with their own naming taxonomy).
+// Mobile source of truth: lib/screens/auth/post_auth_flow_2/pages/hardest_part.dart
+// Mobile Firestore field: `hardest_part` (AppConsts.hardestPartFieldName) —
+// mirror the id below so the persisted value matches across platforms.
 
-import { useEffect } from "react";
 import { useFlow } from "../lib/flow-context";
 import { useFunnelConfig } from "../lib/funnel-config";
 import Button from "../components/Button";
@@ -15,36 +15,38 @@ import StepHeader from "../components/StepHeader";
 import { lightHaptic } from "../lib/haptics";
 import styles from "../start.module.css";
 
-const OPTIONS = ["Yes", "Maybe", "No", "Not sure"];
-
 // Mirror mobile's _idByLabel table so the persisted Firestore value matches
-// across platforms (mobile app + web share the same user doc, and downstream
-// analytics like _insights_snapshot's family_history_men bucket key off the id).
+// across platforms (mobile app + web share the same user doc, and the
+// downstream HardestPartResponse interstitial keys off the id, not the label).
 const ID_BY_LABEL: Record<string, string> = {
-  Yes: "yes",
-  Maybe: "maybe",
-  No: "no",
-  "Not sure": "not_sure",
+  "Nothing I try works": "nothing_works",
+  "I don't know what to do": "dont_know",
+  "Seeing my hair get worse": "seeing_worse",
+  "Trying to hide my hair loss": "hiding",
 };
 
-export default function FamilyHistory() {
+const OPTIONS = Object.keys(ID_BY_LABEL);
+
+export default function HardestPart() {
   const { answers, updateAnswers, next, back } = useFlow();
-  // Renders for both genders — genetics matter for women's pattern thinning
-  // too. Hers asks every quiz-taker the same question.
+  // Shared step — every quiz-taker gets asked. Empathy resonates across
+  // genders and the follow-up response is written to land for both.
   void useFunnelConfig();
 
-  const selectedId = answers.familyHistory ?? "";
+  const selectedId = answers.hardestPart ?? "";
 
   const handlePick = (label: string) => {
     lightHaptic();
-    updateAnswers({ familyHistory: ID_BY_LABEL[label] });
+    updateAnswers({ hardestPart: ID_BY_LABEL[label] });
   };
 
   return (
     <div className={styles.stepBody}>
       <StepHeader onBack={back} />
       <div className={styles.stepInner}>
-        <h1 className={styles.headline}>Does hair loss run in your family?</h1>
+        <h1 className={styles.headline}>
+          What&apos;s been the most challenging part of your hair loss journey?
+        </h1>
         <div className={styles.optionList}>
           {OPTIONS.map((label) => {
             const isSelected = selectedId === ID_BY_LABEL[label];

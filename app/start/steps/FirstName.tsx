@@ -42,7 +42,6 @@ export default function FirstName() {
             inputMode="text"
             autoComplete="given-name"
             autoCapitalize="words"
-            placeholder="Your first name"
             value={value}
             onChange={(e) => setValue(e.target.value)}
             maxLength={40}

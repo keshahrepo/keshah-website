@@ -66,39 +66,13 @@ const SUPPORT_FULL: Record<SupportNeed, string> = {
   diet: "Diet guidance",
 };
 
-const MONTHS = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
-
-function targetDate(): { month: string; full: string } {
-  const d = new Date();
-  d.setDate(d.getDate() + 60);
-  const month = MONTHS[d.getMonth()];
-  const day = d.getDate();
-  const suffix = ordinalSuffix(day);
-  return { month, full: `${month} ${day}${suffix}` };
-}
-
-function ordinalSuffix(n: number): string {
-  const s = ["th", "st", "nd", "rd"];
-  const v = n % 100;
-  return s[(v - 20) % 10] || s[v] || s[0];
-}
+// NOTE: MONTHS / targetDate() / ordinalSuffix() were removed when the
+// subhead switched to the mobile 7-day risk-reversal sentence (no
+// `${month}` personalization). Restore them here before wiring any
+// future variant that needs a personalized target date.
 
 export default function TrialPaywall() {
   const { answers, next, updateAnswers } = useFlow();
-  const { month } = useMemo(targetDate, []);
   const [modalOpen, setModalOpen] = useState(false);
   // Us3 + women's-creator funnels show a "try free / guides + worst-best"
   // intermediate page after Continue, before the plan modal opens. Other
@@ -223,19 +197,16 @@ export default function TrialPaywall() {
     <div className={styles.root}>
       <div className={styles.scroll}>
         <div className={styles.inner}>
-          {/* Header */}
+          {/* Header — matches the mobile 7-day trial paywall: trial-first
+              headline + risk-reversal subhead. funnelConfig overrides still
+              honored so per-creator funnels can swap in bespoke copy. */}
           <div className={styles.header}>
             <h1 className={styles.headline}>
-              {funnelConfig.headlineOverride
-                ?? (useWomenWellnessFrame
-                  ? "Stop hair thinning in 60 days"
-                  : "Stop hair loss in 60 days")}
+              {funnelConfig.headlineOverride ?? "Try KESHAH free for a week."}
             </h1>
             <p className={styles.subhead}>
               {funnelConfig.subheadOverride
-                ?? (useWomenWellnessFrame
-                  ? `By end of ${month}, your hair thinning should stop. Then we'll help you maintain or regrow.`
-                  : `By end of ${month}, your hair fall should stop. Then we'll help you maintain or regrow.`)}
+                ?? "If your scalp feels looser in 7 days, keep going. If not, cancel and pay nothing."}
             </p>
           </div>
 
@@ -339,11 +310,29 @@ export default function TrialPaywall() {
         </div>
       </div>
 
-      {/* Sticky CTA */}
+      {/* Sticky CTA — mobile parity: 3-month pricing disclosure sits above
+          the button so the commitment is visible on the paywall itself,
+          not deferred to the plan modal. Fine print under the button
+          mirrors the mobile "no payment today" reassurance. */}
       <div className={styles.cta}>
+        <div
+          style={{
+            maxWidth: 560,
+            margin: "0 auto 10px",
+            textAlign: "center",
+            fontSize: 12,
+            fontWeight: 400,
+            lineHeight: 1.45,
+            color: "var(--text-70)",
+          }}
+        >
+          Plan starts at <strong style={{ fontWeight: 600, color: "var(--text)" }}>$33/month</strong>
+          {" "}(3-month commitment. Billed as $99 every 3 months). Cancel anytime.
+        </div>
         <button type="button" className={styles.ctaButton} onClick={handleContinue}>
-          Continue
+          Try 7 days free
         </button>
+        <div className={styles.ctaSub}>No payment today. Cancel in app anytime.</div>
       </div>
 
       {isUsFree && modalOpen ? (
@@ -604,28 +593,86 @@ function ChevronIcon({ open }: { open: boolean }) {
   );
 }
 
+// Timeline \u2014 mirrors the mobile trial paywall's 5-step, trial-anchored
+// journey. The IF-YOU-CONTINUE-AFTER-DAY-7 divider sits between the
+// in-trial beats (Today / Day 1-6 / Day 7) and the post-trial beats
+// (Day 60-90 / Day 90+) so the free-trial mechanic reads as a stage of
+// its own, not just another milestone.
+type TimelineItem =
+  | { kind: "milestone"; day: string; title: string; isFirst?: boolean; isLast?: boolean }
+  | { kind: "divider"; label: string };
+
 function Timeline() {
-  const milestones = [
-    { day: "Day 1\u20133", title: "Feel scalp get looser", isFirst: true },
-    { day: "Day 4\u201330", title: "Blood flow improves" },
-    { day: "Day 30\u201360", title: "Hair fall stops" },
-    { day: "Day 60+", title: "Maintain your results or regrow", isLast: true },
+  const items: TimelineItem[] = [
+    { kind: "milestone", day: "Today", title: "Full access unlocked. No payment.", isFirst: true },
+    { kind: "milestone", day: "Day 1\u20136", title: "Scalp starts to loosen." },
+    { kind: "milestone", day: "Day 7", title: "Plan starts. Cancel easily before then." },
+    { kind: "divider", label: "IF YOU CONTINUE AFTER DAY 7" },
+    { kind: "milestone", day: "Day 60\u201390", title: "Hair fall stops." },
+    { kind: "milestone", day: "Day 90+", title: "Keep your results.", isLast: true },
   ];
 
   return (
     <div className={styles.timeline}>
-      {milestones.map((m, i) => (
-        <div key={m.day} className={styles.milestone}>
-          <div className={styles.dotColumn}>
-            <div className={`${styles.dot} ${m.isFirst ? styles.dotFilled : ""}`} />
-            {i < milestones.length - 1 && <div className={styles.dotLine} />}
+      {items.map((item, i) => {
+        if (item.kind === "divider") {
+          return (
+            <div
+              key={`divider-${i}`}
+              style={{
+                display: "flex",
+                alignItems: "stretch",
+                minHeight: 0,
+              }}
+            >
+              <div
+                style={{
+                  width: 20,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <div
+                  style={{
+                    flex: 1,
+                    width: 1,
+                    background: "var(--fg-15)",
+                  }}
+                />
+              </div>
+              <div
+                style={{
+                  flex: 1,
+                  paddingLeft: 14,
+                  paddingTop: 4,
+                  paddingBottom: 18,
+                  fontSize: 10,
+                  fontWeight: 600,
+                  letterSpacing: 1.5,
+                  color: "var(--text-30)",
+                  alignSelf: "center",
+                }}
+              >
+                {item.label}
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div key={item.day} className={styles.milestone}>
+            <div className={styles.dotColumn}>
+              <div className={`${styles.dot} ${item.isFirst ? styles.dotFilled : ""}`} />
+              {i < items.length - 1 && <div className={styles.dotLine} />}
+            </div>
+            <div className={styles.milestoneText}>
+              <div className={styles.milestoneDay}>{item.day}</div>
+              <div className={styles.milestoneTitle}>{item.title}</div>
+            </div>
           </div>
-          <div className={styles.milestoneText}>
-            <div className={styles.milestoneDay}>{m.day}</div>
-            <div className={styles.milestoneTitle}>{m.title}</div>
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

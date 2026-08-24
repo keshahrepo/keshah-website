@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { doc, getFirestore, serverTimestamp, setDoc } from "firebase/firestore";
 import { useFlow } from "../lib/flow-context";
 import { useFunnelConfig } from "../lib/funnel-config";
+import { currentUser } from "../lib/firebase-client";
 import { lightHaptic, mediumHaptic } from "../lib/haptics";
 import { trackSubStep } from "../lib/funnel-track";
 import { buildBeats, type StoryBeat } from "./founder-story-data";
@@ -11,7 +13,7 @@ import DisqualificationScreen from "../components/DisqualificationScreen";
 import styles from "./founder-story.module.css";
 
 export default function FounderStory() {
-  const { next } = useFlow();
+  const { next, answers } = useFlow();
   const config = useFunnelConfig();
 
   // Three modes, gated in this order:
@@ -40,8 +42,93 @@ export default function FounderStory() {
         isLastScreen: i === creatorBeats.length - 1,
       }));
     }
-    return buildBeats();
-  }, [hasCreatorBeats, creatorBeats]);
+    // Post-process buildBeats() output so the rendered story matches mobile
+    // source of truth (KESHAH-Mobile-App/lib/screens/founder_story/…).
+    // Edits live here rather than in founder-story-data.tsx so this file
+    // stays the single owner of parity drifts while the data module keeps
+    // its 1:1 Flutter port shape.
+    const raw = buildBeats();
+    const rawFirstName = answers.firstName?.split(" ")[0]?.trim();
+    // Only greet when we actually have a name (e.g., /startindia collects
+    // firstName before founderStory). Otherwise fall through to the hook
+    // without a bare "Hey ." dangling.
+    const greeting = rawFirstName ? `Hey ${rawFirstName}.\n\n` : "";
+
+    const processed: StoryBeat[] = [];
+
+    // Mobile Beat 1: hook + optional personalized greeting. Web had dropped
+    // this beat entirely; restored so the story doesn't jump straight into
+    // the before-photo with no textual on-ramp.
+    processed.push({
+      text: `${greeting}4 years ago I was losing my hair. I thought nothing could fix it.\n\nHere's my story.`,
+    });
+
+    for (const beat of raw) {
+      // Drop the web-only n=1→n=many bridge beat ("But was it just me?" +
+      // Jonathon MP4). Mobile has no equivalent — the story goes straight
+      // from "My hair now." to the Huberman clip.
+      if (beat.text.startsWith("But was it just me?")) continue;
+
+      // Reddit beat: "scalp massages" (plural) → "scalp massage" (singular)
+      // to match mobile. Update both plain text and the rich JSX render.
+      if (beat.text.includes("real people on Reddit who said scalp massages")) {
+        processed.push({
+          ...beat,
+          text: beat.text.replace(
+            "scalp massages stopped their hair loss.",
+            "scalp massage stopped their hair loss.",
+          ),
+          rich: (
+            <>
+              I went down a rabbit hole. I found real people on Reddit who said scalp massage{" "}
+              <em>stopped</em> their hair loss.
+            </>
+          ),
+        });
+        continue;
+      }
+
+      // Restore mobile's three separate results-progression beats. Web had
+      // collapsed the day-1 and day-30 payoffs into a single screen and
+      // dropped the pivotal "after about a week … something was happening"
+      // beat entirely — the paywall intro calls back that exact italic
+      // "something", so the beat has to exist as its own screen.
+      if (
+        beat.text ===
+        "The first few days I could barely pinch my scalp at all. After 30 days it started to get much looser."
+      ) {
+        processed.push({
+          text: "The first few days I could barely pinch my scalp at all.",
+        });
+        processed.push({
+          text: "After about a week I felt that something was happening. My scalp felt a bit looser after I finished my sessions.",
+          rich: (
+            <>
+              After about a week I felt that <em>something</em> was happening. My scalp felt a bit
+              looser after I finished my sessions.
+            </>
+          ),
+        });
+        processed.push({
+          text: "By day 30 I could pinch and lift almost any part of my scalp.",
+        });
+        continue;
+      }
+
+      // "Built the app" beat — restore mobile canonical copy including the
+      // product name (KESHAH MechanoTherapy) that web had dropped.
+      if (beat.text.startsWith("So I put everything.")) {
+        processed.push({
+          text: "So I put everything. All my research. All the techniques. The exact plan I followed. All of it into an app. I called it KESHAH MechanoTherapy.",
+        });
+        continue;
+      }
+
+      processed.push(beat);
+    }
+
+    return processed;
+  }, [hasCreatorBeats, creatorBeats, answers.firstName]);
 
   const [index, setIndex] = useState(0);
   // Soft-exit state for creator funnels — when user picks "No, I'm good
@@ -65,6 +152,28 @@ export default function FounderStory() {
     const parent = hasCreatorBeats ? "creatorOrigin" : "founderStory";
     trackSubStep(parent, `beat_${index + 1}`);
   }, [index, skip, hasCreatorBeats]);
+
+  // Milestone write — matches mobile FounderStoryPage.initState which sets
+  // Users/{uid}.founder_story_started_at (serverTimestamp, merge). The
+  // dashboard onboarding funnel reads this field as the earliest "new-build
+  // started" signal, so without it web users never appear in the funnel.
+  // Guarded: /start (US) has no auth yet, /startindia has an anon UID from
+  // PhoneNumber — skip silently when no user exists so we don't error out.
+  useEffect(() => {
+    if (skip) return;
+    const u = currentUser();
+    if (!u) return;
+    const db = getFirestore();
+    setDoc(
+      doc(db, "Users", u.uid),
+      { founder_story_started_at: serverTimestamp() },
+      { merge: true },
+    ).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.warn("[founder-story] milestone write failed", err);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [skip]);
 
   if (skip) return null;
 

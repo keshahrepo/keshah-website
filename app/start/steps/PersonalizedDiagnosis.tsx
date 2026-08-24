@@ -149,14 +149,43 @@ function secondaryAxis(triggers: string[] | undefined, symptoms: string[] | unde
   return null;
 }
 
-function outcomeDate(): string {
+// Maps pinch-test answer to the adjective the mobile diagnosis sentence
+// uses. Kept 1:1 with mobile: muchTighter → 'very tight', aBitTighter →
+// 'a little tight', tighter / aboutSame / missing → 'tight'.
+function pinchAdjective(answer: string | undefined): string {
+  if (answer === "muchTighter") return "very tight";
+  if (answer === "aBitTighter") return "a little tight";
+  return "tight";
+}
+
+// Mobile ships a scheduled check-in dated three days from today (MMM DD),
+// which the user reads as a real commitment on the platform's side.
+function followUpDate(): string {
   const d = new Date();
-  d.setDate(d.getDate() + 60);
+  d.setDate(d.getDate() + 3);
   const months = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December",
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
   ];
-  return months[d.getMonth()];
+  return `${months[d.getMonth()]} ${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// Location-personalized focus bullet, matched to mobile's phrasing. The
+// hairline branch is gender-aware — women see 'hairline and temples' while
+// men see just 'hairline'.
+function focusLine(
+  hairLossLocation: string | undefined,
+  isWomen: boolean
+): string {
+  if (hairLossLocation === "hairline") {
+    return isWomen
+      ? "Focus on your hairline and temples"
+      : "Focus on your hairline";
+  }
+  if (hairLossLocation === "all_over") return "Focus on your entire scalp";
+  if (hairLossLocation === "part") return "Focus on your part";
+  if (hairLossLocation === "crown") return "Focus on your crown region";
+  return "Focus on your whole scalp";
 }
 
 export default function PersonalizedDiagnosis() {
@@ -180,10 +209,11 @@ export default function PersonalizedDiagnosis() {
   // Modeled on Noom / Hers' custom-plan reveal — strongest pre-paywall
   // screen in the funnel. TechniquesPreview auto-skips on women now.
   if (isWomen) {
-    const month = outcomeDate();
     const loc = locationSubhead(answers.hairLossLocation);
     const sec = secondaryAxis(answers.triggerContext, answers.hairSymptoms);
     const subhead = sec ? `Built for ${loc} and ${sec}.` : `Built for ${loc}.`;
+    const pinchAdj = pinchAdjective((answers as { pinchTestAnswer?: string }).pinchTestAnswer);
+    const followUp = followUpDate();
     return (
       <div className={startStyles.stepBody}>
         <StepHeader onBack={back} />
@@ -223,7 +253,7 @@ export default function PersonalizedDiagnosis() {
               margin: "0 0 24px",
             }}
           >
-            Your scalp is tight, which restricts blood flow. These techniques are proven to loosen your scalp and restore blood flow to your hair.
+            Your scalp is {pinchAdj} right now, and that&apos;s blocking blood flow to your hair. Here&apos;s how we&apos;re going to fix it.
           </p>
 
           {/* Six techniques grid — same thumbnails as TechniquesPreview,
@@ -299,10 +329,12 @@ export default function PersonalizedDiagnosis() {
             }}
           >
             {[
-              "6 scalp + neck techniques",
-              "Follow video-guidance for technique",
-              "15–20 minutes every day",
+              "Scalp massages + neck work",
+              "Video-guided routine",
+              "9 to 17 minutes every day",
               "Recommended to do before bed",
+              focusLine(answers.hairLossLocation, true),
+              "Message Aadi & team anytime",
             ].map((line) => (
               <div
                 key={line}
@@ -329,17 +361,55 @@ export default function PersonalizedDiagnosis() {
             ))}
           </div>
 
-          {/* Outcome line — concrete, dated. */}
+          {/* FOLLOW-UP block — dated commitment three days out, mirrors
+              the mobile plan-reveal check-in eyebrow. */}
+          <p
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: 0.8,
+              textTransform: "uppercase",
+              color: "var(--fg-55)",
+              margin: "0 0 4px",
+            }}
+          >
+            FOLLOW-UP · {followUp}
+          </p>
           <p
             style={{
               fontSize: 14,
               lineHeight: 1.5,
               color: "var(--fg-75)",
+              margin: "0 0 16px",
+            }}
+          >
+            In 3 days, we&apos;ll check if your scalp is starting to get looser.
+          </p>
+
+          {/* Reassurance / sign-off — removes the "do I also need supplements
+              or a diet?" friction right before the CTA. */}
+          <p
+            style={{
+              fontSize: 13,
+              lineHeight: 1.5,
+              color: "var(--fg-55)",
+              fontStyle: "italic",
+              margin: "0 0 16px",
+            }}
+          >
+            No medication, supplements, diet, or lifestyle changes needed. Most members see results with the routine alone.
+          </p>
+
+          {/* Trust footer — App Store rating + member count. */}
+          <p
+            style={{
+              fontSize: 12,
+              color: "var(--fg-55)",
               textAlign: "center",
               margin: 0,
             }}
           >
-            Most women see hair thinning reduce around day 45. By the end of {month}, your thinning should stop.
+            4.8 on the App Store · 25,000+ members
           </p>
         </div>
 
@@ -356,7 +426,13 @@ export default function PersonalizedDiagnosis() {
     );
   }
 
-  // Men's funnel — original two-column diagnosis layout, unchanged.
+  // Men's funnel — plan-reveal beat matching mobile plan_reveal. Keeps the
+  // web-only two-column comparison as the visual anchor and adds the mobile
+  // plan-list block (bullets + follow-up + reassurance + trust footer)
+  // underneath so the men's branch stops framing this as a diagnostic reveal
+  // and starts framing it as the plan hand-off.
+  const menPinchAdj = pinchAdjective((answers as { pinchTestAnswer?: string }).pinchTestAnswer);
+  const menFollowUp = followUpDate();
   return (
     <div className={startStyles.stepBody}>
       <StepHeader onBack={back} />
@@ -366,10 +442,21 @@ export default function PersonalizedDiagnosis() {
       >
         <h1
           className={startStyles.headline}
-          style={{ fontSize: 26 }}
+          style={{ fontSize: 28 }}
         >
-          Here&apos;s what&apos;s actually happening to your scalp.
+          Your plan is ready
         </h1>
+        <p
+          style={{
+            fontSize: 15,
+            lineHeight: 1.5,
+            color: "var(--fg-75)",
+            marginTop: 6,
+            marginBottom: 16,
+          }}
+        >
+          Your scalp is {menPinchAdj} right now, and that&apos;s blocking blood flow to your hair. Here&apos;s how we&apos;re going to fix it.
+        </p>
 
         {/* Hero animation — the page's single visual anchor. The two
             columns underneath read directly off the two vessels. */}
@@ -377,7 +464,7 @@ export default function PersonalizedDiagnosis() {
           style={{
             display: "flex",
             justifyContent: "center",
-            margin: "20px 0 8px",
+            margin: "8px 0 8px",
           }}
         >
           <BloodVesselAnimation width={320} height={200} />
@@ -393,6 +480,7 @@ export default function PersonalizedDiagnosis() {
             gridTemplateColumns: "1fr 1fr",
             gap: 12,
             marginTop: 8,
+            marginBottom: 20,
           }}
         >
           <FactorColumn
@@ -406,6 +494,100 @@ export default function PersonalizedDiagnosis() {
             items={buildHealthyOutcomes(answers.hairLossLocation)}
           />
         </div>
+
+        {/* Doctor's-plan list — mirrors mobile plan_reveal so the men's
+            branch reads as the plan hand-off, not just a diagnosis reveal. */}
+        <div
+          style={{
+            padding: "16px 0",
+            borderTop: "1px solid var(--fg-8)",
+            borderBottom: "1px solid var(--fg-8)",
+            marginBottom: 16,
+          }}
+        >
+          {[
+            "Scalp exercises + neck work",
+            "Video-guided routine",
+            "9 to 17 minutes every day",
+            "Recommended to do before bed",
+            focusLine(answers.hairLossLocation, false),
+            "Message Aadi & team anytime",
+          ].map((line) => (
+            <div
+              key={line}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "6px 0",
+                fontSize: 14,
+                lineHeight: 1.4,
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path
+                  d="M2 7L6 11L12 4"
+                  stroke="var(--text)"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <span>{line}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* FOLLOW-UP block — dated commitment three days out, mirrors
+            the mobile plan-reveal check-in eyebrow. */}
+        <p
+          style={{
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: 0.8,
+            textTransform: "uppercase",
+            color: "var(--fg-55)",
+            margin: "0 0 4px",
+          }}
+        >
+          FOLLOW-UP · {menFollowUp}
+        </p>
+        <p
+          style={{
+            fontSize: 14,
+            lineHeight: 1.5,
+            color: "var(--fg-75)",
+            margin: "0 0 16px",
+          }}
+        >
+          In 3 days, we&apos;ll check if your scalp is starting to get looser.
+        </p>
+
+        {/* Reassurance / sign-off — removes the "do I also need supplements
+            or a diet?" friction right before the CTA. */}
+        <p
+          style={{
+            fontSize: 13,
+            lineHeight: 1.5,
+            color: "var(--fg-55)",
+            fontStyle: "italic",
+            margin: "0 0 16px",
+          }}
+        >
+          No medication, supplements, diet, or lifestyle changes needed. Most members see results with the routine alone.
+        </p>
+
+        {/* Trust footer — App Store rating + member count. */}
+        <p
+          style={{
+            fontSize: 12,
+            color: "var(--fg-55)",
+            textAlign: "center",
+            margin: 0,
+          }}
+        >
+          4.8 on the App Store · 25,000+ members
+        </p>
       </div>
 
       <div className={startStyles.buttonRow}>
@@ -414,7 +596,7 @@ export default function PersonalizedDiagnosis() {
           className={startStyles.button}
           onClick={handleContinue}
         >
-          See how to fix it
+          Continue
         </button>
       </div>
     </div>

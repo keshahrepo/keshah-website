@@ -9,7 +9,7 @@
 // behaves identically — viewers never watched the clips here anyway,
 // they registered motion-blur proof through the gradient overlay.
 import { useFlow } from "../lib/flow-context";
-import { useFunnelConfig, practiceTerm } from "../lib/funnel-config";
+import { useFunnelConfig } from "../lib/funnel-config";
 import { mediumHaptic } from "../lib/haptics";
 import styles from "./social-proof.module.css";
 
@@ -39,7 +39,6 @@ const WOMEN_ROW = [
 export default function SocialProof() {
   const { next, answers } = useFlow();
   const config = useFunnelConfig();
-  const term = practiceTerm(config.audience, answers.gender);
   const isLight = config.theme === "light";
   const isWomen = config.audience === "women" || answers.gender === "female";
 
@@ -47,6 +46,14 @@ export default function SocialProof() {
     mediumHaptic();
     next();
   };
+
+  // Freshness stamp — matches the mobile "as of {Mon Day}" proof anchor so the
+  // number reads as a recent count, not a stale hero stat. Formatted en-US to
+  // guarantee the "Aug 24" shape regardless of the visitor's locale.
+  const formattedDate = new Date().toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
 
   // Light-theme overrides — re-defines the CSS variables the .module.css
   // consumes so every text/background colour flips to cream palette without
@@ -91,8 +98,8 @@ export default function SocialProof() {
         <div className={styles.bigNumber}>{isWomen ? "8,538+" : "26,538+"}</div>
         <p className={styles.tagline}>{
           isWomen
-            ? "women are reversing their hair thinning with KESHAH scalp massages"
-            : `people are reversing their hair loss with KESHAH ${term}`
+            ? `women have started KESHAH in the last 60 days · as of ${formattedDate}`
+            : `men have started KESHAH in the last 60 days · as of ${formattedDate}`
         }</p>
 
         <div className={styles.starsRow}>
@@ -101,7 +108,7 @@ export default function SocialProof() {
         </div>
 
         <button type="button" className={styles.button} onClick={handleContinue}>
-          Continue
+          Join them
         </button>
       </div>
     </div>
