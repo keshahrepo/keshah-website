@@ -41,10 +41,10 @@ export default function LandingPage() {
           transition={{ duration: 0.6, ease: [0, 0, 0.2, 1] }}
           style={{
             fontFamily: "Poppins, sans-serif",
-            fontSize: 24,
+            fontSize: 28,
             fontWeight: 600,
             lineHeight: 1.25,
-            letterSpacing: "-0.5px",
+            letterSpacing: "-0.6px",
             color: "#fff",
             margin: 0,
           }}
