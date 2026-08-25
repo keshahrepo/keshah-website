@@ -76,6 +76,34 @@ export default function SuccessClient({
   url.searchParams.set("uid", initialClaim.uid);
   const universalLinkHref = url.toString();
 
+  // Custom-URL-scheme fallback for cases where Universal Links don't fire:
+  //   - Tap originates on same-domain (Safari treats same-origin links as
+  //     in-Safari navigation, doesn't ask iOS to intercept)
+  //   - Tap originates inside an in-app browser (WhatsApp, IG, TikTok,
+  //     Facebook, Gmail all hijack link handling and never surface to iOS)
+  // The `keshah://` scheme is registered in Runner/Info.plist +
+  // AndroidManifest, so iOS/Android route it directly to the app. If the
+  // app isn't installed, the scheme fails silently — we time-out at 1.2s
+  // and redirect to the App Store as a backstop.
+  const customSchemeHref = `keshah://claim?ft=${encodeURIComponent(
+    initialClaim.ft,
+  )}&uid=${encodeURIComponent(initialClaim.uid)}`;
+
+  const handleOpenApp: React.MouseEventHandler<HTMLAnchorElement> = (e) => {
+    e.preventDefault();
+    // Try custom scheme first (works from in-app browsers + same-origin
+    // Safari taps that Universal Link misses).
+    window.location.href = customSchemeHref;
+    // If the app doesn't open, fall through to the App Store after 1.2s.
+    // If the app DOES open, iOS backgrounds Safari and this timer never
+    // effectively runs.
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    const storeUrl = isIOS ? APP_STORE_URL : PLAY_STORE_URL;
+    window.setTimeout(() => {
+      window.location.href = storeUrl;
+    }, 1200);
+  };
+
   return (
     <main
       style={{
@@ -118,6 +146,7 @@ export default function SuccessClient({
 
         <a
           href={universalLinkHref}
+          onClick={handleOpenApp}
           style={{
             display: "block",
             width: "100%",
