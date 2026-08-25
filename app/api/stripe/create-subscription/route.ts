@@ -17,7 +17,6 @@
 
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
-import { getFirebaseAdmin } from "@/lib/firebase-admin";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
@@ -64,9 +63,9 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: { email?: string; quizAnswers?: QuizAnswers };
+  let body: { quizAnswers?: QuizAnswers };
   try {
-    body = (await req.json()) as { email?: string; quizAnswers?: QuizAnswers };
+    body = (await req.json()) as { quizAnswers?: QuizAnswers };
   } catch {
     return NextResponse.json(
       { ok: false, error: "invalid_json_body" },
@@ -74,57 +73,19 @@ export async function POST(req: Request) {
     );
   }
 
-  const email = body.email?.trim().toLowerCase();
   const quiz: QuizAnswers = body.quizAnswers || {};
 
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return NextResponse.json(
-      { ok: false, error: "invalid_email" },
-      { status: 400 },
-    );
-  }
-
   try {
-    const { auth } = getFirebaseAdmin();
+    // No email required from the client — Stripe Checkout collects it
+    // directly (mandatory for subscriptions) and the webhook creates the
+    // Firebase user off customer_details.email once payment completes.
+    // Zero pre-payment friction — user just hits Stripe.
 
-    // 1. Get or create Firebase user (passwordless) — so we have a stable
-    //    UID BEFORE Stripe generates a customer. Every downstream write
-    //    (Firestore seed, RC alias) uses this uid.
-    let uid: string;
-    try {
-      const existing = await auth.getUserByEmail(email);
-      uid = existing.uid;
-    } catch (err) {
-      const code = (err as { code?: string })?.code;
-      if (code === "auth/user-not-found") {
-        const created = await auth.createUser({
-          email,
-          emailVerified: false,
-          disabled: false,
-        });
-        uid = created.uid;
-      } else {
-        throw err;
-      }
-    }
-
-    // 2. Stripe customer.
-    const customer = await stripe.customers.create({
-      email,
-      name: quiz.first_name ? str(quiz.first_name) : undefined,
-      metadata: {
-        app_user_id: uid,
-        uid,
-        email,
-        source: "web_onboarding_paywall",
-      },
-    });
-
-    // 3. Subscription metadata — attached to the subscription created
-    //    inside the Checkout Session so the webhook can read it.
+    // Subscription metadata — attached to the subscription created inside
+    // the Checkout Session so the webhook can seed the Firestore doc
+    // without another network hop.
     const gender = str(quiz.selected_gender || quiz.gender);
     const subscriptionMetadata: Record<string, string> = {
-      uid,
       plan_key: str(quiz.plan_key) || "stoppage_trial",
       product: "stoppage_subscription",
       source: "web_onboarding_paywall",
@@ -134,7 +95,6 @@ export async function POST(req: Request) {
       commitment_answer: str(quiz.commitment_answer),
       first_name: str(quiz.first_name),
       phone_number: str(quiz.phone_number),
-      email,
       referral_source: str(quiz.referral_source),
       signup_source: str(quiz.signup_source) || "web_onboarding",
       timezone: str(quiz.timezone),
@@ -142,13 +102,11 @@ export async function POST(req: Request) {
       trial_days: String(TRIAL_DAYS),
     };
 
-    // 4. Create the hosted Checkout Session.
+    // Create the hosted Checkout Session — Stripe generates the customer
+    // + collects the email during checkout.
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
-      customer: customer.id,
-      // client_reference_id is the uid — surfaces in checkout.session.completed
-      // webhook without having to expand subscription.
-      client_reference_id: uid,
+      customer_creation: "always",
       line_items: [
         {
           price: priceId,
@@ -159,16 +117,13 @@ export async function POST(req: Request) {
         trial_period_days: TRIAL_DAYS,
         metadata: subscriptionMetadata,
       },
-      // Also stash uid on the Session itself so the webhook can resolve
-      // even before the subscription object hydrates.
       metadata: {
-        uid,
         source: "web_onboarding_paywall",
       },
       success_url: SUCCESS_URL,
       cancel_url: CANCEL_URL,
       // Wallets (Apple Pay / Google Pay / Link) come on by default in
-      // subscription mode; nothing to enable.
+      // subscription mode.
       allow_promotion_codes: true,
     });
 
@@ -183,8 +138,6 @@ export async function POST(req: Request) {
       ok: true,
       url: session.url,
       sessionId: session.id,
-      uid,
-      customerId: customer.id,
     });
   } catch (err) {
     // eslint-disable-next-line no-console

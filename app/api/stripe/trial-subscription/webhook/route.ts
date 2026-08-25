@@ -140,17 +140,10 @@ export async function POST(req: Request) {
       case "customer.subscription.created": {
         const sub = event.data.object as Stripe.Subscription;
         const md = sub.metadata ?? {};
-        const uid = md.uid;
-        if (!uid) {
-          console.error(
-            "[stripe/trial-subscription/webhook] subscription.created missing uid metadata",
-            sub.id,
-          );
-          break;
-        }
 
-        // Pull email from the Stripe Customer object — metadata.email is
-        // a nice-to-have but the customer object is the source of truth.
+        // Pull email from the Stripe Customer object — Stripe Checkout
+        // collected it, we didn't pre-provide it. Customer email is
+        // authoritative for creating / finding the Firebase user.
         let customerEmail: string | null = md.email || null;
         try {
           const customerId =
@@ -165,6 +158,59 @@ export async function POST(req: Request) {
         } catch (e) {
           console.error(
             "[stripe/trial-subscription/webhook] customer lookup failed:",
+            e,
+          );
+        }
+
+        if (!customerEmail) {
+          console.error(
+            "[stripe/trial-subscription/webhook] subscription.created: no email on customer or metadata",
+            sub.id,
+          );
+          // Ack so Stripe stops retrying — this is a permanent error
+          // (Stripe subscription with no email is a config problem).
+          break;
+        }
+
+        // Create or reuse the Firebase user off the customer email. This
+        // is now the FIRST time this uid exists — pre-checkout API doesn't
+        // touch Firebase Auth anymore (moved from client-required-email to
+        // Stripe-Checkout-captured-email).
+        let uid: string;
+        try {
+          const existing = await auth.getUserByEmail(customerEmail);
+          uid = existing.uid;
+        } catch (err) {
+          const code = (err as { code?: string })?.code;
+          if (code === "auth/user-not-found") {
+            const created = await auth.createUser({
+              email: customerEmail,
+              emailVerified: false,
+              disabled: false,
+            });
+            uid = created.uid;
+          } else {
+            throw err;
+          }
+        }
+
+        // Backfill the uid onto the Stripe customer so RC + future
+        // webhooks can resolve the Firebase UID from Stripe.
+        try {
+          const customerId =
+            typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
+          if (customerId) {
+            await stripe.customers.update(customerId, {
+              metadata: { app_user_id: uid, uid, email: customerEmail },
+            });
+          }
+          // Also backfill on the subscription itself for downstream lookups.
+          await stripe.subscriptions.update(sub.id, {
+            metadata: { ...md, uid, email: customerEmail },
+          });
+        } catch (e) {
+          console.error(
+            "[stripe/trial-subscription/webhook] Stripe metadata backfill failed (non-fatal):",
             e,
           );
         }

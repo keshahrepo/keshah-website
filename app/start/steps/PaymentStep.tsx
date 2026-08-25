@@ -61,18 +61,10 @@ export default function PaymentStep() {
 
     (async () => {
       try {
-        const email = answers.email?.trim();
-        if (!email) {
-          setError(
-            "We couldn't find your email. Go back a step and re-enter it.",
-          );
-          return;
-        }
-
         const res = await fetch("/api/stripe/create-subscription", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, quizAnswers: answers }),
+          body: JSON.stringify({ quizAnswers: answers }),
         });
         const data = (await res.json().catch(() => ({}))) as {
           ok?: boolean;
