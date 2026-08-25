@@ -41,24 +41,24 @@ import { colors } from "../lib/tokens";
 // exactly — clip 7 intentionally precedes clip 6 because clip 6 (Venkatesh)
 // lands strongest as the closer.
 const MALE_GIF_CLIPS = [
-  "/start/results/proof_clip_1.gif", // Jonathon
-  "/start/results/proof_clip_2.gif", // Arush
-  "/start/results/proof_clip_3.gif", // Collin
-  "/start/results/proof_clip_4.gif",
-  "/start/results/proof_clip_5.gif",
-  "/start/results/proof_clip_7.gif",
-  "/start/results/proof_clip_6.gif", // Venkatesh
+  "/start/results/proof_clip_1.mp4", // Jonathon
+  "/start/results/proof_clip_2.mp4", // Arush
+  "/start/results/proof_clip_3.mp4", // Collin
+  "/start/results/proof_clip_4.mp4",
+  "/start/results/proof_clip_5.mp4",
+  "/start/results/proof_clip_7.mp4",
+  "/start/results/proof_clip_6.mp4", // Venkatesh
 ];
 
 // All 6 women clips. Order matches the Flutter source (clip 5 + 1 + 4 first
 // because those are the strongest visible transformations).
 const FEMALE_GIF_CLIPS = [
-  "/start/results/women_clip_5.gif",
-  "/start/results/women_clip_1.gif",
-  "/start/results/women_clip_4.gif",
-  "/start/results/women_clip_2.gif",
-  "/start/results/women_clip_3.gif",
-  "/start/results/women_clip_6.gif",
+  "/start/results/women_clip_5.mp4",
+  "/start/results/women_clip_1.mp4",
+  "/start/results/women_clip_4.mp4",
+  "/start/results/women_clip_2.mp4",
+  "/start/results/women_clip_3.mp4",
+  "/start/results/women_clip_6.mp4",
 ];
 
 // Cropped testimonial screenshots. Order mirrors the Flutter source.
@@ -197,11 +197,14 @@ export default function ResultScreenshotsStep() {
             transition={{ duration: 0.35, ease: [0, 0, 0.2, 1] }}
             style={{ position: "absolute", inset: 0 }}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <video
+              key={gifClips[gifIndex]}
               src={gifClips[gifIndex]}
-              alt=""
-              draggable={false}
+              autoPlay
+              loop
+              muted
+              playsInline
+              preload="auto"
               style={{
                 width: "100%",
                 height: "100%",
@@ -209,6 +212,29 @@ export default function ResultScreenshotsStep() {
                 display: "block",
               }}
             />
+            {/* Warm the browser cache for the NEXT 1-2 clips so tap-through
+                is instant. Hidden preload="auto" tags let the browser pull
+                the bytes while the current clip plays. */}
+            {[1, 2].map((offset) => {
+              const nextIdx = gifIndex + offset;
+              if (nextIdx >= gifClips.length) return null;
+              return (
+                <video
+                  key={`prefetch-${gifClips[nextIdx]}`}
+                  src={gifClips[nextIdx]}
+                  preload="auto"
+                  muted
+                  playsInline
+                  style={{
+                    position: "absolute",
+                    width: 1,
+                    height: 1,
+                    opacity: 0,
+                    pointerEvents: "none",
+                  }}
+                />
+              );
+            })}
           </motion.div>
         ) : (
           <motion.div

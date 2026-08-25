@@ -300,6 +300,22 @@ export default function FounderStoryStep() {
         overflow: "hidden",
       }}
     >
+      {/* Warm the browser cache for videos that appear later in the story
+          (Huberman clip on beat 24). Hidden preload="auto" lets the browser
+          pull the ~8MB while the user is still on the early beats. */}
+      <video
+        src="/start/video/huberman_clip.mp4"
+        preload="auto"
+        muted
+        playsInline
+        style={{
+          position: "absolute",
+          width: 1,
+          height: 1,
+          opacity: 0,
+          pointerEvents: "none",
+        }}
+      />
       {/* Full-screen background image + gradient overlay on visual beats */}
       {isFullScreen && (
         <AnimatePresence>
@@ -751,6 +767,7 @@ function StandardContent({
                 muted
                 loop
                 playsInline
+                preload="auto"
                 style={{
                   width: "100%",
                   height: "100%",
