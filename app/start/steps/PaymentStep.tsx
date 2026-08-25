@@ -107,15 +107,9 @@ export default function PaymentStep() {
               border: "3px solid rgba(255,255,255,0.15)",
               borderTopColor: colors.white,
               animation: "keshah-spin 700ms linear infinite",
-              marginBottom: 24,
             }}
           />
           <style>{`@keyframes keshah-spin { to { transform: rotate(360deg); } }`}</style>
-          <h1 style={HEADER_STYLE}>Redirecting to secure checkout…</h1>
-          <p style={SUB_STYLE}>
-            You&apos;ll finish payment on Stripe&apos;s secure page, then
-            come right back.
-          </p>
         </>
       ) : (
         <>
