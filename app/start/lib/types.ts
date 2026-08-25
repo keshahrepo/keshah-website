@@ -87,18 +87,23 @@ export type StartStep =
 // STEP_COMPONENTS in components/StartFlow.tsx. Gender / branch skipping is
 // handled by wrapper logic in the registry, not per-step.
 export const STEP_ORDER: StartStep[] = [
+  // v1: cold-traffic funnel optimised for cleanest conversion signal.
+  // firstName / phoneNumber / age / referralSource intentionally OMITTED —
+  // their components + StartFlow registry entries are still there so
+  // adding them back later is a one-line uncomment in this array.
+  // See discussion in ACTIVATION_PROPOSALS (or ask Aadi) for why.
+
   // Cold-traffic pre-quiz hook. Fresh users land here first from ads;
   // returning users skip it because flow-context resumes at their last step.
   "landingHook",
-  // Identity + demographics
-  "firstName",
-  "phoneNumber",
-  "quizGender",
-  "age",
-  "referralSource",
-  // Founder story + physical proof beat
+  // Deliver the story promise immediately — no forms between the hook and
+  // Aadi's narrative.
   "founderStory",
   "momentCheckYourScalp",
+  // quizGender is required for pinch-test personalization (male vs female
+  // photos) + hair-goal branching + female-only quiz beats, so it lives
+  // right before the physical-proof section.
+  "quizGender",
   "pinchTest",
   "momentHereIsWhatHappens",
   "resultScreenshots",

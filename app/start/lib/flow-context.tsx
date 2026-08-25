@@ -29,7 +29,7 @@ const FlowContext = createContext<FlowState | null>(null);
 // starts fresh at the new first step. Otherwise users mid-funnel resume at a
 // step that's no longer where they think it should be (e.g. founderStory when
 // pinchTest is now the opening step).
-const DEFAULT_STORAGE_KEY = "keshah_start_state_v19";
+const DEFAULT_STORAGE_KEY = "keshah_start_state_v20";
 
 interface PersistedState {
   step: StartStep;
