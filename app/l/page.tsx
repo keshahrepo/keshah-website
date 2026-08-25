@@ -71,7 +71,63 @@ export default function LandingPage() {
           How I stopped my genetic hair loss in 55 days without medication
         </motion.h1>
 
-        <div style={{ marginTop: 32, display: "flex", flexDirection: "column", gap: 20 }}>
+        {/* Before/After side-by-side — reuses the same hairline pair
+            from the founder story (public/start/story/) */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25, duration: 0.5, ease: [0, 0, 0.2, 1] }}
+          style={{
+            marginTop: 24,
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 8,
+          }}
+        >
+          {[
+            { src: "/start/story/before_hairline.jpg", label: "Day 0" },
+            { src: "/start/story/after_hairline.jpg", label: "Day 55" },
+          ].map(({ src, label }) => (
+            <div
+              key={label}
+              style={{
+                position: "relative",
+                aspectRatio: "3 / 4",
+                borderRadius: 12,
+                overflow: "hidden",
+                background: "#111",
+              }}
+            >
+              <Image
+                src={src}
+                alt={label}
+                fill
+                sizes="(max-width: 600px) 50vw, 300px"
+                style={{ objectFit: "cover" }}
+                priority
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  top: 10,
+                  left: 10,
+                  padding: "3px 8px",
+                  borderRadius: 999,
+                  background: "rgba(0,0,0,0.55)",
+                  color: "#fff",
+                  fontFamily: "Poppins, sans-serif",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  letterSpacing: 0.3,
+                }}
+              >
+                {label}
+              </div>
+            </div>
+          ))}
+        </motion.div>
+
+        <div style={{ marginTop: 28, display: "flex", flexDirection: "column", gap: 20 }}>
           {BULLETS.map((line, i) => (
             <motion.p
               key={i}
