@@ -1,26 +1,32 @@
 "use client";
 
-// Cold-traffic landing page — pre-quiz warmer for paid ads.
-// Copy locked by Aadi; do not edit words.
-// No logo header — headline + photo + 2 lines + CTA, all fits in
-// one viewport on mobile without scrolling.
+/**
+ * LandingHookStep — cold-traffic pre-quiz hook.
+ *
+ * The very first slide of the /start funnel. Job: give a cold ad-clicker
+ * enough context (mirror + proof + mechanism tease) that clicking "Show me"
+ * feels like curiosity, not commitment. Advances into founderStory (via
+ * whatever comes next in STEP_ORDER after landingHook).
+ *
+ * Copy locked by Aadi — do not edit words.
+ * No BackArrowWithAppLogo — this is the funnel entry, no back state exists.
+ */
 
-import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { KeshahButton } from "../start/components/primitives";
+import { KeshahButton } from "../components/primitives";
+import { useFlow } from "../lib/flow-context";
 
-export default function LandingPage() {
-  const router = useRouter();
+export default function LandingHookStep() {
+  const { next } = useFlow();
   return (
     <div
       style={{
-        height: "100dvh",
+        flex: 1,
+        minHeight: 0,
         display: "flex",
         flexDirection: "column",
-        background: "#000",
-        color: "#fff",
-        overflow: "hidden",
+        width: "100%",
       }}
     >
       <div
@@ -52,7 +58,6 @@ export default function LandingPage() {
           How I stopped my genetic hair loss in 55 days without medication
         </motion.h1>
 
-        {/* Before/After side-by-side */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -106,49 +111,39 @@ export default function LandingPage() {
           ))}
         </motion.div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <motion.p
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5, duration: 0.5, ease: [0, 0, 0.2, 1] }}
-            style={{
-              fontFamily: "Poppins, sans-serif",
-              fontSize: 15,
-              fontWeight: 500,
-              lineHeight: 1.5,
-              color: "#fff",
-              margin: 0,
-            }}
-          >
-            I used to be scared to run my hands through my hair because I
-            thought more would fall out. I learnt it was a &lsquo;tight-scalp&rsquo; problem.
-          </motion.p>
-          <motion.p
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.65, duration: 0.5, ease: [0, 0, 0.2, 1] }}
-            style={{
-              fontFamily: "Poppins, sans-serif",
-              fontSize: 15,
-              fontWeight: 500,
-              lineHeight: 1.5,
-              color: "#fff",
-              margin: 0,
-            }}
-          >
-            Let me show you how I fixed it (now I can pull on my hair with all
-            my force and it doesn&rsquo;t go anywhere :) )
-          </motion.p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {[
+            "I used to be scared to run my hands through my hair because I thought more would fall out.",
+            "Now I can pull on my hair with all my force and it doesn’t go anywhere :)",
+            "I learnt it was a ‘tight-scalp’ problem. Let me show you…",
+          ].map((line, i) => (
+            <motion.p
+              key={i}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 + i * 0.12, duration: 0.5, ease: [0, 0, 0.2, 1] }}
+              style={{
+                fontFamily: "Poppins, sans-serif",
+                fontSize: 15,
+                fontWeight: 500,
+                lineHeight: 1.5,
+                color: "#fff",
+                margin: 0,
+              }}
+            >
+              {line}
+            </motion.p>
+          ))}
         </div>
       </div>
 
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.85, duration: 0.5, ease: [0, 0, 0.2, 1] }}
+        transition={{ delay: 0.95, duration: 0.5, ease: [0, 0, 0.2, 1] }}
         style={{ padding: "0 25px 20px", flexShrink: 0 }}
       >
-        <KeshahButton expanded title="Show me" onTap={() => router.push("/start")} />
+        <KeshahButton expanded title="Show me" onTap={next} />
       </motion.div>
     </div>
   );

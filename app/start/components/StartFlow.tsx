@@ -5,6 +5,7 @@ import { FlowProvider, useFlow } from "../lib/flow-context";
 import { type StartStep } from "../lib/types";
 
 // Scratch-rebuild step components — one per entry in STEP_ORDER.
+import LandingHookStep from "../steps/LandingHookStep";
 import FirstNameStep from "../steps/FirstNameStep";
 import PhoneNumberStep from "../steps/PhoneNumberStep";
 import QuizGenderStep from "../steps/QuizGenderStep";
@@ -45,6 +46,7 @@ import TrialPaywall7DayStep from "../steps/TrialPaywall7DayStep";
 // Partial only because the StartStep union is a superset (it keeps legacy
 // step names for old peer components / dashboards to type-check).
 const STEP_COMPONENTS: Partial<Record<StartStep, () => ReactElement | null>> = {
+  landingHook: LandingHookStep,
   firstName: FirstNameStep,
   phoneNumber: PhoneNumberStep,
   quizGender: QuizGenderStep,

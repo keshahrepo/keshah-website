@@ -10,6 +10,9 @@ const nextConfig: NextConfig = {
     // permanently cache the redirect — leaves room to change destinations
     // later without users being stuck on cached 308s.
     return [
+      // /l used to be the standalone landing page; now baked in as the
+      // first step of /start.
+      { source: "/l", destination: "/start", permanent: false },
       { source: "/startus3", destination: "/start", permanent: false },
       { source: "/startus2", destination: "/start", permanent: false },
       { source: "/startus2/:path*", destination: "/start", permanent: false },
