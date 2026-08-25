@@ -108,14 +108,20 @@ async function findCheckoutSessionId(
 // RC dashboard.
 const RC_ENTITLEMENT_ID = "stoppage_treatment";
 
-// Grant the RC promotional entitlement so the mobile app (which calls
-// Purchases.logIn(firebaseUid)) sees the user as paid on next
-// getCustomerInfo()/syncPurchases(). Mirrors the Razorpay grant path in
-// /api/razorpay/start-trial.
+// Register the Stripe subscription with RC as a real "external purchase"
+// (Track External Purchases) so the mobile app (which calls
+// Purchases.logIn(firebaseUid)) sees it as a proper subscription — not a
+// promotional grant. RC then auto-tracks renewal/cancel/refund via its
+// own ingestion of Stripe events (webhook already registered on their
+// incoming URL). We do this manual POST at subscription.created so the
+// user unlocks INSTANTLY (no lag waiting for RC to poll Stripe).
 //
-// Uses duration:"custom" with end_time_ms = sub.current_period_end so RC's
-// expiry tracks Stripe's period exactly — subsequent invoice.paid webhooks
-// re-call this and RC updates the existing grant's expiry (idempotent).
+// Endpoint: POST /v1/receipts with X-Platform: stripe.
+// Auth: RC_STRIPE_PUBLIC_API_KEY (strp_...) — the platform-specific
+// public key for RC's Stripe integration. Different from
+// RC_API_SECRET_KEY (which is for admin ops like promotional grants).
+//
+// Idempotent: RC dedupes by (app_user_id, fetch_token). Safe to re-fire.
 //
 // Non-throwing: RC failures MUST NOT block the Firestore seed or the
 // custom-token mint (those are the critical path for the mobile deep-link
@@ -124,96 +130,47 @@ async function grantRcEntitlement(
   uid: string,
   sub: Stripe.Subscription,
 ): Promise<void> {
-  const rcKey = process.env.RC_API_SECRET_KEY;
-  if (!rcKey) {
+  const rcStripeKey = process.env.RC_STRIPE_PUBLIC_API_KEY;
+  if (!rcStripeKey) {
     console.error(
-      "[stripe/trial-subscription/webhook] RC_API_SECRET_KEY not set — skipping RC grant for uid",
+      "[stripe/trial-subscription/webhook] RC_STRIPE_PUBLIC_API_KEY not set — skipping RC receipt for uid",
       uid,
     );
     return;
   }
   try {
-    const subscriberUrl = `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(uid)}`;
-    // Ensure subscriber exists (auto-creates on GET). Same pattern the
-    // Razorpay flow uses.
-    await fetch(subscriberUrl, {
-      headers: { Authorization: `Bearer ${rcKey}` },
-    });
-
-    const grantUrl = `${subscriberUrl}/entitlements/${RC_ENTITLEMENT_ID}/promotional`;
-    // current_period_end is a UNIX seconds timestamp on Stripe. Falls back
-    // to duration:"monthly" if for any reason it isn't set (shouldn't
-    // happen for an active sub, but keeps the grant working).
-    const body: { duration: string; end_time_ms?: number } =
-      typeof sub.current_period_end === "number" && sub.current_period_end > 0
-        ? {
-            duration: "custom",
-            end_time_ms: sub.current_period_end * 1000,
-          }
-        : { duration: "monthly" };
-
-    const res = await fetch(grantUrl, {
+    const res = await fetch("https://api.revenuecat.com/v1/receipts", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
-        Authorization: `Bearer ${rcKey}`,
+        Authorization: `Bearer ${rcStripeKey}`,
         "X-Platform": "stripe",
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        app_user_id: uid,
+        fetch_token: sub.id, // Stripe subscription ID — RC will fetch details
+      }),
     });
     if (!res.ok) {
       const text = await res.text().catch(() => "");
       console.error(
-        `[stripe/trial-subscription/webhook] RC grant failed uid=${uid} status=${res.status} body=${text}`,
+        `[stripe/trial-subscription/webhook] RC receipt POST failed uid=${uid} sub=${sub.id} status=${res.status} body=${text}`,
       );
     }
   } catch (err) {
     console.error(
-      `[stripe/trial-subscription/webhook] RC grant threw uid=${uid}:`,
+      `[stripe/trial-subscription/webhook] RC receipt POST threw uid=${uid}:`,
       err,
     );
   }
 }
 
-// Revoke the RC promotional entitlement immediately (used on
-// subscription.deleted / cancel-at-period-end paths). RC's
-// revoke_promotionals endpoint is idempotent — safe to re-fire.
-//
-// Non-throwing: same rationale as grantRcEntitlement — RC failures must
-// not cause Stripe to retry the whole webhook.
-async function revokeRcEntitlement(uid: string): Promise<void> {
-  const rcKey = process.env.RC_API_SECRET_KEY;
-  if (!rcKey) {
-    console.error(
-      "[stripe/trial-subscription/webhook] RC_API_SECRET_KEY not set — skipping RC revoke for uid",
-      uid,
-    );
-    return;
-  }
-  try {
-    const revokeUrl = `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(uid)}/entitlements/${RC_ENTITLEMENT_ID}/revoke_promotionals`;
-    const res = await fetch(revokeUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        Authorization: `Bearer ${rcKey}`,
-      },
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      console.error(
-        `[stripe/trial-subscription/webhook] RC revoke failed uid=${uid} status=${res.status} body=${text}`,
-      );
-    }
-  } catch (err) {
-    console.error(
-      `[stripe/trial-subscription/webhook] RC revoke threw uid=${uid}:`,
-      err,
-    );
-  }
-}
+// NOTE: no explicit revoke function anymore. Track External Purchases +
+// RC's automatic Stripe webhook ingestion handle cancel/renewal/refund
+// automatically — RC listens for Stripe's customer.subscription.updated
+// / .deleted events and updates the entitlement accordingly. Our webhook
+// just marks trial_cancelled_at in Firestore for our own analytics.
 
 export async function POST(req: Request) {
   const signingSecret = process.env.STRIPE_TRIAL_WEBHOOK_SECRET;
@@ -565,18 +522,10 @@ export async function POST(req: Request) {
           { merge: true },
         );
 
-        // Revoke the RC promotional entitlement so the mobile app locks
-        // the user out on next getCustomerInfo()/syncPurchases(). Only
-        // revoke immediately when the subscription is fully deleted or
-        // its status is `canceled` — for cancel_at_period_end we let the
-        // entitlement expire naturally at end_time_ms (matches the
-        // Razorpay flow's "keep access until period ends" UX).
-        const isHardCancel =
-          event.type === "customer.subscription.deleted" ||
-          sub.status === "canceled";
-        if (isHardCancel) {
-          await revokeRcEntitlement(uid);
-        }
+        // NOTE: no manual RC revoke. Track External Purchases + RC's
+        // automatic Stripe webhook ingestion handles cancel/renewal/refund
+        // for us — RC updates the entitlement based on Stripe's live sub
+        // status. We just log our own trial_cancelled_at above for analytics.
         break;
       }
 
