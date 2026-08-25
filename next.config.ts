@@ -2,29 +2,28 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   async redirects() {
-    // Deprecated funnels — consolidating on /startus3 (US default),
-    // /mandy + /c/{slug} (creators), /startindia (India), /startfree
-    // (US trial). Everything else 301s to /startus3 so old links in
-    // past content / SMS / email don't 404.
+    // All old funnel variants collapsed onto /start (the single
+    // mobile-parity funnel). Any legacy URL from past ads / SMS / email
+    // 301s to /start so nothing 404s.
+    //
+    // Marked `permanent: false` (307) so ad platforms + browsers don't
+    // permanently cache the redirect — leaves room to change destinations
+    // later without users being stuck on cached 308s.
     return [
-      { source: "/start", destination: "/startus3", permanent: true },
-      // No /start/:path* wildcard — the public/start/ folder holds the
-      // funnel's video poster + photos, and a wildcard would 308 every
-      // asset URL (e.g. /start/aadi_hook.mp4) to /startus3, breaking
-      // Hook, PinchTest, and any image preloads.
-      { source: "/startus2", destination: "/startus3", permanent: true },
-      { source: "/startus2/:path*", destination: "/startus3", permanent: true },
-      { source: "/startindia2", destination: "/startindia", permanent: true },
-      { source: "/startindia2/:path*", destination: "/startindia", permanent: true },
-      { source: "/startindia3", destination: "/startindia", permanent: true },
-      { source: "/startindia3/:path*", destination: "/startindia", permanent: true },
-      { source: "/startindiafree", destination: "/startindia", permanent: true },
-      { source: "/startindiafree2", destination: "/startindia", permanent: true },
-      { source: "/tryfree", destination: "/startus3", permanent: true },
-      { source: "/tryfree/:path*", destination: "/startus3", permanent: true },
-      // Old legal page consolidated onto /privacy so the app link
-      // (contact-footer + T&C footer under sign-up) points at one
-      // canonical URL.
+      { source: "/startus3", destination: "/start", permanent: false },
+      { source: "/startus2", destination: "/start", permanent: false },
+      { source: "/startus2/:path*", destination: "/start", permanent: false },
+      { source: "/startfree", destination: "/start", permanent: false },
+      { source: "/startindia", destination: "/start", permanent: false },
+      { source: "/startindia2", destination: "/start", permanent: false },
+      { source: "/startindia2/:path*", destination: "/start", permanent: false },
+      { source: "/startindia3", destination: "/start", permanent: false },
+      { source: "/startindia3/:path*", destination: "/start", permanent: false },
+      { source: "/startindiafree", destination: "/start", permanent: false },
+      { source: "/startindiafree2", destination: "/start", permanent: false },
+      { source: "/tryfree", destination: "/start", permanent: false },
+      { source: "/tryfree/:path*", destination: "/start", permanent: false },
+      // Old legal page consolidated onto /privacy.
       { source: "/privacy-policy", destination: "/privacy", permanent: true },
     ];
   },
