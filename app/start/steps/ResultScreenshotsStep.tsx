@@ -186,8 +186,10 @@ export default function ResultScreenshotsStep() {
         userSelect: "none",
       }}
     >
-      {/* Media layer — GIFs fill entire screen, screenshots use safe area */}
-      <AnimatePresence mode="wait">
+      {/* Media layer — video/screenshot cross-fade. mode="popLayout" overlaps
+          the exiting + entering elements (both absolutely positioned inside
+          this container) so there's no black flash between clips. */}
+      <AnimatePresence mode="popLayout">
         {isGif ? (
           <motion.div
             key={`gif-${gifIndex}`}

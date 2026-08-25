@@ -252,8 +252,8 @@ export default function TrialPaywall7DayStep() {
           style={{
             fontFamily: "Poppins, -apple-system, sans-serif",
             fontSize: 12,
-            fontWeight: 400,
-            color: "rgba(255,255,255,0.45)",
+            fontWeight: 500,
+            color: "#fff",
             lineHeight: 1.5,
             textAlign: "center",
             margin: 0,
