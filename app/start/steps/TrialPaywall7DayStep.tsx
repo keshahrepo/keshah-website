@@ -261,6 +261,21 @@ export default function TrialPaywall7DayStep() {
         >
           No payment today. Cancel in app anytime.
         </p>
+        {/* Honest-urgency note — real ad decay, not a fake timer. */}
+        <p
+          style={{
+            fontFamily: "Poppins, -apple-system, sans-serif",
+            fontSize: 11,
+            fontWeight: 400,
+            color: "rgba(255,255,255,0.35)",
+            lineHeight: 1.5,
+            textAlign: "center",
+            margin: "6px 0 0",
+          }}
+        >
+          Note: This trial offer is shown to you based on Meta AI’s targeting.
+          You may not see this offer again.
+        </p>
       </motion.div>
     </div>
   );
