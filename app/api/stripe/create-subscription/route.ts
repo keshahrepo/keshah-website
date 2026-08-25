@@ -104,9 +104,11 @@ export async function POST(req: Request) {
 
     // Create the hosted Checkout Session — Stripe generates the customer
     // + collects the email during checkout.
+    // In subscription mode Stripe always creates a customer, so we don't
+    // pass customer_creation. Email is collected on the Stripe hosted
+    // page — webhook uses that email to find/create the Firebase user.
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
-      customer_creation: "always",
       line_items: [
         {
           price: priceId,
