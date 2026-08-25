@@ -40,6 +40,7 @@ export type StartStep =
   | "socialProof"
   | "momentFounderFlashback"
   | "trialPaywall"
+  | "payment"
   // Legacy step keys — kept so old peer components / dashboard code that
   // reference them still compile. Not present in STEP_ORDER.
   | "hook"
@@ -137,6 +138,12 @@ export const STEP_ORDER: StartStep[] = [
   "socialProof",
   "momentFounderFlashback",
   "trialPaywall",
+  // Stripe deferred-payment step (Elements + ExpressCheckout).
+  // Slotted immediately after the trial paywall CTA — user has committed
+  // to the 7-day free trial and now enters card details. Backend creates
+  // the subscription with trial_period_days: 7, then a signed handoff
+  // deep-link opens the app for silent sign-in on first launch.
+  "payment",
 ];
 
 export type Gender = "male" | "female";
