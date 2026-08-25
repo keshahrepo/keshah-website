@@ -121,11 +121,11 @@ export default function LandingHookStep() {
             fontWeight: 500,
             lineHeight: 1.5,
             color: "#fff",
-            fontStyle: "italic",
             margin: 0,
           }}
         >
-          Turns out it wasn’t about buying another product. It was a{" "}
+          Turns out it wasn’t about buying{" "}
+          <span style={{ fontStyle: "italic" }}>another</span> product. It was a{" "}
           <span style={{ fontWeight: 700 }}>‘tight-scalp’</span> problem. Let me
           show you…
         </motion.p>
