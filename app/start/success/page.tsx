@@ -38,11 +38,23 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 interface PendingClaim {
-  ft?: string; // Firebase custom token (short-TTL)
+  ft?: string; // Firebase custom token (short-TTL) — normalized on read
   uid?: string;
   email?: string;
   plan?: string;
   ready?: boolean;
+}
+
+// Firestore doc shape written by /api/stripe/trial-subscription/webhook —
+// see grantRcEntitlement + PendingClaims write. Field name is
+// `custom_token` on disk; we normalize to `ft` here so the client stays
+// simple. Both readers tolerated for backwards compat during migrations.
+interface PendingClaimDoc {
+  custom_token?: string;
+  ft?: string;
+  uid?: string;
+  email?: string;
+  plan?: string;
 }
 
 async function readPendingClaim(
@@ -52,9 +64,10 @@ async function readPendingClaim(
     const { db } = getFirebaseAdmin();
     const snap = await db.collection("PendingClaims").doc(sessionId).get();
     if (!snap.exists) return null;
-    const data = snap.data() as PendingClaim | undefined;
-    if (!data?.ft || !data?.uid) return null;
-    return data;
+    const data = snap.data() as PendingClaimDoc | undefined;
+    const ft = data?.custom_token ?? data?.ft;
+    if (!ft || !data?.uid) return null;
+    return { ft, uid: data.uid, email: data.email, plan: data.plan };
   } catch (err) {
     console.error("[start/success] readPendingClaim failed:", err);
     return null;
