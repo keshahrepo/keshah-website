@@ -14,7 +14,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20" as any,
 });
 
-const PRODUCT_NAME = "KESHAH Membership — 3-Month Plan";
+const PRODUCT_NAME = "KESHAH";
 const PRICE_AMOUNT_CENTS = 9900;
 const PRICE_CURRENCY = "usd";
 const PRICE_INTERVAL_COUNT = 3;
