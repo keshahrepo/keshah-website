@@ -130,6 +130,36 @@ export default function TrialPaywall7DayStep() {
         color: colors.white,
       }}
     >
+      {/* Honest-urgency banner — real ad decay, not a fake timer. Left-
+          aligned dark strip at the top of the paywall so it reads as
+          contextual header rather than fine print. */}
+      <div
+        style={{
+          background: "#1a1a1a",
+          borderBottom: "1px solid rgba(255,255,255,0.06)",
+          padding: "10px 20px",
+          flexShrink: 0,
+        }}
+      >
+        <p
+          style={{
+            fontFamily: "Poppins, -apple-system, sans-serif",
+            fontSize: 11,
+            fontWeight: 400,
+            color: "rgba(255,255,255,0.6)",
+            lineHeight: 1.4,
+            textAlign: "left",
+            margin: 0,
+          }}
+        >
+          <span style={{ fontWeight: 600, color: "rgba(255,255,255,0.75)" }}>
+            Note:
+          </span>{" "}
+          This trial offer is shown to you based on Meta AI’s targeting. You may
+          not see this offer again.
+        </p>
+      </div>
+
       <div
         style={{
           flex: 1,
@@ -260,21 +290,6 @@ export default function TrialPaywall7DayStep() {
           }}
         >
           No payment today. Cancel in app anytime.
-        </p>
-        {/* Honest-urgency note — real ad decay, not a fake timer. */}
-        <p
-          style={{
-            fontFamily: "Poppins, -apple-system, sans-serif",
-            fontSize: 11,
-            fontWeight: 400,
-            color: "rgba(255,255,255,0.35)",
-            lineHeight: 1.5,
-            textAlign: "center",
-            margin: "6px 0 0",
-          }}
-        >
-          Note: This trial offer is shown to you based on Meta AI’s targeting.
-          You may not see this offer again.
         </p>
       </motion.div>
     </div>
