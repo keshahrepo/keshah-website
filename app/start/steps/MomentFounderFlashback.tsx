@@ -1,191 +1,160 @@
 "use client";
 
-// Direct port of moment_founder_flashback.dart.
-// Cinematic personal moment right before the trial paywall. Aadi taps
-// the reader on the shoulder by name ("One last thing, [Name]…"), then
-// shares his week-one experience, then invites them in.
-//
-// Voice: continues Aadi's running conversation with the reader — no
-// italics on the whole line, no attribution. Words wrapped in *asterisks*
-// render italic for word-level emphasis (mirrors the mobile Text.rich
-// split-on-`*` trick).
-//
-// Timing: each beat fades in (900ms), holds for a beat-specific duration
-// (intro shortest, story longest because it has the most text), then
-// fades out (900ms) before the next beat starts. Tap during a hold
-// advances that beat only — doesn't skip the whole sequence — so an
-// impatient reader can pace beat by beat instead of losing the moment
-// on one tap.
-//
-// Paywall handoff: the final beat fades OUT before we call next(), so
-// the screen briefly goes black before the paywall renders — a smooth
-// cinematic dissolve rather than a hard page swap.
-//
-// No gender branching, no Firestore writes — purely a transition beat.
-// Forces a black background (matches mobile kBlack) regardless of the
-// funnel theme; the cinematic intent is the whole point of the beat.
+/**
+ * MomentFounderFlashback — port of
+ * /Users/aadityaagrawal/KESHAH-Mobile-App/lib/screens/auth/post_auth_flow_2/pages/moment_founder_flashback.dart
+ *
+ * Cinematic 3-beat personal moment right before the trial paywall. Aadi
+ * greets the reader by name, shares a week-one memory, then invites them
+ * in. Each beat fades in (900ms) → holds (1200/3500/2800ms, tap-skippable)
+ * → fades out (900ms). Tapping during a hold advances to the next beat;
+ * tapping during the final hold ends the sequence and hands off to the
+ * paywall. Words wrapped in *asterisks* render italic for word-level
+ * emphasis.
+ *
+ * No Firestore writes. Linear (no branching). Shown to both genders.
+ */
 
-import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { colors } from "../lib/tokens";
 import { useFlow } from "../lib/flow-context";
-import { colors, font, letterSpacing, lineHeight } from "../lib/tokens";
 
-// Per-beat hold durations in ms — matches the mobile _beatHolds list.
-// Intro is shortest (setup, not peak). Beat 1 (the story line) has the
-// most text so it gets the longest hold. Beat 2 (invitation) is shorter
-// but still substantial so it lands before the paywall.
-const BEAT_HOLDS_MS = [1200, 3500, 2800] as const;
 const FADE_MS = 900;
+const HOLDS_MS = [1200, 3500, 2800] as const;
 
-type BeatPhase = "in" | "hold" | "out";
+/** Split on `*` and italicize every odd-indexed segment. Mirrors the
+ * Flutter _buildRichText helper — the asterisks themselves are dropped
+ * and the segments they wrap render in italic. */
+function renderChunk(text: string) {
+  const parts = text.split("*");
+  return parts.map((part, i) =>
+    i % 2 === 1 ? (
+      <span key={i} style={{ fontStyle: "italic" }}>
+        {part}
+      </span>
+    ) : (
+      <span key={i}>{part}</span>
+    )
+  );
+}
 
 export default function MomentFounderFlashback() {
   const { next, answers } = useFlow();
 
-  // Personalize the intro line with the user's first name. Falls back to
-  // a name-less variant if we don't have one (defensive — the flow asks
-  // for first name well upstream on funnels that use it, but not every
-  // funnel collects one).
-  const firstName = answers.firstName?.split(" ")[0]?.trim() ?? "";
-  const intro =
-    firstName.length > 0 ? `One last thing, ${firstName}…` : "One last thing…";
+  const chunks = useMemo(() => {
+    const firstName = (answers.firstName ?? "").split(" ")[0]?.trim() ?? "";
+    const intro =
+      firstName.length > 0 ? `One last thing, ${firstName}…` : "One last thing…";
+    return [
+      intro,
+      "I felt like something was *actually* changing when I noticed my scalp getting looser. It took about a week.",
+      "I want you to feel what I did.",
+    ];
+  }, [answers.firstName]);
 
-  const chunks: string[] = [
-    intro,
-    "I felt like something was *actually* changing when I noticed my scalp getting looser. It took about a week.",
-    "I want you to feel what I did.",
-  ];
+  // Sequence state machine: index = which beat we're on;
+  // phase = fading-in ("in") → holding ("hold") → fading-out ("out").
+  // We render the current chunk while it's `in` or `hold`; on `out` the
+  // AnimatePresence exit fires the fade. When exit completes we bump to
+  // the next beat (or call next() after the final beat).
+  const [index, setIndex] = useState(0);
+  const [visible, setVisible] = useState(false);
+  const holdTimerRef = useRef<number | null>(null);
+  const doneRef = useRef(false);
 
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [phase, setPhase] = useState<BeatPhase>("in");
-  // Guard so tap-to-skip and the auto-hold timer can't both fire the same
-  // beat transition (equivalent to Completer.isCompleted check in Flutter).
-  const holdSkippedRef = useRef(false);
-  // Guard so we only call next() once when the final beat completes.
-  const advancedRef = useRef(false);
-
-  useEffect(() => {
-    if (activeIndex >= chunks.length) return;
-
-    // Fade-in → hold → fade-out → next beat. Timings mirror the mobile
-    // controller.forward() → _waitInterruptible(hold) → controller.reverse().
-    let holdTimer: ReturnType<typeof setTimeout> | undefined;
-    let outTimer: ReturnType<typeof setTimeout> | undefined;
-    let advanceTimer: ReturnType<typeof setTimeout> | undefined;
-
-    holdSkippedRef.current = false;
-    setPhase("in");
-
-    const inTimer = setTimeout(() => {
-      setPhase("hold");
-      holdTimer = setTimeout(() => {
-        setPhase("out");
-        outTimer = setTimeout(() => {
-          const isLast = activeIndex === chunks.length - 1;
-          if (isLast) {
-            if (!advancedRef.current) {
-              advancedRef.current = true;
-              next();
-            }
-          } else {
-            setActiveIndex((i) => i + 1);
-          }
-        }, FADE_MS);
-      }, BEAT_HOLDS_MS[activeIndex]);
-    }, FADE_MS);
-
-    return () => {
-      clearTimeout(inTimer);
-      if (holdTimer) clearTimeout(holdTimer);
-      if (outTimer) clearTimeout(outTimer);
-      if (advanceTimer) clearTimeout(advanceTimer);
-    };
-    // chunks.length is a constant per render — safe dep list.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeIndex]);
-
-  // Tap advances to the next beat instead of skipping the whole sequence.
-  // Cuts short the current beat's hold by kicking straight to fade-out.
-  const handleTap = () => {
-    if (phase !== "hold" || holdSkippedRef.current) return;
-    holdSkippedRef.current = true;
-    setPhase("out");
-    setTimeout(() => {
-      const isLast = activeIndex === chunks.length - 1;
-      if (isLast) {
-        if (!advancedRef.current) {
-          advancedRef.current = true;
-          next();
-        }
-      } else {
-        setActiveIndex((i) => i + 1);
-      }
-    }, FADE_MS);
+  const clearHold = () => {
+    if (holdTimerRef.current !== null) {
+      window.clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
   };
 
-  const currentText = chunks[Math.min(activeIndex, chunks.length - 1)];
+  // Kick off each beat: mount + fade in, then schedule the hold. When
+  // the hold elapses (or is skipped by tap) we set visible=false and let
+  // AnimatePresence run the fade-out.
+  useEffect(() => {
+    if (index >= chunks.length) return;
+    // Short defer so the initial={opacity:0} paints before animate={opacity:1}.
+    const inTimer = window.setTimeout(() => setVisible(true), 20);
+    return () => {
+      window.clearTimeout(inTimer);
+      clearHold();
+    };
+  }, [index, chunks.length]);
+
+  // When the fade-in animation completes we start the tap-skippable hold.
+  const handleFadeInComplete = useCallback(() => {
+    if (!visible) return;
+    clearHold();
+    const hold = HOLDS_MS[Math.min(index, HOLDS_MS.length - 1)];
+    holdTimerRef.current = window.setTimeout(() => {
+      holdTimerRef.current = null;
+      setVisible(false);
+    }, hold);
+  }, [index, visible]);
+
+  // When the fade-out completes: advance to the next beat, or on the
+  // final beat call onComplete so the paywall fades in from black.
+  const handleExitComplete = useCallback(() => {
+    if (doneRef.current) return;
+    if (index >= chunks.length - 1) {
+      doneRef.current = true;
+      next();
+      return;
+    }
+    setIndex((i) => i + 1);
+  }, [index, chunks.length, next]);
+
+  // Tap anywhere during the current hold to advance to the next beat.
+  // Ignored while fade-in or fade-out is still running.
+  const handleTap = useCallback(() => {
+    if (holdTimerRef.current === null) return;
+    clearHold();
+    setVisible(false);
+  }, []);
 
   return (
     <div
       onClick={handleTap}
-      role="button"
-      tabIndex={0}
       style={{
-        position: "fixed",
+        position: "absolute",
         inset: 0,
         background: colors.black,
-        color: colors.white,
-        fontFamily: `${font.family}, -apple-system, sans-serif`,
         display: "flex",
         alignItems: "center",
         justifyContent: "flex-start",
         padding: "0 32px",
         cursor: "pointer",
+        WebkitTapHighlightColor: "transparent",
         userSelect: "none",
       }}
     >
-      <div
-        style={{
-          maxWidth: 560,
-          width: "100%",
-          margin: "0 auto",
-        }}
-      >
-        <p
-          style={{
-            fontSize: 28,
-            fontWeight: font.weights.semibold,
-            color: colors.white,
-            letterSpacing: `${letterSpacing.titleTight}px`,
-            lineHeight: lineHeight.base,
-            margin: 0,
-            textAlign: "left",
-            opacity: phase === "hold" ? 1 : 0,
-            transform:
-              phase === "hold" ? "translateY(0)" : "translateY(16px)",
-            transition: `opacity ${FADE_MS}ms cubic-bezier(0.215, 0.61, 0.355, 1), transform ${FADE_MS}ms cubic-bezier(0.215, 0.61, 0.355, 1)`,
-          }}
-        >
-          {renderWithEmphasis(currentText)}
-        </p>
-      </div>
+      <AnimatePresence mode="wait" onExitComplete={handleExitComplete}>
+        {visible && index < chunks.length && (
+          <motion.p
+            key={index}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 0 }}
+            transition={{ duration: FADE_MS / 1000, ease: "easeOut" }}
+            onAnimationComplete={handleFadeInComplete}
+            style={{
+              fontFamily: "Poppins, -apple-system, sans-serif",
+              fontSize: 28,
+              fontWeight: 600,
+              color: colors.white,
+              letterSpacing: -1.0,
+              lineHeight: 1.32,
+              margin: 0,
+              maxWidth: 560,
+              textAlign: "left",
+            }}
+          >
+            {renderChunk(chunks[index])}
+          </motion.p>
+        )}
+      </AnimatePresence>
     </div>
-  );
-}
-
-/**
- * Renders a chunk with *asterisk-wrapped* words italicized. Splits on
- * the `*` marker and italicizes every other segment (odd-indexed
- * segments = the ones between markers). Mirrors mobile _buildRichText.
- */
-function renderWithEmphasis(text: string): React.ReactNode {
-  const parts = text.split("*");
-  return parts.map((part, i) =>
-    i % 2 === 1 ? (
-      <em key={i} style={{ fontStyle: "italic" }}>
-        {part}
-      </em>
-    ) : (
-      <span key={i}>{part}</span>
-    )
   );
 }

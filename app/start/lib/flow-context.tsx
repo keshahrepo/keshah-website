@@ -29,7 +29,7 @@ const FlowContext = createContext<FlowState | null>(null);
 // starts fresh at the new first step. Otherwise users mid-funnel resume at a
 // step that's no longer where they think it should be (e.g. founderStory when
 // pinchTest is now the opening step).
-const DEFAULT_STORAGE_KEY = "keshah_start_state_v18";
+const DEFAULT_STORAGE_KEY = "keshah_start_state_v19";
 
 interface PersistedState {
   step: StartStep;
@@ -117,9 +117,9 @@ export function FlowProvider({ children, stepOrder: stepOrderProp, storageKey }:
         // "us_creator_{slug}" if the slug isn't registered yet.
         if (p.startsWith("/f/")) {
           const slug = p.split("/")[2];
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const { CREATOR_CONFIGS } = require("./funnel-config");
-          if (slug && CREATOR_CONFIGS[slug]) return CREATOR_CONFIGS[slug].attribution;
+          // Creator-config lookup moved out — funnel-config module was
+          // deleted. Fall back to the slug-tagged attribution so the
+          // funnel-track endpoint still records per-creator segmentation.
           return slug ? `us_creator_${slug}` : "us_creator_unknown";
         }
         if (p.startsWith("/mandy")) return "us_women_mandy";
