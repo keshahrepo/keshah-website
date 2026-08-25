@@ -83,15 +83,19 @@ export function KeshahButton({
     onTap?.();
   };
 
+  // Sizing matches mobile Flutter's *visual* weight, not literal pt
+  // values — same 14pt in Flutter Skia renders bigger + crisper than
+  // in a browser. We bump the button so tap targets + text weight
+  // feel like the mobile app on iOS/Android web browsers.
   const buttonStyle: CSSProperties = {
     borderRadius: radius.button,
     background: filled ? backgroundColor : "transparent",
     border: filled ? "none" : `1px solid ${colors.white}`,
     color,
-    padding: "15px 15px",
+    padding: "18px 18px",
     fontFamily: "Poppins, -apple-system, sans-serif",
-    fontWeight: 400,
-    fontSize: fontSize ?? 14,
+    fontWeight: 500,
+    fontSize: fontSize ?? 16,
     letterSpacing: letterSpacing ?? undefined,
     display: "flex",
     alignItems: "center",
