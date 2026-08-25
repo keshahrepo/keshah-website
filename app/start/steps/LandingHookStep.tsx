@@ -35,10 +35,14 @@ export default function LandingHookStep() {
           minHeight: 0,
           overflowY: "auto",
           WebkitOverflowScrolling: "touch",
-          padding: "28px 24px 12px",
+          padding: "24px 24px 20px",
           display: "flex",
           flexDirection: "column",
-          gap: 20,
+          gap: 24,
+          // Center-vertically inside the available scroll area so
+          // whitespace balances above + below the content instead of
+          // pooling as one big gap between body copy and the CTA.
+          justifyContent: "center",
         }}
       >
         <motion.h1
