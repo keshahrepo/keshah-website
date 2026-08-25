@@ -45,50 +45,27 @@ export default function LandingHookStep() {
           justifyContent: "center",
         }}
       >
-        {/* Headline + subheading grouped tightly — subheading FRAMES the
-            photo (setup) rather than explaining it (payoff). */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <motion.h1
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: [0, 0, 0.2, 1] }}
-            style={{
-              fontFamily: "Poppins, sans-serif",
-              fontSize: 28,
-              fontWeight: 600,
-              lineHeight: 1.25,
-              letterSpacing: "-0.6px",
-              color: "#fff",
-              margin: 0,
-            }}
-          >
-            How I stopped my genetic hair loss in 55 days without medication
-          </motion.h1>
-
-          <motion.p
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.25, duration: 0.5, ease: [0, 0, 0.2, 1] }}
-            style={{
-              fontFamily: "Poppins, sans-serif",
-              fontSize: 15,
-              fontWeight: 400,
-              lineHeight: 1.5,
-              color: "rgba(255,255,255,0.75)",
-              margin: 0,
-            }}
-          >
-            Turns out it wasn’t about buying{" "}
-            <span style={{ fontStyle: "italic" }}>another</span> product. It was a{" "}
-            <span style={{ fontWeight: 700, color: "#fff" }}>‘tight-scalp’</span>{" "}
-            problem. Let me show you…
-          </motion.p>
-        </div>
+        <motion.h1
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: [0, 0, 0.2, 1] }}
+          style={{
+            fontFamily: "Poppins, sans-serif",
+            fontSize: 28,
+            fontWeight: 600,
+            lineHeight: 1.25,
+            letterSpacing: "-0.6px",
+            color: "#fff",
+            margin: 0,
+          }}
+        >
+          How I stopped my genetic hair loss in 55 days without medication
+        </motion.h1>
 
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5, duration: 0.5, ease: [0, 0, 0.2, 1] }}
+          transition={{ delay: 0.25, duration: 0.5, ease: [0, 0, 0.2, 1] }}
           style={{
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
@@ -137,6 +114,25 @@ export default function LandingHookStep() {
             </div>
           ))}
         </motion.div>
+
+        <motion.p
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5, duration: 0.5, ease: [0, 0, 0.2, 1] }}
+          style={{
+            fontFamily: "Poppins, sans-serif",
+            fontSize: 15,
+            fontWeight: 500,
+            lineHeight: 1.5,
+            color: "#fff",
+            margin: 0,
+          }}
+        >
+          Turns out it wasn’t about buying{" "}
+          <span style={{ fontStyle: "italic" }}>another</span> product. It was a{" "}
+          <span style={{ fontWeight: 700 }}>‘tight-scalp’</span> problem. Let me
+          show you…
+        </motion.p>
       </div>
 
       <motion.div
