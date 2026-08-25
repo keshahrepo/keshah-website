@@ -1,19 +1,19 @@
-// Bootstrap endpoint for the web onboarding paywall (PaymentStep).
+// Bootstrap endpoint for the web onboarding paywall.
+//
+// Creates a Stripe **Checkout Session** (hosted) instead of an inline
+// subscription — user gets redirected to checkout.stripe.com to pay,
+// then bounces back to /start/success?session_id={CHECKOUT_SESSION_ID}.
+// The webhook (subscribed to `checkout.session.completed`) seeds the
+// Firestore User doc + mints the Firebase custom token in PendingClaims.
 //
 // Flow:
-//   1. Client sends { email, quizAnswers } after collecting the quiz.
-//   2. We reuse the existing Firebase Auth user for that email, or create
-//      a passwordless one so we have a stable UID before payment.
+//   1. Client sends { email, quizAnswers }.
+//   2. Look up / create passwordless Firebase user for that email.
 //   3. Create a Stripe customer tagged with app_user_id = <uid>.
-//   4. Create a Stripe subscription with a 7-day trial and
-//      payment_behavior=default_incomplete so the client can collect the
-//      payment method via Elements / Payment Element using the returned
-//      client secret. With a trial, Stripe attaches a SetupIntent
-//      (pending_setup_intent) instead of a PaymentIntent — return whichever
-//      is present so the client can confirm it.
-//
-// Firestore seeding + custom-token minting happen elsewhere (webhook +
-// claim endpoint). This route only sets up the payment surface.
+//   4. Create a Checkout Session in subscription mode with a 7-day trial.
+//      Subscription metadata carries quiz answers so downstream (webhook,
+//      RC, dashboard) can attribute.
+//   5. Return the hosted checkout URL — client does window.location.href.
 
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
@@ -24,6 +24,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 });
 
 const TRIAL_DAYS = 7;
+const SUCCESS_URL =
+  "https://www.keshah.com/start/success?session_id={CHECKOUT_SESSION_ID}";
+const CANCEL_URL = "https://www.keshah.com/start";
 
 type QuizAnswers = {
   selected_gender?: string;
@@ -84,7 +87,9 @@ export async function POST(req: Request) {
   try {
     const { auth } = getFirebaseAdmin();
 
-    // 1. Get or create Firebase user (passwordless).
+    // 1. Get or create Firebase user (passwordless) — so we have a stable
+    //    UID BEFORE Stripe generates a customer. Every downstream write
+    //    (Firestore seed, RC alias) uses this uid.
     let uid: string;
     try {
       const existing = await auth.getUserByEmail(email);
@@ -103,8 +108,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // 2. Stripe customer. app_user_id is the standard tag RevenueCat / our
-    //    webhooks read to resolve back to the Firebase UID.
+    // 2. Stripe customer.
     const customer = await stripe.customers.create({
       email,
       name: quiz.first_name ? str(quiz.first_name) : undefined,
@@ -115,11 +119,9 @@ export async function POST(req: Request) {
         source: "web_onboarding_paywall",
       },
     });
-    const customerId = customer.id;
 
-    // 3. Build subscription metadata — everything in the contract's
-    //    stripeSubscriptionMetadata list. Stripe rejects non-string values
-    //    and drops keys with empty strings on the dashboard, so coerce.
+    // 3. Subscription metadata — attached to the subscription created
+    //    inside the Checkout Session so the webhook can read it.
     const gender = str(quiz.selected_gender || quiz.gender);
     const subscriptionMetadata: Record<string, string> = {
       uid,
@@ -140,51 +142,49 @@ export async function POST(req: Request) {
       trial_days: String(TRIAL_DAYS),
     };
 
-    // 4. Create the subscription. With trial_period_days > 0 the first
-    //    invoice is $0, so Stripe attaches a SetupIntent to
-    //    pending_setup_intent instead of a PaymentIntent on latest_invoice.
-    //    Expand both and return whichever secret exists.
-    const subscription = await stripe.subscriptions.create({
-      customer: customerId,
-      items: [{ price: priceId }],
-      trial_period_days: TRIAL_DAYS,
-      payment_behavior: "default_incomplete",
-      payment_settings: {
-        save_default_payment_method: "on_subscription",
+    // 4. Create the hosted Checkout Session.
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      customer: customer.id,
+      // client_reference_id is the uid — surfaces in checkout.session.completed
+      // webhook without having to expand subscription.
+      client_reference_id: uid,
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      subscription_data: {
+        trial_period_days: TRIAL_DAYS,
+        metadata: subscriptionMetadata,
       },
-      expand: ["latest_invoice.payment_intent", "pending_setup_intent"],
-      metadata: subscriptionMetadata,
+      // Also stash uid on the Session itself so the webhook can resolve
+      // even before the subscription object hydrates.
+      metadata: {
+        uid,
+        source: "web_onboarding_paywall",
+      },
+      success_url: SUCCESS_URL,
+      cancel_url: CANCEL_URL,
+      // Wallets (Apple Pay / Google Pay / Link) come on by default in
+      // subscription mode; nothing to enable.
+      allow_promotion_codes: true,
     });
 
-    const latestInvoice =
-      subscription.latest_invoice as Stripe.Invoice | null;
-    const paymentIntent =
-      latestInvoice?.payment_intent as Stripe.PaymentIntent | null;
-    const setupIntent =
-      subscription.pending_setup_intent as Stripe.SetupIntent | null;
-
-    const clientSecret =
-      paymentIntent?.client_secret ?? setupIntent?.client_secret ?? null;
-
-    if (!clientSecret) {
-      // eslint-disable-next-line no-console
-      console.error(
-        "[stripe/create-subscription] no client_secret on subscription",
-        subscription.id,
-      );
+    if (!session.url) {
       return NextResponse.json(
-        { ok: false, error: "no_client_secret" },
+        { ok: false, error: "no_checkout_url" },
         { status: 500 },
       );
     }
 
     return NextResponse.json({
       ok: true,
-      clientSecret,
+      url: session.url,
+      sessionId: session.id,
       uid,
-      customerId,
-      subscriptionId: subscription.id,
-      intentType: paymentIntent ? "payment_intent" : "setup_intent",
+      customerId: customer.id,
     });
   } catch (err) {
     // eslint-disable-next-line no-console

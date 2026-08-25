@@ -22,6 +22,13 @@ const PRICE_LOOKUP_KEY = "keshah_trial_3mo_usd";
 
 const WEBHOOK_URL = "https://www.keshah.com/api/stripe/trial-subscription/webhook";
 const WEBHOOK_EVENTS: Stripe.WebhookEndpointCreateParams.EnabledEvent[] = [
+  // Fires when user completes Stripe hosted Checkout. Includes session
+  // metadata + customer + subscription (once created). Primary signal for
+  // the paid-web handoff.
+  "checkout.session.completed",
+  // Fires slightly after checkout.session.completed once the subscription
+  // object hydrates. Our handler seeds Firestore + mints custom token off
+  // subscription.metadata, so this is the actual work trigger.
   "customer.subscription.created",
   "customer.subscription.updated",
   "customer.subscription.deleted",

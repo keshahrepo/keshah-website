@@ -62,14 +62,19 @@ async function readPendingClaim(
 }
 
 interface SuccessPageProps {
-  searchParams: Promise<{ session?: string | string[] }>;
+  searchParams: Promise<{
+    session?: string | string[];
+    session_id?: string | string[]; // Stripe Checkout redirect param name
+  }>;
 }
 
 export default async function SuccessPage({ searchParams }: SuccessPageProps) {
   // Touch headers() so Next always renders this dynamically per request.
   await nextHeaders();
   const params = await searchParams;
-  const rawSession = params.session;
+  // Accept either ?session_id= (Stripe Checkout redirect) or ?session=
+  // (legacy). Prefer Stripe's canonical name.
+  const rawSession = params.session_id ?? params.session;
   const sessionId = Array.isArray(rawSession) ? rawSession[0] : rawSession;
 
   if (!sessionId) {
