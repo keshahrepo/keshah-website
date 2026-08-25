@@ -142,15 +142,36 @@ function StepRenderer() {
 export default function StartFlow() {
   return (
     <FlowProvider>
+      {/*
+        Viewport-locked shell — matches Flutter Scaffold behavior.
+        - `height: 100dvh` locks to visible viewport (dvh accounts for
+          the iOS/Android address bar; better than vh on mobile).
+        - `overflow: hidden` on the shell prevents the whole page from
+          scrolling; each step primitive scrolls its own content area
+          internally (see QuizSinglePick, PageHeader wrappers) and pins
+          the bottom KeshahButton to the viewport bottom.
+        - Inner flex column gives step primitives a proper `flex: 1;
+          min-height: 0` parent so their internal layout can size itself.
+      */}
       <div
         style={{
-          minHeight: "100dvh",
+          height: "100dvh",
           display: "flex",
           flexDirection: "column",
           background: "#000",
+          overflow: "hidden",
         }}
       >
-        <StepRenderer />
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <StepRenderer />
+        </div>
       </div>
     </FlowProvider>
   );
