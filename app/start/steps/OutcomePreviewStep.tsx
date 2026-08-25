@@ -138,8 +138,11 @@ export default function OutcomePreviewStep() {
         </p>
       </motion.div>
 
-      {/* Phone mockup — Expanded + Center in mobile. Fills the slack
-          between header and CTA, image centered inside. */}
+      {/* Phone mockup — fills the slack between header and CTA.
+          Height-driven sizing: the outer flex-1 container gives us a
+          max height; the img uses height:100% + width:auto so the phone
+          scales DOWN on shorter viewports instead of overflowing into
+          the text above. maxWidth caps it on tall viewports. */}
       <div
         style={{
           flex: 1,
@@ -148,6 +151,7 @@ export default function OutcomePreviewStep() {
           justifyContent: "center",
           minHeight: 0,
           padding: "16px 0",
+          overflow: "hidden",
         }}
       >
         <motion.div
@@ -155,24 +159,24 @@ export default function OutcomePreviewStep() {
           animate={{ opacity: 1 }}
           transition={imageFade}
           style={{
-            width: 220,
+            maxWidth: 200,
+            maxHeight: "100%",
             borderRadius: 28,
             border: `3px solid rgba(255, 255, 255, 0.12)`,
-            // Two BoxShadows in mobile: a 1px white spread + a large
-            // black drop shadow. CSS box-shadow list mirrors both.
             boxShadow: [
               "0 0 0 1px rgba(255, 255, 255, 0.06)",
               "0 20px 60px rgba(0, 0, 0, 0.5)",
             ].join(", "),
             overflow: "hidden",
             background: colors.black,
+            display: "flex",
           }}
         >
           <div
             style={{
               borderRadius: 25,
               overflow: "hidden",
-              display: "block",
+              display: "flex",
               lineHeight: 0,
             }}
           >
@@ -182,8 +186,10 @@ export default function OutcomePreviewStep() {
               alt="KESHAH Day 1 dashboard preview"
               style={{
                 display: "block",
-                width: "100%",
-                height: "auto",
+                height: "100%",
+                maxHeight: "60vh",
+                width: "auto",
+                maxWidth: "100%",
                 objectFit: "contain",
               }}
             />
