@@ -1,30 +1,20 @@
 /**
  * /start/success — post-Stripe-checkout landing page.
  *
- * Flow:
- *   1. Stripe redirects here with ?session=<checkout_session_id> once payment
- *      succeeds.
- *   2. The Stripe webhook (POST /api/stripe/subscription/webhook) — verified
- *      via STRIPE_SUBSCRIPTION_WEBHOOK_SECRET on that route — creates the
- *      Firebase Auth user + seeds the User doc + writes a short-lived custom
- *      token into PendingClaims/<sessionId>.
- *   3. This page reads PendingClaims/<sessionId> server-side (via
- *      firebase-admin — the token NEVER touches the browser as a JSON blob;
- *      it only leaves this server embedded in the universal-link URL we hand
- *      to the user).
- *   4. Single big CTA: "Open KESHAH app" → deep link
- *      https://www.keshah.com/app/claim?ft=<token>&uid=<uid>
- *      Universal Link matched by /.well-known/apple-app-site-association
- *      (iOS) + /.well-known/assetlinks.json (Android). If UL fails (Meta /
- *      TikTok in-app browser strips params during App Store hop), the /app/claim
- *      route.ts server handler is the fallback — it stores the token in a
- *      signed HttpOnly cookie so the app can pull it after fresh install.
- *
- * Race handling: Stripe usually redirects the browser here before the webhook
- * fires. If PendingClaims/<sessionId> hasn't materialized yet we render a
- * "Setting up your account…" state with client-side polling; once it lands we
- * swap in the CTA. We cap the poll at ~30 attempts (60s) then show a support
- * message.
+ * Flow (post identity-defer refactor):
+ *   1. Stripe redirects here with ?session_id=<checkout_session_id> once
+ *      payment succeeds.
+ *   2. The trial-subscription webhook writes PaidWebSessions/<sessionId>
+ *      with email + metadata. No Firebase user or Firestore User doc is
+ *      created here — identity is captured post-sign-in.
+ *   3. This page reads PaidWebSessions/<sessionId> server-side and renders
+ *      the sign-in step (SuccessClient). If the doc hasn't materialized
+ *      yet, SuccessClient polls until it does.
+ *   4. User signs in with Apple/Google/email → SuccessClient POSTs
+ *      /api/attach-identity → Firebase UID attached to RC subscription
+ *      + Firestore User doc seeded → install-app step shown.
+ *   5. User installs mobile app, signs in with SAME provider, sees their
+ *      entitlement immediately.
  */
 
 import { headers as nextHeaders } from "next/headers";
@@ -32,44 +22,38 @@ import Link from "next/link";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import SuccessClient from "./SuccessClient";
 
-// Prevent Next from caching this — the PendingClaims doc is written by an
-// out-of-band webhook and can change moment-to-moment.
+// Prevent Next from caching this — the PaidWebSessions doc is written by
+// an out-of-band webhook and can change moment-to-moment.
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-interface PendingClaim {
-  ft?: string; // Firebase custom token (short-TTL) — normalized on read
-  uid?: string;
-  email?: string;
-  plan?: string;
-  ready?: boolean;
+interface PaidSession {
+  email?: string | null;
+  plan?: string | null;
+  claimed_by_uid?: string | null;
 }
 
-// Firestore doc shape written by /api/stripe/trial-subscription/webhook —
-// see grantRcEntitlement + PendingClaims write. Field name is
-// `custom_token` on disk; we normalize to `ft` here so the client stays
-// simple. Both readers tolerated for backwards compat during migrations.
-interface PendingClaimDoc {
-  custom_token?: string;
-  ft?: string;
-  uid?: string;
-  email?: string;
-  plan?: string;
+interface PaidSessionDoc {
+  email?: string | null;
+  plan?: string | null;
+  claimed_by_uid?: string | null;
 }
 
-async function readPendingClaim(
+async function readPaidSession(
   sessionId: string,
-): Promise<PendingClaim | null> {
+): Promise<PaidSession | null> {
   try {
     const { db } = getFirebaseAdmin();
-    const snap = await db.collection("PendingClaims").doc(sessionId).get();
+    const snap = await db.collection("PaidWebSessions").doc(sessionId).get();
     if (!snap.exists) return null;
-    const data = snap.data() as PendingClaimDoc | undefined;
-    const ft = data?.custom_token ?? data?.ft;
-    if (!ft || !data?.uid) return null;
-    return { ft, uid: data.uid, email: data.email, plan: data.plan };
+    const data = snap.data() as PaidSessionDoc | undefined;
+    return {
+      email: data?.email ?? null,
+      plan: data?.plan ?? null,
+      claimed_by_uid: data?.claimed_by_uid ?? null,
+    };
   } catch (err) {
-    console.error("[start/success] readPendingClaim failed:", err);
+    console.error("[start/success] readPaidSession failed:", err);
     return null;
   }
 }
@@ -85,8 +69,6 @@ export default async function SuccessPage({ searchParams }: SuccessPageProps) {
   // Touch headers() so Next always renders this dynamically per request.
   await nextHeaders();
   const params = await searchParams;
-  // Accept either ?session_id= (Stripe Checkout redirect) or ?session=
-  // (legacy). Prefer Stripe's canonical name.
   const rawSession = params.session_id ?? params.session;
   const sessionId = Array.isArray(rawSession) ? rawSession[0] : rawSession;
 
@@ -94,17 +76,10 @@ export default async function SuccessPage({ searchParams }: SuccessPageProps) {
     return <MissingSessionState />;
   }
 
-  const claim = await readPendingClaim(sessionId);
+  const initialSession = await readPaidSession(sessionId);
 
   return (
-    <SuccessClient
-      sessionId={sessionId}
-      initialClaim={
-        claim
-          ? { ft: claim.ft!, uid: claim.uid!, email: claim.email, plan: claim.plan }
-          : null
-      }
-    />
+    <SuccessClient sessionId={sessionId} initialSession={initialSession} />
   );
 }
 
@@ -142,8 +117,8 @@ function MissingSessionState() {
             marginBottom: 24,
           }}
         >
-          If you just paid, check your email for the receipt and app-install
-          link. Otherwise start over.
+          If you just paid, check your email for the receipt. Otherwise start
+          over.
         </p>
         <Link
           href="/start"

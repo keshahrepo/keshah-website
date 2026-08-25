@@ -1,17 +1,22 @@
 // Stripe webhook for the WEB trial-purchase flow (FreeV2 paidStoppage).
 //
 // Distinct from /api/stripe/subscription/webhook — that one is for the
-// Regrowth Kit subscription. This one handles the paywall trial purchase
-// that the mobile app deep-links into via /app/claim?ft=<customToken>.
+// Regrowth Kit subscription. This one handles the paywall trial purchase.
+//
+// This webhook DEFERS identity work. It only records the paid session in
+// PaidWebSessions/<sessionId> with the metadata the app needs to seed a
+// user doc. The actual Firebase user creation, Firestore seed, and
+// RC receipt POST happen in /api/attach-identity — triggered after the
+// user signs in with Apple/Google/email on the success page. That way
+// the identity attached to the RC subscription is the SAME identity the
+// user will produce when they sign into the mobile app with the same
+// provider, so entitlements follow the user with zero handoff steps.
 //
 // Events we act on:
 //
-//   customer.subscription.created — user just completed Stripe Checkout /
-//     Payment Element. Seed Users/<uid> with the exact FreeV2 paidStoppage
-//     shape (mirrors /api/funnel/save-profile so mobile splash treats them
-//     as onboarded), mint a Firebase custom token, stash it in
-//     PendingClaims/<sessionId> so the success page can hand it off to the
-//     app via universal link.
+//   customer.subscription.created — user just completed Stripe Checkout.
+//     Write PaidWebSessions/<sessionId> with email + metadata.
+//     Do NOT create a Firebase user; identity is captured post-sign-in.
 //
 //   invoice.paid — first paid invoice after the trial elapses. Marks
 //     subscription_active_at so we can distinguish "still in trial" from
@@ -29,11 +34,8 @@
 //
 // REQUIRED ENV VARS:
 //   STRIPE_SECRET_KEY               (already set)
-//   STRIPE_TRIAL_WEBHOOK_SECRET     (NEW — signing secret for this endpoint)
-//   FIREBASE_SERVICE_ACCOUNT        (already set; must have the
-//                                    "Service Account Token Creator" role
-//                                    on the service account for
-//                                    auth.createCustomToken() to work)
+//   STRIPE_TRIAL_WEBHOOK_SECRET     (already set)
+//   FIREBASE_SERVICE_ACCOUNT        (already set)
 
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
@@ -48,42 +50,10 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
 });
 
-// Custom-token TTL that Firebase enforces on createCustomToken output.
-// Not configurable — surfaced here as a constant so the PendingClaims
-// expiry we write to Firestore matches what the mobile app will actually
-// be able to redeem.
-const CUSTOM_TOKEN_TTL_SECONDS = 3600;
-
-// start_date shape the mobile app's userDay calc expects. Date must be
-// dd/MM/yyyy, time must be hh:mm AM/PM (zero-padded hour, uppercase
-// meridiem). Mirrors buildStartDate() in /api/funnel/save-profile.
-function buildStartDate(
-  now: Date,
-  timezone: string,
-  offsetInMins: number,
-): { date: string; time: string; timezone: string; timeZoneOffsetInMins: number } {
-  const date = now.toLocaleDateString("en-GB", { timeZone: timezone });
-  const time = now
-    .toLocaleTimeString("en-US", {
-      timeZone: timezone,
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    })
-    .toUpperCase();
-  return {
-    date,
-    time,
-    timezone,
-    timeZoneOffsetInMins: offsetInMins,
-  };
-}
-
 // Look up the Stripe Checkout Session ID that produced this subscription.
-// The success page keys PendingClaims by session_id (that's what the URL
-// carries), so we need it to write the token under a key the page can
-// find. Returns null if this sub wasn't created via Checkout — the caller
-// falls back to subscription.id.
+// The success page keys PaidWebSessions by session_id (that's what the URL
+// carries). Returns null if this sub wasn't created via Checkout — the
+// caller falls back to subscription.id.
 async function findCheckoutSessionId(
   subscriptionId: string,
 ): Promise<string | null> {
@@ -102,75 +72,25 @@ async function findCheckoutSessionId(
   }
 }
 
-// RevenueCat entitlement ID that the mobile app checks for paid access
-// (see purchase_repo.dart — customerInfo.entitlements.active
-// .containsKey('stoppage_treatment')). Must match the ID configured in the
-// RC dashboard.
-const RC_ENTITLEMENT_ID = "stoppage_treatment";
-
-// Register the Stripe subscription with RC as a real "external purchase"
-// (Track External Purchases) so the mobile app (which calls
-// Purchases.logIn(firebaseUid)) sees it as a proper subscription — not a
-// promotional grant. RC then auto-tracks renewal/cancel/refund via its
-// own ingestion of Stripe events (webhook already registered on their
-// incoming URL). We do this manual POST at subscription.created so the
-// user unlocks INSTANTLY (no lag waiting for RC to poll Stripe).
-//
-// Endpoint: POST /v1/receipts with X-Platform: stripe.
-// Auth: RC_STRIPE_PUBLIC_API_KEY (strp_...) — the platform-specific
-// public key for RC's Stripe integration. Different from
-// RC_API_SECRET_KEY (which is for admin ops like promotional grants).
-//
-// Idempotent: RC dedupes by (app_user_id, fetch_token). Safe to re-fire.
-//
-// Non-throwing: RC failures MUST NOT block the Firestore seed or the
-// custom-token mint (those are the critical path for the mobile deep-link
-// handoff). We log and swallow so Stripe still gets a 200 for this event.
-async function grantRcEntitlement(
-  uid: string,
+// Resolve the Firebase uid attached to a subscription. First checks the
+// sub's metadata (set by /api/attach-identity when the user signs in),
+// then falls back to PaidWebSessions.claimed_by_uid keyed by the
+// Checkout Session ID.
+async function resolveUidForSubscription(
+  db: FirebaseFirestore.Firestore,
   sub: Stripe.Subscription,
-): Promise<void> {
-  const rcStripeKey = process.env.RC_STRIPE_PUBLIC_API_KEY;
-  if (!rcStripeKey) {
-    console.error(
-      "[stripe/trial-subscription/webhook] RC_STRIPE_PUBLIC_API_KEY not set — skipping RC receipt for uid",
-      uid,
-    );
-    return;
-  }
-  try {
-    const res = await fetch("https://api.revenuecat.com/v1/receipts", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        Authorization: `Bearer ${rcStripeKey}`,
-        "X-Platform": "stripe",
-      },
-      body: JSON.stringify({
-        app_user_id: uid,
-        fetch_token: sub.id, // Stripe subscription ID — RC will fetch details
-      }),
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      console.error(
-        `[stripe/trial-subscription/webhook] RC receipt POST failed uid=${uid} sub=${sub.id} status=${res.status} body=${text}`,
-      );
-    }
-  } catch (err) {
-    console.error(
-      `[stripe/trial-subscription/webhook] RC receipt POST threw uid=${uid}:`,
-      err,
-    );
-  }
-}
+): Promise<string | null> {
+  const mdUid = sub.metadata?.uid;
+  if (typeof mdUid === "string" && mdUid) return mdUid;
 
-// NOTE: no explicit revoke function anymore. Track External Purchases +
-// RC's automatic Stripe webhook ingestion handle cancel/renewal/refund
-// automatically — RC listens for Stripe's customer.subscription.updated
-// / .deleted events and updates the entitlement accordingly. Our webhook
-// just marks trial_cancelled_at in Firestore for our own analytics.
+  const checkoutSessionId = await findCheckoutSessionId(sub.id);
+  const key = checkoutSessionId ?? sub.id;
+  const snap = await db.collection("PaidWebSessions").doc(key).get();
+  if (!snap.exists) return null;
+  const data = snap.data() ?? {};
+  const uid = data.claimed_by_uid;
+  return typeof uid === "string" && uid ? uid : null;
+}
 
 export async function POST(req: Request) {
   const signingSecret = process.env.STRIPE_TRIAL_WEBHOOK_SECRET;
@@ -203,7 +123,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { db, auth } = getFirebaseAdmin();
+  const { db } = getFirebaseAdmin();
 
   try {
     switch (event.type) {
@@ -212,8 +132,8 @@ export async function POST(req: Request) {
         const md = sub.metadata ?? {};
 
         // Pull email from the Stripe Customer object — Stripe Checkout
-        // collected it, we didn't pre-provide it. Customer email is
-        // authoritative for creating / finding the Firebase user.
+        // collected it, we didn't pre-provide it. The success page reads
+        // this to pre-fill the email input on the sign-in step.
         let customerEmail: string | null = md.email || null;
         try {
           const customerId =
@@ -232,59 +152,6 @@ export async function POST(req: Request) {
           );
         }
 
-        if (!customerEmail) {
-          console.error(
-            "[stripe/trial-subscription/webhook] subscription.created: no email on customer or metadata",
-            sub.id,
-          );
-          // Ack so Stripe stops retrying — this is a permanent error
-          // (Stripe subscription with no email is a config problem).
-          break;
-        }
-
-        // Create or reuse the Firebase user off the customer email. This
-        // is now the FIRST time this uid exists — pre-checkout API doesn't
-        // touch Firebase Auth anymore (moved from client-required-email to
-        // Stripe-Checkout-captured-email).
-        let uid: string;
-        try {
-          const existing = await auth.getUserByEmail(customerEmail);
-          uid = existing.uid;
-        } catch (err) {
-          const code = (err as { code?: string })?.code;
-          if (code === "auth/user-not-found") {
-            const created = await auth.createUser({
-              email: customerEmail,
-              emailVerified: false,
-              disabled: false,
-            });
-            uid = created.uid;
-          } else {
-            throw err;
-          }
-        }
-
-        // Backfill the uid onto the Stripe customer so RC + future
-        // webhooks can resolve the Firebase UID from Stripe.
-        try {
-          const customerId =
-            typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
-          if (customerId) {
-            await stripe.customers.update(customerId, {
-              metadata: { app_user_id: uid, uid, email: customerEmail },
-            });
-          }
-          // Also backfill on the subscription itself for downstream lookups.
-          await stripe.subscriptions.update(sub.id, {
-            metadata: { ...md, uid, email: customerEmail },
-          });
-        } catch (e) {
-          console.error(
-            "[stripe/trial-subscription/webhook] Stripe metadata backfill failed (non-fatal):",
-            e,
-          );
-        }
-
         // Timezone — fall back to Asia/Kolkata + IST offset to match the
         // funnel/save-profile behaviour when the client didn't send one.
         const timezone =
@@ -294,169 +161,53 @@ export async function POST(req: Request) {
         const timezoneOffsetInMins = md.timezone_offset_mins
           ? Number.parseInt(md.timezone_offset_mins, 10) || 330
           : 330;
-
         const trialDays = md.trial_days
           ? Number.parseInt(md.trial_days, 10) || 0
           : 0;
 
-        // Read existing user doc — gates first-write-only fields
-        // (created_at, first_paid_at, start_date, trial_started_at,
-        // signup_source) so a webhook retry doesn't overwrite cohort data.
-        const userRef = db.collection("Users").doc(uid);
-        const snap = await userRef.get();
-        const existing = snap.exists ? snap.data() ?? {} : {};
-
-        const update: Record<string, unknown> = {
-          // Paid FreeV2 state — exact mirror of save-profile. The
-          // discriminator that flags "this user is paid" for the mobile
-          // splash is `extra_user_tags: ["paidStoppage"]`, NOT user_type
-          // or treatment_stage.
-          user_type: "freev2",
-          treatment_stage: "FREE_STOPPAGE",
-          extra_user_tags: ["paidStoppage"],
-          eligible_for_special_regrowth_features: true,
-
-          // Onboarding-complete flags — makes splash skip the app's
-          // gender / starter-photos / paywall screens and route direct
-          // to dashboard.
-          starter_photos_submit_showed_once: true,
-          starter_photos_submit_submitted_once: true,
-
-          userLocalTimeZone: timezone,
-          onboarding_flow_version: "B",
-          is_deleted: false,
-
-          email: customerEmail ?? null,
-          providerId: md.providerId ?? null,
-
-          payment_provider: "stripe",
-          lead_status: "converted",
-
-          // paid_at = "most recent paid touch" (kept for backward compat).
-          paid_at: FieldValue.serverTimestamp(),
-          modified_at: FieldValue.serverTimestamp(),
-        };
-
-        // wp_user nested object — LoginBloc queries wp_user.user_email,
-        // WPUserItem.fromJson reads ID (uppercase), user_email,
-        // display_name, purchase_types.
-        const displayName = md.first_name || "";
-        update.wp_user = {
-          ID: uid,
-          user_email: customerEmail ?? "",
-          display_name: displayName,
-          purchase_types: [],
-        };
-
-        // Quiz answers written under the app's field names so mobile
-        // doesn't re-ask on splash.
-        if (md.gender) update.selected_gender = md.gender;
-        if (md.hair_loss_location) update.hair_loss_location = md.hair_loss_location;
-        if (md.hair_goal) update.hair_goal = md.hair_goal;
-        if (md.commitment_answer) update.commitment_answer = md.commitment_answer;
-        if (md.support_needs) {
-          // support_needs came through metadata as a comma-separated
-          // string (Stripe metadata values are strings). Split back to
-          // an array so the app's UserModel parser is happy.
-          update.support_needs = md.support_needs
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean);
-        }
-
-        if (md.plan_key) update.plan = md.plan_key;
-        if (md.signup_source && !existing.signup_source) {
-          update.signup_source = md.signup_source;
-        }
-        if (md.referral_source && !existing.referral_source) {
-          update.referral_source = md.referral_source;
-        }
-
-        // Immutable first-time fields — set ONCE per uid.
-        if (!existing.created_at) {
-          update.created_at = FieldValue.serverTimestamp();
-        }
-        if (!existing.first_paid_at) {
-          update.first_paid_at = FieldValue.serverTimestamp();
-        }
-        if (!existing.start_date) {
-          update.start_date = buildStartDate(
-            new Date(),
-            timezone,
-            timezoneOffsetInMins,
-          );
-        }
-
-        // Trial tagging — drives the trial-end reminder email.
-        if (trialDays > 0) {
-          if (!existing.trial_started_at) {
-            update.trial_started_at = FieldValue.serverTimestamp();
-          }
-          update.trial_ends_at = new Date(
-            Date.now() + trialDays * 24 * 60 * 60 * 1000,
-          );
-          update.trial_status = "active";
-        }
-
-        await userRef.set(update, { merge: true });
-
-        // Grant the RC promotional entitlement so the mobile app sees the
-        // user as paid the moment they land on the dashboard after the
-        // deep-link handoff. Non-blocking — RC failures must NOT stop the
-        // custom-token mint below.
-        await grantRcEntitlement(uid, sub);
-
-        // Mint a Firebase custom token for the deep-link handoff. The
-        // mobile /app/claim page redeems this with signInWithCustomToken
-        // so the user lands on their onboarded dashboard without a
-        // manual login. Firebase enforces a 1-hour TTL on custom tokens
-        // — the success page must open the deep link promptly.
-        //
-        // { source: "web_paid" } is stamped into the resulting ID
-        // token's claims so the app can distinguish deep-link
-        // logins from organic auth.
-        let customToken: string;
-        try {
-          customToken = await auth.createCustomToken(uid, {
-            source: "web_paid",
-          });
-        } catch (err) {
-          // If token minting fails (usually because the service account
-          // lacks the "Service Account Token Creator" role), return 500
-          // so Stripe retries — user has already paid, we must not drop
-          // this event silently.
-          console.error(
-            "[stripe/trial-subscription/webhook] createCustomToken failed:",
-            err,
-          );
-          return NextResponse.json(
-            { ok: false, error: "custom_token_mint_failed" },
-            { status: 500 },
-          );
-        }
-
-        // Stash the token in PendingClaims/<sessionId>. Success page
-        // reads by Stripe checkout session ID (which is what its URL
-        // carries). Fall back to subscription.id if this sub didn't
-        // come from Checkout (e.g. Payment Element flow, in which case
-        // the client passes subscription.id explicitly).
+        // Write PaidWebSessions/<checkoutSessionId>. The success page
+        // reads by Stripe Checkout session ID (which is what its URL
+        // carries). Fall back to subscription.id if this sub didn't come
+        // from Checkout (e.g. Payment Element flow).
         const checkoutSessionId = await findCheckoutSessionId(sub.id);
-        const claimKey = checkoutSessionId ?? sub.id;
-        const expiresAt = Timestamp.fromMillis(
-          Date.now() + CUSTOM_TOKEN_TTL_SECONDS * 1000,
-        );
+        const sessionKey = checkoutSessionId ?? sub.id;
 
-        // Never log the token — treat like a bearer credential.
-        await db.collection("PendingClaims").doc(claimKey).set(
+        const customerId =
+          typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
+
+        // Copy the metadata bag that /api/attach-identity uses to seed the
+        // Users doc post-sign-in. Only forward strings we actually need.
+        const forwardMd: Record<string, string> = {};
+        for (const k of [
+          "first_name",
+          "gender",
+          "hair_loss_location",
+          "hair_goal",
+          "commitment_answer",
+          "support_needs",
+          "signup_source",
+          "referral_source",
+          "providerId",
+        ] as const) {
+          const v = md[k];
+          if (typeof v === "string" && v) forwardMd[k] = v;
+        }
+
+        await db.collection("PaidWebSessions").doc(sessionKey).set(
           {
-            uid,
-            custom_token: customToken,
-            expires_at: expiresAt,
+            email: customerEmail ?? null,
             subscription_id: sub.id,
-            checkout_session_id: checkoutSessionId,
+            stripe_customer_id: customerId ?? null,
+            plan: md.plan_key ?? null,
+            trial_days: trialDays,
+            timezone,
+            timezone_offset_mins: timezoneOffsetInMins,
+            metadata: forwardMd,
+            claimed_by_uid: null,
+            claimed_at: null,
             created_at: FieldValue.serverTimestamp(),
           },
-          { merge: false },
+          { merge: true },
         );
 
         break;
@@ -472,8 +223,16 @@ export async function POST(req: Request) {
         if (!subscriptionId) break;
 
         const sub = await stripe.subscriptions.retrieve(subscriptionId);
-        const uid = sub.metadata?.uid;
-        if (!uid) break;
+        const uid = await resolveUidForSubscription(db, sub);
+        if (!uid) {
+          // User hasn't signed in / attached their identity yet. Skip —
+          // they'll pick up the active status via the normal RC path when
+          // they eventually sign in.
+          console.warn(
+            `[stripe/trial-subscription/webhook] invoice.paid: no uid resolved for sub ${sub.id}`,
+          );
+          break;
+        }
 
         const isTrialInvoice = invoice.billing_reason === "subscription_create"
           && invoice.amount_paid === 0;
@@ -507,8 +266,13 @@ export async function POST(req: Request) {
           sub.cancel_at_period_end === true;
         if (!isCancelled) break;
 
-        const uid = sub.metadata?.uid;
-        if (!uid) break;
+        const uid = await resolveUidForSubscription(db, sub);
+        if (!uid) {
+          console.warn(
+            `[stripe/trial-subscription/webhook] cancel event: no uid resolved for sub ${sub.id}`,
+          );
+          break;
+        }
 
         await db.collection("Users").doc(uid).set(
           {
