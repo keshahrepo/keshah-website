@@ -122,6 +122,13 @@ export async function POST(req: Request) {
       metadata: {
         source: "web_onboarding_paywall",
       },
+      // Reassurance right above the Subscribe button — the moment of
+      // decision. Mirrors what's under the CTA on our trial paywall.
+      custom_text: {
+        submit: {
+          message: "No payment today. Cancel easily in app anytime.",
+        },
+      },
       success_url: SUCCESS_URL,
       cancel_url: CANCEL_URL,
       // Wallets (Apple Pay / Google Pay / Link) come on by default in

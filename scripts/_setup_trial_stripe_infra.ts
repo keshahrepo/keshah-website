@@ -46,8 +46,7 @@ async function ensureProduct(): Promise<Stripe.Product> {
   }
   const p = await stripe.products.create({
     name: PRODUCT_NAME,
-    description:
-      "$33/month • 3-month commitment • billed as $99 every 3 months • 7-day free trial",
+    description: "No payment today. Cancel easily in app anytime.",
     metadata: { source: "web_trial_paywall", trial_days: "7" },
   });
   console.log(`▸ Product created: ${p.id}`);
