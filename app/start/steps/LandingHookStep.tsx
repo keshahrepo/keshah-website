@@ -111,30 +111,24 @@ export default function LandingHookStep() {
           ))}
         </motion.div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {[
-            "I used to be scared to run my hands through my hair because I thought more would fall out.",
-            "Now I can pull on my hair with all my force and it doesn’t go anywhere :)",
-            "I learnt it was a ‘tight-scalp’ problem. Let me show you…",
-          ].map((line, i) => (
-            <motion.p
-              key={i}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 + i * 0.12, duration: 0.5, ease: [0, 0, 0.2, 1] }}
-              style={{
-                fontFamily: "Poppins, sans-serif",
-                fontSize: 15,
-                fontWeight: 500,
-                lineHeight: 1.5,
-                color: "#fff",
-                margin: 0,
-              }}
-            >
-              {line}
-            </motion.p>
-          ))}
-        </div>
+        <motion.p
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5, duration: 0.5, ease: [0, 0, 0.2, 1] }}
+          style={{
+            fontFamily: "Poppins, sans-serif",
+            fontSize: 15,
+            fontWeight: 500,
+            lineHeight: 1.5,
+            color: "#fff",
+            fontStyle: "italic",
+            margin: 0,
+          }}
+        >
+          Turns out it wasn’t about buying another product. It was a{" "}
+          <span style={{ fontWeight: 700 }}>‘tight-scalp’</span> problem. Let me
+          show you…
+        </motion.p>
       </div>
 
       <motion.div
