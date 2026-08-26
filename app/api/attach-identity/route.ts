@@ -249,10 +249,19 @@ export async function POST(req: Request) {
       : -240;
   const trialDays =
     typeof session.trial_days === "number" ? (session.trial_days as number) : 0;
-  const customerEmail =
-    (session.email as string | undefined) ??
-    body.email ??
-    null;
+  // Stripe collected an email at checkout (customerEmail below). But the
+  // Firebase Auth email — which is what Apple returns when the user picks
+  // "Hide My Email" — is what the mobile app's login flow queries on
+  // (auth_repo.dart:240 does Users.where("email", "==", firebaseUser.email)).
+  // If we save the Stripe email here, mobile Apple sign-in fails with
+  // "User not found" for anyone who picked Hide My Email.
+  //
+  // Fix: prefer the Firebase Auth email (body.email) as the canonical
+  // `email` on the Users doc so mobile lookup always matches. Preserve
+  // the Stripe email separately for CS/support use.
+  const firebaseEmail = body.email ?? null;
+  const stripeEmail = (session.email as string | undefined) ?? null;
+  const customerEmail = firebaseEmail ?? stripeEmail;
 
   const userRef = db.collection("Users").doc(firebaseUid);
   const existingSnap = await userRef.get();
@@ -272,6 +281,7 @@ export async function POST(req: Request) {
     is_deleted: false,
 
     email: customerEmail ?? null,
+    stripe_email: stripeEmail,
     providerId: body.provider_id ?? md.providerId ?? null,
 
     payment_provider: "stripe",
