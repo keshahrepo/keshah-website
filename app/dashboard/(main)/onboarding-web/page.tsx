@@ -512,10 +512,6 @@ export default async function QuizResponsesPage({
     data.payment_provider === "stripe" ||
     data.signup_source === "web_onboarding";
 
-  // For the Landing → Trial conversion metric — count web users who
-  // reached trial_started state (either flag).
-  let webTrialStartedCount = 0;
-
   // Funnel counts respect the gender filter (only in-scope users) AND
   // only count users on the +162 build. Baseline = users who wrote
   // founder_story_started_at (the first new-build write in the flow).
@@ -530,8 +526,6 @@ export default async function QuizResponsesPage({
     if (isTestEmail(data.email)) continue;
     if (!isWebUser(data)) continue;
     totalUsers++;
-
-    if (data.trial_started_at || data.started_trial) webTrialStartedCount++;
 
     const docGender = data.selected_gender as string | undefined;
     if (docGender === "male") genderMaleCount++;
@@ -661,35 +655,6 @@ export default async function QuizResponsesPage({
   const scopeLabel =
     gender === "male" ? "Men only" : gender === "female" ? "Women only" : "All users";
 
-  // Landing → Trial conversion metric — read from FunnelEvents. Every
-  // /start session emits a `landingHook` event with source="us". Count
-  // unique sessions to get the top-of-funnel denominator; the numerator
-  // is the web users who reached trial_started state (computed above).
-  //
-  // Scoped to the same RELEASE_CUTOFF as the Users query so the two
-  // numbers cover the same period.
-  let landingSessions = 0;
-  try {
-    const landingSnap = await db
-      .collection("FunnelEvents")
-      .where("step", "==", "landingHook")
-      .where("firstAt", ">=", Timestamp.fromDate(RELEASE_CUTOFF))
-      .select()
-      .get();
-    landingSessions = landingSnap.size;
-  } catch (err) {
-    // FunnelEvents may not have a composite index yet — fall back to
-    // counting all recent landing events without the date filter. Still
-    // more accurate than showing nothing.
-    console.error("[onboarding-web] landing count failed:", err);
-    landingSessions = 0;
-  }
-
-  const conversionPct =
-    landingSessions > 0
-      ? ((webTrialStartedCount / landingSessions) * 100).toFixed(1)
-      : "—";
-
   return (
     <div>
       <header style={{ marginBottom: 20 }}>
@@ -708,12 +673,6 @@ export default async function QuizResponsesPage({
           option shows All → Started with the delta.
         </p>
       </header>
-
-      <LandingMetric
-        landingSessions={landingSessions}
-        trialStarters={webTrialStartedCount}
-        pct={conversionPct}
-      />
 
       <GenderTabs
         selected={gender}
@@ -1452,99 +1411,3 @@ function DeltaChip({
 }
 
 
-// ─── Landing → Trial metric card (web only) ─────────────────────────────
-// Landing sessions come from FunnelEvents `landingHook` events; trial
-// starters are web users on the Users doc.
-function LandingMetric({
-  landingSessions,
-  trialStarters,
-  pct,
-}: {
-  landingSessions: number;
-  trialStarters: number;
-  pct: string;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        gap: 12,
-        marginBottom: 20,
-        flexWrap: "wrap",
-      }}
-    >
-      <MetricTile
-        label="Landed on /start"
-        value={landingSessions.toLocaleString()}
-        hint="unique sessions viewing landingHook (all sources)"
-      />
-      <MetricTile
-        label="Started trial"
-        value={trialStarters.toLocaleString()}
-        hint="web users who reached trial_started_at OR started_trial"
-      />
-      <MetricTile
-        label="Landing → Trial"
-        value={pct === "—" ? "—" : `${pct}%`}
-        hint="trial starters ÷ landing sessions"
-        accent="#8affc1"
-      />
-    </div>
-  );
-}
-
-function MetricTile({
-  label,
-  value,
-  hint,
-  accent,
-}: {
-  label: string;
-  value: string;
-  hint: string;
-  accent?: string;
-}) {
-  return (
-    <div
-      style={{
-        background: "#141414",
-        borderRadius: 12,
-        padding: "14px 16px",
-        flex: "1 1 200px",
-        minWidth: 200,
-      }}
-    >
-      <div
-        style={{
-          fontSize: 11,
-          fontWeight: 600,
-          letterSpacing: 1.2,
-          color: "rgba(255,255,255,0.4)",
-          textTransform: "uppercase",
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          fontSize: 26,
-          fontWeight: 700,
-          color: accent ?? "#fff",
-          marginTop: 6,
-          fontVariantNumeric: "tabular-nums",
-        }}
-      >
-        {value}
-      </div>
-      <div
-        style={{
-          fontSize: 11,
-          color: "rgba(255,255,255,0.4)",
-          marginTop: 4,
-        }}
-      >
-        {hint}
-      </div>
-    </div>
-  );
-}
