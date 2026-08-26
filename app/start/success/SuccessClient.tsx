@@ -225,15 +225,23 @@ function SignInStep({
   // sign-in sheet directly on our keshah.com page. No Firebase OAuth
   // handler URL flashing, no "CONTINUE TO THE APP" fallback button.
   // On iOS Safari the OS-level Apple sheet appears at the bottom.
+  // Show overlay on pointerdown (before click) so it paints in the gap
+  // between finger-down and finger-up. If we wait for onClick, Safari
+  // blocks the main thread opening the OAuth popup before any paint
+  // happens and the overlay never appears until AFTER the popup is up.
+  const preShow = (key: "google" | "apple") => () => {
+    if (disabled) return;
+    showSignInOverlay(key === "apple" ? "Apple" : "Google");
+  };
+
   const startNative = (
     key: "google" | "apple",
     fn: () => Promise<SignInResult>,
   ) => async () => {
     if (disabled) return;
-    // Show a full-page overlay via DIRECT DOM manipulation — React's
-    // flushSync doesn't force Safari to paint before AppleID.auth.signIn()
-    // blocks the main thread opening the popup. Vanilla JS + inline
-    // styles paint on the next browser event, before the popup blocks.
+    // Overlay was already shown by preShow on pointerdown; just make sure
+    // it's up in case the pointerdown handler was skipped (e.g. keyboard
+    // activation).
     showSignInOverlay(key === "apple" ? "Apple" : "Google");
     flushSync(() => setProviderBusy(key));
     try {
@@ -307,6 +315,7 @@ function SignInStep({
               icon={<GoogleIcon />}
               busy={providerBusy === "google"}
               disabled={disabled}
+              onPointerDown={preShow("google")}
               onClick={startNative("google", signInWithGoogleNative)}
             />
             <div style={{ height: 12 }} />
@@ -316,6 +325,7 @@ function SignInStep({
               icon={<AppleIcon />}
               busy={providerBusy === "apple"}
               disabled={disabled}
+              onPointerDown={preShow("apple")}
               onClick={startNative("apple", signInWithAppleNative)}
             />
             <div style={{ height: 12 }} />
@@ -376,6 +386,7 @@ function ProviderButton({
   busy,
   disabled,
   onClick,
+  onPointerDown,
 }: {
   label: string;
   filled: boolean;
@@ -383,6 +394,7 @@ function ProviderButton({
   busy: boolean;
   disabled: boolean;
   onClick: () => void;
+  onPointerDown?: () => void;
 }) {
   const bg = filled ? "#fff" : "transparent";
   const color = filled ? "#000" : "#fff";
@@ -407,6 +419,7 @@ function ProviderButton({
       <button
         type="button"
         onClick={onClick}
+        onPointerDown={onPointerDown}
         disabled={disabled}
         className="keshah-provider-btn"
         style={{
