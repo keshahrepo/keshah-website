@@ -215,14 +215,29 @@ function SignInStep({
       onSignedIn(result);
     } catch (err) {
       console.error(`[SuccessClient] ${key} native sign-in failed:`, err);
-      const msg = (err as Error)?.message ?? "";
+      const rawErr = err as {
+        message?: string;
+        error?: string;
+        code?: string;
+      };
+      const msg = rawErr?.message ?? rawErr?.error ?? "";
       // User closed the Apple sheet / Google prompt — silent.
-      if (msg.includes("popup_closed") || msg.includes("cancelled") || msg.includes("suppressed")) {
+      if (
+        msg.includes("popup_closed") ||
+        msg.includes("cancelled") ||
+        msg.includes("user_cancelled") ||
+        msg.includes("suppressed") ||
+        rawErr?.error === "popup_closed_by_user" ||
+        rawErr?.error === "user_cancelled_authorize"
+      ) {
         setProviderBusy(null);
         return;
       }
+      // TEMPORARY: surface the real error so we can debug from a phone
+      // where the JS console isn't easily accessible.
+      const debug = JSON.stringify(rawErr, Object.getOwnPropertyNames(rawErr));
       alert(
-        "Sign-in couldn't complete. Please try another method — your subscription is safe.",
+        `[${key}] sign-in error: ${msg || "(no message)"}\n\nfull: ${debug.slice(0, 500)}`,
       );
       setProviderBusy(null);
     }
