@@ -320,12 +320,10 @@ async function waitForGlobal<T>(
 }
 
 /** Generate a cryptographic nonce for Apple ID token binding. Apple
- * requires a nonce that's included in the ID token so we can verify
- * the token was issued for this specific sign-in attempt (blocks replay).
- * We pass the raw nonce (not hashed) — Apple accepts either and Firebase's
- * signInWithCredential is expecting the raw form. Skipping the hash lets
- * us stay synchronous inside the user-tap handler (mobile Safari blocks
- * popups if there's any async work between the tap and window.open). */
+ * embeds this in the returned ID token's `nonce` claim so Firebase can
+ * verify the token was issued for this specific sign-in attempt (replay
+ * protection). Firebase expects `token.nonce === SHA256(rawNonce)` — so
+ * we send the hash to Apple and the raw to Firebase. */
 function generateNonce(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
@@ -334,24 +332,58 @@ function generateNonce(): string {
     .join("");
 }
 
+async function sha256Hex(input: string): Promise<string> {
+  const buf = new TextEncoder().encode(input);
+  const digest = await crypto.subtle.digest("SHA-256", buf);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+interface NoncePair {
+  raw: string;
+  hashed: string;
+}
+
+// Pre-computed on mount + regenerated after each sign-in attempt so the
+// tap handler can pass the hashed nonce to Apple SYNCHRONOUSLY (mobile
+// Safari blocks popups if we await sha256Hex inside the click handler).
+let noncePair: NoncePair | null = null;
+let noncePairPromise: Promise<NoncePair> | null = null;
+
+async function refreshNoncePair(): Promise<NoncePair> {
+  const raw = generateNonce();
+  const hashed = await sha256Hex(raw);
+  noncePair = { raw, hashed };
+  return noncePair;
+}
+
 // Track init once per page so we don't re-init on every sign-in call.
 let appleInitialized = false;
 
-/** Initialize the Apple SDK. Safe to call multiple times. Should be called
- * on page mount (via useEffect) so that when the user taps Continue with
- * Apple, AppleID.auth.signIn() runs synchronously and mobile Safari treats
- * it as a direct user gesture — required to open the sign-in popup. */
+/** Initialize the Apple SDK + pre-compute a nonce pair. Safe to call
+ * multiple times. MUST be called on page mount (via useEffect) so that
+ * when the user taps Continue with Apple:
+ *   - AppleID.auth.signIn() runs synchronously (popup allowed by iOS
+ *     Safari as a direct user-gesture window.open)
+ *   - We already have the SHA256(rawNonce) ready to pass to Apple */
 export function initAppleSignIn(): void {
   if (typeof window === "undefined") return;
-  if (appleInitialized) return;
   if (!window.AppleID) return; // SDK still loading; caller will retry
-  window.AppleID.auth.init({
-    clientId: APPLE_SERVICES_ID,
-    scope: "name email",
-    redirectURI: `${window.location.origin}/start/success`,
-    usePopup: true,
-  });
-  appleInitialized = true;
+  if (!appleInitialized) {
+    window.AppleID.auth.init({
+      clientId: APPLE_SERVICES_ID,
+      scope: "name email",
+      redirectURI: `${window.location.origin}/start/success`,
+      usePopup: true,
+    });
+    appleInitialized = true;
+  }
+  if (!noncePair && !noncePairPromise) {
+    noncePairPromise = refreshNoncePair().finally(() => {
+      noncePairPromise = null;
+    });
+  }
 }
 
 /** Native Sign in with Apple — no Firebase OAuth handler.
@@ -371,15 +403,27 @@ export function signInWithAppleNative(): Promise<SignInResult> {
   }
   if (!appleInitialized) initAppleSignIn();
 
-  // Generate + pass nonce SYNCHRONOUSLY. Firebase needs the same raw
-  // nonce string to verify the ID token's `nonce` claim, so we hold it
-  // in closure across the promise chain.
-  const rawNonce = generateNonce();
+  const pair = noncePair;
+  if (!pair) {
+    // Extremely unlikely (initAppleSignIn always kicks off a refresh) —
+    // but if it happens, kick a refresh so the next attempt works.
+    initAppleSignIn();
+    return Promise.reject(
+      new Error("Nonce not ready — please tap again"),
+    );
+  }
+
+  // Consume the pair — next attempt gets a fresh one, kicked off in
+  // background so it's ready by the time the user retries.
+  noncePair = null;
+  void refreshNoncePair();
 
   // signIn() opens the popup synchronously here; the returned promise
   // resolves when Apple posts back via postMessage from the popup.
+  // Send the HASHED nonce to Apple; Firebase compares token.nonce to
+  // SHA256(rawNonce) so the hash must be what Apple embeds in the token.
   const signInPromise = window.AppleID.auth.signIn({
-    nonce: rawNonce,
+    nonce: pair.hashed,
     usePopup: true,
   });
 
@@ -394,7 +438,7 @@ export function signInWithAppleNative(): Promise<SignInResult> {
 
     const credential = new OAuthProvider("apple.com").credential({
       idToken,
-      rawNonce,
+      rawNonce: pair.raw,
     });
     const cred = await signInWithCredential(ensureAuth(), credential);
 
