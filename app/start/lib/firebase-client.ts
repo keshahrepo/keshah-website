@@ -411,62 +411,24 @@ export function signInWithAppleNative(): Promise<SignInResult> {
   });
 }
 
-/** Native Sign in with Google — same pattern. Uses Google Identity
- * Services' ID token flow so we get a JWT back directly, no page
- * redirects. */
-export async function signInWithGoogleNative(): Promise<SignInResult> {
-  const google = await waitForGlobal(() => window.google);
-  const idToken = await new Promise<string>((resolve, reject) => {
-    let settled = false;
-    const timeout = window.setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      reject(new Error("Google sign-in prompt not displayed"));
-    }, 30000);
-
-    google.accounts.id.initialize({
-      client_id: GOOGLE_OAUTH_CLIENT_ID,
-      callback: (response) => {
-        if (settled) return;
-        settled = true;
-        window.clearTimeout(timeout);
-        if (response.credential) {
-          resolve(response.credential);
-        } else {
-          reject(new Error("Google sign-in returned no credential"));
-        }
-      },
-      // FedCM is Chrome's cookie-less identity API — enabled by default
-      // in Chrome 128+. Keeps the sheet working when third-party cookies
-      // are blocked.
-      use_fedcm_for_prompt: true,
-      auto_select: false,
-      cancel_on_tap_outside: false,
-    });
-
-    google.accounts.id.prompt((notification) => {
-      // If the One Tap prompt is suppressed (already dismissed recently,
-      // FedCM blocked, etc.) the callback above never fires. Reject so
-      // the caller can fall back.
-      if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-        if (settled) return;
-        settled = true;
-        window.clearTimeout(timeout);
-        reject(
-          new Error(
-            `Google prompt suppressed: ${notification.getNotDisplayedReason?.() ?? notification.getSkippedReason?.() ?? "unknown"}`,
-          ),
-        );
-      }
-    });
-  });
-
-  const credential = GoogleAuthProvider.credential(idToken);
-  const cred = await signInWithCredential(ensureAuth(), credential);
-  return {
+/** Sign in with Google — uses Firebase's signInWithPopup which opens
+ * accounts.google.com in a well-behaved popup. Google's OAuth popup is
+ * reliable on mobile Safari (unlike Apple's, which is why we bypass
+ * Firebase for Apple). Google Identity Services' One Tap only shows if
+ * the user is already signed into a Google account, so it's the wrong
+ * primitive for a button-click flow.
+ *
+ * MUST be called synchronously from the click handler so the popup opens
+ * with an active user gesture. */
+export function signInWithGoogleNative(): Promise<SignInResult> {
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
+  // signInWithPopup returns a promise; the popup opens synchronously
+  // inside this call, preserving the user gesture from the tap handler.
+  return signInWithPopup(ensureAuth(), provider).then((cred) => ({
     uid: cred.user.uid,
     email: cred.user.email,
     displayName: cred.user.displayName,
     providerId: "google.com",
-  };
+  }));
 }
