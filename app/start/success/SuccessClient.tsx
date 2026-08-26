@@ -799,8 +799,7 @@ function showSignInOverlay(providerLabel: string): void {
     "pointer-events: none",
   ].join("; ");
   overlay.innerHTML = `
-    <div style="width:36px;height:36px;border:3px solid rgba(255,255,255,0.25);border-top-color:#fff;border-radius:50%;animation:keshah-spin 700ms linear infinite;"></div>
-    <div style="opacity:0.85;letter-spacing:0.2px;">Opening ${providerLabel}…</div>
+    <div style="font-size:18px;font-weight:500;letter-spacing:-0.3px;">Opening ${providerLabel}…</div>
   `;
   document.body.appendChild(overlay);
   // Force reflow so the browser commits the initial opacity: 0 before
