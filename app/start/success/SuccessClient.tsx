@@ -106,9 +106,20 @@ export default function SuccessClient({
         // FunnelEvents timestamps (landingHook / founderStory / pinchTest
         // / resultScreenshots / trialPaywall) onto the Users doc — that
         // makes the mobile-style funnel drop-off panel work for web users.
+        // Read sessionStorage first, fall back to the 7-day cookie
+        // flow-context also writes (Stripe Checkout redirect can drop
+        // sessionStorage in some browsers).
+        const readCookie = (name: string): string | null => {
+          if (typeof document === "undefined") return null;
+          const m = document.cookie.match(
+            new RegExp("(?:^|; )" + name + "=([^;]*)"),
+          );
+          return m ? m[1] : null;
+        };
         const funnelSessionId =
           typeof window !== "undefined"
-            ? sessionStorage.getItem("keshah_funnel_session")
+            ? sessionStorage.getItem("keshah_funnel_session") ??
+              readCookie("keshah_funnel_session")
             : null;
         const res = await fetch("/api/attach-identity", {
           method: "POST",

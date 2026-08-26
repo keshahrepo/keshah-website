@@ -89,18 +89,25 @@ export async function POST(req: Request) {
     // Subscription metadata — attached to the subscription created inside
     // the Checkout Session so the webhook can seed the Firestore doc
     // without another network hop.
+    //
+    // IMPORTANT: /start's flow-context stores answers in camelCase
+    // (hairLossLocation, hairGoal, commitmentAnswer, firstName,
+    // phoneNumber, referralSource). Read those FIRST, then fall back to
+    // snake_case in case someone posts already-transformed answers.
     const gender = str(quiz.selected_gender || quiz.gender);
     const subscriptionMetadata: Record<string, string> = {
       plan_key: str(quiz.plan_key) || "stoppage_trial",
       product: "stoppage_subscription",
       source: "web_onboarding_paywall",
       gender,
-      hair_goal: str(quiz.hair_goal),
-      hair_loss_location: str(quiz.hair_loss_location),
-      commitment_answer: str(quiz.commitment_answer),
-      first_name: str(quiz.first_name),
-      phone_number: str(quiz.phone_number),
-      referral_source: str(quiz.referral_source),
+      hair_goal: str(quiz.hairGoal || quiz.hair_goal),
+      hair_loss_location: str(quiz.hairLossLocation || quiz.hair_loss_location),
+      commitment_answer: str(
+        quiz.commitmentAnswer || quiz.commitment_answer,
+      ),
+      first_name: str(quiz.firstName || quiz.first_name),
+      phone_number: str(quiz.phoneNumber || quiz.phone_number),
+      referral_source: str(quiz.referralSource || quiz.referral_source),
       signup_source: str(quiz.signup_source) || "web_onboarding",
       timezone: str(quiz.timezone),
       timezone_offset_mins: str(quiz.timezone_offset_mins),

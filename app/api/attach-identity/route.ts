@@ -344,23 +344,30 @@ export async function POST(req: Request) {
         .where("sessionId", "==", funnelSessionId)
         .select("step", "timestamp")
         .get();
+      let backfilled = 0;
       for (const doc of funnelSnap.docs) {
         const d = doc.data();
         const step = d.step as string | undefined;
         if (!step) continue;
         const field = FUNNEL_STEP_TO_USER_FIELD[step];
-        if (!field) continue; // ignore sub-steps + steps we don't map
-        // Only backfill if the Users doc doesn't already have it (a
-        // retry-safe idempotent write).
+        if (!field) continue;
         if (existing[field]) continue;
-        update[field] = d.timestamp; // Firestore Timestamp copies cleanly
+        update[field] = d.timestamp;
+        backfilled++;
       }
+      console.log(
+        `[attach-identity] funnel backfill sid=${funnelSessionId} events=${funnelSnap.size} backfilled=${backfilled}`,
+      );
     } catch (err) {
       console.error(
         "[attach-identity] FunnelEvents backfill failed (non-fatal):",
         err,
       );
     }
+  } else {
+    console.warn(
+      `[attach-identity] no funnel_session_id in body — skipping backfill for uid=${firebaseUid}`,
+    );
   }
 
   // Firestore User seed + Stripe metadata + RC receipt all happen in

@@ -104,6 +104,12 @@ export function FlowProvider({ children, stepOrder: stepOrderProp, storageKey }:
         sessionId = crypto.randomUUID();
         sessionStorage.setItem("keshah_funnel_session", sessionId);
       }
+      // Belt-and-suspenders: also stash in a 7-day cookie so the id
+      // survives cross-tab jumps (Stripe Checkout, in-app browsers) that
+      // may not carry sessionStorage. SuccessClient falls back to this
+      // cookie when sessionStorage is empty — critical for the
+      // FunnelEvents → Users backfill in /api/attach-identity.
+      document.cookie = `keshah_funnel_session=${sessionId}; path=/; max-age=604800; SameSite=Lax`;
       const source = (() => {
         if (typeof window === "undefined") return "us";
         const p = window.location.pathname;
