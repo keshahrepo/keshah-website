@@ -23,6 +23,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import {
   signInWithAppleNative,
   signInWithGoogleNative,
@@ -227,7 +228,10 @@ function SignInStep({
     fn: () => Promise<SignInResult>,
   ) => async () => {
     if (disabled) return;
-    setProviderBusy(key);
+    // flushSync forces React to commit the busy state to the DOM
+    // synchronously — otherwise Safari blocks the main thread when the
+    // Apple popup opens and the spinner doesn't render until 2s later.
+    flushSync(() => setProviderBusy(key));
     try {
       const result = await fn();
       // Native SDK completed synchronously — pass through to attach-identity
