@@ -298,47 +298,64 @@ export async function POST(req: Request) {
     update.trial_status = "active";
   }
 
-  await userRef.set(update, { merge: true });
-
-  // ─── Stamp uid on Stripe customer + subscription ───────────────────────
+  // Firestore User seed + Stripe metadata + RC receipt all happen in
+  // parallel — none of them depend on each other, and together they were
+  // adding ~5-8s of latency to the sign-in flow when run sequentially.
   const subscriptionId = session.subscription_id as string | undefined;
   const stripeCustomerId = session.stripe_customer_id as string | undefined;
-  try {
-    if (stripeCustomerId) {
-      await stripe.customers.update(stripeCustomerId, {
-        metadata: {
-          app_user_id: firebaseUid,
-          uid: firebaseUid,
-          email: customerEmail ?? "",
-        },
-      });
-    }
-    if (subscriptionId) {
-      const sub = await stripe.subscriptions.retrieve(subscriptionId);
-      await stripe.subscriptions.update(subscriptionId, {
-        metadata: {
-          ...(sub.metadata ?? {}),
-          uid: firebaseUid,
-          email: customerEmail ?? "",
-        },
-      });
-    }
-  } catch (e) {
-    console.error(
-      "[attach-identity] Stripe metadata backfill failed (non-fatal):",
-      e,
-    );
-  }
 
-  // ─── Grant RC entitlement ─────────────────────────────────────────────
-  let rcOk = false;
-  if (subscriptionId) {
-    const rc = await grantRcEntitlement(firebaseUid, subscriptionId);
-    rcOk = rc.ok;
-  }
+  const seedUserDoc = userRef.set(update, { merge: true });
+
+  const backfillStripeCustomer = stripeCustomerId
+    ? stripe.customers
+        .update(stripeCustomerId, {
+          metadata: {
+            app_user_id: firebaseUid,
+            uid: firebaseUid,
+            email: customerEmail ?? "",
+          },
+        })
+        .catch((e) => {
+          console.error(
+            "[attach-identity] Stripe customer.update failed (non-fatal):",
+            e,
+          );
+        })
+    : Promise.resolve();
+
+  const backfillStripeSubscription = subscriptionId
+    ? stripe.subscriptions
+        .update(subscriptionId, {
+          metadata: {
+            uid: firebaseUid,
+            email: customerEmail ?? "",
+          },
+        })
+        .catch((e) => {
+          console.error(
+            "[attach-identity] Stripe subscription.update failed (non-fatal):",
+            e,
+          );
+        })
+    : Promise.resolve();
+
+  const grantRc = subscriptionId
+    ? grantRcEntitlement(firebaseUid, subscriptionId)
+    : Promise.resolve({ ok: false });
+
+  const [, , , rc] = await Promise.all([
+    seedUserDoc,
+    backfillStripeCustomer,
+    backfillStripeSubscription,
+    grantRc,
+  ]);
+  const rcOk = rc && "ok" in rc ? rc.ok : false;
 
   // ─── Mark session claimed ─────────────────────────────────────────────
-  await sessionRef.set(
+  // Fire-and-forget — the client only needs { ok: true }; the claimed
+  // stamp is bookkeeping. Awaiting this was adding ~200ms of latency
+  // to the visible sign-in flow for no user benefit.
+  void sessionRef.set(
     {
       claimed_by_uid: firebaseUid,
       claimed_at: FieldValue.serverTimestamp(),

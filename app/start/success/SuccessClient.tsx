@@ -92,6 +92,10 @@ export default function SuccessClient({
     async (result: SignInResult) => {
       setStage("attaching");
       setAttachError(null);
+      // Update the overlay from "Opening Apple…" → "Setting up your
+      // account…" so users know the ~2-5s server round-trip is expected
+      // (not a hung sign-in).
+      updateSignInOverlay("Setting up your account…");
       try {
         const idToken = await getIdToken();
         const headers: Record<string, string> = {
@@ -814,4 +818,16 @@ function hideSignInOverlay(): void {
   if (!overlay) return;
   overlay.style.opacity = "0";
   window.setTimeout(() => overlay.remove(), 200);
+}
+
+/** Change the copy inside the existing overlay without dismount/remount.
+ * Used when we transition from "Opening Apple…" (popup phase) to
+ * "Setting up your account…" (attach-identity POST phase). */
+function updateSignInOverlay(text: string): void {
+  if (typeof document === "undefined") return;
+  const overlay = document.getElementById(OVERLAY_ID);
+  if (!overlay) return;
+  overlay.innerHTML = `
+    <div style="font-size:18px;font-weight:500;letter-spacing:-0.3px;">${text}</div>
+  `;
 }
