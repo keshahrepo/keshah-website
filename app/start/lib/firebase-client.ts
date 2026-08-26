@@ -18,6 +18,8 @@ import {
   GoogleAuthProvider,
   OAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signInAnonymously,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -110,6 +112,37 @@ export async function signInWithApple(): Promise<SignInResult> {
   provider.addScope("name");
   const cred = await signInWithPopup(ensureAuth(), provider);
   return toResult(cred.user, "apple.com");
+}
+
+/** Redirect-based sign-in for mobile browsers + in-app browsers where
+ *  signInWithPopup silently fails or opens a broken Firebase handler
+ *  page. Navigates the WHOLE page to the provider (Apple/Google) and
+ *  returns via a full-page redirect back to the caller's URL. The caller
+ *  must invoke completeRedirectSignIn() on mount to pick up the result. */
+export async function redirectToGoogle(): Promise<void> {
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
+  await signInWithRedirect(ensureAuth(), provider);
+}
+
+export async function redirectToApple(): Promise<void> {
+  const provider = new OAuthProvider("apple.com");
+  provider.addScope("email");
+  provider.addScope("name");
+  await signInWithRedirect(ensureAuth(), provider);
+}
+
+/** Called on mount by pages that use the redirect flow. Returns the
+ *  SignInResult once, or null if no redirect result is pending. */
+export async function completeRedirectSignIn(): Promise<SignInResult | null> {
+  const result = await getRedirectResult(ensureAuth());
+  if (!result) return null;
+  // Firebase's OAuthCredential doesn't expose providerId reliably from
+  // getRedirectResult, so derive it from the user's providerData.
+  const providerId =
+    (result.user.providerData[0]?.providerId as SignInResult["providerId"]) ??
+    "password";
+  return toResult(result.user, providerId);
 }
 
 export async function signUpWithEmail(email: string, password: string): Promise<SignInResult> {

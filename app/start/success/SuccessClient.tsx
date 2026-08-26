@@ -4,12 +4,15 @@
  * SuccessClient — post-Stripe-checkout landing page.
  *
  * Two-step flow after payment succeeds:
- *   1. Sign-in step — matches the mobile app's minimal auth screen
- *      (KESHAH logo + Continue-with Google/Apple/Email). The Firebase UID
- *      captured here is the SAME UID the mobile app will produce when the
- *      user signs in with the same provider, so RevenueCat entitlements
- *      tied to it follow the user into the app.
- *   2. Install step — App Store / Play Store CTAs.
+ *   1. Sign-in step — "Almost there. Sign in to open KESHAH on your phone."
+ *      typography ported from MomentFounderFlashback ("One last thing…").
+ *      Three provider buttons (Google/Apple/Email); Google + Apple use
+ *      signInWithRedirect (popups die in iOS Safari + IG/TikTok in-app
+ *      browsers). The Firebase UID captured here is the SAME UID the
+ *      mobile app will produce when the user signs in with the same
+ *      provider, so RevenueCat entitlements follow the user into the app.
+ *   2. Install step — same voice as sign-in ("You're in. Now download
+ *      KESHAH to start your first session.") + App Store / Play Store CTAs.
  *
  * The webhook wrote PaidWebSessions/<sessionId>. We poll for it (~60s cap)
  * to handle the race where the browser redirects here before the webhook
@@ -21,8 +24,9 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  signInWithApple,
-  signInWithGoogle,
+  redirectToApple,
+  redirectToGoogle,
+  completeRedirectSignIn,
   signUpWithEmail,
   signInWithEmail,
   getIdToken,
@@ -59,6 +63,7 @@ export default function SuccessClient({
   const [stage, setStage] = useState<Stage>("signIn");
   const [attachError, setAttachError] = useState<string | null>(null);
   const [signedInEmail, setSignedInEmail] = useState<string | null>(null);
+  const redirectHandledRef = useRef(false);
 
   // Poll until the webhook writes PaidWebSessions/<sessionId>. Once
   // initialSession is non-null this effect no-ops.
@@ -119,6 +124,30 @@ export default function SuccessClient({
     [sessionId],
   );
 
+  // Pick up the redirect result from signInWithRedirect. Fires once on
+  // mount after the user returns from Apple/Google. Guarded by ref so it
+  // never re-runs (React StrictMode + PaidWebSession polling both cause
+  // re-renders — we don't want a second attach-identity POST).
+  useEffect(() => {
+    if (redirectHandledRef.current) return;
+    if (!initialSession) return; // wait for webhook first
+    redirectHandledRef.current = true;
+    (async () => {
+      try {
+        const result = await completeRedirectSignIn();
+        if (result) {
+          setStage("attaching");
+          await handleSignedIn(result);
+        }
+      } catch (err) {
+        console.error("[SuccessClient] redirect result failed:", err);
+        setAttachError(
+          "Sign-in didn't complete. Please try again — your subscription is safe.",
+        );
+      }
+    })();
+  }, [initialSession, handleSignedIn]);
+
   if (!initialSession) {
     return (
       <PendingState
@@ -143,8 +172,9 @@ export default function SuccessClient({
 }
 
 // ─── Sign-in step ───────────────────────────────────────────────────────────
-// Mirrors mobile app's login_onboarding_content.dart:
-//   - KESHAH logo (large, white)
+// Copy-driven layout — mirrors MomentFounderFlashback voice + typography:
+//   - "Almost there. Sign in to open KESHAH on your phone." — Poppins
+//     28px/600, letter-spacing -1.0, line-height 1.32, left-aligned
 //   - Continue with Google (white filled)
 //   - Continue with Apple (white filled)
 //   - Continue with email (white outlined)
@@ -168,74 +198,37 @@ function SignInStep({
 
   const disabled = busy || providerBusy !== null;
 
-  const wrap = (
-    key: "google" | "apple" | "email",
-    fn: () => Promise<SignInResult>,
+  // Redirect flow — navigates the whole page to the provider. The user
+  // returns to /start/success post-auth; SuccessClient's redirect-pickup
+  // effect calls attach-identity from there. We don't set state after
+  // calling redirectTo* — the browser navigates away before any
+  // subsequent code runs.
+  const startRedirect = (
+    key: "google" | "apple",
+    fn: () => Promise<void>,
   ) => async () => {
     if (disabled) return;
     setProviderBusy(key);
     try {
-      const result = await fn();
-      onSignedIn(result);
+      await fn();
+      // Unreachable — page navigates on success.
     } catch (err) {
-      const code = (err as { code?: string })?.code;
-      console.error(`[SuccessClient] ${key} sign-in failed:`, err);
-      if (code !== "auth/popup-closed-by-user" && code !== "auth/cancelled-popup-request") {
-        alert(
-          "Sign-in failed. Please try another method — your subscription is safe.",
-        );
-      }
+      console.error(`[SuccessClient] ${key} redirect failed:`, err);
+      alert(
+        "Sign-in couldn't start. Please try another method — your subscription is safe.",
+      );
       setProviderBusy(null);
     }
   };
 
   return (
     <main style={pageStyle}>
-      <div style={{ width: "100%", maxWidth: 380, textAlign: "center" }}>
-        <p
-          style={{
-            color: "#4CAF50",
-            fontSize: 14,
-            fontWeight: 600,
-            margin: "0 0 20px",
-            letterSpacing: 0.2,
-          }}
-        >
-          ✓ You&apos;re in
-        </p>
-
-        <h1
-          style={{
-            fontSize: 22,
-            fontWeight: 600,
-            letterSpacing: -0.3,
-            lineHeight: 1.3,
-            margin: "0 0 8px",
-            color: "#fff",
-          }}
-        >
-          Save your access to open on your phone
+      <div style={{ width: "100%", maxWidth: 560 }}>
+        <h1 style={headlineStyle}>
+          Almost there. Sign in to open KESHAH on your phone.
         </h1>
-        {email ? (
-          <p
-            style={{
-              color: "rgba(255,255,255,0.55)",
-              fontSize: 13,
-              margin: 0,
-            }}
-          >
-            Paid as {email}
-          </p>
-        ) : null}
 
-        <div style={{ margin: "48px 0 40px", display: "flex", justifyContent: "center" }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/images/keshah-logo-white.png"
-            alt="KESHAH"
-            style={{ height: 88, width: "auto" }}
-          />
-        </div>
+        <div style={{ height: 40 }} />
 
         {error ? (
           <div
@@ -262,7 +255,7 @@ function SignInStep({
               icon={<GoogleIcon />}
               busy={providerBusy === "google"}
               disabled={disabled}
-              onClick={wrap("google", signInWithGoogle)}
+              onClick={startRedirect("google", redirectToGoogle)}
             />
             <div style={{ height: 12 }} />
             <ProviderButton
@@ -271,7 +264,7 @@ function SignInStep({
               icon={<AppleIcon />}
               busy={providerBusy === "apple"}
               disabled={disabled}
-              onClick={wrap("apple", signInWithApple)}
+              onClick={startRedirect("apple", redirectToApple)}
             />
             <div style={{ height: 12 }} />
             <ProviderButton
@@ -472,64 +465,21 @@ function EmailForm({
 
 // ─── Install step ───────────────────────────────────────────────────────────
 
-function InstallStep({ email }: { email: string | null }) {
+function InstallStep({ email: _email }: { email: string | null }) {
   return (
     <main style={pageStyle}>
-      <div style={{ width: "100%", maxWidth: 400, textAlign: "center" }}>
-        <div
-          style={{
-            display: "inline-flex",
-            width: 64,
-            height: 64,
-            borderRadius: 32,
-            background: "rgba(76,175,80,0.15)",
-            alignItems: "center",
-            justifyContent: "center",
-            marginBottom: 20,
-          }}
-          aria-hidden="true"
-        >
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M5 12l4.5 4.5L19 7"
-              stroke="#4CAF50"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </div>
-
-        <h1
-          style={{
-            fontSize: 26,
-            fontWeight: 700,
-            letterSpacing: -0.5,
-            lineHeight: 1.2,
-            margin: "0 0 8px",
-            color: "#fff",
-          }}
-        >
-          Account saved
+      <div style={{ width: "100%", maxWidth: 560 }}>
+        <h1 style={headlineStyle}>
+          You&apos;re in. Now download KESHAH to start your first session.
         </h1>
-        <p
-          style={{
-            color: "rgba(255,255,255,0.75)",
-            fontSize: 15,
-            lineHeight: 1.5,
-            margin: "0 0 40px",
-          }}
-        >
-          Now install KESHAH on your phone and sign in with the same method to
-          start your daily scalp routine.
-        </p>
+
+        <div style={{ height: 40 }} />
 
         <div
           style={{
             display: "flex",
             flexDirection: "row",
             gap: 12,
-            justifyContent: "center",
             alignItems: "center",
             flexWrap: "wrap",
           }}
@@ -559,18 +509,6 @@ function InstallStep({ email }: { email: string | null }) {
             />
           </a>
         </div>
-
-        {email ? (
-          <p
-            style={{
-              marginTop: 40,
-              fontSize: 12,
-              color: "rgba(255,255,255,0.35)",
-            }}
-          >
-            Signed in as {email}
-          </p>
-        ) : null}
       </div>
     </main>
   );
@@ -586,7 +524,7 @@ function PendingState({
   sessionId: string;
 }) {
   return (
-    <main style={{ ...pageStyle, justifyContent: "center" }}>
+    <main style={{ ...pageStyle, alignItems: "center", justifyContent: "center" }}>
       <div style={{ maxWidth: 440, width: "100%", textAlign: "center" }}>
         {!exhausted ? (
           <>
@@ -659,13 +597,28 @@ const pageStyle: React.CSSProperties = {
   minHeight: "100vh",
   background: "#000",
   color: "#fff",
-  padding: "48px 24px",
+  padding: "48px 32px",
   fontFamily:
     "Poppins, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
   display: "flex",
   flexDirection: "column",
-  alignItems: "center",
+  alignItems: "flex-start",
   justifyContent: "center",
+};
+
+// Mirrors MomentFounderFlashback ("One last thing…") typography exactly.
+// Every headline on /start/success uses this so the sign-in + install
+// screens feel like a continuation of the pre-paywall voice.
+const headlineStyle: React.CSSProperties = {
+  fontFamily:
+    "Poppins, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+  fontSize: 28,
+  fontWeight: 600,
+  color: "#fff",
+  letterSpacing: -1.0,
+  lineHeight: 1.32,
+  margin: 0,
+  textAlign: "left",
 };
 
 function Spinner({ size = 20, color = "#000" }: { size?: number; color?: string }) {
