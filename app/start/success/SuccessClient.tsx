@@ -382,32 +382,49 @@ function ProviderButton({
   const color = filled ? "#000" : "#fff";
   const border = filled ? "none" : "1.5px solid rgba(255,255,255,0.5)";
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 10,
-        width: "100%",
-        padding: "16px 22px",
-        background: bg,
-        color,
-        border,
-        borderRadius: 40,
-        fontWeight: 600,
-        fontSize: 16,
-        cursor: disabled ? "not-allowed" : "pointer",
-        opacity: busy ? 0.55 : disabled ? 0.75 : 1,
-        transition: "opacity 200ms",
-        fontFamily: "inherit",
-      }}
-    >
-      {busy ? <Spinner size={16} color={color} /> : icon}
-      {label}
-    </button>
+    <>
+      {/* CSS :active fires INSTANTLY on tap in the browser event loop —
+          way before React can re-render for the busy state. Ensures the
+          button visually depresses the moment the user taps, even when
+          Safari is about to block the main thread for the OAuth popup. */}
+      <style>{`
+        .keshah-provider-btn {
+          -webkit-tap-highlight-color: transparent;
+          touch-action: manipulation;
+          transition: opacity 150ms, transform 100ms;
+        }
+        .keshah-provider-btn:active:not(:disabled) {
+          opacity: 0.55 !important;
+          transform: scale(0.97);
+        }
+      `}</style>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        className="keshah-provider-btn"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 10,
+          width: "100%",
+          padding: "16px 22px",
+          background: bg,
+          color,
+          border,
+          borderRadius: 40,
+          fontWeight: 600,
+          fontSize: 16,
+          cursor: disabled ? "not-allowed" : "pointer",
+          opacity: busy ? 0.55 : disabled ? 0.75 : 1,
+          fontFamily: "inherit",
+        }}
+      >
+        {busy ? <Spinner size={16} color={color} /> : icon}
+        {label}
+      </button>
+    </>
   );
 }
 
