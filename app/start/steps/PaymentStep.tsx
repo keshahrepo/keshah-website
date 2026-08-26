@@ -80,6 +80,20 @@ export default function PaymentStep() {
           // whatever the server picks.
         }
 
+        // Read Meta pixel cookies (fbp, fbc) so the trial-subscription
+        // webhook can fire a server-side StartTrial CAPI event with
+        // proper attribution matching. Stripped ad-blockers may leave
+        // these missing — that's OK, Meta falls back to IP + user agent.
+        const readCookie = (name: string): string => {
+          if (typeof document === "undefined") return "";
+          const m = document.cookie.match(
+            new RegExp("(?:^|; )" + name + "=([^;]*)"),
+          );
+          return m ? m[1] : "";
+        };
+        const fbp = readCookie("_fbp");
+        const fbc = readCookie("_fbc");
+
         // Extend with two fields the API expects but that aren't in the
         // strict QuizAnswers type. Cast the merged object so TS doesn't
         // complain about extra keys.
@@ -87,6 +101,8 @@ export default function PaymentStep() {
           ...answers,
           timezone,
           timezone_offset_mins: timezoneOffsetMins,
+          fbp,
+          fbc,
         };
 
         const res = await fetch("/api/stripe/create-subscription", {

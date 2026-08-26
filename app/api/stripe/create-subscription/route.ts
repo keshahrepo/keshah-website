@@ -40,6 +40,11 @@ type QuizAnswers = {
   timezone?: string;
   timezone_offset_mins?: number | string;
   plan_key?: string;
+  // Meta pixel cookies — forwarded through Stripe metadata so the
+  // trial-subscription webhook can fire a server-side StartTrial CAPI
+  // event with proper attribution matching.
+  fbp?: string;
+  fbc?: string;
   [k: string]: unknown;
 };
 
@@ -100,6 +105,8 @@ export async function POST(req: Request) {
       timezone: str(quiz.timezone),
       timezone_offset_mins: str(quiz.timezone_offset_mins),
       trial_days: String(TRIAL_DAYS),
+      fbp: str(quiz.fbp),
+      fbc: str(quiz.fbc),
     };
 
     // Create the hosted Checkout Session — Stripe generates the customer

@@ -39,6 +39,7 @@
 
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import crypto from "crypto";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
@@ -69,6 +70,80 @@ async function findCheckoutSessionId(
       err,
     );
     return null;
+  }
+}
+
+// Fire a Meta StartTrial event via server-side CAPI. Called from the
+// customer.subscription.created handler so every real trial-start signals
+// Meta's ad optimizer — even when the user closed the browser before the
+// success page loaded (client-side pixel wouldn't fire in that case).
+//
+// Attribution matching uses the fbp/fbc cookies we forwarded through
+// Stripe metadata + the email captured at Checkout. Non-throwing —
+// Meta downtime must NOT break payment processing.
+async function fireStartTrialCapi(opts: {
+  email: string | null;
+  fbp: string | null;
+  fbc: string | null;
+  value: number;
+  currency: string;
+  eventId: string;
+}): Promise<void> {
+  const pixelId = process.env.NEXT_PUBLIC_FB_PIXEL_ID;
+  const accessToken = process.env.FB_CAPI_ACCESS_TOKEN;
+  const testEventCode = process.env.FB_CAPI_TEST_EVENT_CODE;
+  if (!pixelId || !accessToken) return;
+
+  const userData: Record<string, unknown> = {};
+  if (opts.email) {
+    userData.em = [
+      crypto
+        .createHash("sha256")
+        .update(opts.email.trim().toLowerCase())
+        .digest("hex"),
+    ];
+  }
+  if (opts.fbp) userData.fbp = opts.fbp;
+  if (opts.fbc) userData.fbc = opts.fbc;
+
+  const event = {
+    event_name: "StartTrial",
+    event_time: Math.floor(Date.now() / 1000),
+    event_id: opts.eventId,
+    action_source: "website",
+    user_data: userData,
+    custom_data: {
+      value: opts.value,
+      currency: opts.currency,
+      predicted_ltv: opts.value,
+    },
+  };
+  const body: Record<string, unknown> = {
+    data: [event],
+    access_token: accessToken,
+  };
+  if (testEventCode) body.test_event_code = testEventCode;
+
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/v18.0/${pixelId}/events`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.error(
+        `[stripe/trial-subscription/webhook] StartTrial CAPI failed: ${res.status} ${text}`,
+      );
+    }
+  } catch (err) {
+    console.error(
+      "[stripe/trial-subscription/webhook] StartTrial CAPI threw:",
+      err,
+    );
   }
 }
 
@@ -211,6 +286,21 @@ export async function POST(req: Request) {
           },
           { merge: true },
         );
+
+        // Fire Meta StartTrial CAPI so Meta's ad optimizer gets a signal
+        // for every real trial start — even when the user closed the
+        // browser before the success page loaded (client-side pixel
+        // wouldn't fire in that case). value = price after trial (99 USD).
+        // fbp/fbc were captured client-side in PaymentStep + forwarded
+        // through Stripe metadata so attribution matching works.
+        await fireStartTrialCapi({
+          email: customerEmail,
+          fbp: md.fbp || null,
+          fbc: md.fbc || null,
+          value: 99,
+          currency: "USD",
+          eventId: sub.id, // Stripe sub id doubles as dedup key
+        });
 
         break;
       }
