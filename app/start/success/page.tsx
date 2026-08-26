@@ -31,12 +31,17 @@ interface PaidSession {
   email?: string | null;
   plan?: string | null;
   claimed_by_uid?: string | null;
+  // Stripe subscription ID — passed to SuccessClient so it can fire the
+  // browser-side StartTrial pixel on page mount with the SAME event_id
+  // our server-side CAPI uses. Meta dedupes on event_id.
+  subscription_id?: string | null;
 }
 
 interface PaidSessionDoc {
   email?: string | null;
   plan?: string | null;
   claimed_by_uid?: string | null;
+  subscription_id?: string | null;
 }
 
 async function readPaidSession(
@@ -51,6 +56,7 @@ async function readPaidSession(
       email: data?.email ?? null,
       plan: data?.plan ?? null,
       claimed_by_uid: data?.claimed_by_uid ?? null,
+      subscription_id: data?.subscription_id ?? null,
     };
   } catch (err) {
     console.error("[start/success] readPaidSession failed:", err);

@@ -47,6 +47,7 @@ interface PaidSession {
   email?: string | null;
   plan?: string | null;
   claimed_by_uid?: string | null;
+  subscription_id?: string | null;
 }
 
 interface SuccessClientProps {
@@ -87,6 +88,22 @@ export default function SuccessClient({
     if (initialSession?.claimed_by_uid) {
       setStage("install");
     }
+  }, [initialSession]);
+
+  // Fire browser-side StartTrial the moment we know a Stripe subscription
+  // exists — regardless of whether the user has signed in yet. The trial
+  // is REAL at this point (Stripe created the sub), and if they close the
+  // tab before signing in we still want Meta to have the browser event.
+  // event_id = Stripe subscription id, matches what our webhook sends to
+  // CAPI → Meta dedupes → one conversion counted with best-of-both match
+  // quality. Guarded by ref so a session-poll re-render doesn't fire twice.
+  const startTrialFiredRef = useRef(false);
+  useEffect(() => {
+    if (startTrialFiredRef.current) return;
+    const subId = initialSession?.subscription_id;
+    if (!subId) return;
+    startTrialFiredRef.current = true;
+    fbqTrack("StartTrial", { value: 99, currency: "USD" }, subId);
   }, [initialSession]);
 
   const handleSignedIn = useCallback(
@@ -138,25 +155,8 @@ export default function SuccessClient({
           const text = await res.text().catch(() => "");
           throw new Error(`attach-identity ${res.status}: ${text}`);
         }
-        // Fire browser-side StartTrial with the SAME event_id our server-
-        // side CAPI already sent (Stripe subscription id). Meta dedupes on
-        // event_id so both fires count as one conversion — the browser
-        // event gives Meta the native cookie context that improves match
-        // quality, the CAPI fire is the unblockable source of truth.
-        try {
-          const attachData = (await res.clone().json()) as {
-            subscription_id?: string;
-          };
-          if (attachData.subscription_id) {
-            fbqTrack(
-              "StartTrial",
-              { value: 99, currency: "USD" },
-              attachData.subscription_id,
-            );
-          }
-        } catch {
-          // Non-fatal — server-side StartTrial already fired.
-        }
+        // Browser-side StartTrial already fired on the sign-in mount
+        // (see useEffect above with startTrialFiredRef). No re-fire here.
         setSignedInEmail(result.email ?? null);
         setStage("install");
       } catch (err) {
