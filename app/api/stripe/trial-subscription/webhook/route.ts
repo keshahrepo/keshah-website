@@ -152,15 +152,17 @@ export async function POST(req: Request) {
           );
         }
 
-        // Timezone — fall back to Asia/Kolkata + IST offset to match the
-        // funnel/save-profile behaviour when the client didn't send one.
+        // Timezone — fall back to America/New_York (majority of paid
+        // traffic is US) when the client didn't send one. Old fallback
+        // was Asia/Kolkata which made every US user's start_date look
+        // like an IST timestamp on the mobile splash.
         const timezone =
           typeof md.timezone === "string" && md.timezone
             ? md.timezone
-            : "Asia/Kolkata";
+            : "America/New_York";
         const timezoneOffsetInMins = md.timezone_offset_mins
-          ? Number.parseInt(md.timezone_offset_mins, 10) || 330
-          : 330;
+          ? Number.parseInt(md.timezone_offset_mins, 10) || -240
+          : -240;
         const trialDays = md.trial_days
           ? Number.parseInt(md.trial_days, 10) || 0
           : 0;

@@ -61,10 +61,38 @@ export default function PaymentStep() {
 
     (async () => {
       try {
+        // Capture browser timezone so the webhook writes start_date in
+        // the user's actual timezone. Without this, the fallback kicks
+        // in (America/New_York) which is fine for most US traffic but
+        // wrong for anyone abroad. Intl.DateTimeFormat() is universally
+        // supported in every mobile browser we care about.
+        let timezone = "";
+        let timezoneOffsetMins = 0;
+        try {
+          timezone =
+            Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+          // getTimezoneOffset returns MINUTES WEST of UTC (positive
+          // means behind UTC), which is the inverse of what Firestore
+          // expects. Negate.
+          timezoneOffsetMins = -new Date().getTimezoneOffset();
+        } catch {
+          // Old browsers without Intl.DateTimeFormat: fall back to
+          // whatever the server picks.
+        }
+
+        // Extend with two fields the API expects but that aren't in the
+        // strict QuizAnswers type. Cast the merged object so TS doesn't
+        // complain about extra keys.
+        const enriched: Record<string, unknown> = {
+          ...answers,
+          timezone,
+          timezone_offset_mins: timezoneOffsetMins,
+        };
+
         const res = await fetch("/api/stripe/create-subscription", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ quizAnswers: answers }),
+          body: JSON.stringify({ quizAnswers: enriched }),
         });
         const data = (await res.json().catch(() => ({}))) as {
           ok?: boolean;

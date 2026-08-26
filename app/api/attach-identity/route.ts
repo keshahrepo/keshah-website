@@ -85,6 +85,7 @@ function buildStartDate(
 async function grantRcEntitlement(
   uid: string,
   subscriptionId: string,
+  attempt = 1,
 ): Promise<{ ok: boolean; status?: number; body?: string }> {
   const rcStripeKey = process.env.RC_STRIPE_PUBLIC_API_KEY;
   if (!rcStripeKey) {
@@ -108,19 +109,34 @@ async function grantRcEntitlement(
         fetch_token: subscriptionId,
       }),
     });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      console.error(
-        `[attach-identity] RC receipt POST failed uid=${uid} sub=${subscriptionId} status=${res.status} body=${text}`,
+    if (res.ok) return { ok: true };
+
+    const text = await res.text().catch(() => "");
+    // 400/404/500 is often a race — RC's own Stripe webhook hasn't
+    // ingested the sub yet. Retry twice with backoff before giving up.
+    // 401/403 = wrong API key — no point retrying.
+    const retriable = res.status !== 401 && res.status !== 403;
+    if (retriable && attempt < 3) {
+      const delayMs = attempt === 1 ? 2000 : 5000;
+      console.warn(
+        `[attach-identity] RC receipt POST ${res.status} uid=${uid} — retry ${attempt} in ${delayMs}ms`,
       );
-      return { ok: false, status: res.status, body: text };
+      await new Promise((r) => setTimeout(r, delayMs));
+      return grantRcEntitlement(uid, subscriptionId, attempt + 1);
     }
-    return { ok: true };
+    console.error(
+      `[attach-identity] RC receipt POST failed uid=${uid} sub=${subscriptionId} status=${res.status} body=${text}`,
+    );
+    return { ok: false, status: res.status, body: text };
   } catch (err) {
     console.error(
-      `[attach-identity] RC receipt POST threw uid=${uid}:`,
+      `[attach-identity] RC receipt POST threw uid=${uid} (attempt ${attempt}):`,
       err,
     );
+    if (attempt < 3) {
+      await new Promise((r) => setTimeout(r, 2000 * attempt));
+      return grantRcEntitlement(uid, subscriptionId, attempt + 1);
+    }
     return { ok: false };
   }
 }
@@ -209,11 +225,11 @@ export async function POST(req: Request) {
   const timezone =
     typeof session.timezone === "string" && session.timezone
       ? (session.timezone as string)
-      : "Asia/Kolkata";
+      : "America/New_York";
   const timezoneOffsetInMins =
     typeof session.timezone_offset_mins === "number"
       ? (session.timezone_offset_mins as number)
-      : 330;
+      : -240;
   const trialDays =
     typeof session.trial_days === "number" ? (session.trial_days as number) : 0;
   const customerEmail =
@@ -327,6 +343,11 @@ export async function POST(req: Request) {
     ? stripe.subscriptions
         .update(subscriptionId, {
           metadata: {
+            // app_user_id is the key RC's Stripe integration reads to
+            // associate a subscription with a user. WITHOUT this on the
+            // sub metadata, RC binds the sub to $RCAnonymousID even if
+            // the customer.metadata has it. Both need to be set.
+            app_user_id: firebaseUid,
             uid: firebaseUid,
             email: customerEmail ?? "",
           },
