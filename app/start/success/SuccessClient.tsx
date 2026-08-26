@@ -121,6 +121,8 @@ export default function SuccessClient({
           "We couldn't link your account. Please try signing in again — your subscription is safe.",
         );
         setStage("signIn");
+      } finally {
+        hideSignInOverlay();
       }
     },
     [sessionId],
@@ -228,9 +230,11 @@ function SignInStep({
     fn: () => Promise<SignInResult>,
   ) => async () => {
     if (disabled) return;
-    // flushSync forces React to commit the busy state to the DOM
-    // synchronously — otherwise Safari blocks the main thread when the
-    // Apple popup opens and the spinner doesn't render until 2s later.
+    // Show a full-page overlay via DIRECT DOM manipulation — React's
+    // flushSync doesn't force Safari to paint before AppleID.auth.signIn()
+    // blocks the main thread opening the popup. Vanilla JS + inline
+    // styles paint on the next browser event, before the popup blocks.
+    showSignInOverlay(key === "apple" ? "Apple" : "Google");
     flushSync(() => setProviderBusy(key));
     try {
       const result = await fn();
@@ -254,12 +258,14 @@ function SignInStep({
         rawErr?.error === "popup_closed_by_user" ||
         rawErr?.error === "user_cancelled_authorize"
       ) {
+        hideSignInOverlay();
         setProviderBusy(null);
         return;
       }
       // TEMPORARY: surface the real error so we can debug from a phone
       // where the JS console isn't easily accessible.
       const debug = JSON.stringify(rawErr, Object.getOwnPropertyNames(rawErr));
+      hideSignInOverlay();
       alert(
         `[${key}] sign-in error: ${msg || "(no message)"}\n\nfull: ${debug.slice(0, 500)}`,
       );
@@ -745,4 +751,55 @@ function AppleIcon() {
       <path d="M16.365 1.43c0 1.14-.492 2.27-1.184 3.07-.766.9-2.023 1.6-3.045 1.52-.121-1.12.416-2.29 1.11-3.06.79-.88 2.135-1.53 3.12-1.53zM20.5 17.05c-.554 1.276-.816 1.845-1.53 2.976-.998 1.577-2.404 3.542-4.144 3.556-1.548.014-1.946-1.007-4.046-.995-2.099.011-2.539 1.014-4.089.999-1.74-.014-3.072-1.79-4.07-3.366-2.79-4.415-3.083-9.6-1.362-12.351 1.223-1.954 3.153-3.098 4.966-3.098 1.847 0 3.008 1.012 4.535 1.012 1.482 0 2.385-1.014 4.522-1.014 1.614 0 3.325.88 4.542 2.402-3.995 2.19-3.346 7.87-1.324 9.879z" />
     </svg>
   );
+}
+
+// ─── Sign-in loading overlay (vanilla DOM, not React) ───────────────────────
+// React re-renders queue behind Safari's main-thread block when the OAuth
+// popup opens. Direct DOM inserts paint on the next browser event before
+// the popup blocks. This is the ONLY reliable way to give the user
+// instant feedback between tap and popup appearing.
+
+const OVERLAY_ID = "keshah-signin-overlay";
+
+function showSignInOverlay(providerLabel: string): void {
+  if (typeof document === "undefined") return;
+  if (document.getElementById(OVERLAY_ID)) return; // already showing
+  const overlay = document.createElement("div");
+  overlay.id = OVERLAY_ID;
+  overlay.style.cssText = [
+    "position: fixed",
+    "inset: 0",
+    "z-index: 999999",
+    "background: rgba(0, 0, 0, 0.72)",
+    "backdrop-filter: blur(6px)",
+    "-webkit-backdrop-filter: blur(6px)",
+    "display: flex",
+    "flex-direction: column",
+    "align-items: center",
+    "justify-content: center",
+    "gap: 20px",
+    "color: #fff",
+    "font-family: Poppins, -apple-system, BlinkMacSystemFont, sans-serif",
+    "font-size: 16px",
+    "opacity: 0",
+    "transition: opacity 120ms ease-out",
+    "pointer-events: none",
+  ].join("; ");
+  overlay.innerHTML = `
+    <div style="width:36px;height:36px;border:3px solid rgba(255,255,255,0.25);border-top-color:#fff;border-radius:50%;animation:keshah-spin 700ms linear infinite;"></div>
+    <div style="opacity:0.85;letter-spacing:0.2px;">Opening ${providerLabel}…</div>
+  `;
+  document.body.appendChild(overlay);
+  // Force reflow so the browser commits the initial opacity: 0 before
+  // we transition to 1 — otherwise it snaps in with no fade.
+  void overlay.offsetHeight;
+  overlay.style.opacity = "1";
+}
+
+function hideSignInOverlay(): void {
+  if (typeof document === "undefined") return;
+  const overlay = document.getElementById(OVERLAY_ID);
+  if (!overlay) return;
+  overlay.style.opacity = "0";
+  window.setTimeout(() => overlay.remove(), 200);
 }
