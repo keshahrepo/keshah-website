@@ -458,5 +458,9 @@ export async function POST(req: Request) {
     uid: firebaseUid,
     entitlement: RC_ENTITLEMENT_ID,
     rc_receipt_ok: rcOk,
+    // Returned so SuccessClient can fire a browser-side StartTrial with
+    // the SAME event_id our webhook already used server-side (sub.id).
+    // Meta dedupes on event_id → both fires count as one conversion.
+    subscription_id: subscriptionId ?? null,
   });
 }

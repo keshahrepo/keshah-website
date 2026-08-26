@@ -27,7 +27,8 @@ export type FbStandardEvent =
   | "InitiateCheckout"
   | "AddPaymentInfo"
   | "Purchase"
-  | "CompleteRegistration";
+  | "CompleteRegistration"
+  | "StartTrial";
 
 interface EventParams {
   value?: number;

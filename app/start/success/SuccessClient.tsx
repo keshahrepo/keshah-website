@@ -34,6 +34,7 @@ import {
   getIdToken,
   type SignInResult,
 } from "@/app/start/lib/firebase-client";
+import { fbqTrack } from "@/app/start/lib/fb-pixel";
 
 const APP_STORE_URL = "https://apps.apple.com/app/keshah/id6450676544";
 const PLAY_STORE_URL =
@@ -136,6 +137,25 @@ export default function SuccessClient({
         if (!res.ok) {
           const text = await res.text().catch(() => "");
           throw new Error(`attach-identity ${res.status}: ${text}`);
+        }
+        // Fire browser-side StartTrial with the SAME event_id our server-
+        // side CAPI already sent (Stripe subscription id). Meta dedupes on
+        // event_id so both fires count as one conversion — the browser
+        // event gives Meta the native cookie context that improves match
+        // quality, the CAPI fire is the unblockable source of truth.
+        try {
+          const attachData = (await res.clone().json()) as {
+            subscription_id?: string;
+          };
+          if (attachData.subscription_id) {
+            fbqTrack(
+              "StartTrial",
+              { value: 99, currency: "USD" },
+              attachData.subscription_id,
+            );
+          }
+        } catch {
+          // Non-fatal — server-side StartTrial already fired.
         }
         setSignedInEmail(result.email ?? null);
         setStage("install");
