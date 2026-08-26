@@ -418,12 +418,12 @@ interface FunnelStage {
 }
 
 // Only users on the +162 build write these event fields. Presence of
-// For the WEB funnel, `landing_viewed_at` is the earliest signal
-// (backfilled from FunnelEvents `landingHook` at attach-identity time —
-// see the mapping in /api/attach-identity/route.ts). Every stage %
-// below is measured within the cohort that has landing_viewed_at.
-const IS_NEW_BUILD_USER = (d: Record<string, unknown>) =>
-  !!d.landing_viewed_at || !!d.founder_story_started_at;
+// The outer loop already filters to isWebUser (payment_provider=stripe
+// OR signup_source=web_onboarding), so every doc that reaches here is
+// in-scope for the web funnel. No extra "new build" gate needed —
+// the mobile page needs it because it queries all mobile users
+// (some pre-instrumentation), the web page doesn't.
+const IS_NEW_BUILD_USER = (_d: Record<string, unknown>) => true;
 
 const FUNNEL_STAGES: FunnelStage[] = [
   // Web-only: landing page view (first step in /start). Populated via
