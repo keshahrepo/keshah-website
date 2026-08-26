@@ -24,8 +24,8 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  redirectToApple,
-  redirectToGoogle,
+  signInWithAppleNative,
+  signInWithGoogleNative,
   completeRedirectSignIn,
   signUpWithEmail,
   signInWithEmail,
@@ -198,24 +198,31 @@ function SignInStep({
 
   const disabled = busy || providerBusy !== null;
 
-  // Redirect flow — navigates the whole page to the provider. The user
-  // returns to /start/success post-auth; SuccessClient's redirect-pickup
-  // effect calls attach-identity from there. We don't set state after
-  // calling redirectTo* — the browser navigates away before any
-  // subsequent code runs.
-  const startRedirect = (
+  // Native SDK flow — Apple / Google's own JS renders the provider's
+  // sign-in sheet directly on our keshah.com page. No Firebase OAuth
+  // handler URL flashing, no "CONTINUE TO THE APP" fallback button.
+  // On iOS Safari the OS-level Apple sheet appears at the bottom.
+  const startNative = (
     key: "google" | "apple",
-    fn: () => Promise<void>,
+    fn: () => Promise<SignInResult>,
   ) => async () => {
     if (disabled) return;
     setProviderBusy(key);
     try {
-      await fn();
-      // Unreachable — page navigates on success.
+      const result = await fn();
+      // Native SDK completed synchronously — pass through to attach-identity
+      // like the email flow does.
+      onSignedIn(result);
     } catch (err) {
-      console.error(`[SuccessClient] ${key} redirect failed:`, err);
+      console.error(`[SuccessClient] ${key} native sign-in failed:`, err);
+      const msg = (err as Error)?.message ?? "";
+      // User closed the Apple sheet / Google prompt — silent.
+      if (msg.includes("popup_closed") || msg.includes("cancelled") || msg.includes("suppressed")) {
+        setProviderBusy(null);
+        return;
+      }
       alert(
-        "Sign-in couldn't start. Please try another method — your subscription is safe.",
+        "Sign-in couldn't complete. Please try another method — your subscription is safe.",
       );
       setProviderBusy(null);
     }
@@ -255,7 +262,7 @@ function SignInStep({
               icon={<GoogleIcon />}
               busy={providerBusy === "google"}
               disabled={disabled}
-              onClick={startRedirect("google", redirectToGoogle)}
+              onClick={startNative("google", signInWithGoogleNative)}
             />
             <div style={{ height: 12 }} />
             <ProviderButton
@@ -264,7 +271,7 @@ function SignInStep({
               icon={<AppleIcon />}
               busy={providerBusy === "apple"}
               disabled={disabled}
-              onClick={startRedirect("apple", redirectToApple)}
+              onClick={startNative("apple", signInWithAppleNative)}
             />
             <div style={{ height: 12 }} />
             <ProviderButton
