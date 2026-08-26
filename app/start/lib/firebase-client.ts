@@ -287,11 +287,14 @@ declare global {
 // Identifiers & Profiles → Services IDs.
 const APPLE_SERVICES_ID = "com.keshah.app.web";
 
-// Google OAuth client ID — same one already used by Firebase's
-// GoogleAuthProvider (from the Web application client in Google Cloud
-// Console → APIs & Services → Credentials).
+// Google OAuth Web application client ID — from Google Cloud Console →
+// APIs & Services → Credentials → "Web client (auto created by Google
+// Service)". Authorized JavaScript origins must include the domain we
+// call google.accounts.id.initialize from (www.keshah.com + keshah.com).
+// NOT the iOS client ID (used by the mobile app — different type,
+// no JS origins).
 const GOOGLE_OAUTH_CLIENT_ID =
-  "33815207242-8ce5me9ngl8u7t137gcqomm1sv31tlu3.apps.googleusercontent.com";
+  "33815207242-qudn77k1tlfhj2irfcju8fcs13fqu46k.apps.googleusercontent.com";
 
 // Poll for a globally-loaded SDK. The <Script> tag is `strategy="afterInteractive"`,
 // so it's usually available before the user taps a button. If not, we wait
