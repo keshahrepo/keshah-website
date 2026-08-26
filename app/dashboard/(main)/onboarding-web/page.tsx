@@ -418,27 +418,25 @@ interface FunnelStage {
 }
 
 // Only users on the +162 build write these event fields. Presence of
-// `founder_story_started_at` is the earliest new-build signal, so we
-// treat it as the funnel cohort marker. Every stage % is measured
-// within THAT cohort — otherwise the baseline is polluted by 90k
-// legacy users who never had the writes and the funnel reads as 0%
-// everywhere.
+// For the WEB funnel, `landing_viewed_at` is the earliest signal
+// (backfilled from FunnelEvents `landingHook` at attach-identity time —
+// see the mapping in /api/attach-identity/route.ts). Every stage %
+// below is measured within the cohort that has landing_viewed_at.
 const IS_NEW_BUILD_USER = (d: Record<string, unknown>) =>
-  !!d.founder_story_started_at;
+  !!d.landing_viewed_at || !!d.founder_story_started_at;
 
 const FUNNEL_STAGES: FunnelStage[] = [
-  // Baseline for the new-build cohort. 100% by definition — every
-  // user in this funnel got past the founder story mount.
+  // Web-only: landing page view (first step in /start). Populated via
+  // FunnelEvents backfill at attach-identity — every user in this funnel
+  // has landing_viewed_at by definition of being a web user who
+  // completed sign-in.
+  { key: "landing_viewed",    label: "Landing viewed",         check: (d) => !!d.landing_viewed_at },
   { key: "founder_started",   label: "Founder story started",  check: (d) => !!d.founder_story_started_at },
   { key: "pinch_started",     label: "Pinch test started",     check: (d) => !!d.pinch_test_started_at },
   { key: "results_started",   label: "Results screenshots started", check: (d) => !!d.results_screenshots_started_at },
-  // Quiz's own field (hair_loss_location) exists on legacy accounts
-  // too, so we AND it with the new-build marker to keep the funnel
-  // internally consistent (no user shows up here without also having
-  // reached the earlier stages).
-  { key: "quiz_started",      label: "Quiz started",           check: (d) => !!d.hair_loss_location && !!d.founder_story_started_at },
+  { key: "quiz_started",      label: "Quiz started",           check: (d) => !!d.hair_loss_location },
   { key: "paywall_viewed",    label: "Paywall viewed",         check: (d) => !!d.paywall_viewed_at },
-  { key: "trial_started",     label: "Trial started",          check: (d) => !!d.started_trial },
+  { key: "trial_started",     label: "Trial started",          check: (d) => !!d.started_trial || !!d.trial_started_at },
 ];
 
 export default async function QuizResponsesPage({
@@ -474,6 +472,7 @@ export default async function QuizResponsesPage({
       ...quizFields,
       "started_trial",
       "selected_gender",
+      "landing_viewed_at",
       "founder_story_started_at",
       "pinch_test_started_at",
       "results_screenshots_started_at",

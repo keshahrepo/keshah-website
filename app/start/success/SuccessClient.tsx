@@ -102,6 +102,14 @@ export default function SuccessClient({
           "Content-Type": "application/json",
         };
         if (idToken) headers.Authorization = `Bearer ${idToken}`;
+        // Pass the funnel session ID so the server can backfill
+        // FunnelEvents timestamps (landingHook / founderStory / pinchTest
+        // / resultScreenshots / trialPaywall) onto the Users doc — that
+        // makes the mobile-style funnel drop-off panel work for web users.
+        const funnelSessionId =
+          typeof window !== "undefined"
+            ? sessionStorage.getItem("keshah_funnel_session")
+            : null;
         const res = await fetch("/api/attach-identity", {
           method: "POST",
           headers,
@@ -111,6 +119,7 @@ export default function SuccessClient({
             email: result.email,
             display_name: result.displayName,
             provider_id: result.providerId,
+            funnel_session_id: funnelSessionId,
           }),
         });
         if (!res.ok) {

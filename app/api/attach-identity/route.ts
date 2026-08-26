@@ -51,7 +51,24 @@ interface AttachBody {
   email?: string | null;
   display_name?: string | null;
   provider_id?: string | null;
+  // sessionStorage key `keshah_funnel_session` from SuccessClient.
+  // Used to backfill FunnelEvents timestamps onto Users so the
+  // mobile-style funnel drop-off panel works for web users.
+  funnel_session_id?: string | null;
 }
+
+// Map FunnelEvents step name → Firestore field on Users doc. Mirrors
+// the mobile field names PostAuthFlow2 writes on step mount, so the
+// existing /dashboard/onboarding FunnelPanel works unchanged for web
+// users after we backfill. `landing_viewed_at` is web-only (mobile has
+// no landing surface).
+const FUNNEL_STEP_TO_USER_FIELD: Record<string, string> = {
+  landingHook: "landing_viewed_at",
+  founderStory: "founder_story_started_at",
+  pinchTest: "pinch_test_started_at",
+  resultScreenshots: "results_screenshots_started_at",
+  trialPaywall: "paywall_viewed_at",
+};
 
 // Mirrors buildStartDate in /api/stripe/trial-subscription/webhook — must
 // match what the mobile app's userDay calc expects.
@@ -312,6 +329,38 @@ export async function POST(req: Request) {
       Date.now() + trialDays * 24 * 60 * 60 * 1000,
     );
     update.trial_status = "active";
+  }
+
+  // ─── Backfill funnel step timestamps from FunnelEvents ────────────────
+  // Every step in /start writes to FunnelEvents/{sessionId}_{step} via
+  // flow-context.tsx. Copy those timestamps onto the Users doc using the
+  // mobile field names so /dashboard/onboarding-web's funnel drop-off
+  // panel works without any extra web instrumentation.
+  const funnelSessionId = body.funnel_session_id;
+  if (funnelSessionId && typeof funnelSessionId === "string") {
+    try {
+      const funnelSnap = await db
+        .collection("FunnelEvents")
+        .where("sessionId", "==", funnelSessionId)
+        .select("step", "timestamp")
+        .get();
+      for (const doc of funnelSnap.docs) {
+        const d = doc.data();
+        const step = d.step as string | undefined;
+        if (!step) continue;
+        const field = FUNNEL_STEP_TO_USER_FIELD[step];
+        if (!field) continue; // ignore sub-steps + steps we don't map
+        // Only backfill if the Users doc doesn't already have it (a
+        // retry-safe idempotent write).
+        if (existing[field]) continue;
+        update[field] = d.timestamp; // Firestore Timestamp copies cleanly
+      }
+    } catch (err) {
+      console.error(
+        "[attach-identity] FunnelEvents backfill failed (non-fatal):",
+        err,
+      );
+    }
   }
 
   // Firestore User seed + Stripe metadata + RC receipt all happen in
