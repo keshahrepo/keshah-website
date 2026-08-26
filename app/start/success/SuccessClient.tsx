@@ -26,6 +26,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   signInWithAppleNative,
   signInWithGoogleNative,
+  initAppleSignIn,
   completeRedirectSignIn,
   signUpWithEmail,
   signInWithEmail,
@@ -123,6 +124,25 @@ export default function SuccessClient({
     },
     [sessionId],
   );
+
+  // Init the Apple SDK as soon as it's loaded. Must happen BEFORE the user
+  // taps Continue with Apple so that AppleID.auth.signIn() can run
+  // synchronously inside the click handler — otherwise mobile Safari
+  // drops the user-gesture flag and blocks the popup.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.AppleID) {
+      initAppleSignIn();
+      return;
+    }
+    const interval = window.setInterval(() => {
+      if (window.AppleID) {
+        initAppleSignIn();
+        window.clearInterval(interval);
+      }
+    }, 100);
+    return () => window.clearInterval(interval);
+  }, []);
 
   // Pick up the redirect result from signInWithRedirect. Fires once on
   // mount after the user returns from Apple/Google. Guarded by ref so it

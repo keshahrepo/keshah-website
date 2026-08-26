@@ -233,7 +233,14 @@ declare global {
           nonce?: string;
           usePopup?: boolean;
         }) => void;
-        signIn: () => Promise<{
+        signIn: (opts?: {
+          clientId?: string;
+          scope?: string;
+          redirectURI?: string;
+          state?: string;
+          nonce?: string;
+          usePopup?: boolean;
+        }) => Promise<{
           authorization: {
             id_token: string;
             code: string;
@@ -313,9 +320,12 @@ async function waitForGlobal<T>(
 }
 
 /** Generate a cryptographic nonce for Apple ID token binding. Apple
- * requires a raw nonce that's included in the ID token so we can verify
+ * requires a nonce that's included in the ID token so we can verify
  * the token was issued for this specific sign-in attempt (blocks replay).
- * Firebase's signInWithCredential also takes the raw nonce. */
+ * We pass the raw nonce (not hashed) — Apple accepts either and Firebase's
+ * signInWithCredential is expecting the raw form. Skipping the hash lets
+ * us stay synchronous inside the user-tap handler (mobile Safari blocks
+ * popups if there's any async work between the tap and window.open). */
 function generateNonce(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
@@ -324,61 +334,81 @@ function generateNonce(): string {
     .join("");
 }
 
-/** SHA-256 hex of the nonce — Apple wants the hashed nonce sent in the
- * init call; the raw nonce comes back embedded in the ID token so Firebase
- * can bind. */
-async function sha256Hex(input: string): Promise<string> {
-  const buf = new TextEncoder().encode(input);
-  const digest = await crypto.subtle.digest("SHA-256", buf);
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
+// Track init once per page so we don't re-init on every sign-in call.
+let appleInitialized = false;
 
-/** Native Sign in with Apple — no Firebase OAuth handler, no popup dance.
- * On iOS Safari the OS-level Apple sheet renders directly on the page.
- * On desktop, a popup opens to appleid.apple.com. Either way, we get back
- * an ID token and immediately exchange it for a Firebase session. */
-export async function signInWithAppleNative(): Promise<SignInResult> {
-  const AppleID = await waitForGlobal(() => window.AppleID);
-  const rawNonce = generateNonce();
-  const hashedNonce = await sha256Hex(rawNonce);
-
-  AppleID.auth.init({
+/** Initialize the Apple SDK. Safe to call multiple times. Should be called
+ * on page mount (via useEffect) so that when the user taps Continue with
+ * Apple, AppleID.auth.signIn() runs synchronously and mobile Safari treats
+ * it as a direct user gesture — required to open the sign-in popup. */
+export function initAppleSignIn(): void {
+  if (typeof window === "undefined") return;
+  if (appleInitialized) return;
+  if (!window.AppleID) return; // SDK still loading; caller will retry
+  window.AppleID.auth.init({
     clientId: APPLE_SERVICES_ID,
     scope: "name email",
     redirectURI: `${window.location.origin}/start/success`,
-    nonce: hashedNonce,
+    usePopup: true,
+  });
+  appleInitialized = true;
+}
+
+/** Native Sign in with Apple — no Firebase OAuth handler.
+ *
+ * CRITICAL: this function MUST be called synchronously from the user's
+ * click handler. Any await before AppleID.auth.signIn() drops the "user
+ * gesture" flag in mobile Safari and the popup gets blocked. Only await
+ * the returned promise, which does its own async work internally. */
+export function signInWithAppleNative(): Promise<SignInResult> {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("Not in a browser"));
+  }
+  if (!window.AppleID) {
+    return Promise.reject(
+      new Error("Apple SDK not loaded — try again in a moment"),
+    );
+  }
+  if (!appleInitialized) initAppleSignIn();
+
+  // Generate + pass nonce SYNCHRONOUSLY. Firebase needs the same raw
+  // nonce string to verify the ID token's `nonce` claim, so we hold it
+  // in closure across the promise chain.
+  const rawNonce = generateNonce();
+
+  // signIn() opens the popup synchronously here; the returned promise
+  // resolves when Apple posts back via postMessage from the popup.
+  const signInPromise = window.AppleID.auth.signIn({
+    nonce: rawNonce,
     usePopup: true,
   });
 
-  const response = await AppleID.auth.signIn();
-  const idToken = response.authorization.id_token;
-  const email = response.user?.email;
-  const name = response.user?.name
-    ? [response.user.name.firstName, response.user.name.lastName]
-        .filter(Boolean)
-        .join(" ")
-    : undefined;
+  return signInPromise.then(async (response) => {
+    const idToken = response.authorization.id_token;
+    const email = response.user?.email;
+    const name = response.user?.name
+      ? [response.user.name.firstName, response.user.name.lastName]
+          .filter(Boolean)
+          .join(" ")
+      : undefined;
 
-  const credential = new OAuthProvider("apple.com").credential({
-    idToken,
-    rawNonce,
+    const credential = new OAuthProvider("apple.com").credential({
+      idToken,
+      rawNonce,
+    });
+    const cred = await signInWithCredential(ensureAuth(), credential);
+
+    // Apple only returns email + name on the FIRST sign-in ever for a
+    // given (app, Apple ID) pair. On subsequent sign-ins, both are
+    // omitted. Fall back to Firebase's stored values.
+    const user = cred.user;
+    return {
+      uid: user.uid,
+      email: email ?? user.email ?? null,
+      displayName: name ?? user.displayName ?? null,
+      providerId: "apple.com",
+    };
   });
-  const cred = await signInWithCredential(ensureAuth(), credential);
-
-  // Apple only returns email + name on the FIRST sign-in ever for a given
-  // (app, Apple ID) pair. On subsequent sign-ins, both are omitted. Fall
-  // back to Firebase's stored values (populated from the first sign-in).
-  const user = cred.user;
-  const finalEmail = email ?? user.email ?? null;
-  const finalName = name ?? user.displayName ?? null;
-  return {
-    uid: user.uid,
-    email: finalEmail,
-    displayName: finalName,
-    providerId: "apple.com",
-  };
 }
 
 /** Native Sign in with Google — same pattern. Uses Google Identity
