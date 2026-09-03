@@ -39,16 +39,31 @@ export interface Release {
 // probably doesn't shift any user-visible cohort — don't add an entry.
 export const RELEASES: Release[] = [
   {
-    // In-flight mobile release. `date: null` marks it as unshipped so
-    // it doesn't show up on cohort dropdowns yet, but /dashboard/pipeline
-    // uses it as the target for ideas assigned to "next release".
-    // Flip `date` to an ISO string the day this ships to TestFlight;
-    // ideas linked to this slug will then freeze into shipped state.
-    slug: "5_18_next",
-    label: "5.18 (in flight)",
+    // In-flight placeholder — next mobile release.
+    slug: "5_19_next",
+    label: "5.19 (in flight)",
     date: null,
     description: "In flight — assign ideas via /dashboard/pipeline.",
     tracks: [],
+    audience: "mobile",
+  },
+  {
+    slug: "5_18",
+    label: "5.18 launch",
+    date: "2026-09-03",
+    time: "16:30", // ~12:30pm EDT, when Play Console got the AAB
+    description:
+      "Post-purchase Day-0 scalp baseline + Day-3/6/13 check-ins, " +
+      "\"4 Questions I Get After Day 1\" video as 4th Day-1 task with " +
+      "speed control, zero-flash onboarding→first-session handoff, " +
+      "session CTA auto-advance, scalp check-in crash fix, streak-page " +
+      "CTA says Continue on days with follow-up content.",
+    tracks: [
+      "funnel_started",
+      "funnel_day_gte_1",
+      "outcome_converted",
+      "retention_d14",
+    ],
     audience: "mobile",
   },
   {
