@@ -47,6 +47,26 @@ export const RELEASES: Release[] = [
     tracks: [],
     audience: "mobile",
   },
+  // "All time" pseudo-release — picker option to unfilter to the full
+  // dataset. Date is arbitrary early cutoff (before the app existed);
+  // treated as any other release by consumers so no special-casing
+  // needed downstream.
+  {
+    slug: "all_time_mobile",
+    label: "All time",
+    date: "2020-01-01",
+    description: "No release filter — every mobile user since launch.",
+    tracks: [],
+    audience: "mobile",
+  },
+  {
+    slug: "all_time_web",
+    label: "All time",
+    date: "2020-01-01",
+    description: "No release filter — every web signup since launch.",
+    tracks: [],
+    audience: "web",
+  },
   {
     slug: "5_18",
     label: "5.18 launch",
