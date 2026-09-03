@@ -14,6 +14,8 @@
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { InstallSourceTabs } from "../_lib/InstallSourceTabs";
+import { VersionTabs } from "../_lib/VersionTabs";
+import { MOBILE_RELEASES, getReleaseWindow } from "@/lib/release-history";
 import {
   matchesInstallSource,
   type InstallSourceFilter,
@@ -442,7 +444,7 @@ const FUNNEL_STAGES: FunnelStage[] = [
 export default async function QuizResponsesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ g?: string; c?: string; s?: string }>;
+  searchParams: Promise<{ g?: string; c?: string; s?: string; new?: string }>;
 }) {
   const { db } = getFirebaseAdmin();
 
@@ -462,6 +464,14 @@ export default async function QuizResponsesPage({
   const source: InstallSourceFilter =
     sourceRaw === "paid" || sourceRaw === "organic" ? sourceRaw : "all";
 
+  // Release cohort — defaults to the newest shipped mobile release
+  // (currently 5.18). VersionTabs writes this via ?new=<slug>.
+  const newSlug = params.new ?? MOBILE_RELEASES[0]?.slug ?? "";
+  const releaseWindow = getReleaseWindow(newSlug, MOBILE_RELEASES);
+  const cohortFrom =
+    releaseWindow?.from ?? new Date("2026-08-18T00:00:00Z");
+  const cohortTo = releaseWindow?.to ?? new Date();
+
   // Pull tally fields + the cohort split field + gender in one pass.
   // We always fetch every user and filter in-memory rather than issuing
   // a where("selected_gender", "==", ...) query, because:
@@ -471,7 +481,8 @@ export default async function QuizResponsesPage({
   const quizFields = QUESTIONS.map((q) => q.field);
   const snap = await db
     .collection("Users")
-    .where("created_at", ">=", Timestamp.fromDate(RELEASE_CUTOFF))
+    .where("created_at", ">=", Timestamp.fromDate(cohortFrom))
+    .where("created_at", "<=", Timestamp.fromDate(cohortTo))
     .select(
       ...quizFields,
       "started_trial",
@@ -673,7 +684,7 @@ export default async function QuizResponsesPage({
           style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", margin: "4px 0 0" }}
         >
           {scopeLabel} · signups since{" "}
-          {RELEASE_CUTOFF.toISOString().slice(0, 10)} (build 162 release) ·{" "}
+          {cohortFrom.toISOString().slice(0, 10)} ·{" "}
           <span style={{ color: "#8affc1" }}>
             {startedCount.toLocaleString()} started trial
           </span>
@@ -681,6 +692,8 @@ export default async function QuizResponsesPage({
           option shows All → Started with the delta.
         </p>
       </header>
+
+      <VersionTabs selectedSlug={newSlug} releases={MOBILE_RELEASES} />
 
       <GenderTabs
         selected={gender}

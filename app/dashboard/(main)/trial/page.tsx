@@ -10,6 +10,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import Link from "next/link";
 import { Day1HoverRow } from "./Day1HoverRow";
 import { CohortPicker } from "../_lib/CohortPicker";
+import { VersionTabs } from "../_lib/VersionTabs";
 import { InstallSourceTabs } from "../_lib/InstallSourceTabs";
 import {
   matchesInstallSource,
@@ -340,13 +341,15 @@ export default async function TrialPage({
         <CompareToggle compareMode={compareMode} gender={gender} source={source} country={country} />
       </header>
 
-      {compareMode && (
+      {compareMode ? (
         <CohortPicker
           baselineSlug={baselineSlug!}
           newSlug={newSlug}
           labelForKey={METRIC_KEYS.trial}
           releases={MOBILE_RELEASES}
         />
+      ) : (
+        <VersionTabs selectedSlug={newSlug} releases={MOBILE_RELEASES} />
       )}
 
       <GenderTabs
