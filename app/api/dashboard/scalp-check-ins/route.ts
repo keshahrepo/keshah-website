@@ -58,17 +58,25 @@ export async function GET(req: Request) {
     const fromMs = new Date(fromStr + "T00:00:00Z").getTime();
     const toMs = new Date(toStr + "T23:59:59Z").getTime();
 
-    // Firestore doesn't let us filter on "field exists" cleanly, so
-    // pull the Users with a treatment_stage set (FreeV2 stoppage cohort)
-    // and filter in memory on scalp_tension_baseline presence.
+    // Filter directly on scalp_tension_baseline_at instead of pulling
+    // every FREE_STOPPAGE user (93k+ docs) and filtering in memory —
+    // the wide scan was timing out at 500. Baseline capture is the
+    // load-bearing signal for this page anyway; if it isn't set, we
+    // have nothing to show. Auto-index handles single-field `>=`.
+    const { Timestamp } = await import("firebase-admin/firestore");
     const snap = await db
       .collection("Users")
-      .where("treatment_stage", "in", ["FREE_STOPPAGE", "FREE_STOPPAGE_PLUS"])
+      .where("scalp_tension_baseline_at", ">=", Timestamp.fromMillis(fromMs))
+      .where("scalp_tension_baseline_at", "<=", Timestamp.fromMillis(toMs))
       .get();
 
     const rows: UserRow[] = [];
     for (const doc of snap.docs) {
       const d = doc.data() as Record<string, unknown>;
+      // In-memory: FreeV2 stoppage cohort only.
+      const stage = d.treatment_stage;
+      if (stage !== "FREE_STOPPAGE" && stage !== "FREE_STOPPAGE_PLUS") continue;
+
       const baselineRaw = d.scalp_tension_baseline;
       const baseline =
         typeof baselineRaw === "number"
@@ -80,7 +88,6 @@ export async function GET(req: Request) {
 
       const baselineAtMs = ts(d.scalp_tension_baseline_at);
       if (baselineAtMs === null) continue;
-      if (baselineAtMs < fromMs || baselineAtMs > toMs) continue;
 
       const tier =
         typeof d.country_tier === "string"
