@@ -12,20 +12,60 @@
 export interface Release {
   slug: string;             // stable id, used in URL params
   label: string;            // shown in chip / dropdown
-  date: string;             // ISO date shipped (yyyy-mm-dd)
+  date: string | null;      // ISO date shipped (yyyy-mm-dd), OR null for
+                            // an in-flight version that hasn't shipped
+                            // yet (used by /dashboard/pipeline to show
+                            // "assigned to next release" swimlane). When
+                            // the version ships, flip to the real date
+                            // and the release history + cohort picker
+                            // pick it up automatically.
+  time?: string;            // optional UTC time (HH:mm) — use when a
+                            // release needs sub-day precision (e.g. ads
+                            // launched mid-day and pre-launch data is
+                            // noise). Defaults to "00:00" if omitted.
   description: string;      // what changed, plain english
   tracks: string[];         // metric keys expected to move — see METRIC_KEYS
   outcome?: string;         // filled in AFTER data lands: what actually moved
+  audience: "mobile" | "web"; // which cohort this release affects.
+                            // Mobile dashboards (trial, onboarding) filter
+                            // to "mobile" so a web-only launch (e.g. ads
+                            // going live) doesn't silently become the
+                            // default cutoff for mobile pages.
 }
 
-// Only real MOBILE APP releases go here — things that change what users
-// see. Backend integrations (Sendblue webhook, RC webhook auth fix, etc.)
-// don't get their own entry because they don't shift the in-app cohort.
-//
-// Ordered newest first. Trial page ALWAYS treats +162 as baseline (the
-// first build with the new-onboarding data model). Future builds become
-// selectable in the "new" dropdown as we ship them.
+// Ordered newest first. Mobile pages (trial, onboarding) filter to
+// audience==="mobile"; the web pages (trial-web, onboarding-web) filter
+// to "web". If you add a backend integration (webhook, cron, etc.) it
+// probably doesn't shift any user-visible cohort — don't add an entry.
 export const RELEASES: Release[] = [
+  {
+    // In-flight mobile release. `date: null` marks it as unshipped so
+    // it doesn't show up on cohort dropdowns yet, but /dashboard/pipeline
+    // uses it as the target for ideas assigned to "next release".
+    // Flip `date` to an ISO string the day this ships to TestFlight;
+    // ideas linked to this slug will then freeze into shipped state.
+    slug: "5_18_next",
+    label: "5.18 (in flight)",
+    date: null,
+    description: "In flight — assign ideas via /dashboard/pipeline.",
+    tracks: [],
+    audience: "mobile",
+  },
+  {
+    slug: "web_ads_launch",
+    label: "Web ads launched",
+    date: "2026-08-26",
+    time: "20:15", // 4:15pm EDT
+    description:
+      "First day of paid Meta ads driving traffic to /start. " +
+      "Every prior cohort is either mobile-only trials or test data.",
+    tracks: [
+      "funnel_started",
+      "funnel_day_gte_1",
+      "outcome_converted",
+    ],
+    audience: "web",
+  },
   {
     slug: "162_launch",
     label: "+162 launch",
@@ -38,8 +78,44 @@ export const RELEASES: Release[] = [
       "funnel_day_gte_1",
       "outcome_converted",
     ],
+    audience: "mobile",
   },
 ];
+
+// Audience-scoped views. Consumers should import these directly instead
+// of filtering RELEASES at the call site — a web release must never
+// become the default cutoff for a mobile page.
+//
+// Shipped-only variants exclude in-flight (date === null) releases so
+// the cohort picker on dashboards doesn't offer a version that has no
+// window. The pipeline page uses the full audience list so it can
+// render "next release" ideas.
+export const MOBILE_RELEASES: Release[] = RELEASES.filter(
+  (r) => r.audience === "mobile" && r.date !== null,
+);
+export const WEB_RELEASES: Release[] = RELEASES.filter(
+  (r) => r.audience === "web" && r.date !== null,
+);
+export const MOBILE_RELEASES_INC_INFLIGHT: Release[] = RELEASES.filter(
+  (r) => r.audience === "mobile",
+);
+export const WEB_RELEASES_INC_INFLIGHT: Release[] = RELEASES.filter(
+  (r) => r.audience === "web",
+);
+
+/**
+ * The next in-flight release for a given audience (the one whose
+ * ideas are currently being built). Returns null if there's no
+ * unshipped version registered — that's a hint to add a `date: null`
+ * entry to RELEASES.
+ */
+export function getInFlightRelease(
+  audience: "mobile" | "web",
+): Release | null {
+  return (
+    RELEASES.find((r) => r.audience === audience && r.date === null) ?? null
+  );
+}
 
 // ── Metric direction map ─────────────────────────────────────────────
 // "higher_better" — new > baseline is a WIN (highlight green)
@@ -82,11 +158,28 @@ export const METRIC_KEYS = {
     funnel_paywall_viewed: "Paywall viewed",
     funnel_trial_started: "Trial started",
   },
+  retention: {
+    // Day-N retention milestones — % of the paid cohort that had
+    // ≥1 completed exercise on the given day. Computed by
+    // /api/dashboard/retention and rendered on /dashboard/retention.
+    retention_d1: "Day 1 retention",
+    retention_d7: "Day 7 retention",
+    retention_d14: "Day 14 retention",
+    retention_d30: "Day 30 retention",
+    retention_d60: "Day 60 retention",
+  },
 } as const;
 
 // ── Helpers ──────────────────────────────────────────────────────────
+//
+// All list-walking helpers take an optional `list` parameter so mobile
+// pages can pass MOBILE_RELEASES and web pages can pass WEB_RELEASES.
+// Without this, getReleaseWindow("162_launch") on a mobile page would
+// end its window at the next release IN THE UNIFIED LIST — which could
+// be a WEB release (web_ads_launch) — and cut mobile data off at the
+// web ads launch time. The window must be scoped to the same audience.
 
-/** Get a release by slug. */
+/** Get a release by slug. Searches the unified list — slugs are unique. */
 export function getRelease(slug: string | null | undefined): Release | null {
   if (!slug) return null;
   return RELEASES.find((r) => r.slug === slug) ?? null;
@@ -94,22 +187,45 @@ export function getRelease(slug: string | null | undefined): Release | null {
 
 /**
  * Given a "new" release slug, return the release immediately before it
- * (chronologically). Used as the auto-default baseline.
+ * (chronologically) within the same audience list. Used as the
+ * auto-default baseline for cohort comparison.
  */
-export function getPreviousRelease(slug: string): Release | null {
-  const idx = RELEASES.findIndex((r) => r.slug === slug);
-  if (idx < 0 || idx >= RELEASES.length - 1) return null;
-  return RELEASES[idx + 1];
+export function getPreviousRelease(
+  slug: string,
+  list: Release[] = RELEASES,
+): Release | null {
+  const idx = list.findIndex((r) => r.slug === slug);
+  if (idx < 0 || idx >= list.length - 1) return null;
+  return list[idx + 1];
 }
 
 /**
  * Date range covered by a release: from its ship date up to (but not
- * including) the next release's ship date, or now if it's the newest.
+ * including) the next release's ship date in the SAME audience list,
+ * or now if it's the newest for that audience.
  */
-export function getReleaseWindow(slug: string): { from: Date; to: Date } | null {
-  const idx = RELEASES.findIndex((r) => r.slug === slug);
+export function getReleaseWindow(
+  slug: string,
+  list: Release[] = RELEASES,
+): { from: Date; to: Date } | null {
+  const idx = list.findIndex((r) => r.slug === slug);
   if (idx < 0) return null;
-  const from = new Date(RELEASES[idx].date + "T00:00:00Z");
-  const to = idx === 0 ? new Date() : new Date(RELEASES[idx - 1].date + "T00:00:00Z");
+  const r = list[idx];
+  // In-flight (date: null) releases have no window yet — no cohort
+  // data to compare against. Callers should filter these out before
+  // calling.
+  if (r.date === null) return null;
+  const startOf = (rr: Release): Date =>
+    new Date(`${rr.date}T${rr.time ?? "00:00"}:00Z`);
+  const from = startOf(r);
+  // Walk backwards through the list to find the NEWER shipped release
+  // (skipping any in-flight entries that sit above).
+  let to: Date = new Date();
+  for (let i = idx - 1; i >= 0; i--) {
+    if (list[i].date !== null) {
+      to = startOf(list[i]);
+      break;
+    }
+  }
   return { from, to };
 }

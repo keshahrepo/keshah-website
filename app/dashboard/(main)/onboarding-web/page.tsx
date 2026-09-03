@@ -28,16 +28,15 @@ const TEST_EMAIL_REGEX = /^test\d+@test\.com$/i;
 const isTestEmail = (email: unknown): boolean =>
   typeof email === "string" && TEST_EMAIL_REGEX.test(email);
 
-// +162 shipped on 2026-08-18 (release with new funnel writes,
-// started_trial, country_tier, age question). Scoping the Firestore
-// query to users created after this cutoff:
-//   1. Makes every tab/card count meaningful — no more 90k legacy
-//      users diluting the numerator/denominator.
-//   2. Trims the query from ~91k docs to a few hundred → faster load.
+// Meta ads for the web funnel launched 2026-08-26 ~20:00 UTC.
+// Every user before this was either test data or a mobile-only trial —
+// keeping them in the cohort dilutes the ad-funnel numbers we actually
+// care about. Bumped cutoff to ads-launch so this dashboard reflects
+// only paid-ad conversions from this point forward.
 //
 // Change this date when you cut a new release cohort you want to
 // track separately.
-const RELEASE_CUTOFF = new Date("2026-08-18T00:00:00Z");
+const RELEASE_CUTOFF = new Date("2026-08-26T20:15:00Z"); // 4:15pm EDT
 
 export const dynamic = "force-dynamic";
 
@@ -411,33 +410,164 @@ function matchesCountryFilter(
 //
 // Ordered by flow position. `check` returns true if the user reached
 // that stage. All users count toward "Signed up" — the 100% baseline.
-interface FunnelStage {
+// Funnel stages — upper stages (landing → paywall_viewed) count from
+// FunnelEvents directly using unique sessionIds, so every visitor is
+// counted whether or not they paid. trial_started still comes from the
+// Users doc since that's the truest "actually paid" signal (set by the
+// Stripe webhook, not client-side).
+//
+// `funnelStep` = the step name written to FunnelEvents by flow-context.
+// `userCheck` = fallback field on Users doc (only trial_started uses this).
+interface WebFunnelStage {
   key: string;
   label: string;
-  check: (d: Record<string, unknown>) => boolean;
+  funnelStep?: string;
+  userCheck?: (d: Record<string, unknown>) => boolean;
 }
 
-// Only users on the +162 build write these event fields. Presence of
-// The outer loop already filters to isWebUser (payment_provider=stripe
-// OR signup_source=web_onboarding), so every doc that reaches here is
-// in-scope for the web funnel. No extra "new build" gate needed —
-// the mobile page needs it because it queries all mobile users
-// (some pre-instrumentation), the web page doesn't.
-const IS_NEW_BUILD_USER = (_d: Record<string, unknown>) => true;
-
-const FUNNEL_STAGES: FunnelStage[] = [
-  // Web-only: landing page view (first step in /start). Populated via
-  // FunnelEvents backfill at attach-identity — every user in this funnel
-  // has landing_viewed_at by definition of being a web user who
-  // completed sign-in.
-  { key: "landing_viewed",    label: "Landing viewed",         check: (d) => !!d.landing_viewed_at },
-  { key: "founder_started",   label: "Founder story started",  check: (d) => !!d.founder_story_started_at },
-  { key: "pinch_started",     label: "Pinch test started",     check: (d) => !!d.pinch_test_started_at },
-  { key: "results_started",   label: "Results screenshots started", check: (d) => !!d.results_screenshots_started_at },
-  { key: "quiz_started",      label: "Quiz started",           check: (d) => !!d.hair_loss_location },
-  { key: "paywall_viewed",    label: "Paywall viewed",         check: (d) => !!d.paywall_viewed_at },
-  { key: "trial_started",     label: "Trial started",          check: (d) => !!d.started_trial || !!d.trial_started_at },
+const FUNNEL_STAGES: WebFunnelStage[] = [
+  { key: "landing_viewed",    label: "Landing viewed",                funnelStep: "landingHook" },
+  { key: "founder_started",   label: "Founder story started",         funnelStep: "founderStory" },
+  { key: "pinch_started",     label: "Pinch test started",            funnelStep: "pinchTest" },
+  { key: "results_started",   label: "Results screenshots started",   funnelStep: "resultScreenshots" },
+  { key: "quiz_started",      label: "Quiz started",                  funnelStep: "qualification" },
+  // ── v2 text-consult funnel end (current /start) ──
+  { key: "text_handoff_reached", label: "Text handoff reached",       funnelStep: "textConsult" },
+  { key: "text_handoff_clicked", label: "Tapped Text Aadi",           funnelStep: "text_handoff_clicked" },
+  // ── v1 paywall funnel end (preserved at /startv1) ──
+  { key: "paywall_viewed",    label: "Paywall viewed (v1)",           funnelStep: "trialPaywall" },
+  { key: "payment_clicked",   label: "Payment clicked (v1)",          funnelStep: "payment" },
+  // Universal — trial started via any path (paywall inline checkout OR
+  // Aadi's personalized plan URL sent over text).
+  { key: "trial_started",     label: "Trial started",                 userCheck: (d) => !!d.started_trial || !!d.trial_started_at },
 ];
+
+// Query QuizAnswers (populated on every quiz-step submission from
+// flow-context) and aggregate into per-question tallies. Every answer
+// is counted whether or not the user paid — same "all traffic" logic
+// as the FunnelEvents-based funnel drop-off panel above.
+//
+// Docs are keyed by `{sessionId}_{field}` so re-answering a question
+// overwrites rather than duplicating. We group by sessionId first so
+// multi-question tallies count each user once per option they picked.
+async function getQuizTalliesFromEvents(
+  db: FirebaseFirestore.Firestore,
+  cutoff: Date,
+  questions: Question[],
+): Promise<Record<string, Tally>> {
+  const cutoffDate = cutoff.toISOString().slice(0, 10);
+  const snap = await db
+    .collection("QuizAnswers")
+    .where("date", ">=", cutoffDate)
+    .select("field", "value", "sessionId", "source", "timestamp")
+    .get();
+
+  const WEB_SOURCES = new Set([
+    "us",
+    "us_trial",
+    "us_kit",
+    "us_weekly_trial",
+    "us_women_mandy",
+  ]);
+  const cutoffMs = cutoff.getTime();
+
+  // sessionId → { field → value } so we deduplicate across doc rewrites.
+  const bySession = new Map<string, Record<string, unknown>>();
+  for (const doc of snap.docs) {
+    const data = doc.data();
+    const source = data.source as string | undefined;
+    if (!source || (!WEB_SOURCES.has(source) && !source.startsWith("us_creator_"))) continue;
+    const ts = data.timestamp as { toMillis?: () => number } | undefined;
+    if (ts?.toMillis && ts.toMillis() < cutoffMs) continue;
+    const sid = data.sessionId as string | undefined;
+    const field = data.field as string | undefined;
+    if (!sid || !field) continue;
+    let bag = bySession.get(sid);
+    if (!bag) {
+      bag = {};
+      bySession.set(sid, bag);
+    }
+    bag[field] = data.value;
+  }
+
+  const talliesByQuestion: Record<string, Tally> = {};
+  for (const q of questions) talliesByQuestion[q.key] = emptyTally();
+
+  for (const bag of bySession.values()) {
+    for (const q of questions) {
+      const raw = bag[q.field];
+      if (raw === undefined || raw === null) continue;
+      const validValues = new Set(q.options.map((o) => o.value));
+      const t = talliesByQuestion[q.key];
+      if (q.array) {
+        if (!Array.isArray(raw) || raw.length === 0) continue;
+        t.answered++;
+        for (const v of raw) {
+          const s = String(v);
+          if (validValues.has(s)) t.counts[s] = (t.counts[s] ?? 0) + 1;
+          else t.other++;
+          t.total++;
+        }
+      } else {
+        const s = String(raw);
+        if (s === "") continue;
+        t.answered++;
+        t.total++;
+        if (validValues.has(s)) t.counts[s] = (t.counts[s] ?? 0) + 1;
+        else t.other++;
+      }
+    }
+  }
+  return talliesByQuestion;
+}
+
+// Query FunnelEvents (source="us" for the main web funnel) and count
+// unique sessionIds per step. Runs in parallel with the Users query.
+// The `date` field is a "YYYY-MM-DD" string — indexed for range queries.
+async function getFunnelStageCounts(
+  db: FirebaseFirestore.Firestore,
+  cutoff: Date,
+): Promise<Record<string, number>> {
+  const cutoffDate = cutoff.toISOString().slice(0, 10);
+  const snap = await db
+    .collection("FunnelEvents")
+    .where("date", ">=", cutoffDate)
+    .select("step", "sessionId", "source", "timestamp")
+    .get();
+
+  const WEB_SOURCES = new Set([
+    "us",
+    "us_trial",
+    "us_kit",
+    "us_weekly_trial",
+    "us_women_mandy",
+  ]);
+  const cutoffMs = cutoff.getTime();
+
+  const sessionsByStep = new Map<string, Set<string>>();
+  for (const doc of snap.docs) {
+    const data = doc.data();
+    const step = data.step as string | undefined;
+    const sessionId = data.sessionId as string | undefined;
+    const source = data.source as string | undefined;
+    if (!step || !sessionId || !source) continue;
+    if (!WEB_SOURCES.has(source) && !source.startsWith("us_creator_")) continue;
+    // Belt-and-suspenders precise filter — the date-string filter cuts
+    // to whole days, and we want a sub-day cutoff (4:15pm EDT).
+    const ts = data.timestamp as { toMillis?: () => number } | undefined;
+    if (ts?.toMillis && ts.toMillis() < cutoffMs) continue;
+    let set = sessionsByStep.get(step);
+    if (!set) {
+      set = new Set();
+      sessionsByStep.set(step, set);
+    }
+    set.add(sessionId);
+  }
+
+  const out: Record<string, number> = {};
+  for (const [step, ids] of sessionsByStep) out[step] = ids.size;
+  return out;
+}
 
 export default async function QuizResponsesPage({
   searchParams,
@@ -465,38 +595,38 @@ export default async function QuizResponsesPage({
   // show up. Same in-memory-filter pattern as the mobile page's gender
   // toggle — Firestore composite index cost isn't worth it at our size.
   const quizFields = QUESTIONS.map((q) => q.field);
-  const snap = await db
-    .collection("Users")
-    .where("created_at", ">=", Timestamp.fromDate(RELEASE_CUTOFF))
-    .select(
-      ...quizFields,
-      "started_trial",
-      "selected_gender",
-      "landing_viewed_at",
-      "founder_story_started_at",
-      "pinch_test_started_at",
-      "results_screenshots_started_at",
-      "paywall_viewed_at",
-      "country_tier",
-      "userLocalTimeZone",
-      "email",
-      // Web-specific discriminators — set by attach-identity for every
-      // paid web trial. Either being present flags a web user.
-      "payment_provider",
-      "signup_source",
-      // trial_started_at is the web equivalent of `started_trial`
-      // (mobile field name is deliberately different). Used for the
-      // Landing → Trial conversion metric.
-      "trial_started_at",
-    )
-    .get();
+  // Fire the Users query and the FunnelEvents query in parallel —
+  // the funnel-events count is independent of the user tally.
+  const [snap, funnelEventCounts, allTalliesFromEvents] = await Promise.all([
+    db
+      .collection("Users")
+      .where("created_at", ">=", Timestamp.fromDate(RELEASE_CUTOFF))
+      .select(
+        ...quizFields,
+        "started_trial",
+        "selected_gender",
+        "country_tier",
+        "userLocalTimeZone",
+        "email",
+        // Web-specific discriminators — set by attach-identity for every
+        // paid web trial. Either being present flags a web user.
+        "payment_provider",
+        "signup_source",
+        // trial_started_at is the web equivalent of `started_trial`
+        // (mobile field name is deliberately different).
+        "trial_started_at",
+      )
+      .get(),
+    getFunnelStageCounts(db, RELEASE_CUTOFF),
+    getQuizTalliesFromEvents(db, RELEASE_CUTOFF, QUESTIONS),
+  ]);
 
-  const allTallies: Record<string, Tally> = {};
+  // "All" tallies now come from QuizAnswers (every visitor, incl.
+  // drop-offs). "Started" tallies still come from Users doc since we
+  // need the started_trial flag to segment.
+  const allTallies: Record<string, Tally> = allTalliesFromEvents;
   const startedTallies: Record<string, Tally> = {};
-  for (const q of QUESTIONS) {
-    allTallies[q.key] = emptyTally();
-    startedTallies[q.key] = emptyTally();
-  }
+  for (const q of QUESTIONS) startedTallies[q.key] = emptyTally();
 
   // Tab counts — always computed against the full user base so the
   // toggle shows how big each cohort is regardless of current filter.
@@ -512,11 +642,20 @@ export default async function QuizResponsesPage({
     data.payment_provider === "stripe" ||
     data.signup_source === "web_onboarding";
 
-  // Funnel counts respect the gender filter (only in-scope users) AND
-  // only count users on the +162 build. Baseline = users who wrote
-  // founder_story_started_at (the first new-build write in the flow).
+  // Funnel counts — upper stages come from FunnelEvents (unique
+  // sessionIds, so every landing/step visit is counted regardless of
+  // whether the user paid). trial_started stays as a Users doc check
+  // since it's the only stage with a reliable post-payment signal.
+  //
+  // Gender/country filters DON'T apply to upper stages (FunnelEvents
+  // doesn't carry gender/country), only to trial_started. Note added
+  // in the panel UI so the numbers aren't misread.
   const funnelCounts: Record<string, number> = {};
-  for (const s of FUNNEL_STAGES) funnelCounts[s.key] = 0;
+  for (const s of FUNNEL_STAGES) {
+    funnelCounts[s.key] = s.funnelStep
+      ? (funnelEventCounts[s.funnelStep] ?? 0)
+      : 0;
+  }
 
   // Iterate — filter to web users first, then apply gender/country
   // filters. Mobile users are excluded from every tally on this page.
@@ -539,46 +678,43 @@ export default async function QuizResponsesPage({
     const isStarter = !!data.started_trial;
     if (isStarter) startedCount++;
 
-    // Funnel only counts users on the new build. Legacy users don't
-    // have `founder_story_started_at`, so they don't inflate the
-    // baseline (which would drive every stage % to ~0). Also applies
-    // the country filter — All / Tier 1 / Tier 2 / US / India.
-    if (IS_NEW_BUILD_USER(data) && matchesCountryFilter(country, data)) {
+    // Only trial_started is counted from Users doc — every other
+    // funnel stage is counted from FunnelEvents (populated above).
+    // Trial started respects country filter (Users doc has country_tier)
+    // but NOT gender filter (would need gender to be applied to the
+    // entire funnel, which we can't do — leave gender-filter as visual
+    // only on the quiz cards below).
+    if (matchesCountryFilter(country, data)) {
       for (const s of FUNNEL_STAGES) {
-        if (s.check(data)) funnelCounts[s.key]++;
+        if (s.userCheck && s.userCheck(data)) funnelCounts[s.key]++;
       }
     }
 
+    // Only started-trial users tally into startedTallies. allTallies is
+    // populated once, above, from QuizAnswers (all traffic).
+    if (!isStarter) continue;
     for (const q of QUESTIONS) {
       const raw = data[q.field];
       if (raw === undefined || raw === null) continue;
       const validValues = new Set(q.options.map((o) => o.value));
-
-      // Tally into both All (always) and Started (if isStarter).
-      const targets: Tally[] = isStarter
-        ? [allTallies[q.key], startedTallies[q.key]]
-        : [allTallies[q.key]];
+      const t = startedTallies[q.key];
 
       if (q.array) {
         if (!Array.isArray(raw) || raw.length === 0) continue;
-        for (const t of targets) t.answered++;
+        t.answered++;
         for (const v of raw) {
           const s = String(v);
-          for (const t of targets) {
-            if (validValues.has(s)) t.counts[s] = (t.counts[s] ?? 0) + 1;
-            else t.other++;
-            t.total++;
-          }
+          if (validValues.has(s)) t.counts[s] = (t.counts[s] ?? 0) + 1;
+          else t.other++;
+          t.total++;
         }
       } else {
         const s = String(raw);
         if (s === "") continue;
-        for (const t of targets) {
-          t.answered++;
-          t.total++;
-          if (validValues.has(s)) t.counts[s] = (t.counts[s] ?? 0) + 1;
-          else t.other++;
-        }
+        t.answered++;
+        t.total++;
+        if (validValues.has(s)) t.counts[s] = (t.counts[s] ?? 0) + 1;
+        else t.other++;
       }
     }
   }
@@ -751,8 +887,10 @@ function FunnelPanel({
           marginBottom: 14,
         }}
       >
-        % of {baseline.toLocaleString()} signups (since build 162 release)
-        that reached each stage.
+        % of {baseline.toLocaleString()} landing views (all traffic since ad
+        launch) that reached each stage. Upper stages count unique sessions
+        from FunnelEvents — gender/country filters below only affect the
+        final Trial started row and the quiz cards below.
       </div>
 
       <FunnelCountryTabs selected={country} gender={gender} />

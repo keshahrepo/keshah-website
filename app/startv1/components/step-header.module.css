@@ -1,0 +1,40 @@
+.header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 24px 6px;
+  padding-top: calc(env(safe-area-inset-top) + 18px);
+  flex-shrink: 0;
+  height: auto;
+  min-height: 64px;
+}
+
+.logo {
+  height: 40px;
+  width: 60px;
+  display: block;
+  filter: brightness(0) invert(1);
+  object-fit: contain;
+}
+
+.backBtn {
+  position: absolute;
+  left: 16px;
+  top: calc(env(safe-area-inset-top) + 12px);
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background 0.15s;
+}
+
+.backBtn:hover {
+  background: var(--fg-6);
+}

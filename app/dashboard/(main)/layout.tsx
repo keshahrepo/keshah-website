@@ -33,6 +33,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: "",
     roles: ["admin"],
     items: [
+      { href: "/dashboard/pipeline", label: "Pipeline", icon: "pipeline", roles: ["admin"] },
       { href: "/dashboard/support", label: "Support", icon: "support", roles: ["admin"] },
       { href: "/dashboard/onboarding", label: "Onboarding", icon: "funnel", roles: ["admin"] },
       { href: "/dashboard/onboarding-web", label: "Onboarding Web", icon: "funnel", roles: ["admin"] },
@@ -51,6 +52,7 @@ const NAV_SECTIONS: NavSection[] = [
         ],
       },
       { href: "/dashboard/retention", label: "Retention", icon: "repeat", roles: ["admin"] },
+      { href: "/dashboard/scalp-check-ins", label: "Scalp check-ins", icon: "activity", roles: ["admin"] },
     ],
   },
 ];
@@ -95,6 +97,12 @@ function NavIcon({ icon, active }: { icon: string; active: boolean }) {
           <path d="M3 11V9a4 4 0 0 1 4-4h14" />
           <polyline points="7 23 3 19 7 15" />
           <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+        </svg>
+      );
+    case "activity":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2}>
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
         </svg>
       );
     case "funnel2":
@@ -151,6 +159,15 @@ function NavIcon({ icon, active }: { icon: string; active: boolean }) {
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
           <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
           <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </svg>
+      );
+    case "pipeline":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          {/* Three vertical columns evoking kanban lanes. */}
+          <rect x="3" y="5" width="4" height="14" rx="1" />
+          <rect x="10" y="5" width="4" height="10" rx="1" />
+          <rect x="17" y="5" width="4" height="7" rx="1" />
         </svg>
       );
     case "support":

@@ -167,6 +167,39 @@ export function FlowProvider({ children, stepOrder: stepOrderProp, storageKey }:
 
   const updateAnswers = useCallback((patch: Partial<QuizAnswers>) => {
     setAnswers((current) => ({ ...current, ...patch }));
+    // Persist to QuizAnswers collection so the onboarding-web dashboard
+    // sees ALL answers (not just those from converted users). Uses same
+    // sessionId + source derivation as /api/funnel/track above.
+    if (typeof window === "undefined") return;
+    try {
+      let sessionId = sessionStorage.getItem("keshah_funnel_session");
+      if (!sessionId) {
+        sessionId = crypto.randomUUID();
+        sessionStorage.setItem("keshah_funnel_session", sessionId);
+      }
+      const source = (() => {
+        const p = window.location.pathname;
+        if (p.startsWith("/startindiafree2")) return "india_premium_trial";
+        if (p.startsWith("/startindia2")) return "india2";
+        if (p.startsWith("/startindia3")) return "india3";
+        if (p.startsWith("/startindia")) return "india";
+        if (p.startsWith("/f/")) {
+          const slug = p.split("/")[2];
+          return slug ? `us_creator_${slug}` : "us_creator_unknown";
+        }
+        if (p.startsWith("/mandy")) return "us_women_mandy";
+        if (p.startsWith("/startus3")) return "us_weekly_trial";
+        if (p.startsWith("/startus2")) return "us_kit";
+        if (p.startsWith("/startfree")) return "us_trial";
+        return "us";
+      })();
+      fetch("/api/quiz/log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, source, answers: patch }),
+        keepalive: true,
+      }).catch(() => {});
+    } catch {}
   }, []);
 
   const value = useMemo<FlowState>(

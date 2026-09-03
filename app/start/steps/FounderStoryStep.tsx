@@ -193,10 +193,16 @@ function buildBeats(firstName?: string): StoryBeat[] {
         { text: "how doesn't everyone know about this?", italic: true },
       ],
     },
-    // Beat 26: Built the app
+    // Beat 26: Now I help people make their own plan + volume proof.
+    // Instagram + TikTok screenshots as the visual — same socials shown
+    // in other places, keeps proof consistent across the funnel.
     {
       text:
-        "So I put everything. All my research. All the techniques. The exact plan I followed. All of it into an app. I called it KESHAH MechanoTherapy.",
+        "Now I help people who don't want to take drugs figure out their own plan. I've been lucky enough to help more than 1,500 people in the last 2 years alone.",
+      stackedImages: [
+        "/trial/aadi_instagram.jpg",
+        "/trial/aadi_tiktok.jpg",
+      ],
     },
     // Beat 27: CTA
     { text: "It's in your hands now.", isLastScreen: true },

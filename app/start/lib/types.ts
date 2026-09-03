@@ -41,6 +41,11 @@ export type StartStep =
   | "momentFounderFlashback"
   | "trialPaywall"
   | "payment"
+  // New text-consult funnel — final step. Replaces trialPaywall in
+  // STEP_ORDER. Shows a "you qualify for a free text consult with Aadi"
+  // page with an iMessage handoff CTA (sms:+18328634933 pre-loaded with
+  // their quiz answers). Old paywall funnel lives on at /startv1.
+  | "textConsult"
   // Legacy step keys — kept so old peer components / dashboard code that
   // reference them still compile. Not present in STEP_ORDER.
   | "hook"
@@ -83,67 +88,48 @@ export type StartStep =
   | "watchVideo2"
   | "watchTrialInfo";
 
-// Scratch-rebuild flow order — matches the built list from the mobile parity
-// sweep 1:1. Every entry MUST have a corresponding component registered in
-// STEP_COMPONENTS in components/StartFlow.tsx. Gender / branch skipping is
-// handled by wrapper logic in the registry, not per-step.
+// v2 flow — TEXT-CONSULT FUNNEL. Replaced the 30-step paywall funnel on
+// 2026-08-28 after testing showed cold Meta traffic wouldn't type a card
+// at checkout (0/47 SetupIntents advanced past requires_payment_method).
+//
+// Hypothesis: trust deficit for unknown brand at $99 subscription is the
+// killer. New model: warm the user (story + physical proof + social
+// proof) → shorter qualification quiz (5 factual questions, not 20) →
+// text handoff to Aadi. Aadi does the equivalent of his old video-call
+// consultation via iMessage, generates a personalized plan URL,
+// user starts trial from a much warmer position.
+//
+// The OLD 30-step paywall funnel is preserved verbatim at /startv1 as a
+// fallback / A-B comparison route. Every step component removed from
+// STEP_ORDER below still exists in STEP_COMPONENTS so re-adding one is
+// a single-line uncomment. Meta ads still point at /start — no ad
+// changes needed.
 export const STEP_ORDER: StartStep[] = [
-  // v1: cold-traffic funnel optimised for cleanest conversion signal.
-  // firstName / phoneNumber / age / referralSource intentionally OMITTED —
-  // their components + StartFlow registry entries are still there so
-  // adding them back later is a one-line uncomment in this array.
-  // See discussion in ACTIVATION_PROPOSALS (or ask Aadi) for why.
-
-  // Cold-traffic pre-quiz hook. Fresh users land here first from ads;
-  // returning users skip it because flow-context resumes at their last step.
+  // ── Warming: story + physical proof + social proof (7 steps) ──
   "landingHook",
-  // Deliver the story promise immediately — no forms between the hook and
-  // Aadi's narrative.
-  "founderStory",
+  "founderStory", // full 23 beats (Aadi's call — story is central to brand)
   "momentCheckYourScalp",
-  // quizGender is required for pinch-test personalization (male vs female
-  // photos) + hair-goal branching + female-only quiz beats, so it lives
-  // right before the physical-proof section.
-  "quizGender",
+  "quizGender", // needed for pinch-test personalization
   "pinchTest",
   "momentHereIsWhatHappens",
   "resultScreenshots",
-  "momentBuildYourPlan",
-  // Qualification + universal quiz
+  "momentBuildYourPlan", // bridge into the qualifying questions
+
+  // ── Qualification quiz: 5 factual questions, no interstitials ──
+  // Purpose is different from the old quiz: not "collect data for a
+  // paywall plan generator" — it's "qualify user for text consult with
+  // Aadi + give him starting context for the conversation." Emotional /
+  // motivational questions (hairGoal, hardestPart, stressContribution,
+  // hormonalChanges, tightHairstyles) intentionally moved TO the text
+  // conversation itself so it has real diagnostic purpose.
   "qualification",
-  "qualificationResponse", // female-only, wrapper skips on male
   "hairLossLocation",
-  "hairGoal",
-  "goalResponse",
-  "hairLossMedicationMen",
-  "hairLossMedicationMenResponse",
-  "stressContribution",
-  "stressContributionResponse", // skips on stress_contribution === "no"
-  // Women-only hormonal + traction branches (wrapper skips on male +
-  // conditional response skips).
-  "hormonalChanges",
-  "hormonalChangesResponse",
-  "tightHairstyles",
-  "tightHairstylesResponse",
-  // Universal
+  "hairLossMedicationMen", // finasteride context — universal (wrapper skips on female)
   "familyHistory",
-  "familyHistoryMenResponse", // skips on no / not_sure
-  "hardestPart",
-  "hardestPartResponse",
-  "commitment",
-  // Plan build + paywall lead-in
-  "buildingYourPlan",
-  "planReveal",
-  "outcomePreview",
-  "socialProof",
-  "momentFounderFlashback",
-  "trialPaywall",
-  // Stripe deferred-payment step (Elements + ExpressCheckout).
-  // Slotted immediately after the trial paywall CTA — user has committed
-  // to the 7-day free trial and now enters card details. Backend creates
-  // the subscription with trial_period_days: 7, then a signed handoff
-  // deep-link opens the app for silent sign-in on first launch.
-  "payment",
+  "commitment", // 20 min/day gate — the qualifier
+
+  // ── Text handoff (1 step, replaces trialPaywall) ──
+  "textConsult",
 ];
 
 export type Gender = "male" | "female";

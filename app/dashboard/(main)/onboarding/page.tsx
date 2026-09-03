@@ -13,6 +13,11 @@
 
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
+import { InstallSourceTabs } from "../_lib/InstallSourceTabs";
+import {
+  matchesInstallSource,
+  type InstallSourceFilter,
+} from "../_lib/installSource";
 
 // Match testXXX@test.com accounts (any digits). Used to strip Aadi's
 // QA users from the analytics so real conversion rates aren't
@@ -437,7 +442,7 @@ const FUNNEL_STAGES: FunnelStage[] = [
 export default async function QuizResponsesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ g?: string; c?: string }>;
+  searchParams: Promise<{ g?: string; c?: string; s?: string }>;
 }) {
   const { db } = getFirebaseAdmin();
 
@@ -453,6 +458,9 @@ export default async function QuizResponsesPage({
     countryRaw === "india"
       ? countryRaw
       : "all";
+  const sourceRaw = params.s;
+  const source: InstallSourceFilter =
+    sourceRaw === "paid" || sourceRaw === "organic" ? sourceRaw : "all";
 
   // Pull tally fields + the cohort split field + gender in one pass.
   // We always fetch every user and filter in-memory rather than issuing
@@ -477,6 +485,10 @@ export default async function QuizResponsesPage({
       // Country-filter inputs — used only by the funnel panel.
       "country_tier",
       "userLocalTimeZone",
+      // Install-source filter — backfilled from RC by
+      // /api/rc/backfill-attribution. Used by the InstallSourceTabs
+      // filter to slice paid-ad vs organic cohorts.
+      "install_source",
       // Email — used only to strip test accounts from the sample.
       "email",
     )
@@ -495,6 +507,11 @@ export default async function QuizResponsesPage({
   let genderMaleCount = 0;
   let genderFemaleCount = 0;
   let startedCount = 0;
+  // Install-source tab counts — populated from the same pass so the
+  // pill counts reflect the current gender/country filter state.
+  // Binary: paid vs everything else (organic bucket absorbs missing +
+  // legacy "unknown" values).
+  const sourceCounts = { all: 0, paid: 0, organic: 0 };
 
   // Funnel counts respect the gender filter (only in-scope users) AND
   // only count users on the +162 build. Baseline = users who wrote
@@ -515,6 +532,17 @@ export default async function QuizResponsesPage({
     // tab. Users with no selected_gender are only included in "all".
     if (gender === "male" && docGender !== "male") continue;
     if (gender === "female" && docGender !== "female") continue;
+
+    // Tally install-source counts (post-gender filter so pill numbers
+    // match what the tab would show), then apply the source filter.
+    // Anything that isn't explicitly "paid" rolls into organic — so
+    // legacy null / "unknown" values show up under Organic without a
+    // migration pass.
+    const docSource = data.install_source as string | undefined;
+    const bucket: "paid" | "organic" = docSource === "paid" ? "paid" : "organic";
+    sourceCounts.all++;
+    sourceCounts[bucket]++;
+    if (!matchesInstallSource(source, data)) continue;
 
     const isStarter = !!data.started_trial;
     if (isStarter) startedCount++;
@@ -658,9 +686,12 @@ export default async function QuizResponsesPage({
         selected={gender}
         totals={{ all: totalUsers, male: genderMaleCount, female: genderFemaleCount }}
         country={country}
+        source={source}
       />
 
-      <FunnelPanel counts={funnelCounts} country={country} gender={gender} />
+      <InstallSourceTabs selected={source} totals={sourceCounts} />
+
+      <FunnelPanel counts={funnelCounts} country={country} gender={gender} source={source} />
 
       <TopSignalsPanel
         signals={allSignals}
@@ -696,10 +727,12 @@ function FunnelPanel({
   counts,
   country,
   gender,
+  source,
 }: {
   counts: Record<string, number>;
   country: CountryFilter;
   gender: GenderFilter;
+  source: InstallSourceFilter;
 }) {
   const baseline = counts[FUNNEL_STAGES[0].key] || 1;
   return (
@@ -735,7 +768,7 @@ function FunnelPanel({
         that reached each stage.
       </div>
 
-      <FunnelCountryTabs selected={country} gender={gender} />
+      <FunnelCountryTabs selected={country} gender={gender} source={source} />
       <div style={{ display: "grid", gap: 6 }}>
         {FUNNEL_STAGES.map((s) => {
           const count = counts[s.key] ?? 0;
@@ -802,13 +835,17 @@ function FunnelPanel({
 function FunnelCountryTabs({
   selected,
   gender,
+  source,
 }: {
   selected: CountryFilter;
   gender: GenderFilter;
+  source: InstallSourceFilter;
 }) {
-  // Keep the gender param in the URL when switching country tab so the
-  // rest of the page (per-question cards, top signals) doesn't reset.
+  // Keep the gender + source params in the URL when switching country
+  // tab so the rest of the page (per-question cards, top signals,
+  // install-source filter) doesn't reset.
   const genderParam = gender === "all" ? "" : `g=${gender}`;
+  const sourceParam = source === "all" ? "" : `s=${source}`;
   return (
     <div
       style={{
@@ -825,6 +862,7 @@ function FunnelCountryTabs({
         const active = tab.id === selected;
         const parts: string[] = [];
         if (genderParam) parts.push(genderParam);
+        if (sourceParam) parts.push(sourceParam);
         if (tab.id !== "all") parts.push(`c=${tab.id}`);
         const href = parts.length === 0 ? "?" : `?${parts.join("&")}`;
         return (
@@ -854,10 +892,12 @@ function GenderTabs({
   selected,
   totals,
   country,
+  source,
 }: {
   selected: GenderFilter;
   totals: { all: number; male: number; female: number };
   country: CountryFilter;
+  source: InstallSourceFilter;
 }) {
   return (
     <div
@@ -874,11 +914,13 @@ function GenderTabs({
       {GENDER_TABS.map((tab) => {
         const active = tab.id === selected;
         const count = totals[tab.id];
-        // Preserve the country filter across gender switches so users
-        // who set "US only" don't lose it when flipping Men → Women.
+        // Preserve the country + source filters across gender switches
+        // so users who set "US only" or "Paid" don't lose them when
+        // flipping Men → Women.
         const parts: string[] = [];
         if (tab.id !== "all") parts.push(`g=${tab.id}`);
         if (country !== "all") parts.push(`c=${country}`);
+        if (source !== "all") parts.push(`s=${source}`);
         const href = parts.length === 0 ? "?" : `?${parts.join("&")}`;
         return (
           <a

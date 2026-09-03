@@ -15,6 +15,7 @@ export function CohortPicker({
   baselineSlug,
   newSlug,
   labelForKey,
+  releases,
 }: {
   baselineSlug: string;
   newSlug: string;
@@ -22,10 +23,16 @@ export function CohortPicker({
   // pills in the banner. Passed by the page since each page has its own
   // metric namespace.
   labelForKey: Record<string, string>;
+  // The list of releases to show in the dropdown. Defaults to the full
+  // list; mobile pages should pass MOBILE_RELEASES and web pages should
+  // pass WEB_RELEASES so a web release can't be selected on a mobile
+  // page's dropdown (and vice versa).
+  releases?: Release[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
+  const list = releases ?? RELEASES;
 
   const setSlug = (which: "baseline" | "new", slug: string) => {
     const next = new URLSearchParams(params.toString());
@@ -35,7 +42,7 @@ export function CohortPicker({
 
   const baseline = getRelease(baselineSlug);
   const newRel = getRelease(newSlug);
-  const onlyOneRelease = RELEASES.length < 2;
+  const onlyOneRelease = list.length < 2;
 
   return (
     <div style={{ marginBottom: 20 }}>
@@ -53,12 +60,14 @@ export function CohortPicker({
           label="Baseline"
           value={baselineSlug}
           onChange={(v) => setSlug("baseline", v)}
+          releases={list}
         />
         <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 18 }}>→</div>
         <ReleaseSelect
           label="New"
           value={newSlug}
           onChange={(v) => setSlug("new", v)}
+          releases={list}
         />
       </div>
 
@@ -93,10 +102,12 @@ function ReleaseSelect({
   label,
   value,
   onChange,
+  releases,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  releases: Release[];
 }) {
   return (
     <label
@@ -124,7 +135,7 @@ function ReleaseSelect({
           minWidth: 200,
         }}
       >
-        {RELEASES.map((r) => (
+        {releases.map((r) => (
           <option key={r.slug} value={r.slug} style={{ background: "#000" }}>
             {r.label} ({r.date})
           </option>

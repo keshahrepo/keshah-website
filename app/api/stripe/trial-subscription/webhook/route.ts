@@ -89,9 +89,25 @@ async function fireStartTrialCapi(opts: {
   currency: string;
   eventId: string;
 }): Promise<void> {
-  const pixelId = process.env.NEXT_PUBLIC_FB_PIXEL_ID;
-  const accessToken = process.env.FB_CAPI_ACCESS_TOKEN;
-  const testEventCode = process.env.FB_CAPI_TEST_EVENT_CODE;
+  // Bridge-domain test: if META_BRIDGE_PIXEL_ID + token + URL are all set,
+  // fire to the fresh bridge pixel using the bridge URL as event_source_url.
+  // Isolates whether Meta's health flag keys on URL vs BM/ad-account.
+  // If any is missing, fall back to the original keshah pixel.
+  const bridgePixelId = process.env.META_BRIDGE_PIXEL_ID;
+  const bridgeToken = process.env.META_BRIDGE_CAPI_TOKEN;
+  const bridgeUrl = process.env.NEXT_PUBLIC_BRIDGE_URL;
+  const useBridge = Boolean(bridgePixelId && bridgeToken && bridgeUrl);
+
+  const pixelId = useBridge
+    ? bridgePixelId
+    : process.env.NEXT_PUBLIC_FB_PIXEL_ID;
+  const accessToken = useBridge
+    ? bridgeToken
+    : process.env.FB_CAPI_ACCESS_TOKEN;
+  const testEventCode = useBridge
+    ? process.env.META_BRIDGE_CAPI_TEST_EVENT_CODE
+    : process.env.FB_CAPI_TEST_EVENT_CODE;
+  const eventSourceUrl = useBridge ? bridgeUrl : undefined;
   if (!pixelId || !accessToken) return;
 
   const userData: Record<string, unknown> = {};
@@ -106,7 +122,7 @@ async function fireStartTrialCapi(opts: {
   if (opts.fbp) userData.fbp = opts.fbp;
   if (opts.fbc) userData.fbc = opts.fbc;
 
-  const event = {
+  const event: Record<string, unknown> = {
     event_name: "StartTrial",
     event_time: Math.floor(Date.now() / 1000),
     event_id: opts.eventId,
@@ -118,6 +134,7 @@ async function fireStartTrialCapi(opts: {
       predicted_ltv: opts.value,
     },
   };
+  if (eventSourceUrl) event.event_source_url = eventSourceUrl;
   const body: Record<string, unknown> = {
     data: [event],
     access_token: accessToken,
@@ -202,6 +219,101 @@ export async function POST(req: Request) {
 
   try {
     switch (event.type) {
+      // Inline-checkout /trial flow. Fires when the user confirms card via
+      // stripe.confirmSetup(). We create the Subscription server-side here
+      // — NOT at intent-creation time — so we never leak ghost subs for
+      // users who bail on card entry. Standard customer.subscription.created
+      // handler then runs downstream (writes PaidWebSessions keyed by the
+      // SetupIntent id, fires StartTrial CAPI).
+      case "setup_intent.succeeded": {
+        const setupIntent = event.data.object as Stripe.SetupIntent;
+        const md = setupIntent.metadata ?? {};
+
+        // Not one of our /trial setup intents — bail. Guards against
+        // stray SetupIntents (kit purchases, other flows) triggering
+        // subscription creation.
+        if (md.source !== "web_onboarding_paywall") {
+          console.log(
+            `[stripe/trial-subscription/webhook] setup_intent.succeeded skipped — source=${md.source ?? "none"} (not web_onboarding_paywall)`,
+          );
+          break;
+        }
+
+        const customerId =
+          typeof setupIntent.customer === "string"
+            ? setupIntent.customer
+            : setupIntent.customer?.id;
+        const paymentMethodId =
+          typeof setupIntent.payment_method === "string"
+            ? setupIntent.payment_method
+            : setupIntent.payment_method?.id;
+        const priceId = md.price_id;
+        const trialDaysStr = md.trial_days;
+
+        if (!customerId || !paymentMethodId || !priceId) {
+          console.error(
+            `[stripe/trial-subscription/webhook] setup_intent.succeeded missing fields: customer=${customerId} pm=${paymentMethodId} price=${priceId}`,
+          );
+          break;
+        }
+
+        // Update the customer with the real email captured by the
+        // PaymentElement (billing_details) so downstream code + our
+        // Users doc get the right address.
+        try {
+          const email = setupIntent.latest_attempt
+            ? null
+            : null; // latest_attempt doesn't carry email
+          // The PaymentElement collects billingDetails.email on the
+          // PaymentMethod itself — pull it there.
+          const pm = await stripe.paymentMethods.retrieve(paymentMethodId);
+          const pmEmail = pm.billing_details?.email ?? email;
+          if (pmEmail) {
+            await stripe.customers.update(customerId, { email: pmEmail });
+          }
+        } catch (e) {
+          console.warn(
+            "[stripe/trial-subscription/webhook] customer email update failed:",
+            e,
+          );
+        }
+
+        // Idempotency: if a subscription already exists for this
+        // customer, skip. Guards against duplicate webhook deliveries or
+        // re-confirmed setup intents.
+        const existing = await stripe.subscriptions.list({
+          customer: customerId,
+          limit: 1,
+        });
+        if (existing.data.length > 0) {
+          console.log(
+            `[stripe/trial-subscription/webhook] subscription already exists for customer ${customerId} — skipping create`,
+          );
+          break;
+        }
+
+        // Forward the same metadata bag to the Subscription so the
+        // customer.subscription.created handler downstream has everything
+        // it needs. Include setup_intent_id so PaidWebSessions gets keyed
+        // by the setup_intent id — that's what the /success page URL
+        // carries as session_id.
+        const subMetadata: Record<string, string> = { ...md };
+        subMetadata.setup_intent_id = setupIntent.id;
+        // trial_days already in md; parse for the Stripe param
+        const trialDays = trialDaysStr
+          ? Number.parseInt(trialDaysStr, 10) || 0
+          : 0;
+
+        await stripe.subscriptions.create({
+          customer: customerId,
+          items: [{ price: priceId }],
+          default_payment_method: paymentMethodId,
+          trial_period_days: trialDays,
+          metadata: subMetadata,
+        });
+        break;
+      }
+
       case "customer.subscription.created": {
         const sub = event.data.object as Stripe.Subscription;
         const md = sub.metadata ?? {};
@@ -242,12 +354,22 @@ export async function POST(req: Request) {
           ? Number.parseInt(md.trial_days, 10) || 0
           : 0;
 
-        // Write PaidWebSessions/<checkoutSessionId>. The success page
-        // reads by Stripe Checkout session ID (which is what its URL
-        // carries). Fall back to subscription.id if this sub didn't come
-        // from Checkout (e.g. Payment Element flow).
-        const checkoutSessionId = await findCheckoutSessionId(sub.id);
-        const sessionKey = checkoutSessionId ?? sub.id;
+        // Write PaidWebSessions/<sessionKey>. The success page reads by
+        // whatever id its URL carries. Three flows produce sessionKey:
+        //   - Hosted Checkout: Stripe Checkout Session id (cs_live_...).
+        //   - Inline /trial Elements: SetupIntent id (from md.setup_intent_id).
+        //   - Legacy fallback: subscription.id.
+        // /trial's return_url passes ?session_id={setup_intent_id}, so we
+        // key by setup_intent_id when it's present. Hosted Checkout takes
+        // priority when neither of those apply; sub.id is the last fallback.
+        const setupIntentId =
+          typeof md.setup_intent_id === "string" && md.setup_intent_id
+            ? md.setup_intent_id
+            : null;
+        const checkoutSessionId = setupIntentId
+          ? null
+          : await findCheckoutSessionId(sub.id);
+        const sessionKey = setupIntentId ?? checkoutSessionId ?? sub.id;
 
         const customerId =
           typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
@@ -293,13 +415,18 @@ export async function POST(req: Request) {
         // wouldn't fire in that case). value = price after trial (99 USD).
         // fbp/fbc were captured client-side in PaymentStep + forwarded
         // through Stripe metadata so attribution matching works.
+        // event_id = checkout session id (falls back to sub.id if this sub
+        // didn't come from Checkout). Must match the sid that the bridge
+        // page passes as its event_id — Stripe redirects the browser to
+        // the bridge with `?sid={CHECKOUT_SESSION_ID}` right after payment.
+        // Same event_id on both server + browser fires = Meta dedupes.
         await fireStartTrialCapi({
           email: customerEmail,
           fbp: md.fbp || null,
           fbc: md.fbc || null,
           value: 99,
           currency: "USD",
-          eventId: sub.id, // Stripe sub id doubles as dedup key
+          eventId: sessionKey,
         });
 
         break;

@@ -42,6 +42,7 @@ import SocialProofStep from "../steps/SocialProofStep";
 import MomentFounderFlashback from "../steps/MomentFounderFlashback";
 import TrialPaywall7DayStep from "../steps/TrialPaywall7DayStep";
 import PaymentStep from "../steps/PaymentStep";
+import TextConsultStep from "../steps/TextConsultStep";
 
 // Every entry in STEP_ORDER must have a matching component here. Registry is
 // Partial only because the StartStep union is a superset (it keeps legacy
@@ -84,6 +85,7 @@ const STEP_COMPONENTS: Partial<Record<StartStep, () => ReactElement | null>> = {
   momentFounderFlashback: MomentFounderFlashback,
   trialPaywall: TrialPaywall7DayStep,
   payment: PaymentStep,
+  textConsult: TextConsultStep,
 };
 
 // Conditional-skip rules — steps whose registered component should not

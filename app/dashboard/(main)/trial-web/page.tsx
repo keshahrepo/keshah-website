@@ -17,7 +17,7 @@ import Link from "next/link";
 import { Day1HoverRow } from "./Day1HoverRow";
 import { CohortPicker } from "../_lib/CohortPicker";
 import {
-  RELEASES,
+  WEB_RELEASES,
   METRIC_KEYS,
   METRIC_DIRECTIONS,
   getRelease,
@@ -163,15 +163,15 @@ export default async function TrialPage({
   const compareMode = params.compare === "1";
 
   // Resolve "new" cohort. Default: newest release.
-  const newSlug = params.new ?? RELEASES[0]?.slug ?? "";
+  const newSlug = params.new ?? WEB_RELEASES[0]?.slug ?? "";
   const newRel = getRelease(newSlug);
-  const newWin = getReleaseWindow(newSlug);
+  const newWin = getReleaseWindow(newSlug, WEB_RELEASES);
 
   // Baseline only used in compare mode. Auto-picks previous release.
   const baselineSlug = compareMode
-    ? params.baseline ?? getPreviousRelease(newSlug)?.slug ?? RELEASES[RELEASES.length - 1]?.slug ?? newSlug
+    ? params.baseline ?? getPreviousRelease(newSlug, WEB_RELEASES)?.slug ?? WEB_RELEASES[WEB_RELEASES.length - 1]?.slug ?? newSlug
     : null;
-  const baselineWin = baselineSlug ? getReleaseWindow(baselineSlug) : null;
+  const baselineWin = baselineSlug ? getReleaseWindow(baselineSlug, WEB_RELEASES) : null;
 
   // Query union of both windows so a single query fills either mode.
   const earliestFrom = new Date(
@@ -299,6 +299,7 @@ export default async function TrialPage({
           baselineSlug={baselineSlug!}
           newSlug={newSlug}
           labelForKey={METRIC_KEYS.trial}
+          releases={WEB_RELEASES}
         />
       )}
 

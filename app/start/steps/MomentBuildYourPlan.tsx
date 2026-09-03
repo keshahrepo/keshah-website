@@ -14,5 +14,5 @@ import { useFlow } from "../lib/flow-context";
 
 export default function MomentBuildYourPlan() {
   const { next } = useFlow();
-  return <QuizMoment text="Let's build your plan." onComplete={next} />;
+  return <QuizMoment text="Tell Aadi about your case." onComplete={next} />;
 }

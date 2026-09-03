@@ -10,8 +10,19 @@ import { Timestamp } from "firebase-admin/firestore";
 import Link from "next/link";
 import { Day1HoverRow } from "./Day1HoverRow";
 import { CohortPicker } from "../_lib/CohortPicker";
+import { InstallSourceTabs } from "../_lib/InstallSourceTabs";
 import {
-  RELEASES,
+  matchesInstallSource,
+  type InstallSourceFilter,
+} from "../_lib/installSource";
+import { CountryTabs } from "../_lib/CountryTabs";
+import {
+  matchesCountryFilter,
+  parseCountryFilter,
+  type CountryFilter,
+} from "../_lib/countryFilter";
+import {
+  MOBILE_RELEASES,
   METRIC_KEYS,
   METRIC_DIRECTIONS,
   getRelease,
@@ -146,26 +157,30 @@ function computeMetrics(users: TrialUser[], allSignupsInCohort: number, now: num
 export default async function TrialPage({
   searchParams,
 }: {
-  searchParams: Promise<{ g?: string; baseline?: string; new?: string; compare?: string }>;
+  searchParams: Promise<{ g?: string; s?: string; c?: string; baseline?: string; new?: string; compare?: string }>;
 }) {
   const { db } = getFirebaseAdmin();
   const params = await searchParams;
   const genderRaw = params.g;
   const gender: GenderFilter =
     genderRaw === "male" || genderRaw === "female" ? genderRaw : "all";
+  const sourceRaw = params.s;
+  const source: InstallSourceFilter =
+    sourceRaw === "paid" || sourceRaw === "organic" ? sourceRaw : "all";
+  const country: CountryFilter = parseCountryFilter(params.c);
 
   const compareMode = params.compare === "1";
 
   // Resolve "new" cohort. Default: newest release.
-  const newSlug = params.new ?? RELEASES[0]?.slug ?? "";
+  const newSlug = params.new ?? MOBILE_RELEASES[0]?.slug ?? "";
   const newRel = getRelease(newSlug);
-  const newWin = getReleaseWindow(newSlug);
+  const newWin = getReleaseWindow(newSlug, MOBILE_RELEASES);
 
   // Baseline only used in compare mode. Auto-picks previous release.
   const baselineSlug = compareMode
-    ? params.baseline ?? getPreviousRelease(newSlug)?.slug ?? RELEASES[RELEASES.length - 1]?.slug ?? newSlug
+    ? params.baseline ?? getPreviousRelease(newSlug, MOBILE_RELEASES)?.slug ?? MOBILE_RELEASES[MOBILE_RELEASES.length - 1]?.slug ?? newSlug
     : null;
-  const baselineWin = baselineSlug ? getReleaseWindow(baselineSlug) : null;
+  const baselineWin = baselineSlug ? getReleaseWindow(baselineSlug, MOBILE_RELEASES) : null;
 
   // Query union of both windows so a single query fills either mode.
   const earliestFrom = new Date(
@@ -182,6 +197,16 @@ export default async function TrialPage({
     .select(
       "started_trial", "converted_trial", "subscription_status", "progress",
       "scalp_check_answers", "selected_gender", "email", "created_at",
+      // Install-source filter — backfilled from RC by
+      // /api/rc/backfill-attribution. Slices paid-ad vs organic cohorts.
+      "install_source",
+      // Country filter inputs — tier_1/tier_2 from persisted
+      // country_tier, us/india from userLocalTimeZone.
+      "country_tier",
+      "userLocalTimeZone",
+      // p9 alarm walkthrough acceptance — recorded on completion or
+      // skip-confirm. Split rendered as a small card below the funnel.
+      "alarm_walkthrough_outcome",
     )
     .get();
 
@@ -189,6 +214,21 @@ export default async function TrialPage({
   const newUsers: TrialUser[] = [];
   let baselineSignups = 0;
   let newSignups = 0;
+  // p9 alarm walkthrough split — counted for the "new" cohort only,
+  // post filters (gender / source / country). Excludes users without
+  // an outcome recorded (pre-p9 cohort or splash-backfill users).
+  let alarmCompleted = 0;
+  let alarmSkipped = 0;
+  // Install-source pill counts — reflect the current gender + cohort
+  // filter state so the tab counts match what clicking would show.
+  // Binary: paid vs everything else (organic absorbs missing/legacy).
+  const sourceCounts = { all: 0, paid: 0, organic: 0 };
+  // Country pill counts — same shape as source. Computed post-gender
+  // + post-source so pill counts show what clicking each tab would
+  // yield with the other filters held constant.
+  const countryCounts: Record<CountryFilter, number> = {
+    all: 0, tier_1: 0, tier_2: 0, us: 0, india: 0,
+  };
 
   for (const doc of snap.docs) {
     const d = doc.data();
@@ -207,6 +247,30 @@ export default async function TrialPage({
       createdMs >= baselineWin.from.getTime() && createdMs < baselineWin.to.getTime();
 
     if (!inNew && !inBaseline) continue;
+
+    // Tally install-source pill counts for the "new" cohort only —
+    // that's the primary view. Then apply the source filter. Anything
+    // that isn't explicitly "paid" rolls into organic so legacy nulls
+    // land in the right bucket without a migration.
+    if (inNew) {
+      const rawSource = d.install_source as string | undefined;
+      const bucket: "paid" | "organic" = rawSource === "paid" ? "paid" : "organic";
+      sourceCounts.all++;
+      sourceCounts[bucket]++;
+    }
+    if (!matchesInstallSource(source, d)) continue;
+
+    // Country pill counts, same idea — post source filter so counts
+    // reflect the current slice. `all` is the running total; each
+    // country is a subset.
+    if (inNew) {
+      countryCounts.all++;
+      if (matchesCountryFilter("tier_1", d)) countryCounts.tier_1++;
+      if (matchesCountryFilter("tier_2", d)) countryCounts.tier_2++;
+      if (matchesCountryFilter("us", d)) countryCounts.us++;
+      if (matchesCountryFilter("india", d)) countryCounts.india++;
+    }
+    if (!matchesCountryFilter(country, d)) continue;
 
     if (inNew) newSignups++;
     if (inBaseline) baselineSignups++;
@@ -247,6 +311,14 @@ export default async function TrialPage({
 
     if (inNew) newUsers.push(user);
     if (inBaseline) baselineUsers.push(user);
+
+    // Alarm walkthrough outcome — count only new-cohort users so the
+    // card reflects the same slice as the funnel above.
+    if (inNew) {
+      const outcome = d.alarm_walkthrough_outcome as string | undefined;
+      if (outcome === "completed") alarmCompleted++;
+      else if (outcome === "skipped") alarmSkipped++;
+    }
   }
 
   const now = Date.now();
@@ -265,7 +337,7 @@ export default async function TrialPage({
             {newM.total.toLocaleString()} trials · {newRel?.label ?? "current"} ({newRel?.date ?? "-"})
           </p>
         </div>
-        <CompareToggle compareMode={compareMode} gender={gender} />
+        <CompareToggle compareMode={compareMode} gender={gender} source={source} country={country} />
       </header>
 
       {compareMode && (
@@ -273,6 +345,7 @@ export default async function TrialPage({
           baselineSlug={baselineSlug!}
           newSlug={newSlug}
           labelForKey={METRIC_KEYS.trial}
+          releases={MOBILE_RELEASES}
         />
       )}
 
@@ -280,7 +353,13 @@ export default async function TrialPage({
         selected={gender}
         totals={{ all: newM.total, male: newM.genderMale, female: newM.genderFemale }}
         compareMode={compareMode}
+        source={source}
+        country={country}
       />
+
+      <CountryTabs selected={country} totals={countryCounts} />
+
+      <InstallSourceTabs selected={source} totals={sourceCounts} />
 
       <OutcomesStrip
         m={newM}
@@ -304,6 +383,8 @@ export default async function TrialPage({
         <CheckInCard day={6} counts={newM.checkIn6} />
       </div>
 
+      <AlarmWalkthroughCard completed={alarmCompleted} skipped={alarmSkipped} />
+
       <p style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 24 }}>
         Day 13 check-in is post-trial — see{" "}
         <Link href="/dashboard/retention" style={{ color: "rgba(255,255,255,0.55)" }}>Retention</Link>.
@@ -312,11 +393,84 @@ export default async function TrialPage({
   );
 }
 
+// ── Alarm walkthrough (p9) — Help me set it up vs Skip ──────────
+// Small strip showing the split. Users without a recorded outcome
+// (pre-p9 cohort or splash-backfill re-runs) are excluded from the
+// denominator so % isn't diluted by legacy noise.
+function AlarmWalkthroughCard({ completed, skipped }: { completed: number; skipped: number }) {
+  const total = completed + skipped;
+  const completedPct = total === 0 ? 0 : (completed / total) * 100;
+  const skippedPct = total === 0 ? 0 : (skipped / total) * 100;
+  return (
+    <div
+      style={{
+        marginTop: 24,
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        borderRadius: 12,
+        padding: 18,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4, gap: 12 }}>
+        <div style={{ fontSize: 15, fontWeight: 600, color: "#fff" }}>Alarm walkthrough</div>
+        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>
+          <span style={{ color: "#fff", fontWeight: 600 }}>{total.toLocaleString()}</span> answered
+        </div>
+      </div>
+      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 14 }}>
+        Help me set it up vs Skip on the Day-1 alarm walkthrough (p9).
+      </div>
+      {total === 0 ? (
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>No answers yet.</div>
+      ) : (
+        <div style={{ display: "grid", gap: 10 }}>
+          {[
+            { key: "completed", label: "Help me set it up", color: "#5AB758", count: completed, pct: completedPct },
+            { key: "skipped", label: "Skip", color: "#DAA520", count: skipped, pct: skippedPct },
+          ].map((r) => (
+            <div key={r.key} style={{ display: "grid", gap: 5 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "rgba(255,255,255,0.9)" }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: r.color, display: "inline-block" }} />
+                  <span>{r.label}</span>
+                </div>
+                <div style={{ fontSize: 13, fontVariantNumeric: "tabular-nums", color: "#fff", fontWeight: 500, display: "flex", gap: 8 }}>
+                  <span>{r.pct.toFixed(1)}%</span>
+                  <span style={{ color: "rgba(255,255,255,0.4)", fontWeight: 400 }}>{r.count.toLocaleString()}</span>
+                </div>
+              </div>
+              <div style={{ height: 6, background: "rgba(255,255,255,0.05)", borderRadius: 3, overflow: "hidden" }}>
+                <div style={{ width: `${r.pct}%`, height: "100%", background: r.color, borderRadius: 3 }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Toggle button ───────────────────────────────────────────────────
 
-function CompareToggle({ compareMode, gender }: { compareMode: boolean; gender: GenderFilter }) {
-  const genderParam = gender === "all" ? "" : `&g=${gender}`;
-  const href = compareMode ? `/dashboard/trial${genderParam ? `?${genderParam.slice(1)}` : ""}` : `/dashboard/trial?compare=1${genderParam}`;
+function CompareToggle({
+  compareMode,
+  gender,
+  source,
+  country,
+}: {
+  compareMode: boolean;
+  gender: GenderFilter;
+  source: InstallSourceFilter;
+  country: CountryFilter;
+}) {
+  // Preserve gender + source + country filters across compare toggle
+  // so users don't lose their slice when flipping into/out of compare.
+  const parts: string[] = [];
+  if (!compareMode) parts.push("compare=1");
+  if (gender !== "all") parts.push(`g=${gender}`);
+  if (source !== "all") parts.push(`s=${source}`);
+  if (country !== "all") parts.push(`c=${country}`);
+  const href = parts.length === 0 ? "/dashboard/trial" : `/dashboard/trial?${parts.join("&")}`;
   return (
     <Link
       href={href}
@@ -589,20 +743,23 @@ function CheckInCard({ day, counts }: { day: number; counts: CheckInCounts }) {
   );
 }
 
-function GenderTabs({ selected, totals, compareMode }: {
+function GenderTabs({ selected, totals, compareMode, source, country }: {
   selected: GenderFilter;
   totals: { all: number; male: number; female: number };
   compareMode: boolean;
+  source: InstallSourceFilter;
+  country: CountryFilter;
 }) {
-  const compareParam = compareMode ? "&compare=1" : "";
   return (
     <div style={{ display: "inline-flex", gap: 2, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 999, padding: 3, marginBottom: 20 }}>
       {GENDER_TABS.map((t) => {
         const active = t.key === selected;
-        const base = t.key === "all" ? "/dashboard/trial" : `/dashboard/trial?g=${t.key}`;
-        const href = compareMode
-          ? (t.key === "all" ? `/dashboard/trial?compare=1` : `${base}${compareParam}`)
-          : base;
+        const parts: string[] = [];
+        if (t.key !== "all") parts.push(`g=${t.key}`);
+        if (compareMode) parts.push("compare=1");
+        if (source !== "all") parts.push(`s=${source}`);
+        if (country !== "all") parts.push(`c=${country}`);
+        const href = parts.length === 0 ? "/dashboard/trial" : `/dashboard/trial?${parts.join("&")}`;
         const count = t.key === "all" ? totals.all : t.key === "male" ? totals.male : totals.female;
         return (
           <Link key={t.key} href={href} style={{

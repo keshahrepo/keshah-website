@@ -129,6 +129,20 @@ export default function RetentionPage() {
           value={loading ? "…" : String(data?.cohort_size ?? 0)}
           subtitle={data ? `${data.engaged} engaged total` : ""}
         />
+        {(() => {
+          // Day 14 is the pipeline's marquee retention metric — first
+          // week + one full extra week past trial billing. Anything
+          // moving p6-style dead-zone plans should show up here.
+          const d14 = data?.milestones?.find((m) => m.day === 14);
+          const d14Eligible = d14?.eligible ?? 0;
+          return (
+            <MetricCard
+              label="Day 14 retention"
+              value={loading ? "…" : d14Eligible > 0 ? `${d14?.pct ?? 0}%` : "—"}
+              subtitle={d14Eligible > 0 ? `${d14?.reached}/${d14Eligible} eligible` : "cohort too small"}
+            />
+          );
+        })()}
         <MetricCard
           label="Date range"
           value={loading ? "…" : `${data?.from ?? from}`}

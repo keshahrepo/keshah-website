@@ -31,7 +31,7 @@ const ATTRIBUTE_KEYS = [
   "treatment_stage",
 ] as const;
 
-const RC_SECRET = process.env.RC_SECRET_KEY || "";
+const RC_SECRET = process.env.RC_API_SECRET_KEY || "";
 
 type Attr = { value: string };
 
@@ -92,7 +92,7 @@ export async function POST(req: Request) {
   }
 
   if (!RC_SECRET) {
-    return NextResponse.json({ error: "RC_SECRET_KEY not configured" }, { status: 500 });
+    return NextResponse.json({ error: "RC_API_SECRET_KEY not configured" }, { status: 500 });
   }
 
   const url = new URL(req.url);

@@ -23,9 +23,45 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 });
 
 const TRIAL_DAYS = 7;
-const SUCCESS_URL =
+const KESHAH_SUCCESS_URL_FALLBACK =
   "https://www.keshah.com/start/success?session_id={CHECKOUT_SESSION_ID}";
 const CANCEL_URL = "https://www.keshah.com/start";
+
+// Stripe redirects the browser to the bridge domain's /success page.
+// That page:
+//   1. fires StartTrial pixel + CAPI on the fresh bridge pixel (Meta
+//      sees event_source_url=bridge, not keshah — escapes the
+//      health-category flag)
+//   2. renders the sign-in + install-app UI (same Firebase project as
+//      mobile so UID matches)
+//   3. calls its own /api/attach-identity to link Firebase UID to the
+//      Stripe subscription + seed the Users doc
+//
+// Nothing bounces back to keshah — the whole post-payment flow lives
+// on the bridge domain.
+//
+// Params passed to /success:
+//   - session_id: Stripe checkout session id, doubles as event_id for
+//     browser+CAPI dedup vs webhook CAPI
+//   - value / currency: event params for the pixel
+//   - fbp / fbc: Meta attribution cookies (set on keshah.com, so we
+//     forward them through URL params since bridge can't read them)
+function buildSuccessUrl(fbp: string, fbc: string): string {
+  const bridgeUrl = process.env.NEXT_PUBLIC_BRIDGE_URL;
+  if (!bridgeUrl) return KESHAH_SUCCESS_URL_FALLBACK;
+  const params = new URLSearchParams();
+  params.set("session_id", "{CHECKOUT_SESSION_ID}");
+  params.set("value", "99");
+  params.set("currency", "USD");
+  if (fbp) params.set("fbp", fbp);
+  if (fbc) params.set("fbc", fbc);
+  return `${bridgeUrl.replace(/\/$/, "")}/success?${params
+    .toString()
+    // URLSearchParams URL-encodes {} — Stripe wants them raw for
+    // template replacement, so decode them back.
+    .replace(/%7B/g, "{")
+    .replace(/%7D/g, "}")}`;
+}
 
 type QuizAnswers = {
   selected_gender?: string;
@@ -143,7 +179,7 @@ export async function POST(req: Request) {
           message: "No payment today. Cancel easily in app anytime.",
         },
       },
-      success_url: SUCCESS_URL,
+      success_url: buildSuccessUrl(str(quiz.fbp), str(quiz.fbc)),
       cancel_url: CANCEL_URL,
       // Wallets (Apple Pay / Google Pay / Link) come on by default in
       // subscription mode.

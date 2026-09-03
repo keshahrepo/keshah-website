@@ -25,6 +25,10 @@
     {
       "path": "/api/rc/sync-attributes",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/rc/backfill-attribution",
+      "schedule": "0 5 * * *"
     }
   ]
 }
