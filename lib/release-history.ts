@@ -51,7 +51,7 @@ export const RELEASES: Release[] = [
     slug: "5_18",
     label: "5.18 launch",
     date: "2026-09-03",
-    time: "16:30", // ~12:30pm EDT, when Play Console got the AAB
+    time: "20:00", // 4pm EDT
     description:
       "Post-purchase Day-0 scalp baseline + Day-3/6/13 check-ins, " +
       "\"4 Questions I Get After Day 1\" video as 4th Day-1 task with " +
