@@ -370,6 +370,10 @@ export default async function TrialPage({
         tracks={tracks}
       />
 
+      <PaidQualityCard users={newUsers} />
+
+      <EngagementGradientPanel users={newUsers} />
+
       <FunnelPanel rows={newM.funnel} base={baseM?.funnel} baseTotal={baseM?.total} tracks={tracks} />
 
       <PerDayPanel
@@ -779,6 +783,135 @@ function GenderTabs({ selected, totals, compareMode, source, country }: {
           </Link>
         );
       })}
+    </div>
+  );
+}
+
+// ── Paid-quality KPI: % of paying users who engaged with ≥ 1 day ──
+function PaidQualityCard({ users }: { users: TrialUser[] }) {
+  const paid = users.filter((u) => u.converted);
+  if (paid.length === 0) {
+    return (
+      <div style={{
+        marginBottom: 20,
+        padding: "14px 18px",
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        borderRadius: 10,
+        fontSize: 12,
+        color: "rgba(255,255,255,0.5)",
+      }}>
+        Paid quality: no paid users in this cohort yet.
+      </div>
+    );
+  }
+  const engaged = paid.filter((u) => u.daysCompleted >= 1).length;
+  const pct = engaged / paid.length;
+  const pctStr = (pct * 100).toFixed(0) + "%";
+  const color = pct >= 0.85 ? "#8affc1" : pct >= 0.70 ? "#f0c674" : "#ff8f8f";
+  const light = pct >= 0.85
+    ? "rgba(138,255,193,0.08)"
+    : pct >= 0.70
+    ? "rgba(240,198,116,0.08)"
+    : "rgba(255,143,143,0.08)";
+  return (
+    <div style={{
+      marginBottom: 20,
+      padding: "12px 18px",
+      background: light,
+      border: `1px solid ${color}33`,
+      borderLeft: `3px solid ${color}`,
+      borderRadius: 10,
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      fontSize: 13,
+      color: "rgba(255,255,255,0.8)",
+    }}>
+      <span style={{ fontSize: 15, fontWeight: 700, color, fontVariantNumeric: "tabular-nums" }}>
+        {pctStr}
+      </span>
+      <span>
+        of paying users engaged with ≥ 1 day{" "}
+        <span style={{ color: "rgba(255,255,255,0.4)" }}>
+          ({engaged.toLocaleString()} / {paid.length.toLocaleString()})
+        </span>
+      </span>
+      <span style={{ marginLeft: "auto", fontSize: 11, color: "rgba(255,255,255,0.4)" }}>
+        Health: {pct >= 0.85 ? "engaged" : pct >= 0.70 ? "mixed" : "forgot-to-cancel risk"}
+      </span>
+    </div>
+  );
+}
+
+// ── Engagement gradient: paid conversion rate by trial-days completed ──
+function EngagementGradientPanel({ users }: { users: TrialUser[] }) {
+  if (users.length === 0) return null;
+
+  // Bucket by days completed. 5-7 grouped because n gets thin at the tail.
+  const buckets = [
+    { label: "0",     min: 0, max: 0 },
+    { label: "1",     min: 1, max: 1 },
+    { label: "2",     min: 2, max: 2 },
+    { label: "3-4",   min: 3, max: 4 },
+    { label: "5-7",   min: 5, max: 7 },
+  ];
+  const rows = buckets.map((b) => {
+    const inBucket = users.filter((u) => u.daysCompleted >= b.min && u.daysCompleted <= b.max);
+    const paid = inBucket.filter((u) => u.converted).length;
+    return { label: b.label, n: inBucket.length, paid, rate: inBucket.length ? paid / inBucket.length : 0 };
+  });
+  const baseRate = users.filter((u) => u.converted).length / users.length;
+  const maxRate = Math.max(...rows.map((r) => r.rate), baseRate, 0.01);
+
+  return (
+    <div style={{
+      marginBottom: 28,
+      padding: "16px 18px",
+      background: "rgba(255,255,255,0.04)",
+      border: "1px solid rgba(255,255,255,0.08)",
+      borderRadius: 12,
+    }}>
+      <div style={{
+        fontSize: 10,
+        fontWeight: 600,
+        letterSpacing: 1.2,
+        textTransform: "uppercase",
+        color: "rgba(255,255,255,0.4)",
+        marginBottom: 4,
+      }}>
+        Trial engagement → paid
+      </div>
+      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", marginBottom: 14 }}>
+        Paid conversion rate sliced by how many trial days each user completed at least one task on.
+        Base rate: <span style={{ color: "#fff" }}>{(baseRate * 100).toFixed(1)}%</span>.
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "60px 80px 60px 80px 1fr", rowGap: 6, columnGap: 12, alignItems: "center", fontSize: 12 }}>
+        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", letterSpacing: 1, textTransform: "uppercase" }}>Days</div>
+        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", letterSpacing: 1, textTransform: "uppercase", textAlign: "right" }}>Users</div>
+        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", letterSpacing: 1, textTransform: "uppercase", textAlign: "right" }}>Paid</div>
+        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", letterSpacing: 1, textTransform: "uppercase", textAlign: "right" }}>Rate</div>
+        <div />
+        {rows.map((r) => {
+          const delta = r.rate - baseRate;
+          const barWidth = maxRate > 0 ? (r.rate / maxRate) * 100 : 0;
+          const barColor = delta >= 0.05 ? "#8affc1" : delta <= -0.03 ? "#ff8f8f" : "rgba(255,255,255,0.4)";
+          return (
+            <>
+              <div key={r.label + "-d"} style={{ fontWeight: 600 }}>{r.label}</div>
+              <div key={r.label + "-n"} style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", color: "rgba(255,255,255,0.7)" }}>{r.n.toLocaleString()}</div>
+              <div key={r.label + "-p"} style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", color: "rgba(255,255,255,0.7)" }}>{r.paid.toLocaleString()}</div>
+              <div key={r.label + "-r"} style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
+                {(r.rate * 100).toFixed(1)}%
+              </div>
+              <div key={r.label + "-b"} style={{ height: 8, background: "rgba(255,255,255,0.06)", borderRadius: 4, overflow: "hidden" }}>
+                <div style={{ width: `${barWidth}%`, height: "100%", background: barColor, borderRadius: 4 }} />
+              </div>
+            </>
+          );
+        })}
+      </div>
     </div>
   );
 }
