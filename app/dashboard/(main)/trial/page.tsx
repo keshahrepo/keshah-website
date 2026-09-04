@@ -40,6 +40,14 @@ const isTestEmail = (email: unknown): boolean =>
 const TRIAL_DAYS = 7;
 const DAY_MS = 86_400_000;
 
+// Days shown in the per-day completion panel: the full trial (1-7)
+// plus two post-trial retention beats — Day 10 (3 days into paid) and
+// Day 14 (1 week into paid). Skipping 8/9/11/12/13 keeps the panel
+// focused on the beats that matter (trial engagement + first
+// retention checkpoints).
+const DISPLAYED_DAYS = [1, 2, 3, 4, 5, 6, 7, 10, 14];
+const MAX_TRACKED_DAY = 14;
+
 type GenderFilter = "all" | "male" | "female";
 const GENDER_TABS: Array<{ key: GenderFilter; label: string }> = [
   { key: "all", label: "All" },
@@ -106,12 +114,15 @@ function computeMetrics(users: TrialUser[], allSignupsInCohort: number, now: num
     { key: "funnel_converted",  label: "Converted to paid",       count: converted },
   ];
 
-  const perDayCounts = new Array(TRIAL_DAYS).fill(0);
-  const perDayEligible = new Array(TRIAL_DAYS).fill(0);
+  // Track through MAX_TRACKED_DAY (14) so the panel can show Day 10 and
+  // Day 14 alongside the trial days. Trial-related metrics (funnel,
+  // gradient) still only use days 1..TRIAL_DAYS.
+  const perDayCounts = new Array(MAX_TRACKED_DAY).fill(0);
+  const perDayEligible = new Array(MAX_TRACKED_DAY).fill(0);
   for (const u of users) {
     if (u.startedAtMs === null) continue;
     const tenureDays = Math.floor((now - u.startedAtMs) / DAY_MS);
-    for (let i = 0; i < TRIAL_DAYS; i++) {
+    for (let i = 0; i < MAX_TRACKED_DAY; i++) {
       if (tenureDays >= i) {
         perDayEligible[i]++;
         if (u.perDay[i]) perDayCounts[i]++;
@@ -281,7 +292,10 @@ export default async function TrialPage({
     const progress = (d.progress as Record<string, Array<{ is_completed?: boolean }> | undefined> | undefined) ?? {};
     const perDay: boolean[] = [];
     let daysCompleted = 0, day1Done = 0, day1Total = 0;
-    for (let day = 1; day <= TRIAL_DAYS; day++) {
+    // Loop through MAX_TRACKED_DAY so we can also record Day 10 / 14
+    // fully-complete status. daysCompleted still only counts trial
+    // days (1..TRIAL_DAYS) because it drives the engagement gradient.
+    for (let day = 1; day <= MAX_TRACKED_DAY; day++) {
       const entries = progress[`day${day}`];
       const opened = Array.isArray(entries) && entries.length > 0;
       const doneCount = opened ? entries!.filter((e) => e?.is_completed === true).length : 0;
@@ -292,7 +306,7 @@ export default async function TrialPage({
       const totalCount = opened ? entries!.length : 0;
       const dayFullyDone = totalCount > 0 && doneCount === totalCount;
       perDay.push(dayFullyDone);
-      if (dayFullyDone) daysCompleted++;
+      if (dayFullyDone && day <= TRIAL_DAYS) daysCompleted++;
       if (day === 1) { day1Total = totalCount; day1Done = doneCount; }
     }
 
@@ -595,10 +609,11 @@ function PerDayPanel({
       subtitle="% of trials that completed each specific day, over trials old enough to have reached it. Order-independent."
     >
       <div style={{ display: "grid", gap: 6 }}>
-        {counts.map((count, i) => {
-          const day = i + 1;
+        {DISPLAYED_DAYS.map((day) => {
+          const i = day - 1;
+          const count = counts[i] ?? 0;
           const metricKey = `perday_day${day}`;
-          const elig = eligible[i];
+          const elig = eligible[i] ?? 0;
           const pct = elig === 0 ? 0 : (count / elig) * 100;
           const baseElig = baseEligible?.[i] ?? 0;
           const basePct = baseElig > 0 && baseCounts ? (baseCounts[i] / baseElig) * 100 : null;
