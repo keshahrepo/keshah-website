@@ -285,9 +285,15 @@ export default async function TrialPage({
       const entries = progress[`day${day}`];
       const opened = Array.isArray(entries) && entries.length > 0;
       const doneCount = opened ? entries!.filter((e) => e?.is_completed === true).length : 0;
-      perDay.push(doneCount > 0);
-      if (doneCount > 0) daysCompleted++;
-      if (day === 1) { day1Total = opened ? entries!.length : 0; day1Done = doneCount; }
+      // "Day complete" = ALL tasks marked is_completed. Previously this
+      // was `doneCount > 0` (any single task) which was misleading —
+      // the panel's own label says "% that completed each day", so it
+      // needs to mean fully complete.
+      const totalCount = opened ? entries!.length : 0;
+      const dayFullyDone = totalCount > 0 && doneCount === totalCount;
+      perDay.push(dayFullyDone);
+      if (dayFullyDone) daysCompleted++;
+      if (day === 1) { day1Total = totalCount; day1Done = doneCount; }
     }
 
     const answers = (d.scalp_check_answers as Record<string, string> | undefined) ?? {};
