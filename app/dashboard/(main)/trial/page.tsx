@@ -374,8 +374,6 @@ export default async function TrialPage({
 
       <EngagementGradientPanel users={newUsers} />
 
-      <FunnelPanel rows={newM.funnel} base={baseM?.funnel} baseTotal={baseM?.total} tracks={tracks} />
-
       <PerDayPanel
         counts={newM.perDayCounts}
         eligible={newM.perDayEligible}
@@ -571,46 +569,9 @@ function OutcomesStrip({ m, base, tracks }: {
 
 // ── Funnel panel ────────────────────────────────────────────────────
 
-function FunnelPanel({ rows, base, baseTotal, tracks }: {
-  rows: Array<{ key: string; label: string; count: number }>;
-  base?: Array<{ key: string; label: string; count: number }>;
-  baseTotal?: number;
-  tracks: Set<string>;
-}) {
-  const baseline = rows[0].count || 1;
-  return (
-    <PanelWrap title="Funnel" subtitle={`% of ${baseline.toLocaleString()} trials that reached each stage.`}>
-      <div style={{ display: "grid", gap: 6 }}>
-        {rows.map((r) => {
-          const pct = (r.count / baseline) * 100;
-          const baseRow = base?.find((b) => b.key === r.key);
-          const basePct = baseRow && baseTotal ? (baseRow.count / (baseTotal || 1)) * 100 : null;
-          const barColor = r.key === "funnel_converted" ? "#359033" : "#fff";
-          return (
-            <div key={r.key} style={{
-              display: "grid",
-              gridTemplateColumns: "170px 1fr 150px",
-              alignItems: "center",
-              gap: 12,
-              padding: "6px 0 6px 8px",
-              borderLeft: trackedBorder(r.key, tracks),
-            }}>
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)" }}>{r.label}</div>
-              <div style={{ height: 6, background: "rgba(255,255,255,0.06)", borderRadius: 3, overflow: "hidden" }}>
-                <div style={{ width: `${Math.min(pct, 100)}%`, height: "100%", background: barColor }} />
-              </div>
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", fontVariantNumeric: "tabular-nums", textAlign: "right" }}>
-                {pct.toFixed(1)}%
-                <span style={{ color: "rgba(255,255,255,0.35)", marginLeft: 8 }}>{r.count.toLocaleString()}</span>
-                <DeltaChip metricKey={r.key} newPct={pct} basePct={basePct} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </PanelWrap>
-  );
-}
+// FunnelPanel removed — replaced by EngagementGradientPanel above,
+// which shows the same days-completed axis plus paid conversion rate
+// per bucket (strict superset of what the funnel showed).
 
 // ── Per-day panel ──────────────────────────────────────────────────
 
