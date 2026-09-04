@@ -71,9 +71,19 @@ const QUESTIONS: Question[] = [
       { value: "female", label: "Female" },
     ],
   },
-  // Age question card removed — the field is being written on new
-  // signups but the card wasn't showing meaningful data yet at review
-  // time. Add back later once we want the age slice.
+  {
+    key: "age_range",
+    field: "age_range",
+    label: "Age",
+    section: "Basics",
+    options: [
+      { value: "18-24", label: "18–24" },
+      { value: "25-34", label: "25–34" },
+      { value: "35-44", label: "35–44" },
+      { value: "45-54", label: "45–54" },
+      { value: "55+", label: "55+" },
+    ],
+  },
   {
     key: "referral_source",
     field: "referral_source",
