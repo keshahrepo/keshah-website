@@ -865,7 +865,7 @@ function EngagementGradientPanel({ users }: { users: TrialUser[] }) {
         Trial engagement → paid
       </div>
       <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", marginBottom: 14 }}>
-        Paid conversion rate sliced by how many trial days each user completed at least one task on.
+        Paid conversion rate sliced by how many trial days each user fully completed (all tasks done).
         Base rate: <span style={{ color: "#fff" }}>{(baseRate * 100).toFixed(1)}%</span>.
       </div>
 
