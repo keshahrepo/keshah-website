@@ -20,7 +20,11 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export default async function PipelinePage() {
+export default async function PipelinePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ version?: string }>;
+}) {
   const { db } = getFirebaseAdmin();
   const snap = await db
     .collection("Ideas")
@@ -42,11 +46,29 @@ export default async function PipelinePage() {
     }));
 
   const inFlight = getInFlightRelease("mobile");
-  const versionOptions = MOBILE_RELEASES_INC_INFLIGHT.map((r) => ({
+
+  // Version options for the side-panel dropdown AND the version tabs.
+  // Filter out the "all time" pseudo-release — it's a bucketing helper
+  // for the trial/onboarding cohort pickers, never something you'd
+  // assign an idea to. Everything else (in-flight + shipped) is fair
+  // game.
+  const versionOptions = MOBILE_RELEASES_INC_INFLIGHT.filter(
+    (r) => !r.slug.startsWith("all_time"),
+  ).map((r) => ({
     slug: r.slug,
     label: r.label,
     isInFlight: r.date === null,
   }));
+
+  // ?version=<slug> filters the page to a single release. Empty /
+  // missing = show the full kanban. Unknown slug falls back to All
+  // rather than 404'ing so a stale bookmark doesn't break.
+  const params = await searchParams;
+  const requestedSlug = params.version ?? null;
+  const selectedVersionSlug =
+    requestedSlug && versionOptions.some((v) => v.slug === requestedSlug)
+      ? requestedSlug
+      : null;
 
   const stats = {
     total: ideas.length,
@@ -104,6 +126,7 @@ export default async function PipelinePage() {
         initialIdeas={ideas}
         metricOptions={metricOptions}
         versionOptions={versionOptions}
+        selectedVersionSlug={selectedVersionSlug}
       />
     </div>
   );
@@ -142,9 +165,7 @@ function StatStrip({
       style={{
         display: "grid",
         gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
-        gap: 1,
-        background: "rgba(255,255,255,0.08)",
-        border: "1px solid rgba(255,255,255,0.08)",
+        gap: 10,
         marginBottom: 24,
       }}
     >
@@ -152,10 +173,12 @@ function StatStrip({
         <div
           key={it.label}
           style={{
-            background: "#0a0a0a",
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: 12,
             padding: "14px 16px",
             display: "grid",
-            gap: 4,
+            gap: 6,
           }}
         >
           <div
