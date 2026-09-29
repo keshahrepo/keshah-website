@@ -52,21 +52,23 @@ export default async function RoleDetail({
 
   return (
     <main className={styles.detailPage}>
-      <nav className={styles.nav}>
-        <Link href="/" className={styles.navLogo} aria-label="KESHAH">
-          <Image
-            src="/images/keshah-logo-white.png"
-            alt="KESHAH"
-            width={100}
-            height={26}
-            priority
-          />
-        </Link>
-        <div className={styles.navRight}>
-          <Link href="/careers">All roles</Link>
-          <Link href="/support">Support</Link>
-        </div>
-      </nav>
+      <div className={styles.navBar}>
+        <nav className={styles.nav}>
+          <Link href="/" className={styles.navLogo} aria-label="KESHAH">
+            <Image
+              src="/images/keshah-logo-white.png"
+              alt="KESHAH"
+              width={100}
+              height={26}
+              priority
+            />
+          </Link>
+          <div className={styles.navRight}>
+            <Link href="/careers">All roles</Link>
+            <Link href="/support">Support</Link>
+          </div>
+        </nav>
+      </div>
 
       <Link href="/careers" className={styles.back}>
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">

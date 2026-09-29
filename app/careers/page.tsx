@@ -34,21 +34,23 @@ export default function CareersLanding() {
 
   return (
     <main className={styles.page}>
-      <nav className={styles.nav}>
-        <Link href="/" className={styles.navLogo} aria-label="KESHAH">
-          <Image
-            src="/images/keshah-logo-white.png"
-            alt="KESHAH"
-            width={100}
-            height={26}
-            priority
-          />
-        </Link>
-        <div className={styles.navRight}>
-          <Link href="/">Home</Link>
-          <Link href="/support">Support</Link>
-        </div>
-      </nav>
+      <div className={styles.navBar}>
+        <nav className={styles.nav}>
+          <Link href="/" className={styles.navLogo} aria-label="KESHAH">
+            <Image
+              src="/images/keshah-logo-white.png"
+              alt="KESHAH"
+              width={100}
+              height={26}
+              priority
+            />
+          </Link>
+          <div className={styles.navRight}>
+            <Link href="/">Home</Link>
+            <Link href="/support">Support</Link>
+          </div>
+        </nav>
+      </div>
 
       <section className={styles.hero}>
         <div className={styles.eyebrow}>Careers at KESHAH</div>
@@ -62,6 +64,7 @@ export default function CareersLanding() {
         </p>
       </section>
 
+      <div className={styles.filtersWrap}>
       <div className={styles.filters}>
         <div className={styles.searchWrap}>
           <svg className={styles.searchIcon} viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -93,6 +96,7 @@ export default function CareersLanding() {
         >
           {locations.map((l) => <option key={l}>{l}</option>)}
         </select>
+      </div>
       </div>
 
       {filtered.length > 0 ? (
