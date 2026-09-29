@@ -45,6 +45,22 @@
   box-sizing: border-box;
 }
 
+/* Desktop: give the shell more breathing room without becoming
+   a full-bleed dashboard. Wider column + roomier vertical rhythm so
+   the quiz feels intentional on a 27" monitor, not a phone column
+   stranded in a black canvas. */
+@media (min-width: 768px) {
+  .shellInner {
+    max-width: 640px;
+    padding: 0 48px;
+  }
+}
+@media (min-width: 1200px) {
+  .shellInner {
+    max-width: 720px;
+  }
+}
+
 /* Header slot — mobile only shows the wordmark on firstName/phone. On
    the web we always show it so users have a nav anchor + can jump home. */
 .header {
@@ -55,10 +71,23 @@
   min-height: 56px;      /* kToolbarHeight */
 }
 
+@media (min-width: 768px) {
+  .header {
+    padding: 32px 0 16px;
+    min-height: 72px;
+  }
+}
+
 .headerLogo {
   height: 30px;
   width: auto;
   opacity: 0.95;
+}
+
+@media (min-width: 768px) {
+  .headerLogo {
+    height: 34px;
+  }
 }
 
 /* Flex spacer utilities — replicate Spacer(flex: 1) / Spacer(flex: 2) */
@@ -77,6 +106,16 @@
   text-wrap: balance;
 }
 
+/* Desktop: nudge headline up so it holds its own against extra
+   whitespace, without going full "marketing hero" scale. */
+@media (min-width: 768px) {
+  .title {
+    font-size: 36px;
+    letter-spacing: -1.4px;
+    line-height: 1.15;
+  }
+}
+
 .titleSmall {
   font-size: 26px;
   letter-spacing: -1px;
@@ -92,12 +131,26 @@
   margin: 12px 0 0;
 }
 
+@media (min-width: 768px) {
+  .subtitle {
+    font-size: 15px;
+    margin-top: 14px;
+    line-height: 1.5;
+  }
+}
+
 /* ── Bottom-sticky button area ─────────────────────────────────── */
 .bottom {
   padding: 20px 25px 35px;   /* matches inline pages' bottom:35, h:25 */
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+@media (min-width: 768px) {
+  .bottom {
+    padding: 28px 0 48px;
+  }
 }
 
 .primaryBtn {
@@ -113,6 +166,15 @@
   cursor: pointer;
   transition: background 200ms ease, color 200ms ease, opacity 200ms ease;
   letter-spacing: 0;
+}
+
+@media (min-width: 768px) {
+  .primaryBtn {
+    padding: 20px 24px;
+    font-size: 16px;
+    max-width: 320px;
+    align-self: center;
+  }
 }
 
 .primaryBtn:hover:not(:disabled) { background: #F4F4F4; }
@@ -181,6 +243,13 @@
   gap: 24px;
 }
 
+@media (min-width: 768px) {
+  .landingBody {
+    padding: 40px 0 0;
+    gap: 32px;
+  }
+}
+
 .landingLede {
   font-family: var(--font-sans);
   font-size: 20px;
@@ -189,6 +258,13 @@
   line-height: 1.5;
   letter-spacing: -0.3px;
   margin: 0;
+}
+
+@media (min-width: 768px) {
+  .landingLede {
+    font-size: 22px;
+    line-height: 1.45;
+  }
 }
 
 .rolesLabel {
@@ -217,13 +293,23 @@
   color: #FFFFFF;
   text-decoration: none;
   display: block;
-  transition: border-color 160ms ease, background 160ms ease;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
   cursor: pointer;
 }
 
 .roleCard:hover {
   border-color: #FFFFFF;
   background: rgba(255, 255, 255, 0.02);
+}
+
+@media (min-width: 768px) {
+  .roleCard {
+    padding: 24px 26px;
+    border-radius: 16px;
+  }
+  .roleCard:hover {
+    transform: translateY(-1px);
+  }
 }
 
 .roleTitle {
@@ -235,12 +321,20 @@
   margin: 0 0 6px;
 }
 
+@media (min-width: 768px) {
+  .roleTitle { font-size: 18px; margin-bottom: 8px; }
+}
+
 .roleMeta {
   font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 400;
   color: rgba(255, 255, 255, 0.5);
   line-height: 1.45;
+}
+
+@media (min-width: 768px) {
+  .roleMeta { font-size: 14px; }
 }
 
 .emptyRoles {

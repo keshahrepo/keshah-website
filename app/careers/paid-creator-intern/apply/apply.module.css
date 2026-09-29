@@ -43,6 +43,14 @@
   line-height: 1.35;
 }
 
+@media (min-width: 768px) {
+  .option {
+    padding: 20px 24px;
+    font-size: 16px;
+    border-radius: 16px;
+  }
+}
+
 .option:hover {
   border-color: rgba(255, 255, 255, 0.35);
   color: rgba(255, 255, 255, 0.75);
@@ -90,6 +98,14 @@
   letter-spacing: -0.1px;
 }
 
+@media (min-width: 768px) {
+  .input {
+    padding: 20px 24px;
+    font-size: 17px;
+    border-radius: 12px;
+  }
+}
+
 .input::placeholder {
   color: rgba(255, 255, 255, 0.3);
   font-weight: 400;
@@ -122,6 +138,17 @@
   transition: background 200ms ease;
 }
 .yesBtn:hover { background: #F4F4F4; }
+
+@media (min-width: 768px) {
+  .yesBtn,
+  .noBtn {
+    max-width: 380px;
+    align-self: center;
+  }
+  .yesBtn { padding: 20px 24px; }
+  .noBtn { padding: 16px 24px; }
+  .yesNoStack { align-items: center; }
+}
 
 .noBtn {
   width: 100%;
@@ -165,6 +192,13 @@
   object-fit: cover;
 }
 
+@media (min-width: 768px) {
+  .refVideo {
+    max-width: 320px;
+    border-radius: 16px;
+  }
+}
+
 /* ── Script step ──────────────────────────────────────────────── */
 .scriptCard {
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -172,6 +206,13 @@
   padding: 20px;
   margin-top: 24px;
   background: rgba(255, 255, 255, 0.02);
+}
+
+@media (min-width: 768px) {
+  .scriptCard {
+    padding: 28px;
+    border-radius: 16px;
+  }
 }
 
 .scriptText {
@@ -183,6 +224,13 @@
   letter-spacing: -0.1px;
   white-space: pre-line;
   margin: 0;
+}
+
+@media (min-width: 768px) {
+  .scriptText {
+    font-size: 16px;
+    line-height: 1.6;
+  }
 }
 
 .scriptCopyRow {
@@ -273,6 +321,10 @@
   margin: 0 auto;
 }
 
+@media (min-width: 768px) {
+  .uploadedPreview { max-width: 300px; border-radius: 14px; }
+}
+
 .uploadedRow {
   display: flex;
   align-items: center;
@@ -341,6 +393,13 @@
   cursor: pointer;
   transition: border-color 160ms ease;
   margin-top: 32px;
+}
+
+@media (min-width: 768px) {
+  .consentBox {
+    padding: 22px 24px;
+    border-radius: 16px;
+  }
 }
 .consentBox:hover { border-color: rgba(255, 255, 255, 0.35); }
 .consentBoxChecked {
