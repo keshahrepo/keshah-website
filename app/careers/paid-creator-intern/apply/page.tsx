@@ -501,11 +501,17 @@ export default function ApplyQuiz() {
                   type="button"
                   className={apply.yesBtn}
                   onClick={() => {
+                    // Set the answer AND advance directly — routing
+                    // through advance()/canContinue() would read the
+                    // stale form ref (state update is async), which is
+                    // why the first tap wasn't registering. We know the
+                    // value is valid here, so it's safe to jump.
                     set(step.key, "yes" as never);
-                    // Auto-advance on Yes — quick confirmation feels
-                    // more like the mobile Commitment page than a
-                    // second tap to Continue.
-                    setTimeout(() => advance(), 120);
+                    saveDraft({ [step.key]: "yes" as never });
+                    if (stepIdx < STEPS.length - 1) {
+                      setStepIdx((i) => i + 1);
+                      setError(null);
+                    }
                   }}
                 >
                   Yes, I can commit
