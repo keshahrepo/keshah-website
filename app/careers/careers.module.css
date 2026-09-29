@@ -60,7 +60,11 @@
   text-decoration: none;
 }
 
-.navLogo img { height: 26px; width: auto; }
+.navLogo img { height: 32px; width: auto; }
+
+@media (min-width: 768px) {
+  .navLogo img { height: 36px; }
+}
 
 .navRight {
   display: flex;
@@ -882,10 +886,10 @@
   .header { padding: 32px 0 16px; min-height: 72px; }
 }
 
-.headerLogo { height: 30px; width: auto; opacity: 0.95; }
+.headerLogo { height: 36px; width: auto; opacity: 0.95; }
 
 @media (min-width: 768px) {
-  .headerLogo { height: 34px; }
+  .headerLogo { height: 42px; }
 }
 
 /* Vertical spacers wrap the step content. Mobile keeps the mobile-app
