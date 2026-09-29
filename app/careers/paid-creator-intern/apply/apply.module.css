@@ -124,55 +124,60 @@
   margin-top: 32px;
 }
 
-.yesBtn {
+/* Both buttons share the same shape (padding, radius, font, height) so
+   the No option feels like the visual twin of Yes — a real second choice,
+   not a smaller fine-print alternative. Subtitle sits underneath the No
+   button as a separate faded caption rather than crammed inside. */
+.yesBtn,
+.noBtn {
   width: 100%;
-  padding: 18px 20px;
+  padding: 18px 24px;
+  border-radius: 40px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: background 200ms ease, border-color 200ms ease, color 200ms ease;
+}
+
+.yesBtn {
   background: #FFFFFF;
   color: #000000;
   border: 0;
-  border-radius: 40px;
-  font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 200ms ease;
 }
 .yesBtn:hover { background: #F4F4F4; }
 
-@media (min-width: 768px) {
-  .yesBtn,
-  .noBtn {
-    max-width: 380px;
-    align-self: center;
-  }
-  .yesBtn { padding: 20px 24px; }
-  .noBtn { padding: 16px 24px; }
-  .yesNoStack { align-items: center; }
-}
-
+/* No button stacks the primary label + subtitle inside a taller pill.
+   Same width/radius/font family as Yes so they read as a matched pair,
+   just with a two-line body. */
 .noBtn {
-  width: 100%;
-  padding: 14px 20px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.75);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 40px;
-  font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 500;
-  cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  transition: border-color 200ms ease, color 200ms ease;
+  justify-content: center;
+  gap: 4px;
+  padding: 14px 24px;
 }
-.noBtn:hover { border-color: rgba(255, 255, 255, 0.4); color: rgba(255, 255, 255, 0.9); }
+.noBtn:hover { border-color: rgba(255, 255, 255, 0.4); color: #FFFFFF; }
 
 .noBtnSub {
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: 12px;
   font-weight: 400;
-  color: rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 0.4);
+  line-height: 1.4;
+}
+
+@media (min-width: 768px) {
+  .yesBtn,
+  .noBtn { max-width: 380px; }
+  .yesBtn { padding: 20px 32px; }
+  .noBtn { padding: 16px 32px; }
+  .yesNoStack { align-items: center; }
 }
 
 /* ── Reference video step ─────────────────────────────────────── */

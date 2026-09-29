@@ -70,18 +70,20 @@ export default async function RoleDetail({
         </nav>
       </div>
 
-      <Link href="/careers" className={styles.back}>
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-          <path
-            d="M7.5 2L3 6l4.5 4"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-        Back to all roles
-      </Link>
+      <div className={styles.backWrap}>
+        <Link href="/careers" className={styles.back}>
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path
+              d="M7.5 2L3 6l4.5 4"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          Back to all roles
+        </Link>
+      </div>
 
       <header className={styles.detailHead}>
         <div className={styles.detailPills}>

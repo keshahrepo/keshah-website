@@ -609,26 +609,37 @@
   font-family: var(--font-sans);
 }
 
+/* Container gives the back link the same max-width + horizontal padding
+   as the article body below, so the link visually anchors to the left
+   edge of the content column instead of floating centered in the page. */
+.backWrap {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 28px 24px 0;
+}
+
+@media (min-width: 768px) {
+  .backWrap { padding: 40px 40px 0; }
+}
+
+@media (min-width: 1200px) {
+  .backWrap { padding: 48px 56px 0; }
+}
+
 .back {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 28px 24px 0;
+  font-family: var(--font-sans);
   font-size: 13px;
   color: rgba(255, 255, 255, 0.5);
   text-decoration: none;
-  transition: color 120ms ease;
+  transition: color 120ms ease, gap 160ms ease;
 }
-.back:hover { color: #FFFFFF; }
+.back:hover { color: #FFFFFF; gap: 10px; }
 
 @media (min-width: 768px) {
-  .back { padding: 40px 40px 0; font-size: 14px; }
-}
-
-@media (min-width: 1200px) {
-  .back { padding: 48px 56px 0; }
+  .back { font-size: 14px; }
 }
 
 .detailHead {
@@ -808,7 +819,10 @@
   .section ul { gap: 14px; }
 }
 
-.section li {
+/* Scoped to UL only — the numbered OL ".steps" was inheriting these
+   selectors, colliding with its number-circle ::before and mangling
+   the "How to apply" list. */
+.section ul li {
   font-family: var(--font-sans);
   font-size: 15px;
   line-height: 1.6;
@@ -818,11 +832,11 @@
 }
 
 @media (min-width: 768px) {
-  .section li { font-size: 17px; line-height: 1.6; padding-left: 24px; }
-  .section li::before { top: 12px !important; }
+  .section ul li { font-size: 17px; line-height: 1.6; padding-left: 24px; }
+  .section ul li::before { top: 12px; }
 }
 
-.section li::before {
+.section ul li::before {
   content: "";
   position: absolute;
   left: 4px;
@@ -875,11 +889,16 @@
 
 .steps li {
   counter-increment: steps;
-  padding-left: 42px;
+  padding-left: 44px;
   position: relative;
+  font-family: var(--font-sans);
   font-size: 15px;
   line-height: 1.55;
   color: rgba(255, 255, 255, 0.85);
+}
+
+@media (min-width: 768px) {
+  .steps li { font-size: 17px; padding-left: 48px; line-height: 1.6; }
 }
 
 .steps li::before {
