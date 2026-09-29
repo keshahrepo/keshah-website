@@ -375,7 +375,8 @@ export default function ApplyQuiz() {
   return (
     <main className={styles.shell}>
       <div className={styles.shellInner}>
-        {/* Header — wordmark + subtle progress "X of Y" like a chapter mark */}
+        {/* Header — wordmark centered like the mobile app's onboarding
+            first-name/phone screens. */}
         <div className={styles.header}>
           <Link href="/careers" aria-label="KESHAH">
             <Image
@@ -387,6 +388,23 @@ export default function ApplyQuiz() {
               priority
             />
           </Link>
+        </div>
+
+        {/* Segmented progress rail — mirrors the founder story's
+            Instagram-story-style chapter mark. One segment per step. */}
+        <div className={styles.progressRail} aria-label={`Step ${stepIdx + 1} of ${STEPS.length}`}>
+          {STEPS.map((_, i) => (
+            <div
+              key={i}
+              className={`${styles.progressSeg} ${
+                i < stepIdx
+                  ? styles.progressSegDone
+                  : i === stepIdx
+                  ? styles.progressSegActive
+                  : ""
+              }`}
+            />
+          ))}
         </div>
 
         {/* Back arrow (only after first step) */}

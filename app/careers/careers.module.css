@@ -831,11 +831,44 @@
 }
 
 @media (min-width: 768px) {
-  .shellInner { max-width: 640px; padding: 0 48px; }
+  .shellInner { max-width: 680px; padding: 0 56px; }
 }
 @media (min-width: 1200px) {
-  .shellInner { max-width: 720px; }
+  .shellInner { max-width: 760px; padding: 0 64px; }
 }
+
+/* Segmented progress bar at the top of the apply quiz — same
+   Instagram-story-style rail the mobile founder story uses. Renders
+   on top of the header wordmark on mobile; on desktop it also gives
+   the quiz a visible "chapter mark" so users know how far they are
+   in a 12-step form. */
+.progressRail {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 12px 32px 0;
+  box-sizing: border-box;
+}
+
+@media (min-width: 768px) {
+  .progressRail { max-width: 680px; padding: 20px 56px 0; }
+}
+@media (min-width: 1200px) {
+  .progressRail { max-width: 760px; padding: 24px 64px 0; }
+}
+
+.progressSeg {
+  flex: 1;
+  height: 2.5px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  transition: background 200ms ease;
+}
+
+.progressSegDone { background: rgba(255, 255, 255, 0.8); }
+.progressSegActive { background: rgba(255, 255, 255, 0.5); }
 
 .header {
   padding: 20px 0 8px;
@@ -855,8 +888,20 @@
   .headerLogo { height: 34px; }
 }
 
+/* Vertical spacers wrap the step content. Mobile keeps the mobile-app
+   bottom-weighted feel (flex 1/2). Desktop rebalances to near-center
+   so the question doesn't sit stranded at the top of a 1080p viewport. */
 .spacerSmall { flex: 1; }
 .spacerLarge { flex: 2; }
+
+@media (min-width: 768px) {
+  .spacerSmall { flex: 1.2; }
+  .spacerLarge { flex: 1.4; }
+}
+@media (min-width: 1200px) {
+  .spacerSmall { flex: 1; }
+  .spacerLarge { flex: 1; }
+}
 
 .title {
   font-family: var(--font-sans);
@@ -870,7 +915,10 @@
 }
 
 @media (min-width: 768px) {
-  .title { font-size: 36px; letter-spacing: -1.4px; line-height: 1.15; }
+  .title { font-size: 38px; letter-spacing: -1.5px; line-height: 1.15; }
+}
+@media (min-width: 1200px) {
+  .title { font-size: 44px; letter-spacing: -1.8px; line-height: 1.1; }
 }
 
 .subtitle {
