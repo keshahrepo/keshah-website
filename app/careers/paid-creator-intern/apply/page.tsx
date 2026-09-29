@@ -175,8 +175,9 @@ export default function ApplyQuiz() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, form, videoObjectPath]);
 
+  // Pure — must not touch state (this is called during render for
+  // the disabled-state of the Continue button).
   function canContinue(): boolean {
-    setError(null);
     switch (step.kind) {
       case "text": {
         const v = form[step.key];
