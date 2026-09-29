@@ -739,21 +739,25 @@
   justify-content: center;
 }
 
-/* Sticky Apply CTA on detail page */
+/* End-of-article Apply CTA — anchored, not sticky. The sticky version
+   was overlaying content on short pages and reading as a floating chip. */
 .applyBar {
-  position: sticky;
-  bottom: 0;
-  padding: 24px 28px 36px;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0), #000000 40%);
+  max-width: 900px;
+  margin: 24px auto 0;
+  padding: 32px 24px 80px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  z-index: 5;
+  gap: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 @media (min-width: 768px) {
-  .applyBar { padding: 32px 40px 44px; }
+  .applyBar { padding: 48px 40px 120px; gap: 16px; }
+}
+
+@media (min-width: 1200px) {
+  .applyBar { padding: 56px 56px 140px; }
 }
 
 .applyBtn {
@@ -761,18 +765,20 @@
   color: #000000;
   border: 0;
   border-radius: 40px;
-  padding: 16px 32px;
+  padding: 18px 32px;
   font-family: var(--font-sans);
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 500;
   cursor: pointer;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   transition: background 120ms ease, transform 120ms ease;
-  min-width: 260px;
+  width: 100%;
+  max-width: 320px;
   justify-content: center;
+  box-sizing: border-box;
 }
 
 .applyBtn:hover { background: #F4F4F4; transform: translateY(-1px); }
@@ -780,19 +786,22 @@
 .applyNote {
   text-align: center;
   font-family: var(--font-sans);
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.45);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.5;
 }
 
 .closingNote {
   font-family: var(--font-sans);
-  font-size: 14px;
-  font-style: italic;
-  line-height: 1.6;
-  color: rgba(255, 255, 255, 0.6);
-  padding: 20px 0 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.7);
   margin-top: 32px;
+}
+
+@media (min-width: 768px) {
+  .closingNote { font-size: 17px; line-height: 1.6; margin-top: 40px; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
