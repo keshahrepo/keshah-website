@@ -120,10 +120,10 @@ export default async function RoleDetail({
           </section>
         ))}
 
-        <div className={styles.compBox}>
-          <div className={styles.compLabel}>Compensation</div>
-          <div className={styles.compBody}>{listing.compensation}</div>
-        </div>
+        <section className={styles.section}>
+          <h2>Compensation</h2>
+          <p>{listing.compensation}</p>
+        </section>
 
         <section className={styles.section}>
           <h2>How to apply</h2>
