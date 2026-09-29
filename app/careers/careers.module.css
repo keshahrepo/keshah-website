@@ -1,352 +1,288 @@
-/* Careers page — Apple's jobs.apple.com structural cues (search + team +
-   location filters, listing rows, generous whitespace) rendered in
-   KESHAH's design tokens (black bg, Poppins body, Instrument Serif
-   display, gold and green as the only pops of color). */
+/* Careers pages — recreate the KESHAH mobile onboarding chrome 1:1.
+   Pure kBlack bg, Poppins everywhere, no editorial serifs, no gold.
+   The only difference from mobile is a soft max-width so a 27" monitor
+   doesn't stretch the content into a stripe.
+   Referenced Flutter files (for token parity):
+     lib/screens/founder_story/founder_story_page.dart
+     lib/screens/auth/post_auth_flow_2/pages/_quiz_widgets.dart
+     lib/screens/auth/post_auth_flow_2/pages/social_proof.dart */
 
-.page {
+/* ── App-wide fade helpers ─────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Staggered fade — mirrors post_auth_flow_2 (1000ms AnimationController,
+   3 curves on Curves.easeOut with intervals 0–0.4 / 0.2–0.7 / 0.5–1.0,
+   kicked off 100ms after mount). CSS animation-delay is measured from
+   start of animation window, so we translate the Intervals into equivalent
+   delays with 700ms fade window each. */
+.fadeTitle    { animation: fadeUp 700ms cubic-bezier(0.16, 1, 0.3, 1) 100ms both; }
+.fadeOptions  { animation: fadeUp 700ms cubic-bezier(0.16, 1, 0.3, 1) 300ms both; }
+.fadeButton   { animation: fadeUp 700ms cubic-bezier(0.16, 1, 0.3, 1) 600ms both; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Shared page shell (used by /careers, /careers/[slug], /careers/…/apply)
+   ═══════════════════════════════════════════════════════════════════════ */
+.shell {
   min-height: 100dvh;
-  color: var(--color-white);
-  background: var(--color-black);
+  background: #000000;
+  color: #FFFFFF;
   font-family: var(--font-sans);
-}
-
-/* ── Nav bar (thin, minimalist — Apple pattern) ─────────────────────── */
-.nav {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18px 28px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.navLogo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 600;
-  font-size: 15px;
-  letter-spacing: 0.2px;
-  color: var(--color-white);
-  text-decoration: none;
-}
-
-.navLogo img {
-  height: 26px;
-  width: auto;
-}
-
-.navRight {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.55);
-}
-
-.navRight a {
-  color: rgba(255, 255, 255, 0.55);
-  text-decoration: none;
-  transition: color 120ms ease;
-}
-
-.navRight a:hover {
-  color: var(--color-white);
-}
-
-/* ── Hero ───────────────────────────────────────────────────────────── */
-.hero {
-  padding: 80px 28px 56px;
-  max-width: 900px;
-  margin: 0 auto;
-  text-align: center;
-}
-
-.eyebrow {
-  font-size: 11px;
-  letter-spacing: 1.5px;
-  color: rgba(255, 255, 255, 0.45);
-  font-weight: 600;
-  text-transform: uppercase;
-  margin-bottom: 16px;
-}
-
-/* Match mobile paywall headline: Poppins semibold, tight tracking.
-   Slightly scaled up for desktop marketing surface but same voice. */
-.heroTitle {
-  font-family: var(--font-sans);
-  font-size: 34px;
-  line-height: 1.2;
-  letter-spacing: -1.2px;
-  font-weight: 600;
-  color: var(--color-white);
-  margin: 0 0 18px;
-  text-wrap: balance;
-}
-
-.heroSub {
-  font-family: var(--font-sans);
-  font-size: 15px;
-  line-height: 1.5;
-  color: var(--color-white);
-  max-width: 560px;
-  margin: 0 auto;
-  text-wrap: pretty;
-  font-weight: 400;
-}
-
-@media (max-width: 640px) {
-  .hero { padding: 56px 22px 40px; }
-  .heroTitle { font-size: 26px; letter-spacing: -1px; }
-  .heroSub { font-size: 14px; }
-}
-
-/* ── Filter bar ─────────────────────────────────────────────────────── */
-.filters {
-  max-width: 1040px;
-  margin: 0 auto;
-  padding: 0 28px;
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 12px;
-  align-items: center;
-}
-
-@media (max-width: 720px) {
-  .filters {
-    grid-template-columns: 1fr;
-    gap: 10px;
-    padding: 0 22px;
-  }
-}
-
-.searchWrap {
-  position: relative;
-}
-
-.searchIcon {
-  position: absolute;
-  left: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 16px;
-  height: 16px;
-  color: rgba(255, 255, 255, 0.45);
-  pointer-events: none;
-}
-
-.search {
-  width: 100%;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 999px;
-  padding: 13px 18px 13px 42px;
-  color: var(--color-white);
-  font-size: 14px;
-  font-family: var(--font-sans);
-  outline: none;
-  transition: border-color 120ms ease, background 120ms ease;
-}
-
-.search::placeholder { color: rgba(255, 255, 255, 0.4); }
-.search:focus {
-  border-color: rgba(255, 255, 255, 0.35);
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.select {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 999px;
-  padding: 13px 40px 13px 18px;
-  color: var(--color-white);
-  font-size: 14px;
-  font-family: var(--font-sans);
-  outline: none;
-  cursor: pointer;
-  appearance: none;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path fill='none' stroke='rgba(255,255,255,0.55)' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' d='M2.5 4.5L6 8l3.5-3.5'/></svg>");
-  background-repeat: no-repeat;
-  background-position: right 16px center;
-  min-width: 160px;
-  transition: border-color 120ms ease, background-color 120ms ease;
-}
-
-.select:focus { border-color: rgba(255, 255, 255, 0.35); }
-.select option { background: var(--color-black); color: var(--color-white); }
-
-/* ── Listing rows ───────────────────────────────────────────────────── */
-.count {
-  max-width: 1040px;
-  margin: 40px auto 20px;
-  padding: 0 28px;
-  font-size: 12px;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.4);
-  font-weight: 600;
-}
-
-.list {
-  max-width: 1040px;
-  margin: 0 auto 96px;
-  padding: 0 28px;
   display: flex;
   flex-direction: column;
 }
 
-.row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 24px;
-  align-items: center;
-  padding: 26px 4px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  color: var(--color-white);
-  text-decoration: none;
-  transition: background 120ms ease, padding 120ms ease;
-  cursor: pointer;
-}
-
-.row:last-child { border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
-
-.row:hover {
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.03), transparent 60%);
-  padding-left: 12px;
-}
-
-.rowTitle {
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: -0.4px;
-  margin: 0 0 6px;
-  color: var(--color-white);
-}
-
-.rowSummary {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.6);
-  line-height: 1.5;
-  margin: 0 0 10px;
-  max-width: 640px;
-}
-
-.rowMeta {
+.shellInner {
+  flex: 1;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.5);
-  letter-spacing: 0.1px;
+  flex-direction: column;
+  width: 100%;
+  max-width: 520px;      /* mobile viewport upper bound — matches app feel */
+  margin: 0 auto;
+  padding: 0 32px;       /* mobile app uses 32px horizontal padding */
+  box-sizing: border-box;
 }
 
-.rowMeta span { display: inline-flex; align-items: center; }
-.rowMeta span + span::before {
-  content: "";
-  display: inline-block;
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.3);
-  margin-right: 14px;
-  transform: translateX(-14px);
-}
-
-.rowArrow {
-  width: 32px; height: 32px;
-  border-radius: 50%;
+/* Header slot — mobile only shows the wordmark on firstName/phone. On
+   the web we always show it so users have a nav anchor + can jump home. */
+.header {
+  padding: 20px 0 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.55);
-  transition: color 120ms ease, background 120ms ease, transform 120ms ease;
+  min-height: 56px;      /* kToolbarHeight */
 }
 
-.row:hover .rowArrow {
-  color: var(--color-white);
-  background: rgba(255, 255, 255, 0.08);
-  transform: translateX(2px);
+.headerLogo {
+  height: 30px;
+  width: auto;
+  opacity: 0.95;
 }
 
-/* ── Empty state ────────────────────────────────────────────────────── */
-.empty {
-  max-width: 640px;
-  margin: 60px auto 96px;
-  padding: 48px 28px;
-  text-align: center;
-  border: 1px dashed rgba(255, 255, 255, 0.12);
-  border-radius: 16px;
-}
+/* Flex spacer utilities — replicate Spacer(flex: 1) / Spacer(flex: 2) */
+.spacerSmall { flex: 1; }
+.spacerLarge { flex: 2; }
 
-.empty h2 {
+/* ── Title + subtitle (shared) ─────────────────────────────────── */
+.title {
   font-family: var(--font-sans);
+  font-size: 28px;
   font-weight: 600;
-  font-size: 20px;
-  margin: 0 0 10px;
-  letter-spacing: -0.5px;
-  color: var(--color-white);
+  color: #FFFFFF;
+  letter-spacing: -1.2px;
+  line-height: 1.25;
+  margin: 0;
+  text-wrap: balance;
 }
 
-.empty p {
+.titleSmall {
+  font-size: 26px;
+  letter-spacing: -1px;
+  line-height: 1.2;
+}
+
+.subtitle {
+  font-family: var(--font-sans);
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.55);
-  line-height: 1.55;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.4;
+  margin: 12px 0 0;
+}
+
+/* ── Bottom-sticky button area ─────────────────────────────────── */
+.bottom {
+  padding: 20px 25px 35px;   /* matches inline pages' bottom:35, h:25 */
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.primaryBtn {
+  width: 100%;
+  padding: 18px 20px;
+  background: #FFFFFF;
+  color: #000000;
+  border: 0;
+  border-radius: 40px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 200ms ease, color 200ms ease, opacity 200ms ease;
+  letter-spacing: 0;
+}
+
+.primaryBtn:hover:not(:disabled) { background: #F4F4F4; }
+
+.primaryBtn:disabled,
+.primaryBtnDisabled {
+  background: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.5);
+  cursor: not-allowed;
+}
+
+.secondaryBtn {
+  width: 100%;
+  padding: 14px 20px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 40px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 200ms ease, border-color 200ms ease;
+}
+
+.secondaryBtn:hover { border-color: rgba(255, 255, 255, 0.4); color: rgba(255, 255, 255, 0.9); }
+
+.secondarySub {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.25);
+  margin-top: 2px;
+}
+
+.tapToContinue {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+  font-weight: 400;
+  padding: 16px 0;
+  user-select: none;
+}
+
+.skipLink {
+  background: none;
+  border: 0;
+  color: rgba(255, 255, 255, 0.35);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  padding: 8px 0 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.skipLink:hover { color: rgba(255, 255, 255, 0.6); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   /careers landing — founder-story-style intro + role rows
+   ═══════════════════════════════════════════════════════════════════════ */
+.landingBody {
+  padding: 24px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.landingLede {
+  font-family: var(--font-sans);
+  font-size: 20px;
+  font-weight: 500;
+  color: #FFFFFF;
+  line-height: 1.5;
+  letter-spacing: -0.3px;
   margin: 0;
 }
 
-.empty a { color: var(--color-white); text-decoration: underline; text-underline-offset: 2px; }
-.empty a:hover { color: rgba(255, 255, 255, 0.7); }
-
-/* ── Footer / values band ───────────────────────────────────────────── */
-.foot {
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  padding: 44px 28px 64px;
-  color: rgba(255, 255, 255, 0.4);
+.rolesLabel {
+  font-family: var(--font-sans);
   font-size: 12px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: 600;
+  margin: 8px 0 0;
+}
+
+.roles {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 8px;
+}
+
+/* Same visual as the mobile quiz option card. */
+.roleCard {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 14px;
+  padding: 18px 20px;
+  color: #FFFFFF;
+  text-decoration: none;
+  display: block;
+  transition: border-color 160ms ease, background 160ms ease;
+  cursor: pointer;
+}
+
+.roleCard:hover {
+  border-color: #FFFFFF;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.roleTitle {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  color: #FFFFFF;
+  letter-spacing: -0.3px;
+  margin: 0 0 6px;
+}
+
+.roleMeta {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.45;
+}
+
+.emptyRoles {
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  padding: 32px 24px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.emptyRoles a { color: #FFFFFF; text-decoration: underline; text-underline-offset: 3px; }
+
+.landingFoot {
+  padding: 24px 0 40px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.35);
   text-align: center;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   Detail page
+   /careers/[slug] detail — narrative pitch page
    ═══════════════════════════════════════════════════════════════════════ */
-.detailPage {
-  min-height: 100dvh;
-  color: var(--color-white);
-  background: var(--color-black);
-  font-family: var(--font-sans);
+.detailBody {
+  padding: 8px 0 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
-.back {
-  max-width: 780px;
-  margin: 0 auto;
-  padding: 28px 28px 0;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.5);
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transition: color 120ms ease;
-}
-
-.back:hover { color: var(--color-white); }
-
-.detailHead {
-  max-width: 780px;
-  margin: 0 auto;
-  padding: 40px 28px 32px;
-}
-
-.detailPills {
+.detailMeta {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 10px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(255, 255, 255, 0.5);
   letter-spacing: 0.1px;
-  margin-bottom: 20px;
+  margin: 8px 0 0;
 }
 
-.detailPills span + span::before {
+.detailMeta span + span::before {
   content: "";
   display: inline-block;
   width: 3px;
@@ -357,83 +293,81 @@
   transform: translateX(-10px);
 }
 
-.detailTitle {
+.detailSection h2 {
   font-family: var(--font-sans);
-  font-size: 32px;
-  line-height: 1.2;
-  letter-spacing: -1.2px;
+  font-size: 16px;
   font-weight: 600;
-  color: var(--color-white);
-  margin: 0 0 24px;
-  text-wrap: balance;
+  color: #FFFFFF;
+  letter-spacing: -0.3px;
+  margin: 0 0 10px;
 }
 
-@media (max-width: 640px) {
-  .detailTitle { font-size: 26px; letter-spacing: -1px; }
+.detailSection p,
+.detailSection li {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.55;
+  letter-spacing: -0.1px;
+  margin: 0;
 }
 
-.metaBox {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  overflow: hidden;
-  margin-bottom: 40px;
+.detailSection ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-@media (max-width: 640px) {
-  .metaBox { grid-template-columns: 1fr; }
+.detailSection li {
+  padding-left: 18px;
+  position: relative;
 }
 
-.metaCell {
-  background: rgba(255, 255, 255, 0.02);
-  padding: 16px 18px;
+.detailSection li::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 10px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
 }
 
-.metaLabel {
-  font-size: 10.5px;
+.detailCompensation {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 20px 0;
+  margin: 8px 0;
+}
+
+.detailCompensationLabel {
+  font-family: var(--font-sans);
+  font-size: 11px;
   letter-spacing: 1.5px;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.45);
   font-weight: 600;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
 
-.metaValue {
-  font-size: 13.5px;
-  color: var(--color-white);
-  line-height: 1.4;
-}
-
-.detailBody {
-  max-width: 780px;
-  margin: 0 auto;
-  padding: 0 28px 64px;
-}
-
-.section {
-  margin-bottom: 36px;
-}
-
-.section h2 {
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: -0.2px;
-  margin: 0 0 14px;
-  color: var(--color-white);
-}
-
-.section p {
+.detailCompensationBody {
+  font-family: var(--font-sans);
   font-size: 15px;
-  line-height: 1.65;
-  color: rgba(255, 255, 255, 0.78);
-  margin: 0 0 10px;
+  font-weight: 500;
+  color: #FFFFFF;
+  line-height: 1.55;
+  letter-spacing: -0.1px;
 }
 
-.section ul {
+/* Numbered step list for "How to apply" */
+.detailSteps {
   list-style: none;
+  counter-reset: steps;
   padding: 0;
   margin: 0;
   display: flex;
@@ -441,135 +375,29 @@
   gap: 10px;
 }
 
-.section li {
-  font-size: 15px;
-  line-height: 1.6;
-  color: rgba(255, 255, 255, 0.78);
-  padding-left: 22px;
-  position: relative;
-}
-
-.section li::before {
-  content: "";
-  position: absolute;
-  left: 4px;
-  top: 10px;
-  width: 5px;
-  height: 5px;
-  background: rgba(255, 255, 255, 0.55);
-  border-radius: 50%;
-}
-
-/* Compensation callout — uses the same green as the trial paywall's
-   post-trial outcome milestones (#4CAF50) and "PLUS" bonus label.
-   Green = "the outcome you get" in the mobile app's vocabulary. */
-.compBox {
-  border: 1px solid rgba(76, 175, 80, 0.35);
-  background: linear-gradient(180deg, rgba(76, 175, 80, 0.06), rgba(76, 175, 80, 0.02));
-  border-radius: 14px;
-  padding: 20px 22px;
-  margin: 40px 0;
-}
-
-.compLabel {
-  font-size: 11px;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  color: #4CAF50;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-
-.compBody {
-  font-size: 16px;
-  line-height: 1.5;
-  color: var(--color-white);
-  font-weight: 500;
-}
-
-/* Application process — numbered */
-.steps {
-  list-style: none;
-  counter-reset: steps;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.steps li {
+.detailSteps li {
   counter-increment: steps;
-  padding-left: 42px;
+  padding-left: 40px !important;
   position: relative;
   font-size: 15px;
   line-height: 1.55;
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.85) !important;
 }
 
-.steps li::before {
-  content: counter(steps);
+.detailSteps li::before {
+  content: counter(steps) !important;
   position: absolute;
-  left: 0;
-  top: -1px;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  left: 0 !important;
+  top: -2px !important;
+  width: 26px !important;
+  height: 26px !important;
+  border-radius: 50% !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18);
   color: rgba(255, 255, 255, 0.7);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.03);
-}
-
-/* Sticky apply CTA */
-.applyBar {
-  position: sticky;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0), var(--color-black) 40%);
-  padding: 28px 28px 32px;
-  display: flex;
-  justify-content: center;
-  z-index: 5;
-}
-
-.applyBtn {
-  background: var(--color-white);
-  color: var(--color-black);
-  border: 0;
-  border-radius: 40px;
-  padding: 16px 32px;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: 0.1px;
-  cursor: pointer;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  transition: transform 120ms ease, background 120ms ease;
-}
-
-.applyBtn:hover { transform: translateY(-1px); background: #F4F4F4; }
-
-.applyNote {
-  text-align: center;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.45);
-  margin-top: 12px;
-}
-
-.closingNote {
-  font-size: 14px;
-  line-height: 1.6;
-  color: rgba(255, 255, 255, 0.6);
-  padding: 20px 0 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  margin-top: 40px;
-  font-style: italic;
 }

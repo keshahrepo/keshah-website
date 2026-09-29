@@ -1,7 +1,6 @@
-// Detail page for a single career listing. Route: /careers/[slug].
-// Slugs and content come from ../listings.ts. Apply button drops into
-// a pre-filled mailto with the role in the subject line, so submissions
-// arrive at contact@keshah.com already tagged by role.
+// /careers/[slug] — narrative role page in the mobile founder-story
+// voice. Section-by-section, dense but calm. White pill CTA at bottom
+// routes into the multi-step quiz application.
 
 import Link from "next/link";
 import Image from "next/image";
@@ -10,8 +9,13 @@ import type { Metadata } from "next";
 import styles from "../careers.module.css";
 import { APPLY_EMAIL, LISTINGS, getListing } from "../listings";
 
-// Statically generate a page per slug at build time — faster than
-// dynamic rendering and lets us give each role its own SEO.
+// Roles that have a purpose-built on-site quiz application flow. Any
+// role not in this map falls back to a pre-filled mailto so every card
+// on the landing has a real CTA behind it.
+const ON_SITE_APPLY: Record<string, string> = {
+  "paid-creator-intern": "/careers/paid-creator-intern/apply",
+};
+
 export function generateStaticParams() {
   return LISTINGS.map((l) => ({ slug: l.slug }));
 }
@@ -30,7 +34,7 @@ export async function generateMetadata({
   };
 }
 
-export default async function ListingDetailPage({
+export default async function RoleDetail({
   params,
 }: {
   params: Promise<{ slug: string }>;
@@ -39,127 +43,100 @@ export default async function ListingDetailPage({
   const listing = getListing(slug);
   if (!listing) notFound();
 
-  // Roles with a purpose-built on-site application flow route to it
-  // directly; anything else falls back to a pre-filled mailto so the
-  // "Apply" button always has somewhere to go without extra scaffolding.
-  const APPLY_ROUTES: Record<string, string> = {
-    "paid-creator-intern": "/careers/paid-creator-intern/apply",
-  };
-  const onSiteApplyUrl = APPLY_ROUTES[listing.slug];
-  const subject = encodeURIComponent(`Application: ${listing.title}`);
-  const body = encodeURIComponent(
-    `Hi KESHAH team,\n\nI'd like to apply for the ${listing.title} role.\n\nName:\nSchool (if applicable):\nLink to short test video:\n\nA quick note about why I'd be a good fit:\n\n\n—`
-  );
-  const applyHref = onSiteApplyUrl ?? `mailto:${APPLY_EMAIL}?subject=${subject}&body=${body}`;
+  const applyHref =
+    ON_SITE_APPLY[listing.slug] ??
+    `mailto:${APPLY_EMAIL}?subject=${encodeURIComponent(`Application: ${listing.title}`)}`;
 
   return (
-    <main className={styles.detailPage}>
-      <nav className={styles.nav}>
-        <Link href="/" className={styles.navLogo}>
-          <Image
-            src="/images/keshah-logo-white.png"
-            alt="KESHAH"
-            width={100}
-            height={26}
-            priority
-          />
-        </Link>
-        <div className={styles.navRight}>
-          <Link href="/careers">All roles</Link>
-          <Link href="/support">Support</Link>
-        </div>
-      </nav>
-
-      <Link href="/careers" className={styles.back}>
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-          <path
-            d="M7.5 2L3 6l4.5 4"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-        Back to all roles
-      </Link>
-
-      <header className={styles.detailHead}>
-        <div className={styles.detailPills}>
-          <span>{listing.location}</span>
-          <span>{listing.employment}</span>
-          <span>{listing.team}</span>
-        </div>
-        <h1 className={styles.detailTitle}>{listing.title}</h1>
-
-        <div className={styles.metaBox}>
-          <div className={styles.metaCell}>
-            <div className={styles.metaLabel}>Start date</div>
-            <div className={styles.metaValue}>{listing.meta.startDate}</div>
-          </div>
-          <div className={styles.metaCell}>
-            <div className={styles.metaLabel}>Duration</div>
-            <div className={styles.metaValue}>{listing.meta.duration}</div>
-          </div>
-          <div className={styles.metaCell}>
-            <div className={styles.metaLabel}>Schedule</div>
-            <div className={styles.metaValue}>{listing.meta.schedule}</div>
-          </div>
-        </div>
-      </header>
-
-      <article className={styles.detailBody}>
-        {listing.sections.map((s, i) => (
-          <section key={i} className={styles.section}>
-            <h2>{s.heading}</h2>
-            {s.body && <p>{s.body}</p>}
-            {s.bullets && (
-              <ul>
-                {s.bullets.map((b, j) => (
-                  <li key={j}>{b}</li>
-                ))}
-              </ul>
-            )}
-          </section>
-        ))}
-
-        <div className={styles.compBox}>
-          <div className={styles.compLabel}>Compensation</div>
-          <div className={styles.compBody}>{listing.compensation}</div>
+    <main className={styles.shell}>
+      <div className={styles.shellInner}>
+        <div className={styles.header}>
+          <Link href="/" aria-label="KESHAH">
+            <Image
+              src="/images/keshah-logo-white.png"
+              alt="KESHAH"
+              width={130}
+              height={30}
+              className={styles.headerLogo}
+              priority
+            />
+          </Link>
         </div>
 
-        <section className={styles.section}>
-          <h2>How to apply</h2>
-          <ol className={styles.steps}>
-            {listing.applicationProcess.map((step, i) => (
-              <li key={i}>{step}</li>
-            ))}
-          </ol>
-        </section>
-
-        {listing.closingNote && (
-          <p className={styles.closingNote}>{listing.closingNote}</p>
-        )}
-      </article>
-
-      <div className={styles.applyBar}>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-          <a href={applyHref} className={styles.applyBtn}>
-            {onSiteApplyUrl ? "Apply now" : `Apply — email ${APPLY_EMAIL}`}
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+        <div style={{ paddingTop: 8 }}>
+          <Link
+            href="/careers"
+            style={{
+              color: "rgba(255,255,255,0.45)",
+              fontSize: 13,
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
               <path
-                d="M3 7h8M8 3l4 4-4 4"
+                d="M7.5 2L3 6l4.5 4"
                 stroke="currentColor"
-                strokeWidth="1.8"
+                strokeWidth="1.6"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
             </svg>
-          </a>
-          <div className={styles.applyNote}>
-            {onSiteApplyUrl
-              ? "Takes about 10 minutes. Your test video is your application."
-              : "Include a short test video link (Loom, unlisted YouTube, or Drive)"}
+            All roles
+          </Link>
+        </div>
+
+        <section className={styles.detailBody}>
+          <h1 className={`${styles.title} ${styles.fadeTitle}`}>
+            {listing.title}
+          </h1>
+          <div className={`${styles.detailMeta} ${styles.fadeTitle}`}>
+            <span>{listing.location}</span>
+            <span>{listing.employment}</span>
+            <span>{listing.team}</span>
           </div>
+
+          <div className={`${styles.fadeOptions}`} style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            {listing.sections.map((s, i) => (
+              <div key={i} className={styles.detailSection}>
+                <h2>{s.heading}</h2>
+                {s.body && <p>{s.body}</p>}
+                {s.bullets && (
+                  <ul>
+                    {s.bullets.map((b, j) => (
+                      <li key={j}>{b}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+
+            <div className={styles.detailCompensation}>
+              <div className={styles.detailCompensationLabel}>Compensation</div>
+              <div className={styles.detailCompensationBody}>
+                {listing.compensation}
+              </div>
+            </div>
+
+            <div className={styles.detailSection}>
+              <h2>How to apply</h2>
+              <ol className={styles.detailSteps}>
+                {listing.applicationProcess.map((step, i) => (
+                  <li key={i}>{step}</li>
+                ))}
+              </ol>
+            </div>
+          </div>
+        </section>
+
+        <div className={styles.spacerLarge} />
+
+        <div className={`${styles.bottom} ${styles.fadeButton}`}>
+          <Link href={applyHref} className={styles.primaryBtn} style={{ textDecoration: "none", textAlign: "center" }}>
+            Start application
+          </Link>
         </div>
       </div>
     </main>

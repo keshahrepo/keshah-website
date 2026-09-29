@@ -1,83 +1,118 @@
 "use client";
 
-// Thank-you page — landed by the apply form after a successful POST.
-// Personalizes with ?name= from the query string (only the first name
-// was pushed there, no PII beyond that). Static content otherwise.
+// Thank-you page — same mobile-app shell + type scale as the apply
+// quiz. Reads the applicant's first name from ?name= for a small
+// personalization touch. Static content otherwise.
 
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import styles from "../../../careers.module.css";
-import thanksStyles from "./thanks.module.css";
 
 function ThanksInner() {
   const params = useSearchParams();
-  const rawName = (params.get("name") ?? "there").trim();
-  // Prevent injection into the DOM via the URL param — strip anything
-  // that isn't a-z/A-Z/space/hyphen/apostrophe. React would escape it
-  // anyway, but this stops "?name=<script>" from looking weird on
-  // screen if someone shares the URL.
-  const firstName = rawName.replace(/[^A-Za-z\-'\s]/g, "").slice(0, 40) || "there";
+  const raw = (params.get("name") ?? "there").trim();
+  // Strip URL-injection weirdness — React would escape it, but this
+  // also prevents visual noise from "?name=%3Cscript%3E".
+  const firstName = raw.replace(/[^A-Za-z\-'\s]/g, "").slice(0, 40) || "there";
 
   return (
     <>
-      <header className={styles.detailHead}>
-        <div className={thanksStyles.kicker}>Application received</div>
-        <h1 className={styles.detailTitle}>Thanks, {firstName}.</h1>
-        <p className={thanksStyles.lede}>
+      <div className={styles.spacerSmall} />
+
+      <section style={{ display: "flex", flexDirection: "column", gap: 24, padding: "24px 0" }}>
+        <h1 className={`${styles.title} ${styles.fadeTitle}`}>
+          Thanks, {firstName}.
+        </h1>
+        <p
+          className={styles.fadeTitle}
+          style={{
+            fontFamily: "var(--font-sans)",
+            fontSize: 20,
+            fontWeight: 500,
+            color: "#FFFFFF",
+            lineHeight: 1.5,
+            letterSpacing: -0.3,
+            margin: 0,
+          }}
+        >
           We&apos;ve received your application and test video.
         </p>
-      </header>
 
-      <article className={styles.detailBody}>
-        <section className={styles.section}>
-          <h2>What happens next</h2>
-          <ul>
-            <li>Our team reviews every submission</li>
-            <li>
+        <div
+          className={styles.fadeOptions}
+          style={{
+            marginTop: 16,
+            display: "flex",
+            flexDirection: "column",
+            gap: 14,
+          }}
+        >
+          <div style={{ display: "flex", gap: 12 }}>
+            <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 14, marginTop: 2 }}>1.</span>
+            <span style={{ color: "rgba(255,255,255,0.85)", fontSize: 15, lineHeight: 1.55 }}>
+              Our team reviews every submission.
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: 12 }}>
+            <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 14, marginTop: 2 }}>2.</span>
+            <span style={{ color: "rgba(255,255,255,0.85)", fontSize: 15, lineHeight: 1.55 }}>
               If selected, you&apos;ll receive an email with details on your
-              paid two-week trial
-            </li>
-          </ul>
-        </section>
-
-        <p className={thanksStyles.contact}>
-          Questions? Email{" "}
-          <a href="mailto:contact@keshah.com">contact@keshah.com</a>
-        </p>
-
-        <div className={thanksStyles.ctaRow}>
-          <Link href="/careers" className={thanksStyles.secondary}>
-            Back to all roles
-          </Link>
+              paid two-week trial.
+            </span>
+          </div>
         </div>
-      </article>
+
+        <p
+          className={styles.fadeButton}
+          style={{
+            fontSize: 13,
+            color: "rgba(255,255,255,0.5)",
+            marginTop: 20,
+          }}
+        >
+          Questions?{" "}
+          <a
+            href="mailto:contact@keshah.com"
+            style={{ color: "#FFFFFF", textDecoration: "underline", textUnderlineOffset: 3 }}
+          >
+            contact@keshah.com
+          </a>
+        </p>
+      </section>
+
+      <div className={styles.spacerLarge} />
+
+      <div className={`${styles.bottom} ${styles.fadeButton}`}>
+        <Link href="/careers" className={styles.primaryBtn} style={{ textDecoration: "none", textAlign: "center" }}>
+          Back to all roles
+        </Link>
+      </div>
     </>
   );
 }
 
 export default function ThanksPage() {
   return (
-    <main className={styles.detailPage}>
-      <nav className={styles.nav}>
-        <Link href="/" className={styles.navLogo}>
-          <Image
-            src="/images/keshah-logo-white.png"
-            alt="KESHAH"
-            width={100}
-            height={26}
-            priority
-          />
-        </Link>
-        <div className={styles.navRight}>
-          <Link href="/careers">All roles</Link>
+    <main className={styles.shell}>
+      <div className={styles.shellInner}>
+        <div className={styles.header}>
+          <Link href="/" aria-label="KESHAH">
+            <Image
+              src="/images/keshah-logo-white.png"
+              alt="KESHAH"
+              width={130}
+              height={30}
+              className={styles.headerLogo}
+              priority
+            />
+          </Link>
         </div>
-      </nav>
-
-      <Suspense fallback={null}>
-        <ThanksInner />
-      </Suspense>
+        <Suspense fallback={null}>
+          <ThanksInner />
+        </Suspense>
+      </div>
     </main>
   );
 }

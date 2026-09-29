@@ -1,331 +1,279 @@
-/* Apply page — form, reference video, script, video upload. Uses the
-   shared careers.module.css for nav/back/title/section chrome; this
-   file only adds the form-specific styles. Same design vocabulary as
-   the mobile trial paywall: Poppins semibold headings, tight tracking,
-   white pill CTAs, kBoxColor-adjacent card backgrounds. */
+/* Apply-quiz specific styles. Layers on top of careers.module.css's
+   shared shell + fade helpers. Follows the mobile app 1:1:
+     - Option card: 14px radius, 1px kWhite@0.15 border → 1.5px kWhite
+       on select, transparent bg, right-side check on selected
+     - Text input: filled kBoxColor (#373737), 10px radius, no visible
+       border change on focus, cursor white
+     - Yes/No: stacked vertically, primary filled white pill, secondary
+       outlined kWhite@0.2 with faint sub-label
+     - Content block wrapped in Spacer(flex:1) / Spacer(flex:2)  */
 
-.applyKicker {
-  font-family: var(--font-sans);
-  font-size: 11px;
-  letter-spacing: 1.5px;
-  color: rgba(255, 255, 255, 0.45);
-  font-weight: 600;
-  text-transform: uppercase;
-  margin-bottom: 12px;
+.stepBody {
+  padding: 24px 0 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
-.applyLede {
+/* ── Option cards (single-select, multi-select behave identically) ─ */
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 32px;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: var(--font-sans);
   font-size: 15px;
-  line-height: 1.55;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease, border-width 160ms ease;
+  text-align: left;
+  width: 100%;
+  line-height: 1.35;
+}
+
+.option:hover {
+  border-color: rgba(255, 255, 255, 0.35);
   color: rgba(255, 255, 255, 0.75);
-  margin: 0 0 8px;
-  max-width: 540px;
 }
 
-.form {
-  max-width: 620px;
-  margin: 0 auto;
-  padding: 12px 28px 96px;
-  color: var(--color-white);
-  font-family: var(--font-sans);
+.optionSelected,
+.optionSelected:hover {
+  border-color: #FFFFFF;
+  color: #FFFFFF;
+  /* box-shadow-inset simulates the mobile 1.5px selected border without
+     the layout jump from swapping border-width */
+  box-shadow: inset 0 0 0 0.5px #FFFFFF;
 }
 
-.section {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 36px 0 12px;
+.optionCheck {
+  color: #FFFFFF;
+  opacity: 0;
+  transition: opacity 160ms ease;
+  flex: 0 0 auto;
 }
 
-.sectionTitle {
-  font-family: var(--font-sans);
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: -0.5px;
-  margin: 0 0 6px;
-  color: var(--color-white);
-}
+.optionSelected .optionCheck { opacity: 1; }
 
-.sectionLede {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.6);
-  line-height: 1.55;
-  margin: 0 0 24px;
-}
-
-/* ── Field ────────────────────────────────────────────────────── */
+/* ── Text input (mobile KeshahTextField) ──────────────────────── */
 .field {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 20px;
+  gap: 16px;
+  margin-top: 32px;
 }
 
-.fieldLabel {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.75);
-  font-weight: 500;
-  letter-spacing: 0.1px;
-}
-
-.req {
-  color: #F26B4C;
-  font-style: normal;
-  margin-left: 2px;
-}
-
-.row2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-
-@media (max-width: 520px) {
-  .row2 { grid-template-columns: 1fr; }
-}
-
-.input,
-.select {
+.input {
   width: 100%;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  padding: 16px 20px;
+  background: #373737;
+  border: 1px solid #373737;
   border-radius: 10px;
-  padding: 13px 14px;
-  color: var(--color-white);
+  color: #FFFFFF;
   font-family: var(--font-sans);
-  font-size: 14.5px;
+  font-size: 15px;
+  font-weight: 500;
   outline: none;
-  transition: border-color 120ms ease, background 120ms ease;
+  caret-color: #FFFFFF;
+  box-sizing: border-box;
+  letter-spacing: -0.1px;
 }
 
-.input::placeholder { color: rgba(255, 255, 255, 0.35); }
-
-.input:focus,
-.select:focus {
-  border-color: rgba(255, 255, 255, 0.45);
-  background: rgba(255, 255, 255, 0.06);
+.input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+  font-weight: 400;
 }
 
-.select {
-  appearance: none;
-  padding-right: 40px;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path fill='none' stroke='rgba(255,255,255,0.6)' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' d='M2.5 4.5L6 8l3.5-3.5'/></svg>");
-  background-repeat: no-repeat;
-  background-position: right 14px center;
+.input:focus {
+  /* mobile app doesn't change border on focus — keep parity */
+  border-color: #373737;
 }
 
-.select option { background: var(--color-black); color: var(--color-white); }
-
-/* Pill option group (used for Gender + can_commit) — same visual
-   language as the mobile app's selectable-option cards. */
-.pillGroup {
+/* Yes/No pill row — mobile uses vertically stacked, not side-by-side. */
+.yesNoStack {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 32px;
 }
 
-.pill {
-  flex: 1;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 10px;
-  padding: 12px 14px;
-  color: rgba(255, 255, 255, 0.85);
+.yesBtn {
+  width: 100%;
+  padding: 18px 20px;
+  background: #FFFFFF;
+  color: #000000;
+  border: 0;
+  border-radius: 40px;
   font-family: var(--font-sans);
-  font-size: 14.5px;
+  font-size: 16px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition: background 200ms ease;
 }
+.yesBtn:hover { background: #F4F4F4; }
 
-.pill:hover { border-color: rgba(255, 255, 255, 0.3); }
-
-.pillActive {
-  background: var(--color-white);
-  color: var(--color-black);
-  border-color: var(--color-white);
+.noBtn {
+  width: 100%;
+  padding: 14px 20px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 40px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  transition: border-color 200ms ease, color 200ms ease;
 }
+.noBtn:hover { border-color: rgba(255, 255, 255, 0.4); color: rgba(255, 255, 255, 0.9); }
 
-/* ── Reference video ──────────────────────────────────────────── */
-.refVideoBlock {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  padding: 16px;
-  margin-bottom: 24px;
-}
-
-.refVideoLabel {
+.noBtnSub {
   font-size: 11px;
-  letter-spacing: 1.5px;
-  color: rgba(255, 255, 255, 0.55);
-  font-weight: 600;
-  text-transform: uppercase;
-  margin-bottom: 12px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.25);
+}
+
+/* ── Reference video step ─────────────────────────────────────── */
+.videoWrap {
+  display: flex;
+  justify-content: center;
+  margin: 24px 0 0;
 }
 
 .refVideo {
   width: 100%;
-  max-width: 320px;
+  max-width: 260px;
   aspect-ratio: 9 / 16;
-  background: black;
-  border-radius: 10px;
+  border-radius: 12px;
+  background: #000000;
   display: block;
-  margin: 0 auto;
+  object-fit: cover;
 }
 
-.refVideoNote {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.6);
-  line-height: 1.5;
-  margin: 12px 0 0;
-  text-align: center;
-}
-
-/* ── Script block ─────────────────────────────────────────────── */
-.scriptBlock {
-  border: 1px solid rgba(255, 255, 255, 0.1);
+/* ── Script step ──────────────────────────────────────────────── */
+.scriptCard {
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 14px;
-  padding: 18px;
-  margin-bottom: 20px;
+  padding: 20px;
+  margin-top: 24px;
   background: rgba(255, 255, 255, 0.02);
 }
 
-.scriptHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-  gap: 12px;
-}
-
-.scriptLabel {
-  font-size: 11px;
-  letter-spacing: 1.5px;
-  color: rgba(255, 255, 255, 0.55);
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.scriptActions {
-  display: flex;
-  gap: 14px;
-}
-
-.linkBtn {
-  background: none;
-  border: 0;
-  color: var(--color-white);
+.scriptText {
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 15px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.55;
+  letter-spacing: -0.1px;
+  white-space: pre-line;
+  margin: 0;
+}
+
+.scriptCopyRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.scriptCopyBtn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  padding: 8px 14px;
+  color: rgba(255, 255, 255, 0.85);
+  font-family: var(--font-sans);
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  padding: 0;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  transition: border-color 160ms ease, color 160ms ease;
 }
+.scriptCopyBtn:hover { border-color: #FFFFFF; color: #FFFFFF; }
 
-.linkBtn:disabled { opacity: 0.4; cursor: not-allowed; }
-.linkBtn:hover:not(:disabled) { color: rgba(255, 255, 255, 0.75); }
-
-.scriptBody {
-  font-size: 15px;
-  line-height: 1.65;
-  color: rgba(255, 255, 255, 0.9);
-  white-space: pre-line;
-}
-
-/* ── Tips ─────────────────────────────────────────────────────── */
-.tips {
-  margin-bottom: 24px;
-}
-
-.tipsLabel {
-  font-size: 11px;
-  letter-spacing: 1.5px;
-  color: rgba(255, 255, 255, 0.55);
-  font-weight: 600;
-  text-transform: uppercase;
-  margin-bottom: 10px;
-}
-
-.tips ul {
+.tipsList {
   list-style: none;
   padding: 0;
-  margin: 0;
+  margin: 20px 0 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.tips li {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.75);
-  line-height: 1.5;
+.tipsList li {
   padding-left: 18px;
   position: relative;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.5;
 }
 
-.tips li::before {
+.tipsList li::before {
   content: "";
   position: absolute;
   left: 4px;
   top: 9px;
   width: 4px;
   height: 4px;
-  background: rgba(255, 255, 255, 0.55);
   border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
 }
 
-/* ── Video upload ─────────────────────────────────────────────── */
-.uploadBlock {
-  margin-top: 18px;
-}
-
-.hiddenFile {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  border: 0;
+/* ── Upload step ──────────────────────────────────────────────── */
+.uploadArea {
+  margin-top: 32px;
 }
 
 .uploadBtn {
   width: 100%;
-  background: var(--color-white);
-  color: var(--color-black);
+  padding: 18px 20px;
+  background: #FFFFFF;
+  color: #000000;
   border: 0;
   border-radius: 40px;
-  padding: 16px 20px;
   font-family: var(--font-sans);
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 500;
   cursor: pointer;
-  transition: background 120ms ease, transform 120ms ease;
+  transition: background 200ms ease;
 }
-
-.uploadBtn:hover { background: #F4F4F4; transform: translateY(-1px); }
+.uploadBtn:hover { background: #F4F4F4; }
 
 .uploadedBox {
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
-  padding: 14px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
 }
 
 .uploadedPreview {
   width: 100%;
-  max-width: 260px;
+  max-width: 240px;
   aspect-ratio: 9 / 16;
-  background: black;
   border-radius: 10px;
+  background: #000000;
   display: block;
   margin: 0 auto;
 }
 
-.uploadStatusRow {
+.uploadedRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -333,84 +281,109 @@
   font-size: 13px;
 }
 
-.uploadFilename {
+.uploadedName {
   color: rgba(255, 255, 255, 0.85);
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex: 1;
-  min-width: 0;
 }
 
-.uploadPct {
-  color: rgba(255, 255, 255, 0.6);
+.uploadedStatus {
+  color: rgba(255, 255, 255, 0.55);
   font-weight: 500;
 }
-
-.uploadOk {
-  color: #4CAF50;
-  font-weight: 600;
-}
+.uploadedStatusOk { color: #4CAF50; font-weight: 600; }
 
 .progressTrack {
-  height: 4px;
-  border-radius: 2px;
+  height: 3px;
   background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
   overflow: hidden;
 }
 
 .progressFill {
   height: 100%;
-  background: var(--color-white);
+  background: #FFFFFF;
   transition: width 120ms ease;
 }
+
+.replaceLink {
+  background: none;
+  border: 0;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  align-self: flex-start;
+}
+.replaceLink:hover { color: #FFFFFF; }
 
 .uploadHint {
   text-align: center;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.35);
   margin-top: 10px;
 }
 
-/* ── Consent + submit ─────────────────────────────────────────── */
-.consent {
+/* ── Consent step ─────────────────────────────────────────────── */
+.consentBox {
   display: flex;
-  gap: 10px;
   align-items: flex-start;
-  margin: 32px 0 20px;
+  gap: 12px;
+  padding: 18px 20px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
   cursor: pointer;
-  font-size: 13.5px;
-  line-height: 1.5;
-  color: rgba(255, 255, 255, 0.85);
+  transition: border-color 160ms ease;
+  margin-top: 32px;
+}
+.consentBox:hover { border-color: rgba(255, 255, 255, 0.35); }
+.consentBoxChecked {
+  border-color: #FFFFFF;
+  box-shadow: inset 0 0 0 0.5px #FFFFFF;
 }
 
-.consent input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  margin-top: 2px;
-  accent-color: var(--color-white);
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-
-.consent em {
-  color: #F26B4C;
-  font-style: normal;
-  margin-left: 2px;
-}
-
-.error {
-  background: rgba(242, 107, 76, 0.08);
-  border: 1px solid rgba(242, 107, 76, 0.35);
-  border-radius: 10px;
-  padding: 12px 14px;
-  color: #F26B4C;
-  font-size: 13.5px;
-  margin: 12px 0;
-}
-
-.submitRow {
+.consentCheck {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
   display: flex;
+  align-items: center;
   justify-content: center;
-  margin-top: 24px;
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: transparent;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.consentBoxChecked .consentCheck {
+  background: #FFFFFF;
+  border-color: #FFFFFF;
+  color: #000000;
+}
+
+.consentLabel {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.5;
+}
+
+/* ── Error banner ─────────────────────────────────────────────── */
+.error {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: rgba(242, 107, 76, 0.08);
+  border: 1px solid rgba(242, 107, 76, 0.3);
+  color: #F26B4C;
+  font-family: var(--font-sans);
+  font-size: 13px;
 }
