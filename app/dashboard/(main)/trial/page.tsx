@@ -17,6 +17,13 @@ import {
   type InstallSourceFilter,
 } from "../_lib/installSource";
 import { CountryTabs } from "../_lib/CountryTabs";
+import { CampaignTabs } from "../_lib/CampaignTabs";
+import {
+  matchesCampaign,
+  normalizeCampaignName,
+  parseCampaignFilter,
+  type CampaignFilter,
+} from "../_lib/campaign";
 import {
   matchesCountryFilter,
   parseCountryFilter,
@@ -169,7 +176,7 @@ function computeMetrics(users: TrialUser[], allSignupsInCohort: number, now: num
 export default async function TrialPage({
   searchParams,
 }: {
-  searchParams: Promise<{ g?: string; s?: string; c?: string; baseline?: string; new?: string; compare?: string }>;
+  searchParams: Promise<{ g?: string; s?: string; c?: string; camp?: string; baseline?: string; new?: string; compare?: string }>;
 }) {
   const { db } = getFirebaseAdmin();
   const params = await searchParams;
@@ -180,6 +187,7 @@ export default async function TrialPage({
   const source: InstallSourceFilter =
     sourceRaw === "paid" || sourceRaw === "organic" ? sourceRaw : "all";
   const country: CountryFilter = parseCountryFilter(params.c);
+  const campaign: CampaignFilter = parseCampaignFilter(params.camp);
 
   const compareMode = params.compare === "1";
 
@@ -216,6 +224,9 @@ export default async function TrialPage({
       // country_tier, us/india from userLocalTimeZone.
       "country_tier",
       "userLocalTimeZone",
+      // Appstack campaign (influencer filter) — populated by the RC
+      // backfill from $campaign / appstack_campaign subscriber attrs.
+      "attribution_campaign",
       // p9 alarm walkthrough acceptance — recorded on completion or
       // skip-confirm. Split rendered as a small card below the funnel.
       "alarm_walkthrough_outcome",
@@ -241,6 +252,10 @@ export default async function TrialPage({
   const countryCounts: Record<CountryFilter, number> = {
     all: 0, tier_1: 0, tier_2: 0, us: 0, india: 0,
   };
+  // Campaign pill counts — dynamic. Only "new" cohort, post gender +
+  // source + country filters. Blanks (users with no attribution_campaign)
+  // are dropped from named buckets but still tallied in "all".
+  const campaignCounts = new Map<string, number>();
 
   for (const doc of snap.docs) {
     const d = doc.data();
@@ -283,6 +298,17 @@ export default async function TrialPage({
       if (matchesCountryFilter("india", d)) countryCounts.india++;
     }
     if (!matchesCountryFilter(country, d)) continue;
+
+    // Tally campaign counts post-country so pills reflect the current
+    // slice. Then apply the campaign filter itself.
+    if (inNew) {
+      // Normalize creator campaigns into a single per-creator bucket
+      // (e.g. "Isai TikTok" + "Isai Insta" + "Isai" → "Isai").
+      const normCamp = normalizeCampaignName(d.attribution_campaign as string | undefined);
+      campaignCounts.set("all", (campaignCounts.get("all") ?? 0) + 1);
+      if (normCamp) campaignCounts.set(normCamp, (campaignCounts.get(normCamp) ?? 0) + 1);
+    }
+    if (!matchesCampaign(campaign, d)) continue;
 
     if (inNew) newSignups++;
     if (inBaseline) baselineSignups++;
@@ -383,6 +409,17 @@ export default async function TrialPage({
       <CountryTabs selected={country} totals={countryCounts} />
 
       <InstallSourceTabs selected={source} totals={sourceCounts} />
+
+      <CampaignTabs
+        selected={campaign}
+        totals={(() => {
+          const all = campaignCounts.get("all") ?? 0;
+          const named = [...campaignCounts.entries()]
+            .filter(([k]) => k !== "all")
+            .sort((a, b) => b[1] - a[1]);
+          return [["all", all] as [string, number], ...named];
+        })()}
+      />
 
       <OutcomesStrip
         m={newM}

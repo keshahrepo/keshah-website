@@ -14,6 +14,13 @@
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { InstallSourceTabs } from "../_lib/InstallSourceTabs";
+import { CampaignTabs } from "../_lib/CampaignTabs";
+import {
+  matchesCampaign,
+  normalizeCampaignName,
+  parseCampaignFilter,
+  type CampaignFilter,
+} from "../_lib/campaign";
 import { VersionTabs } from "../_lib/VersionTabs";
 import { MOBILE_RELEASES, getReleaseWindow } from "@/lib/release-history";
 import {
@@ -454,7 +461,7 @@ const FUNNEL_STAGES: FunnelStage[] = [
 export default async function QuizResponsesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ g?: string; c?: string; s?: string; new?: string }>;
+  searchParams: Promise<{ g?: string; c?: string; s?: string; camp?: string; new?: string }>;
 }) {
   const { db } = getFirebaseAdmin();
 
@@ -473,6 +480,7 @@ export default async function QuizResponsesPage({
   const sourceRaw = params.s;
   const source: InstallSourceFilter =
     sourceRaw === "paid" || sourceRaw === "organic" ? sourceRaw : "all";
+  const campaign: CampaignFilter = parseCampaignFilter(params.camp);
 
   // Release cohort — defaults to the newest shipped mobile release
   // (currently 5.18). VersionTabs writes this via ?new=<slug>.
@@ -510,6 +518,9 @@ export default async function QuizResponsesPage({
       // /api/rc/backfill-attribution. Used by the InstallSourceTabs
       // filter to slice paid-ad vs organic cohorts.
       "install_source",
+      // Appstack campaign (influencer filter) — populated by the RC
+      // backfill from $campaign / appstack_campaign subscriber attrs.
+      "attribution_campaign",
       // Email — used only to strip test accounts from the sample.
       "email",
     )
@@ -533,6 +544,9 @@ export default async function QuizResponsesPage({
   // Binary: paid vs everything else (organic bucket absorbs missing +
   // legacy "unknown" values).
   const sourceCounts = { all: 0, paid: 0, organic: 0 };
+  // Campaign pill counts — dynamic, populated post gender + source
+  // filter so pill numbers match the current slice.
+  const campaignCounts = new Map<string, number>();
 
   // Funnel counts respect the gender filter (only in-scope users) AND
   // only count users on the +162 build. Baseline = users who wrote
@@ -564,6 +578,16 @@ export default async function QuizResponsesPage({
     sourceCounts.all++;
     sourceCounts[bucket]++;
     if (!matchesInstallSource(source, data)) continue;
+
+    // Tally campaign counts post-source so pill numbers match the
+    // current slice. Then apply the campaign filter.
+    // Normalize creator campaigns into a single per-creator bucket
+    // (e.g. "Isai TikTok" + "Isai Insta" + "Isai" → "Isai") so the
+    // tab list groups creator-first. See _lib/campaign.ts.
+    const normCamp = normalizeCampaignName(data.attribution_campaign as string | undefined);
+    campaignCounts.set("all", (campaignCounts.get("all") ?? 0) + 1);
+    if (normCamp) campaignCounts.set(normCamp, (campaignCounts.get(normCamp) ?? 0) + 1);
+    if (!matchesCampaign(campaign, data)) continue;
 
     const isStarter = !!data.started_trial;
     if (isStarter) startedCount++;
@@ -713,6 +737,17 @@ export default async function QuizResponsesPage({
       />
 
       <InstallSourceTabs selected={source} totals={sourceCounts} />
+
+      <CampaignTabs
+        selected={campaign}
+        totals={(() => {
+          const all = campaignCounts.get("all") ?? 0;
+          const named = [...campaignCounts.entries()]
+            .filter(([k]) => k !== "all")
+            .sort((a, b) => b[1] - a[1]);
+          return [["all", all] as [string, number], ...named];
+        })()}
+      />
 
       <FunnelPanel counts={funnelCounts} country={country} gender={gender} source={source} />
 
