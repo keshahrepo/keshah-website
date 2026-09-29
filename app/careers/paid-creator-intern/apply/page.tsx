@@ -13,13 +13,23 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getListing } from "../../listings";
 import styles from "../../careers.module.css";
 import applyStyles from "./apply.module.css";
 
 const SLUG = "paid-creator-intern";
+const DRAFT_STORAGE_KEY = "keshah_careers_draft_id_v1";
+
+// Local (browser-only) UUID-ish generator — good enough as a doc id
+// key. Avoids a runtime dep for uuid, and Firestore doesn't care if
+// the id isn't RFC 4122 exact.
+function newDraftId(): string {
+  const t = Date.now().toString(36);
+  const r = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6);
+  return `d_${t}_${r}`;
+}
 
 // The test video script. Keep short (30-45 seconds when read aloud) —
 // the whole point of the test is delivery, not lore. Edit here to
@@ -76,6 +86,64 @@ export default function ApplyPage() {
   const [copied, setCopied] = useState(false);
   const [scriptOpen, setScriptOpen] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Draft id lives in localStorage so a page reload picks up the same
+  // pending Firestore doc instead of creating a new one every visit.
+  // On successful submit we clear it, so the next open starts fresh.
+  const draftIdRef = useRef<string>("");
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let id = window.localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (!id) {
+      id = newDraftId();
+      window.localStorage.setItem(DRAFT_STORAGE_KEY, id);
+    }
+    draftIdRef.current = id;
+  }, []);
+
+  // Fire-and-forget draft save. Called on every field blur (and after
+  // a successful video upload). Failure is silent — we don't want a
+  // transient network blip to nag the applicant mid-form.
+  async function saveDraft(overrides?: Partial<FormState> & { video_object_path?: string | null; video_original_name?: string | null; video_size_bytes?: number | null }) {
+    const id = draftIdRef.current;
+    if (!id) return;
+    const merged = { ...form, ...(overrides ?? {}) };
+    const payload = {
+      draft_id: id,
+      listing_slug: SLUG,
+      full_name: merged.full_name,
+      email: merged.email,
+      phone: merged.phone,
+      gender: merged.gender,
+      college: merged.college,
+      graduation_year: merged.graduation_year,
+      can_commit: merged.can_commit,
+      social_handle: merged.social_handle,
+      consent: merged.consent,
+      video_object_path:
+        overrides?.video_object_path !== undefined
+          ? overrides.video_object_path
+          : videoObjectPath,
+      video_original_name:
+        overrides?.video_original_name !== undefined
+          ? overrides.video_original_name
+          : videoFile?.name ?? null,
+      video_size_bytes:
+        overrides?.video_size_bytes !== undefined
+          ? overrides.video_size_bytes
+          : videoFile?.size ?? null,
+    };
+    try {
+      await fetch("/api/careers/apply-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        keepalive: true,
+      });
+    } catch {
+      /* silent — draft save is best-effort */
+    }
+  }
 
   const referenceVideoUrl = useMemo(
     () =>
@@ -165,6 +233,14 @@ export default function ApplyPage() {
       });
 
       setVideoObjectPath(objectPath);
+      // Persist the video path onto the draft immediately so partial
+      // fills that got as far as uploading show up with the video
+      // link in the admin Recruit tab even if they never submit.
+      saveDraft({
+        video_object_path: objectPath,
+        video_original_name: file.name,
+        video_size_bytes: file.size,
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setVideoFile(null);
@@ -227,6 +303,7 @@ export default function ApplyPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          draft_id: draftIdRef.current,
           listing_slug: SLUG,
           full_name: form.full_name,
           email: form.email,
@@ -245,6 +322,13 @@ export default function ApplyPage() {
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || "Something went wrong. Try again.");
+      }
+      // Clear the draft id — a fresh open should start a new
+      // application, not resume the completed one.
+      try {
+        window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+      } catch {
+        /* localStorage disabled — no-op */
       }
       const firstName = form.full_name.trim().split(/\s+/)[0] ?? "there";
       router.push(
@@ -309,6 +393,7 @@ export default function ApplyPage() {
               className={applyStyles.input}
               value={form.full_name}
               onChange={(e) => set("full_name", e.target.value)}
+              onBlur={() => saveDraft()}
               autoComplete="name"
               required
             />
@@ -321,6 +406,7 @@ export default function ApplyPage() {
                 className={applyStyles.input}
                 value={form.email}
                 onChange={(e) => set("email", e.target.value)}
+                onBlur={() => saveDraft()}
                 autoComplete="email"
                 inputMode="email"
                 required
@@ -332,6 +418,7 @@ export default function ApplyPage() {
                 className={applyStyles.input}
                 value={form.phone}
                 onChange={(e) => set("phone", e.target.value)}
+                onBlur={() => saveDraft()}
                 autoComplete="tel"
                 inputMode="tel"
                 required
@@ -346,7 +433,10 @@ export default function ApplyPage() {
                   key={g}
                   type="button"
                   className={`${applyStyles.pill} ${form.gender === g ? applyStyles.pillActive : ""}`}
-                  onClick={() => set("gender", g)}
+                  onClick={() => {
+                    set("gender", g);
+                    saveDraft({ gender: g });
+                  }}
                 >
                   {g === "male" ? "Male" : "Female"}
                 </button>
@@ -360,6 +450,7 @@ export default function ApplyPage() {
               className={applyStyles.input}
               value={form.college}
               onChange={(e) => set("college", e.target.value)}
+              onBlur={() => saveDraft()}
               autoComplete="organization"
               required
             />
@@ -370,7 +461,10 @@ export default function ApplyPage() {
               <select
                 className={applyStyles.select}
                 value={form.graduation_year}
-                onChange={(e) => set("graduation_year", e.target.value)}
+                onChange={(e) => {
+                  set("graduation_year", e.target.value);
+                  saveDraft({ graduation_year: e.target.value });
+                }}
                 required
               >
                 <option value="" disabled>
@@ -390,7 +484,10 @@ export default function ApplyPage() {
                     key={v}
                     type="button"
                     className={`${applyStyles.pill} ${form.can_commit === v ? applyStyles.pillActive : ""}`}
-                    onClick={() => set("can_commit", v)}
+                    onClick={() => {
+                      set("can_commit", v);
+                      saveDraft({ can_commit: v });
+                    }}
                   >
                     {v === "yes" ? "Yes" : "No"}
                   </button>
@@ -405,6 +502,7 @@ export default function ApplyPage() {
               className={applyStyles.input}
               value={form.social_handle}
               onChange={(e) => set("social_handle", e.target.value)}
+              onBlur={() => saveDraft()}
               placeholder="@yourhandle"
             />
           </Field>
