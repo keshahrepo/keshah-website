@@ -1,0 +1,416 @@
+/* Apply page — form, reference video, script, video upload. Uses the
+   shared careers.module.css for nav/back/title/section chrome; this
+   file only adds the form-specific styles. Same design vocabulary as
+   the mobile trial paywall: Poppins semibold headings, tight tracking,
+   white pill CTAs, kBoxColor-adjacent card backgrounds. */
+
+.applyKicker {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.applyLede {
+  font-size: 15px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.75);
+  margin: 0 0 8px;
+  max-width: 540px;
+}
+
+.form {
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 12px 28px 96px;
+  color: var(--color-white);
+  font-family: var(--font-sans);
+}
+
+.section {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 36px 0 12px;
+}
+
+.sectionTitle {
+  font-family: var(--font-sans);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  margin: 0 0 6px;
+  color: var(--color-white);
+}
+
+.sectionLede {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.55;
+  margin: 0 0 24px;
+}
+
+/* ── Field ────────────────────────────────────────────────────── */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.fieldLabel {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.75);
+  font-weight: 500;
+  letter-spacing: 0.1px;
+}
+
+.req {
+  color: #F26B4C;
+  font-style: normal;
+  margin-left: 2px;
+}
+
+.row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 520px) {
+  .row2 { grid-template-columns: 1fr; }
+}
+
+.input,
+.select {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  padding: 13px 14px;
+  color: var(--color-white);
+  font-family: var(--font-sans);
+  font-size: 14.5px;
+  outline: none;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.input::placeholder { color: rgba(255, 255, 255, 0.35); }
+
+.input:focus,
+.select:focus {
+  border-color: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.select {
+  appearance: none;
+  padding-right: 40px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path fill='none' stroke='rgba(255,255,255,0.6)' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' d='M2.5 4.5L6 8l3.5-3.5'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+}
+
+.select option { background: var(--color-black); color: var(--color-white); }
+
+/* Pill option group (used for Gender + can_commit) — same visual
+   language as the mobile app's selectable-option cards. */
+.pillGroup {
+  display: flex;
+  gap: 8px;
+}
+
+.pill {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: rgba(255, 255, 255, 0.85);
+  font-family: var(--font-sans);
+  font-size: 14.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.pill:hover { border-color: rgba(255, 255, 255, 0.3); }
+
+.pillActive {
+  background: var(--color-white);
+  color: var(--color-black);
+  border-color: var(--color-white);
+}
+
+/* ── Reference video ──────────────────────────────────────────── */
+.refVideoBlock {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.refVideoLabel {
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.refVideo {
+  width: 100%;
+  max-width: 320px;
+  aspect-ratio: 9 / 16;
+  background: black;
+  border-radius: 10px;
+  display: block;
+  margin: 0 auto;
+}
+
+.refVideoNote {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.5;
+  margin: 12px 0 0;
+  text-align: center;
+}
+
+/* ── Script block ─────────────────────────────────────────────── */
+.scriptBlock {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 18px;
+  margin-bottom: 20px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.scriptHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 12px;
+}
+
+.scriptLabel {
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.scriptActions {
+  display: flex;
+  gap: 14px;
+}
+
+.linkBtn {
+  background: none;
+  border: 0;
+  color: var(--color-white);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.linkBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+.linkBtn:hover:not(:disabled) { color: rgba(255, 255, 255, 0.75); }
+
+.scriptBody {
+  font-size: 15px;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.9);
+  white-space: pre-line;
+}
+
+/* ── Tips ─────────────────────────────────────────────────────── */
+.tips {
+  margin-bottom: 24px;
+}
+
+.tipsLabel {
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.tips ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tips li {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.5;
+  padding-left: 18px;
+  position: relative;
+}
+
+.tips li::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 9px;
+  width: 4px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.55);
+  border-radius: 50%;
+}
+
+/* ── Video upload ─────────────────────────────────────────────── */
+.uploadBlock {
+  margin-top: 18px;
+}
+
+.hiddenFile {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.uploadBtn {
+  width: 100%;
+  background: var(--color-white);
+  color: var(--color-black);
+  border: 0;
+  border-radius: 40px;
+  padding: 16px 20px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
+}
+
+.uploadBtn:hover { background: #F4F4F4; transform: translateY(-1px); }
+
+.uploadedBox {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.uploadedPreview {
+  width: 100%;
+  max-width: 260px;
+  aspect-ratio: 9 / 16;
+  background: black;
+  border-radius: 10px;
+  display: block;
+  margin: 0 auto;
+}
+
+.uploadStatusRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.uploadFilename {
+  color: rgba(255, 255, 255, 0.85);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.uploadPct {
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 500;
+}
+
+.uploadOk {
+  color: #4CAF50;
+  font-weight: 600;
+}
+
+.progressTrack {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--color-white);
+  transition: width 120ms ease;
+}
+
+.uploadHint {
+  text-align: center;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+  margin-top: 10px;
+}
+
+/* ── Consent + submit ─────────────────────────────────────────── */
+.consent {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 32px 0 20px;
+  cursor: pointer;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.consent input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--color-white);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.consent em {
+  color: #F26B4C;
+  font-style: normal;
+  margin-left: 2px;
+}
+
+.error {
+  background: rgba(242, 107, 76, 0.08);
+  border: 1px solid rgba(242, 107, 76, 0.35);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: #F26B4C;
+  font-size: 13.5px;
+  margin: 12px 0;
+}
+
+.submitRow {
+  display: flex;
+  justify-content: center;
+  margin-top: 24px;
+}

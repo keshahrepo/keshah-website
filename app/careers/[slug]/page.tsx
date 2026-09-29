@@ -39,11 +39,18 @@ export default async function ListingDetailPage({
   const listing = getListing(slug);
   if (!listing) notFound();
 
+  // Roles with a purpose-built on-site application flow route to it
+  // directly; anything else falls back to a pre-filled mailto so the
+  // "Apply" button always has somewhere to go without extra scaffolding.
+  const APPLY_ROUTES: Record<string, string> = {
+    "paid-creator-intern": "/careers/paid-creator-intern/apply",
+  };
+  const onSiteApplyUrl = APPLY_ROUTES[listing.slug];
   const subject = encodeURIComponent(`Application: ${listing.title}`);
   const body = encodeURIComponent(
     `Hi KESHAH team,\n\nI'd like to apply for the ${listing.title} role.\n\nName:\nSchool (if applicable):\nLink to short test video:\n\nA quick note about why I'd be a good fit:\n\n\n—`
   );
-  const mailto = `mailto:${APPLY_EMAIL}?subject=${subject}&body=${body}`;
+  const applyHref = onSiteApplyUrl ?? `mailto:${APPLY_EMAIL}?subject=${subject}&body=${body}`;
 
   return (
     <main className={styles.detailPage}>
@@ -136,8 +143,8 @@ export default async function ListingDetailPage({
 
       <div className={styles.applyBar}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-          <a href={mailto} className={styles.applyBtn}>
-            Apply — email {APPLY_EMAIL}
+          <a href={applyHref} className={styles.applyBtn}>
+            {onSiteApplyUrl ? "Apply now" : `Apply — email ${APPLY_EMAIL}`}
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
               <path
                 d="M3 7h8M8 3l4 4-4 4"
@@ -149,7 +156,9 @@ export default async function ListingDetailPage({
             </svg>
           </a>
           <div className={styles.applyNote}>
-            Include a short test video link (Loom, unlisted YouTube, or Drive)
+            {onSiteApplyUrl
+              ? "Takes about 10 minutes. Your test video is your application."
+              : "Include a short test video link (Loom, unlisted YouTube, or Drive)"}
           </div>
         </div>
       </div>
