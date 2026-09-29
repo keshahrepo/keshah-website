@@ -91,6 +91,20 @@ export default async function RoleDetail({
         </div>
         <h1 className={styles.detailTitle}>{listing.title}</h1>
 
+        {/* Top Apply CTA — Apple pattern: primary action right under the
+            meta so a returning visitor who's already decided doesn't
+            have to scroll to the bottom. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 40 }}>
+          <a href={applyHref} className={styles.applyBtn} style={{ maxWidth: 280 }}>
+            {onSite ? "Start application" : `Apply — email ${APPLY_EMAIL}`}
+          </a>
+          {onSite && (
+            <span style={{ fontSize: 13, color: "rgba(255,255,255,0.5)" }}>
+              Takes about 10 minutes
+            </span>
+          )}
+        </div>
+
         <div className={styles.metaBox}>
           <div className={styles.metaCell}>
             <div className={styles.metaLabel}>Start date</div>

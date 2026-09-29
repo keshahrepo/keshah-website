@@ -91,21 +91,24 @@
   .nav { padding: 22px 56px; }
 }
 
-/* ── Hero ──────────────────────────────────────────────────────── */
+/* ── Hero — full-bleed editorial band ──────────────────────────── */
+.heroBand {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 88px 0 96px;
+}
+
+@media (min-width: 768px) { .heroBand { padding: 128px 0 128px; } }
+@media (min-width: 1200px) { .heroBand { padding: 160px 0 160px; } }
+
 .hero {
-  max-width: 960px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 80px 24px 56px;
-  text-align: center;
+  padding: 0 24px;
+  text-align: left;
 }
 
-@media (min-width: 768px) {
-  .hero { padding: 128px 40px 80px; }
-}
-
-@media (min-width: 1200px) {
-  .hero { padding: 160px 56px 96px; }
-}
+@media (min-width: 768px) { .hero { padding: 0 40px; } }
+@media (min-width: 1200px) { .hero { padding: 0 56px; } }
 
 .eyebrow {
   font-family: var(--font-sans);
@@ -114,91 +117,266 @@
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.5);
   font-weight: 600;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 @media (min-width: 768px) {
-  .eyebrow { font-size: 12px; letter-spacing: 2px; margin-bottom: 24px; }
+  .eyebrow { font-size: 12px; letter-spacing: 2px; margin-bottom: 32px; }
 }
 
+/* Editorial hero — big Poppins semibold in the Apple/Anthropic ballpark
+   (56-72px on desktop). Left-aligned so it reads as a document, not a
+   pitch deck. text-wrap: balance keeps line breaks pleasant. */
 .heroTitle {
   font-family: var(--font-sans);
-  font-size: 34px;
+  font-size: 40px;
   font-weight: 600;
   color: #FFFFFF;
-  letter-spacing: -1.4px;
-  line-height: 1.1;
-  margin: 0 0 20px;
+  letter-spacing: -1.6px;
+  line-height: 1.05;
+  margin: 0 0 24px;
+  max-width: 900px;
   text-wrap: balance;
 }
 
 @media (min-width: 768px) {
   .heroTitle {
-    font-size: 56px;
-    letter-spacing: -2.2px;
+    font-size: 64px;
+    letter-spacing: -2.6px;
     line-height: 1.02;
-    margin-bottom: 28px;
+    margin-bottom: 32px;
   }
 }
 
 @media (min-width: 1200px) {
   .heroTitle {
-    font-size: 68px;
-    letter-spacing: -2.6px;
+    font-size: 80px;
+    letter-spacing: -3.2px;
+    line-height: 0.98;
   }
 }
 
 .heroSub {
   font-family: var(--font-sans);
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 400;
   line-height: 1.55;
-  color: rgba(255, 255, 255, 0.65);
+  color: rgba(255, 255, 255, 0.7);
   max-width: 620px;
-  margin: 0 auto;
+  margin: 0 0 32px;
   text-wrap: pretty;
 }
 
 @media (min-width: 768px) {
   .heroSub {
-    font-size: 19px;
-    line-height: 1.5;
-    max-width: 680px;
+    font-size: 20px;
+    line-height: 1.45;
+    max-width: 720px;
+    margin-bottom: 40px;
   }
 }
 
-/* ── Filters bar ───────────────────────────────────────────────── */
-.filtersWrap {
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.015);
-  padding: 20px 0;
+/* Text-with-caret CTA — Apple's editorial pattern. Not a filled button,
+   just a hover-underlined link with a chevron. */
+.heroCta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 500;
+  color: #FFFFFF;
+  text-decoration: none;
+  padding: 0;
+  transition: gap 160ms ease;
 }
+
+.heroCta:hover { gap: 12px; }
+
+.heroCta::after {
+  content: "›";
+  font-weight: 400;
+  font-size: 18px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.6);
+  transition: color 160ms ease;
+}
+
+.heroCta:hover::after { color: #FFFFFF; }
 
 @media (min-width: 768px) {
-  .filtersWrap { padding: 24px 0; }
+  .heroCta { font-size: 17px; }
+  .heroCta::after { font-size: 22px; }
 }
 
-.filters {
+/* ── Roles band (sidebar filters + row listings) ───────────────── */
+.rolesBand {
+  padding: 64px 0 120px;
+}
+
+@media (min-width: 768px) { .rolesBand { padding: 88px 0 160px; } }
+@media (min-width: 1200px) { .rolesBand { padding: 104px 0 200px; } }
+
+.rolesInner {
   max-width: 1200px;
   margin: 0 auto;
   padding: 0 24px;
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 12px;
-  align-items: center;
 }
 
-@media (max-width: 720px) {
-  .filters { grid-template-columns: 1fr; padding: 0 22px; }
+@media (min-width: 768px) { .rolesInner { padding: 0 40px; } }
+@media (min-width: 1200px) { .rolesInner { padding: 0 56px; } }
+
+.rolesLead {
+  margin-bottom: 40px;
+}
+
+@media (min-width: 768px) { .rolesLead { margin-bottom: 56px; } }
+
+.rolesLabel {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.rolesHeadline {
+  font-family: var(--font-sans);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -1px;
+  line-height: 1.15;
+  color: #FFFFFF;
+  margin: 0;
 }
 
 @media (min-width: 768px) {
-  .filters { padding: 0 40px; gap: 16px; }
+  .rolesHeadline { font-size: 36px; letter-spacing: -1.4px; }
+}
+
+/* Grid: sidebar filters on the left (~280px) at desktop, results on the
+   right. Collapses to single column on mobile where filters go inline
+   above the list. */
+.rolesGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 32px;
+}
+
+@media (min-width: 900px) {
+  .rolesGrid {
+    grid-template-columns: 260px 1fr;
+    gap: 56px;
+    align-items: start;
+  }
 }
 
 @media (min-width: 1200px) {
-  .filters { padding: 0 56px; }
+  .rolesGrid { grid-template-columns: 280px 1fr; gap: 72px; }
+}
+
+/* Sidebar (or top row on mobile) */
+.rolesFilters {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+@media (min-width: 900px) {
+  .rolesFilters {
+    position: sticky;
+    top: 96px;
+    gap: 28px;
+  }
+}
+
+.filterGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.filterGroupLabel {
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: 600;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Sidebar input — full-width slim underline-ish look. */
+.searchWrap { position: relative; }
+
+.searchIcon {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  color: rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+}
+
+.search {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 0;
+  padding: 10px 4px 10px 24px;
+  color: #FFFFFF;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 160ms ease;
+}
+.search::placeholder { color: rgba(255, 255, 255, 0.35); }
+.search:focus { border-bottom-color: rgba(255, 255, 255, 0.6); }
+
+/* Group choices — vertical text-only radio-ish list. Selected row has a
+   dim white text (no fill, no dot); non-selected are dim white @ 0.55. */
+.filterChoice {
+  background: none;
+  border: 0;
+  padding: 6px 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  text-align: left;
+  transition: color 120ms ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.filterChoice:hover { color: #FFFFFF; }
+
+.filterChoiceActive { color: #FFFFFF; font-weight: 500; }
+
+.filterChoiceActive::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  flex: 0 0 auto;
+}
+
+.filterChoice:not(.filterChoiceActive)::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  flex: 0 0 auto;
 }
 
 .searchWrap { position: relative; }
@@ -253,46 +431,39 @@
 .select:focus { border-color: rgba(255, 255, 255, 0.4); }
 .select option { background: #000000; color: #FFFFFF; }
 
-/* ── Count line + listing ──────────────────────────────────────── */
+/* Results column — count line + list of rows (Apple pattern) */
+.resultsCol {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.resultsHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  margin-bottom: 4px;
+}
+
 .count {
-  max-width: 1200px;
-  margin: 48px auto 16px;
-  padding: 0 24px;
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 1.6px;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.55);
   font-weight: 600;
 }
 
 @media (min-width: 768px) {
-  .count {
-    padding: 0 40px;
-    margin: 64px auto 20px;
-    font-size: 12px;
-    letter-spacing: 2px;
-  }
-}
-
-@media (min-width: 1200px) {
-  .count { padding: 0 56px; margin-top: 80px; }
+  .count { font-size: 13px; letter-spacing: 2px; }
 }
 
 .list {
-  max-width: 1200px;
-  margin: 0 auto 120px;
-  padding: 0 24px;
   display: flex;
   flex-direction: column;
-}
-
-@media (min-width: 768px) {
-  .list { padding: 0 40px; margin-bottom: 140px; }
-}
-
-@media (min-width: 1200px) {
-  .list { padding: 0 56px; margin-bottom: 180px; }
 }
 
 .row {
@@ -300,28 +471,19 @@
   grid-template-columns: 1fr auto;
   gap: 24px;
   align-items: center;
-  padding: 30px 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 28px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   color: #FFFFFF;
   text-decoration: none;
-  transition: background 160ms ease, padding-left 160ms ease;
+  transition: padding-left 200ms ease;
   cursor: pointer;
 }
 
-.row:last-child { border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
-
-.row:hover {
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.03), transparent 60%);
-  padding-left: 18px;
-}
+.row:hover { padding-left: 12px; }
 
 @media (min-width: 768px) {
-  .row { padding: 40px 12px; gap: 32px; }
-  .row:hover { padding-left: 24px; }
-}
-
-@media (min-width: 1200px) {
-  .row { padding: 48px 12px; }
+  .row { padding: 36px 0; gap: 32px; }
+  .row:hover { padding-left: 16px; }
 }
 
 .rowTitle {
@@ -331,15 +493,11 @@
   letter-spacing: -0.4px;
   color: #FFFFFF;
   margin: 0 0 8px;
-  line-height: 1.25;
+  line-height: 1.2;
 }
 
 @media (min-width: 768px) {
-  .rowTitle { font-size: 26px; letter-spacing: -0.8px; margin-bottom: 10px; }
-}
-
-@media (min-width: 1200px) {
-  .rowTitle { font-size: 30px; letter-spacing: -1px; }
+  .rowTitle { font-size: 24px; letter-spacing: -0.6px; }
 }
 
 .rowSummary {
@@ -348,12 +506,12 @@
   font-weight: 400;
   color: rgba(255, 255, 255, 0.65);
   line-height: 1.5;
-  margin: 0 0 12px;
-  max-width: 700px;
+  margin: 0 0 10px;
+  max-width: 640px;
 }
 
 @media (min-width: 768px) {
-  .rowSummary { font-size: 16px; margin-bottom: 14px; line-height: 1.55; }
+  .rowSummary { font-size: 15px; margin-bottom: 12px; }
 }
 
 .rowMeta {

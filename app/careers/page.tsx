@@ -1,9 +1,9 @@
 "use client";
 
-// /careers — proper careers-page structure (top nav, hero, filters,
-// listing rows with count) rendered in KESHAH tokens (Poppins, kBlack,
-// no serif, no gold). This is a marketing surface, so it uses a wide
-// layout — the apply quiz below it is the narrow mobile-app shell.
+// /careers — real desktop-native careers page: full-bleed hero band,
+// left-sidebar-filtered role listing (Apple pattern), pure typography
+// throughout. KESHAH tokens (Poppins, kBlack, no serif, no gold, no
+// imagery). Mobile collapses the sidebar filters inline above the list.
 
 import Link from "next/link";
 import Image from "next/image";
@@ -52,94 +52,130 @@ export default function CareersLanding() {
         </nav>
       </div>
 
-      <section className={styles.hero}>
-        <div className={styles.eyebrow}>Careers at KESHAH</div>
-        <h1 className={styles.heroTitle}>
-          Build the drug-free future of hair loss.
-        </h1>
-        <p className={styles.heroSub}>
-          KESHAH is a small team helping hundreds of thousands of people
-          stop hair loss without pills, surgery, or empty promises. If you
-          want your work to reach real people fast, this is the place.
-        </p>
+      {/* ── Hero band ──────────────────────────────────────────── */}
+      <section className={styles.heroBand}>
+        <div className={styles.hero}>
+          <div className={styles.eyebrow}>Careers at KESHAH</div>
+          <h1 className={styles.heroTitle}>
+            Build the drug-free future of hair loss.
+          </h1>
+          <p className={styles.heroSub}>
+            KESHAH is a small team helping hundreds of thousands of people
+            stop hair loss without pills, surgery, or empty promises. If you
+            want your work to reach real people fast, this is the place.
+          </p>
+          <a href="#roles" className={styles.heroCta}>
+            See open roles
+          </a>
+        </div>
       </section>
 
-      <div className={styles.filtersWrap}>
-      <div className={styles.filters}>
-        <div className={styles.searchWrap}>
-          <svg className={styles.searchIcon} viewBox="0 0 20 20" fill="none" aria-hidden="true">
-            <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="1.6" />
-            <path d="M14 14l3.5 3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-          </svg>
-          <input
-            type="search"
-            className={styles.search}
-            placeholder="Search roles"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            aria-label="Search roles"
-          />
-        </div>
-        <select
-          className={styles.select}
-          value={team}
-          onChange={(e) => setTeam(e.target.value)}
-          aria-label="Team"
-        >
-          {teams.map((t) => <option key={t}>{t}</option>)}
-        </select>
-        <select
-          className={styles.select}
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
-          aria-label="Location"
-        >
-          {locations.map((l) => <option key={l}>{l}</option>)}
-        </select>
-      </div>
-      </div>
+      {/* ── Roles band ─────────────────────────────────────────── */}
+      <section className={styles.rolesBand} id="roles">
+        <div className={styles.rolesInner}>
+          <div className={styles.rolesLead}>
+            <div className={styles.rolesLabel}>Open roles</div>
+            <h2 className={styles.rolesHeadline}>Join us.</h2>
+          </div>
 
-      {filtered.length > 0 ? (
-        <>
-          <div className={styles.count}>
-            {filtered.length} open role{filtered.length === 1 ? "" : "s"}
-          </div>
-          <div className={styles.list}>
-            {filtered.map((l) => (
-              <Link key={l.slug} href={`/careers/${l.slug}`} className={styles.row}>
-                <div>
-                  <h2 className={styles.rowTitle}>{l.title}</h2>
-                  <p className={styles.rowSummary}>{l.summary}</p>
-                  <div className={styles.rowMeta}>
-                    <span>{l.location}</span>
-                    <span>{l.employment}</span>
-                    <span>{l.team}</span>
-                  </div>
-                </div>
-                <div className={styles.rowArrow} aria-hidden="true">
-                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                    <path
-                      d="M6 3l6 6-6 6"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
+          <div className={styles.rolesGrid}>
+            {/* Left sidebar filters (top row on mobile) */}
+            <aside className={styles.rolesFilters}>
+              <div className={styles.filterGroup}>
+                <div className={styles.filterGroupLabel}>Search</div>
+                <div className={styles.searchWrap}>
+                  <svg className={styles.searchIcon} viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                    <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="1.6" />
+                    <path d="M14 14l3.5 3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
                   </svg>
+                  <input
+                    type="search"
+                    className={styles.search}
+                    placeholder="Role, team, keyword"
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    aria-label="Search roles"
+                  />
                 </div>
-              </Link>
-            ))}
+              </div>
+
+              <div className={styles.filterGroup}>
+                <div className={styles.filterGroupLabel}>Team</div>
+                {teams.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    className={`${styles.filterChoice} ${team === t ? styles.filterChoiceActive : ""}`}
+                    onClick={() => setTeam(t)}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+
+              <div className={styles.filterGroup}>
+                <div className={styles.filterGroupLabel}>Location</div>
+                {locations.map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    className={`${styles.filterChoice} ${location === l ? styles.filterChoiceActive : ""}`}
+                    onClick={() => setLocation(l)}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </aside>
+
+            {/* Right results column */}
+            <div className={styles.resultsCol}>
+              <div className={styles.resultsHead}>
+                <div className={styles.count}>
+                  {filtered.length} open role{filtered.length === 1 ? "" : "s"}
+                </div>
+              </div>
+
+              {filtered.length > 0 ? (
+                <div className={styles.list}>
+                  {filtered.map((l) => (
+                    <Link key={l.slug} href={`/careers/${l.slug}`} className={styles.row}>
+                      <div>
+                        <h3 className={styles.rowTitle}>{l.title}</h3>
+                        <p className={styles.rowSummary}>{l.summary}</p>
+                        <div className={styles.rowMeta}>
+                          <span>{l.location}</span>
+                          <span>{l.employment}</span>
+                          <span>{l.team}</span>
+                        </div>
+                      </div>
+                      <div className={styles.rowArrow} aria-hidden="true">
+                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                          <path
+                            d="M6 3l6 6-6 6"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className={styles.empty}>
+                  <h2>No matching roles.</h2>
+                  <p>
+                    Try clearing your filters. Still interested?{" "}
+                    <a href="mailto:contact@keshah.com">contact@keshah.com</a>
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
-        </>
-      ) : (
-        <div className={styles.empty}>
-          <h2>No matching roles.</h2>
-          <p>
-            Try clearing your filters. Still interested?{" "}
-            <a href="mailto:contact@keshah.com">contact@keshah.com</a>
-          </p>
         </div>
-      )}
+      </section>
 
       <footer className={styles.foot}>© KESHAH</footer>
     </main>
