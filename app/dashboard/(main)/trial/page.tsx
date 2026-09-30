@@ -85,6 +85,11 @@ interface TrialUser {
   checkIn6: Answer | null;
   converted: boolean;
   cancelled: boolean;
+  // Lifetime revenue on the user doc, accumulated by the RevenueCat webhook
+  // from the store's own price / tax / commission figures. Only accrues from
+  // 30 Sep 2026, when capture was added, so earlier cohorts read 0.
+  revenueUsd: number;
+  proceedsUsd: number;
 }
 
 function tsToMs(raw: unknown): number | null {
@@ -104,6 +109,8 @@ interface CohortMetrics {
   checkIn3: CheckInCounts;
   checkIn6: CheckInCounts;
   outcomes: { converted: number; cancelled: number; stillInTrial: number };
+  revenueUsd: number;
+  proceedsUsd: number;
   funnel: Array<{ key: string; label: string; count: number }>;
   day1Distribution: number[];
   day1NeverOpened: number;
@@ -118,6 +125,8 @@ function computeMetrics(users: TrialUser[], allSignupsInCohort: number, now: num
   const converted = users.filter((u) => u.converted).length;
   const cancelled = users.filter((u) => u.cancelled).length;
   const stillInTrial = Math.max(0, total - converted - cancelled);
+  const revenueUsd = users.reduce((a, u) => a + u.revenueUsd, 0);
+  const proceedsUsd = users.reduce((a, u) => a + u.proceedsUsd, 0);
 
   const funnel = [
     { key: "funnel_started",    label: "Trial started",           count: total },
@@ -168,6 +177,8 @@ function computeMetrics(users: TrialUser[], allSignupsInCohort: number, now: num
     checkIn3,
     checkIn6,
     outcomes: { converted, cancelled, stillInTrial },
+    revenueUsd,
+    proceedsUsd,
     funnel,
     day1Distribution,
     day1NeverOpened,
@@ -224,6 +235,7 @@ export default async function TrialPage({
     .where("created_at", "<=", Timestamp.fromDate(latestTo))
     .select(
       "started_trial", "converted_trial", "subscription_status", "progress",
+      "revenue_usd_total", "proceeds_usd_total",
       "scalp_check_answers", "selected_gender", "email", "created_at",
       // Install-source filter — backfilled from RC by
       // /api/rc/backfill-attribution. Slices paid-ad vs organic cohorts.
@@ -375,6 +387,8 @@ export default async function TrialPage({
       checkIn6: parseAns(answers["6"]),
       converted: !!d.converted_trial,
       cancelled: d.subscription_status === "cancelled",
+      revenueUsd: typeof d.revenue_usd_total === "number" ? d.revenue_usd_total : 0,
+      proceedsUsd: typeof d.proceeds_usd_total === "number" ? d.proceeds_usd_total : 0,
     };
 
     if (inNew) newUsers.push(user);
@@ -458,6 +472,8 @@ export default async function TrialPage({
         base={baseM}
         tracks={tracks}
       />
+
+      <RevenueStrip m={newM} />
 
       <PaidQualityCard users={newUsers} />
 
@@ -610,6 +626,57 @@ function DeltaChip({ metricKey, newPct, basePct }: { metricKey: string; newPct: 
 
 function trackedBorder(metricKey: string, tracks: Set<string>): string {
   return tracks.has(metricKey) ? "3px solid #DAA520" : "3px solid transparent";
+}
+
+// ── Revenue strip ───────────────────────────────────────────────────
+//
+// Money for the current slice. Proceeds are after store commission and
+// tax, using the store's own figures as reported by RevenueCat.
+//
+// Capture started 2026-09-30, so any cohort before that reads $0 —
+// nothing existed to record it. Backfilling would need a RevenueCat API
+// v2 key; the RC_API_SECRET_KEY in env is a legacy v1 key that v2
+// rejects. The strip hides itself when there's nothing to show, so it
+// stays invisible on historical cohorts rather than claiming zero
+// revenue.
+
+function RevenueStrip({ m }: { m: CohortMetrics }) {
+  if (m.revenueUsd <= 0 && m.proceedsUsd <= 0) return null;
+
+  const money = (v: number) =>
+    `$${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  const perPaid = m.outcomes.converted > 0 ? m.proceedsUsd / m.outcomes.converted : null;
+
+  const items = [
+    { label: "Revenue", value: money(m.revenueUsd), sub: "gross, before store cut" },
+    { label: "Proceeds", value: money(m.proceedsUsd), sub: "after commission + tax" },
+    {
+      label: "Proceeds per paid user",
+      value: perPaid === null ? "—" : money(perPaid),
+      sub: `${m.outcomes.converted} converted`,
+    },
+  ];
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginBottom: 20 }}>
+      {items.map((it) => (
+        <div key={it.label} style={{
+          background: "rgba(255,255,255,0.04)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: 12,
+          padding: "14px 16px",
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: "rgba(255,255,255,0.45)" }}>
+            {it.label}
+          </div>
+          <div style={{ fontSize: 24, fontWeight: 600, color: "#fff", fontVariantNumeric: "tabular-nums", lineHeight: 1.25 }}>
+            {it.value}
+          </div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{it.sub}</div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 // ── Outcomes strip ──────────────────────────────────────────────────
