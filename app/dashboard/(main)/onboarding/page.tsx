@@ -92,6 +92,21 @@ const QUESTIONS: Question[] = [
     ],
   },
   {
+    // Who, if anyone, drove this lead here via a 1:1 outreach link.
+    // Populated by the app when the lead taps keshah.com/app/paywall?s=<sender>
+    // — see PaywallEntryScreen in the mobile repo. Distinct from
+    // referral_source (self-reported) and install_source (Appstack, which
+    // answers where the INSTALL came from, not who closed them).
+    //
+    // Adding it here is all that's needed: quizFields is derived from
+    // QUESTIONS, so the field joins the Firestore .select() whitelist too.
+    key: "outreach_sender",
+    field: "outreach_first_click_sender",
+    label: "Outreach link tapped (sender)",
+    section: "Basics",
+    options: [{ value: "ani", label: "Ani" }],
+  },
+  {
     key: "referral_source",
     field: "referral_source",
     label: "How did you hear about us?",

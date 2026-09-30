@@ -53,6 +53,15 @@ export async function POST(req: NextRequest) {
       role = "admin";
     } else if (password === process.env.MARKETING_PASSWORD) {
       role = "marketing";
+    } else if (
+      process.env.OUTREACH_PASSWORD &&
+      password === process.env.OUTREACH_PASSWORD
+    ) {
+      // Env-password role, same shape as marketing above. One person does
+      // this today, so a Firestore-backed user collection would be more
+      // moving parts than it earns. Guarded on the var being set so an
+      // unset env can't be matched by an empty password.
+      role = "outreach";
     }
   }
 

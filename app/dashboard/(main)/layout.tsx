@@ -56,6 +56,17 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/dashboard/scalp-check-ins", label: "Scalp check-ins", icon: "activity", roles: ["admin"] },
     ],
   },
+  {
+    // 1:1 lead messaging. Visible to admin and to the outreach role, which
+    // middleware confines to /dashboard/outreach* — so this section is the
+    // whole dashboard as far as that role is concerned.
+    title: "Outreach",
+    roles: ["admin", "outreach"],
+    items: [
+      { href: "/dashboard/outreach", label: "Leads to text", icon: "chat", roles: ["admin", "outreach"] },
+      { href: "/dashboard/outreach/results", label: "Results", icon: "funnel2", roles: ["admin", "outreach"] },
+    ],
+  },
 ];
 
 function NavIcon({ icon, active }: { icon: string; active: boolean }) {

@@ -4,7 +4,9 @@ import { cookies } from "next/headers";
 const COOKIE_NAME = "keshah_dash";
 const secret = new TextEncoder().encode(process.env.JWT_SECRET || "dev-secret-change-me");
 
-export type Role = "admin" | "marketing" | "manager" | "creator";
+// "outreach" is the 1:1 lead-messaging role (Ani). Scoped by middleware
+// to /dashboard/outreach* — the lead list plus the conversion results.
+export type Role = "admin" | "marketing" | "manager" | "creator" | "outreach";
 
 export interface TokenPayload {
   role: Role;

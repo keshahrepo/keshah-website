@@ -51,6 +51,12 @@ export async function middleware(req: NextRequest) {
         return NextResponse.redirect(new URL("/dashboard/marketing", req.url));
       }
 
+      // Outreach role (1:1 lead messaging) sees only its own section: the
+      // lead list to text from, and the conversion results for those texts.
+      if (role === "outreach" && !pathname.startsWith("/dashboard/outreach")) {
+        return NextResponse.redirect(new URL("/dashboard/outreach", req.url));
+      }
+
       // Manager role can only access /dashboard/today, /dashboard/recruit, /dashboard/manage, and /dashboard/resources
       if (role === "manager" && !pathname.startsWith("/dashboard/today") && !pathname.startsWith("/dashboard/manage") && !pathname.startsWith("/dashboard/recruit") && !pathname.startsWith("/dashboard/resources")) {
         return NextResponse.redirect(new URL("/dashboard/today", req.url));
