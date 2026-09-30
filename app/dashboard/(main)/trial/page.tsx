@@ -18,6 +18,13 @@ import {
 } from "../_lib/installSource";
 import { CountryTabs } from "../_lib/CountryTabs";
 import { CampaignTabs } from "../_lib/CampaignTabs";
+import { OutreachSenderTabs } from "../_lib/OutreachSenderTabs";
+import {
+  matchesOutreachSender,
+  parseOutreachSenderFilter,
+  senderBucket,
+  type OutreachSenderFilter,
+} from "../_lib/outreachSender";
 import {
   matchesCampaign,
   normalizeCampaignName,
@@ -176,7 +183,7 @@ function computeMetrics(users: TrialUser[], allSignupsInCohort: number, now: num
 export default async function TrialPage({
   searchParams,
 }: {
-  searchParams: Promise<{ g?: string; s?: string; c?: string; camp?: string; baseline?: string; new?: string; compare?: string }>;
+  searchParams: Promise<{ g?: string; s?: string; c?: string; camp?: string; sender?: string; baseline?: string; new?: string; compare?: string }>;
 }) {
   const { db } = getFirebaseAdmin();
   const params = await searchParams;
@@ -188,6 +195,7 @@ export default async function TrialPage({
     sourceRaw === "paid" || sourceRaw === "organic" ? sourceRaw : "all";
   const country: CountryFilter = parseCountryFilter(params.c);
   const campaign: CampaignFilter = parseCampaignFilter(params.camp);
+  const sender: OutreachSenderFilter = parseOutreachSenderFilter(params.sender);
 
   const compareMode = params.compare === "1";
 
@@ -227,6 +235,9 @@ export default async function TrialPage({
       // Appstack campaign (influencer filter) — populated by the RC
       // backfill from $campaign / appstack_campaign subscriber attrs.
       "attribution_campaign",
+      // Who closed this lead via a 1:1 outreach message. Distinct from
+      // attribution_campaign, which is who drove the install.
+      "outreach_first_click_sender",
       // p9 alarm walkthrough acceptance — recorded on completion or
       // skip-confirm. Split rendered as a small card below the funnel.
       "alarm_walkthrough_outcome",
@@ -256,6 +267,7 @@ export default async function TrialPage({
   // source + country filters. Blanks (users with no attribution_campaign)
   // are dropped from named buckets but still tallied in "all".
   const campaignCounts = new Map<string, number>();
+  const senderCounts = new Map<string, number>();
 
   for (const doc of snap.docs) {
     const d = doc.data();
@@ -309,6 +321,15 @@ export default async function TrialPage({
       if (normCamp) campaignCounts.set(normCamp, (campaignCounts.get(normCamp) ?? 0) + 1);
     }
     if (!matchesCampaign(campaign, d)) continue;
+
+    // Tally senders post-campaign so the pills reflect the current slice,
+    // then apply the sender filter itself — same order as campaign above.
+    if (inNew) {
+      const bucket = senderBucket(d);
+      senderCounts.set("all", (senderCounts.get("all") ?? 0) + 1);
+      if (bucket) senderCounts.set(bucket, (senderCounts.get(bucket) ?? 0) + 1);
+    }
+    if (!matchesOutreachSender(sender, d)) continue;
 
     if (inNew) newSignups++;
     if (inBaseline) baselineSignups++;
@@ -409,6 +430,17 @@ export default async function TrialPage({
       <CountryTabs selected={country} totals={countryCounts} />
 
       <InstallSourceTabs selected={source} totals={sourceCounts} />
+
+      <OutreachSenderTabs
+        selected={sender}
+        totals={(() => {
+          const all = senderCounts.get("all") ?? 0;
+          const named = [...senderCounts.entries()]
+            .filter(([k]) => k !== "all")
+            .sort((a, b) => b[1] - a[1]);
+          return [["all", all], ...named] as Array<[string, number]>;
+        })()}
+      />
 
       <CampaignTabs
         selected={campaign}
