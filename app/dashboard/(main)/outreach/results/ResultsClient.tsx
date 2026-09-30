@@ -10,7 +10,6 @@ import { useEffect, useState } from "react";
 
 type SenderStats = {
   sender: string;
-  sent: number;
   clicked: number;
   trials: number;
   paid: number;
@@ -19,7 +18,6 @@ type SenderStats = {
   trialsOutsideWindow: number;
   revenueUsd: number;
   proceedsUsd: number;
-  clickRatePct: number | null;
   trialRatePct: number | null;
   paidRatePct: number | null;
 };
@@ -39,13 +37,11 @@ type ApiResponse = {
   days: number;
   attribution_window_days: number;
   totals: {
-    sent: number;
     clicked: number;
     trials: number;
     paid: number;
     cancelled: number;
     still_in_trial: number;
-    click_rate_pct: number | null;
     trial_rate_pct: number | null;
     paid_rate_pct: number | null;
     revenue_usd: number;
@@ -217,7 +213,7 @@ function StatCard({
 
 /** Headline bar — colour tracks the number, like the Trial page health bar. */
 function HeadlineBar({ t }: { t: ApiResponse["totals"] }) {
-  if (t.sent === 0 && t.clicked === 0) {
+  if (t.clicked === 0) {
     return (
       <div
         style={{
@@ -230,8 +226,8 @@ function HeadlineBar({ t }: { t: ApiResponse["totals"] }) {
           color: "rgba(255,255,255,0.5)",
         }}
       >
-        No outreach activity in this range yet. Send a link from the lead list to start
-        recording taps.
+        No link taps in this range yet. Taps appear here as soon as a lead opens your
+        link.
       </div>
     );
   }
@@ -379,17 +375,10 @@ export default function ResultsClient() {
             }}
           >
             <StatCard
-              label="Texted"
-              color={DIM2}
-              value={data.totals.sent.toLocaleString()}
-              sub="marked sent"
-            />
-            <StatCard
-              label="Tapped"
+              label="Tapped the link"
               color={GOLD}
               value={data.totals.clicked.toLocaleString()}
-              suffix={pct(data.totals.click_rate_pct)}
-              sub="of texted"
+              sub="leads who opened it"
             />
             <StatCard
               label="Trials"
@@ -419,9 +408,7 @@ export default function ResultsClient() {
               <thead>
                 <tr>
                   <th style={th}>Sender</th>
-                  <th style={th}>Texted</th>
                   <th style={th}>Tapped</th>
-                  <th style={th}>Tap rate</th>
                   <th style={th}>Trials</th>
                   <th style={th}>Trial rate</th>
                   <th style={th}>Paid</th>
@@ -434,7 +421,7 @@ export default function ResultsClient() {
               <tbody>
                 {data.senders.length === 0 && (
                   <tr>
-                    <td style={{ ...td, color: DIM }} colSpan={11}>
+                    <td style={{ ...td, color: DIM }} colSpan={9}>
                       Nothing in this range yet.
                     </td>
                   </tr>
@@ -442,9 +429,7 @@ export default function ResultsClient() {
                 {data.senders.map((s) => (
                   <tr key={s.sender}>
                     <td style={{ ...td, color: "#fff", fontWeight: 500 }}>{s.sender}</td>
-                    <td style={tdNum}>{s.sent}</td>
                     <td style={tdNum}>{s.clicked}</td>
-                    <td style={{ ...tdNum, color: DIM2 }}>{pct(s.clickRatePct)}</td>
                     <td style={tdNum}>{s.trials}</td>
                     <td style={{ ...tdNum, color: DIM2 }}>{pct(s.trialRatePct)}</td>
                     <td style={{ ...tdNum, color: "#8fdc9f", fontWeight: 600 }}>{s.paid}</td>
