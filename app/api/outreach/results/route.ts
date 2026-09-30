@@ -46,6 +46,11 @@ type SenderStats = {
   cancelled: number;
   stillInTrial: number;
   trialsOutsideWindow: number;
+  // Lifetime revenue of the leads this sender is credited with. Accumulated
+  // by the RevenueCat webhook from the store's own price / tax / commission
+  // figures — see recordRevenue in api/revenuecat/webhook.
+  revenueUsd: number;
+  proceedsUsd: number;
   clickRatePct: number | null;
   trialRatePct: number | null;
   paidRatePct: number | null;
@@ -126,6 +131,8 @@ export async function GET(req: Request) {
   let paidTotal = 0;
   let cancelledTotal = 0;
   let stillInTrialTotal = 0;
+  let revenueTotal = 0;
+  let proceedsTotal = 0;
 
   const stats = (sender: string): SenderStats => {
     let s = bySender.get(sender);
@@ -139,6 +146,8 @@ export async function GET(req: Request) {
         cancelled: 0,
         stillInTrial: 0,
         trialsOutsideWindow: 0,
+        revenueUsd: 0,
+        proceedsUsd: 0,
         clickRatePct: null,
         trialRatePct: null,
         paidRatePct: null,
@@ -192,6 +201,15 @@ export async function GET(req: Request) {
     if (withinWindow) {
       s.trials++;
       trialsTotal++;
+      // Revenue is only counted for trials inside the window, so it lines up
+      // exactly with the conversions being credited.
+      const rev = typeof d.revenue_usd_total === "number" ? d.revenue_usd_total : 0;
+      const proc = typeof d.proceeds_usd_total === "number" ? d.proceeds_usd_total : 0;
+      s.revenueUsd += rev;
+      s.proceedsUsd += proc;
+      revenueTotal += rev;
+      proceedsTotal += proc;
+
       if (outcome === "paid") {
         s.paid++;
         paidTotal++;
@@ -224,6 +242,8 @@ export async function GET(req: Request) {
     trialRatePct: s.clicked > 0 ? Math.round((s.trials / s.clicked) * 1000) / 10 : null,
     // Of the trials this sender is credited with, how many actually billed.
     paidRatePct: s.trials > 0 ? Math.round((s.paid / s.trials) * 1000) / 10 : null,
+    revenueUsd: Math.round(s.revenueUsd * 100) / 100,
+    proceedsUsd: Math.round(s.proceedsUsd * 100) / 100,
   }));
   senders.sort((a, b) => b.paid - a.paid || b.trials - a.trials || b.clicked - a.clicked);
 
@@ -244,6 +264,8 @@ export async function GET(req: Request) {
         clickedTotal > 0 ? Math.round((trialsTotal / clickedTotal) * 1000) / 10 : null,
       paid_rate_pct:
         trialsTotal > 0 ? Math.round((paidTotal / trialsTotal) * 1000) / 10 : null,
+      revenue_usd: Math.round(revenueTotal * 100) / 100,
+      proceeds_usd: Math.round(proceedsTotal * 100) / 100,
     },
     senders,
     conversions: conversions.slice(0, 100),

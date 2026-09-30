@@ -11,6 +11,8 @@ type SenderStats = {
   cancelled: number;
   stillInTrial: number;
   trialsOutsideWindow: number;
+  revenueUsd: number;
+  proceedsUsd: number;
   clickRatePct: number | null;
   trialRatePct: number | null;
   paidRatePct: number | null;
@@ -40,6 +42,8 @@ type ApiResponse = {
     click_rate_pct: number | null;
     trial_rate_pct: number | null;
     paid_rate_pct: number | null;
+    revenue_usd: number;
+    proceeds_usd: number;
   };
   senders: SenderStats[];
   conversions: Conversion[];
@@ -54,6 +58,8 @@ const RANGE_OPTIONS = [
 ];
 
 const pct = (v: number | null) => (v === null ? "—" : `${v}%`);
+const usd = (v: number) =>
+  v === 0 ? "—" : `$${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
 function hoursLabel(h: number): string {
   if (h < 1) return `${Math.round(h * 60)}m`;
@@ -159,6 +165,11 @@ export default function ResultsClient() {
                 sub: pct(data.totals.trial_rate_pct) + " of tappers",
               },
               {
+                label: "Proceeds",
+                value: usd(data.totals.proceeds_usd),
+                sub: `${usd(data.totals.revenue_usd)} gross`,
+              },
+              {
                 label: "Paid",
                 value: data.totals.paid,
                 sub: `${pct(data.totals.paid_rate_pct)} of trials · ${data.totals.still_in_trial} still in trial`,
@@ -215,13 +226,15 @@ export default function ResultsClient() {
                   <th style={head}>Paid</th>
                   <th style={head}>Paid rate</th>
                   <th style={head}>In trial</th>
+                  <th style={head}>Revenue</th>
+                  <th style={head}>Proceeds</th>
                   <th style={head}>Late</th>
                 </tr>
               </thead>
               <tbody>
                 {data.senders.length === 0 && (
                   <tr>
-                    <td style={cell} colSpan={10}>
+                    <td style={cell} colSpan={12}>
                       Nothing in this range yet.
                     </td>
                   </tr>
@@ -238,6 +251,10 @@ export default function ResultsClient() {
                     <td style={num}>{pct(s.paidRatePct)}</td>
                     <td style={{ ...num, color: "rgba(255,255,255,0.55)" }}>
                       {s.stillInTrial || "—"}
+                    </td>
+                    <td style={num}>{usd(s.revenueUsd)}</td>
+                    <td style={{ ...num, color: "#8fdc9f", fontWeight: 600 }}>
+                      {usd(s.proceedsUsd)}
                     </td>
                     <td
                       style={{ ...num, color: "rgba(255,255,255,0.4)" }}
@@ -335,7 +352,10 @@ export default function ResultsClient() {
             within {data.attribution_window_days} days of that tap. Taps are recorded on the
             lead&apos;s record, so tapping Monday and subscribing Thursday still counts.
             &ldquo;Paid&rdquo; means the trial actually billed (converted_trial from the
-            RevenueCat webhook), not just that they got past the paywall. Generated{" "}
+            RevenueCat webhook), not just that they got past the paywall. Proceeds are after
+            store commission and tax, using the store&apos;s own figures from that webhook — and
+            they only start accruing from 30 Sep 2026, when revenue capture was added, so
+            anything before that reads as $0. Generated{" "}
             {new Date(data.generated_at).toLocaleString()}.
           </p>
         </>

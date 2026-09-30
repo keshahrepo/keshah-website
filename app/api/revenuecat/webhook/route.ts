@@ -27,6 +27,7 @@
 import { NextResponse } from "next/server";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { extractAttrs, attributionPatch } from "@/lib/rc-attribution";
 
 // Events that should mark the user as paid and ensure the FreeV2 fields
 // are written. Critically TRANSFER must be here — when a paid-anonymous
@@ -60,6 +61,20 @@ interface RcWebhookEvent {
     environment?: "SANDBOX" | "PRODUCTION";
     store?: string;
     transaction_id?: string;
+    // Money. All documented as "sometimes" present and nullable, so every
+    // read below is defensive.
+    //   price                        USD price of the transaction
+    //   price_in_purchased_currency  price in the currency actually charged
+    //   currency                     ISO 4217
+    //   tax_percentage               estimated tax deducted
+    //   commission_percentage        estimated store commission
+    // proceeds = price x (1 - tax_percentage - commission_percentage).
+    // takehome_percentage is deprecated in favour of those two.
+    price?: number | null;
+    price_in_purchased_currency?: number | null;
+    currency?: string | null;
+    tax_percentage?: number | null;
+    commission_percentage?: number | null;
   };
 }
 
@@ -291,6 +306,85 @@ export async function POST(req: Request) {
 // in the normal happy path (alias resolved firebaseUid) AND after the
 // auto-recovery alias above. Idempotent — only writes fields that are
 // missing or wrong.
+/**
+ * Record the money on a billing event, and keep lifetime totals on the user.
+ *
+ * Revenue never reached Firestore before this: the webhook tracked WHETHER
+ * someone paid, never how much. So outreach / campaign / creator reporting
+ * could count conversions but not what they were worth, and a sender who
+ * converts three-month plans looked identical to one converting monthlies.
+ *
+ * Idempotent by construction. Each event gets its own doc under
+ * Users/{uid}/RevenueEvents/{event.id}, and the lifetime counters only move
+ * when that doc didn't already exist — so a webhook re-delivery (which
+ * RevenueCat does on non-2xx) can't double-count. The subcollection doubles
+ * as the audit trail for any figure shown in the dashboard.
+ *
+ * Only forward-looking: nothing here can reconstruct past transactions.
+ * RevenueCat's REST API or a data export would be needed for that.
+ */
+async function recordRevenue(
+  docRef: FirebaseFirestore.DocumentReference,
+  evt: RcWebhookEvent["event"]
+): Promise<void> {
+  const usd = typeof evt.price === "number" ? evt.price : null;
+  // Trial starts and $0 grace events arrive with price 0 or null. Nothing to
+  // record, and writing them would bloat the subcollection.
+  if (usd === null || usd <= 0) return;
+  if (!evt.id) return;
+
+  const tax = typeof evt.tax_percentage === "number" ? evt.tax_percentage : 0;
+  const commission =
+    typeof evt.commission_percentage === "number" ? evt.commission_percentage : 0;
+  // Clamp: these are estimates from the store and a malformed pair shouldn't
+  // be able to produce proceeds above revenue or below zero.
+  const takehome = Math.min(1, Math.max(0, 1 - tax - commission));
+  const proceedsUsd = Math.round(usd * takehome * 100) / 100;
+
+  const eventRef = docRef.collection("RevenueEvents").doc(evt.id);
+
+  try {
+    const { db } = getFirebaseAdmin();
+    await db.runTransaction(async (tx) => {
+      const existingEvent = await tx.get(eventRef);
+      if (existingEvent.exists) return; // already counted
+
+      tx.set(eventRef, {
+        event_type: evt.type,
+        product_id: evt.product_id ?? null,
+        store: evt.store ?? null,
+        environment: evt.environment ?? null,
+        transaction_id: evt.transaction_id ?? null,
+        revenue_usd: usd,
+        proceeds_usd: proceedsUsd,
+        price_in_purchased_currency: evt.price_in_purchased_currency ?? null,
+        currency: evt.currency ?? null,
+        tax_percentage: tax,
+        commission_percentage: commission,
+        purchased_at_ms: evt.purchased_at_ms ?? null,
+        recorded_at: FieldValue.serverTimestamp(),
+      });
+
+      tx.set(
+        docRef,
+        {
+          revenue_usd_total: FieldValue.increment(usd),
+          proceeds_usd_total: FieldValue.increment(proceedsUsd),
+          last_revenue_at: FieldValue.serverTimestamp(),
+          last_revenue_usd: usd,
+          last_revenue_product_id: evt.product_id ?? null,
+        },
+        { merge: true }
+      );
+    });
+  } catch (e) {
+    // Never fail the webhook over reporting. RevenueCat retries non-2xx
+    // responses, and a retry would re-run the paid-status reconciliation
+    // that actually matters.
+    console.error("[rc/webhook] recordRevenue failed", e);
+  }
+}
+
 async function reconcileFirestoreDoc(
   firebaseUid: string,
   email: string | undefined,
@@ -436,7 +530,21 @@ async function reconcileFirestoreDoc(
     received_at: FieldValue.serverTimestamp(),
   };
 
+  // Attribution write — pulled straight from evt.subscriber_attributes,
+  // which RC populates from Appstack's $mediaSource / $campaign / etc.
+  // Real-time replacement for the nightly backfill: install_source (paid
+  // vs organic) + attribution_campaign (influencer filter) land within
+  // seconds of the trial-start event. Nulls stripped so a later empty
+  // subscriber_attributes bag doesn't clear existing values.
+  const attrs = extractAttrs(evt.subscriber_attributes);
+  const attrPatch = attributionPatch(attrs);
+  for (const [k, v] of Object.entries(attrPatch)) updates[k] = v;
+
   await docRef.set(updates, { merge: true });
+
+  // After the status write, so a revenue hiccup can't block paid-status
+  // reconciliation — that's the part users feel.
+  await recordRevenue(docRef, evt);
 
   // eslint-disable-next-line no-console
   console.log(
