@@ -311,7 +311,10 @@ async function reconcileFirestoreDoc(
   }
 
   if (existing.user_type !== "freev2") updates.user_type = "freev2";
-  if (existing.treatment_stage !== "FREE_STOPPAGE") {
+  // Seed the stage only for brand-new users. Overwriting on every paid
+  // event (RENEWAL etc.) knocked REGROWTH kit users back to stoppage each
+  // month, which then routed them into maintenance mid-kit.
+  if (!existing.treatment_stage) {
     updates.treatment_stage = "FREE_STOPPAGE";
   }
   if (existing.eligible_for_special_regrowth_features !== true) {
