@@ -7,9 +7,13 @@ type SenderStats = {
   sent: number;
   clicked: number;
   trials: number;
+  paid: number;
+  cancelled: number;
+  stillInTrial: number;
   trialsOutsideWindow: number;
   clickRatePct: number | null;
   trialRatePct: number | null;
+  paidRatePct: number | null;
 };
 
 type Conversion = {
@@ -20,6 +24,7 @@ type Conversion = {
   trialAt: string;
   hoursToTrial: number;
   withinWindow: boolean;
+  outcome: "paid" | "cancelled" | "in_trial";
 };
 
 type ApiResponse = {
@@ -29,8 +34,12 @@ type ApiResponse = {
     sent: number;
     clicked: number;
     trials: number;
+    paid: number;
+    cancelled: number;
+    still_in_trial: number;
     click_rate_pct: number | null;
     trial_rate_pct: number | null;
+    paid_rate_pct: number | null;
   };
   senders: SenderStats[];
   conversions: Conversion[];
@@ -149,6 +158,11 @@ export default function ResultsClient() {
                 value: data.totals.trials,
                 sub: pct(data.totals.trial_rate_pct) + " of tappers",
               },
+              {
+                label: "Paid",
+                value: data.totals.paid,
+                sub: `${pct(data.totals.paid_rate_pct)} of trials · ${data.totals.still_in_trial} still in trial`,
+              },
             ].map((s) => (
               <div
                 key={s.label}
@@ -198,13 +212,16 @@ export default function ResultsClient() {
                   <th style={head}>Tap rate</th>
                   <th style={head}>Trials</th>
                   <th style={head}>Trial rate</th>
+                  <th style={head}>Paid</th>
+                  <th style={head}>Paid rate</th>
+                  <th style={head}>In trial</th>
                   <th style={head}>Late</th>
                 </tr>
               </thead>
               <tbody>
                 {data.senders.length === 0 && (
                   <tr>
-                    <td style={cell} colSpan={7}>
+                    <td style={cell} colSpan={10}>
                       Nothing in this range yet.
                     </td>
                   </tr>
@@ -215,8 +232,13 @@ export default function ResultsClient() {
                     <td style={num}>{s.sent}</td>
                     <td style={num}>{s.clicked}</td>
                     <td style={num}>{pct(s.clickRatePct)}</td>
-                    <td style={{ ...num, color: "#fff", fontWeight: 600 }}>{s.trials}</td>
+                    <td style={num}>{s.trials}</td>
                     <td style={num}>{pct(s.trialRatePct)}</td>
+                    <td style={{ ...num, color: "#8fdc9f", fontWeight: 600 }}>{s.paid}</td>
+                    <td style={num}>{pct(s.paidRatePct)}</td>
+                    <td style={{ ...num, color: "rgba(255,255,255,0.55)" }}>
+                      {s.stillInTrial || "—"}
+                    </td>
                     <td
                       style={{ ...num, color: "rgba(255,255,255,0.4)" }}
                       title={`Trials that came more than ${data.attribution_window_days} days after the tap, so they don't count`}
@@ -241,13 +263,14 @@ export default function ResultsClient() {
                   <th style={head}>Tapped</th>
                   <th style={head}>Trial started</th>
                   <th style={head}>Gap</th>
+                  <th style={head}>Outcome</th>
                   <th style={head}>Counts</th>
                 </tr>
               </thead>
               <tbody>
                 {data.conversions.length === 0 && (
                   <tr>
-                    <td style={cell} colSpan={6}>
+                    <td style={cell} colSpan={7}>
                       No trials yet from a tapped link in this range.
                     </td>
                   </tr>
@@ -259,6 +282,33 @@ export default function ResultsClient() {
                     <td style={cell}>{new Date(c.clickedAt).toLocaleString()}</td>
                     <td style={cell}>{new Date(c.trialAt).toLocaleString()}</td>
                     <td style={num}>{hoursLabel(c.hoursToTrial)}</td>
+                    <td style={cell}>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          padding: "2px 7px",
+                          borderRadius: 4,
+                          background:
+                            c.outcome === "paid"
+                              ? "rgba(90,190,110,0.16)"
+                              : c.outcome === "cancelled"
+                                ? "rgba(192,62,6,0.18)"
+                                : "rgba(255,255,255,0.08)",
+                          color:
+                            c.outcome === "paid"
+                              ? "#8fdc9f"
+                              : c.outcome === "cancelled"
+                                ? "#e2845c"
+                                : "rgba(255,255,255,0.55)",
+                        }}
+                      >
+                        {c.outcome === "paid"
+                          ? "paid"
+                          : c.outcome === "cancelled"
+                            ? "cancelled"
+                            : "in trial"}
+                      </span>
+                    </td>
                     <td style={cell}>
                       <span
                         style={{
@@ -283,7 +333,9 @@ export default function ResultsClient() {
           <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 20 }}>
             A trial counts for a sender when the lead tapped their link and started the trial
             within {data.attribution_window_days} days of that tap. Taps are recorded on the
-            lead&apos;s record, so tapping Monday and subscribing Thursday still counts. Generated{" "}
+            lead&apos;s record, so tapping Monday and subscribing Thursday still counts.
+            &ldquo;Paid&rdquo; means the trial actually billed (converted_trial from the
+            RevenueCat webhook), not just that they got past the paywall. Generated{" "}
             {new Date(data.generated_at).toLocaleString()}.
           </p>
         </>

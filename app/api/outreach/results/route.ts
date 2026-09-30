@@ -42,9 +42,13 @@ type SenderStats = {
   sent: number;
   clicked: number;
   trials: number;
+  paid: number;
+  cancelled: number;
+  stillInTrial: number;
   trialsOutsideWindow: number;
   clickRatePct: number | null;
   trialRatePct: number | null;
+  paidRatePct: number | null;
 };
 
 type RecentConversion = {
@@ -55,6 +59,11 @@ type RecentConversion = {
   trialAt: string;
   hoursToTrial: number;
   withinWindow: boolean;
+  // Outcome of that trial, using the same definitions as the Trial
+  // dashboard: converted_trial is webhook-written on actual post-trial
+  // billing, so it is the real paid signal rather than "got past the
+  // paywall". started_trial / converted_at only mean the latter.
+  outcome: "paid" | "cancelled" | "in_trial";
 };
 
 function ms(v: unknown): number | null {
@@ -114,6 +123,9 @@ export async function GET(req: Request) {
   let sentTotal = 0;
   let clickedTotal = 0;
   let trialsTotal = 0;
+  let paidTotal = 0;
+  let cancelledTotal = 0;
+  let stillInTrialTotal = 0;
 
   const stats = (sender: string): SenderStats => {
     let s = bySender.get(sender);
@@ -123,9 +135,13 @@ export async function GET(req: Request) {
         sent: 0,
         clicked: 0,
         trials: 0,
+        paid: 0,
+        cancelled: 0,
+        stillInTrial: 0,
         trialsOutsideWindow: 0,
         clickRatePct: null,
         trialRatePct: null,
+        paidRatePct: null,
       };
       bySender.set(sender, s);
     }
@@ -166,10 +182,26 @@ export async function GET(req: Request) {
     // wasn't caused by it.
     if (trialAt < clickedAt) return;
 
+    const outcome: "paid" | "cancelled" | "in_trial" = d.converted_trial
+      ? "paid"
+      : d.subscription_status === "cancelled"
+        ? "cancelled"
+        : "in_trial";
+
     const withinWindow = trialAt - clickedAt <= windowMs;
     if (withinWindow) {
       s.trials++;
       trialsTotal++;
+      if (outcome === "paid") {
+        s.paid++;
+        paidTotal++;
+      } else if (outcome === "cancelled") {
+        s.cancelled++;
+        cancelledTotal++;
+      } else {
+        s.stillInTrial++;
+        stillInTrialTotal++;
+      }
     } else {
       s.trialsOutsideWindow++;
     }
@@ -182,6 +214,7 @@ export async function GET(req: Request) {
       trialAt: new Date(trialAt).toISOString(),
       hoursToTrial: Math.round(((trialAt - clickedAt) / 3_600_000) * 10) / 10,
       withinWindow,
+      outcome,
     });
   });
 
@@ -189,8 +222,10 @@ export async function GET(req: Request) {
     ...s,
     clickRatePct: s.sent > 0 ? Math.round((s.clicked / s.sent) * 1000) / 10 : null,
     trialRatePct: s.clicked > 0 ? Math.round((s.trials / s.clicked) * 1000) / 10 : null,
+    // Of the trials this sender is credited with, how many actually billed.
+    paidRatePct: s.trials > 0 ? Math.round((s.paid / s.trials) * 1000) / 10 : null,
   }));
-  senders.sort((a, b) => b.trials - a.trials || b.clicked - a.clicked);
+  senders.sort((a, b) => b.paid - a.paid || b.trials - a.trials || b.clicked - a.clicked);
 
   conversions.sort((a, b) => b.trialAt.localeCompare(a.trialAt));
 
@@ -201,9 +236,14 @@ export async function GET(req: Request) {
       sent: sentTotal,
       clicked: clickedTotal,
       trials: trialsTotal,
+      paid: paidTotal,
+      cancelled: cancelledTotal,
+      still_in_trial: stillInTrialTotal,
       click_rate_pct: sentTotal > 0 ? Math.round((clickedTotal / sentTotal) * 1000) / 10 : null,
       trial_rate_pct:
         clickedTotal > 0 ? Math.round((trialsTotal / clickedTotal) * 1000) / 10 : null,
+      paid_rate_pct:
+        trialsTotal > 0 ? Math.round((paidTotal / trialsTotal) * 1000) / 10 : null,
     },
     senders,
     conversions: conversions.slice(0, 100),
