@@ -52,9 +52,15 @@ type Sub = {
   product_id?: string;
   status?: string;
   store?: string;
+  // RevenueCat's own customer id. Several app_user_ids can be aliased onto
+  // one customer, and the API returns that merged customer's FULL history
+  // for any of them — so this is what identifies a distinct payer.
+  customer_id?: string;
+  original_customer_id?: string;
 };
 
 type RevenueRollup = {
+  customerId: string | null;
   gross: number;
   proceeds: number;
   commission: number;
@@ -104,11 +110,15 @@ async function fetchRevenue(uid: string): Promise<RevenueRollup | null> {
     byStore[k].commission += m.commission ?? 0;
   }
 
+  const customerId =
+    (items.find((i) => i.customer_id)?.customer_id as string | undefined) ?? null;
+
   const r2 = (n: number) => Math.round(n * 100) / 100;
   for (const k of Object.keys(byStore)) {
     byStore[k] = { gross: r2(byStore[k].gross), commission: r2(byStore[k].commission) };
   }
   return {
+    customerId,
     gross: r2(gross),
     proceeds: r2(proceeds),
     commission: r2(commission),
@@ -143,7 +153,12 @@ async function main() {
       console.log(`  ${field.padEnd(16)} ${snap.size} users`);
     }
   }
-  let uids = [...seen];
+  // Sorted so the alias winner below is deterministic: with a stable order,
+  // first-come IS the lexicographically smallest uid, and no re-claiming is
+  // needed. Re-claiming would be a bug — the earlier uid has already had its
+  // revenue written by the time a "smaller" one arrives, leaving both
+  // credited.
+  let uids = [...seen].sort();
   if (LIMIT > 0) uids = uids.slice(0, LIMIT);
 
   console.log(`\n${uids.length} distinct paid users. APPLY=${APPLY ? "yes" : "NO (dry run)"}\n`);
@@ -157,6 +172,27 @@ async function main() {
   let totalTax = 0;
   const storeTotals: Record<string, { gross: number; commission: number }> = {};
 
+  // RevenueCat customer -> the one Firestore uid credited with its revenue.
+  //
+  // WHY: RevenueCat aliases app_user_ids, and /customers/{uid}/subscriptions
+  // returns the merged customer's ENTIRE history for ANY aliased id. Writing
+  // that total against each uid double-counts — observed live, where one
+  // merged customer (20 subscriptions, $14,344.60, a legacy numeric
+  // original_customer_id) was credited to two separate Firestore users and
+  // alone accounted for 66% of a cohort's reported revenue.
+  //
+  // Revenue is therefore written to exactly ONE uid per RC customer and
+  // zeroed on the others, so every downstream sum is correct without the
+  // dashboards needing to know about aliasing. The winner is whichever uid
+  // is reached first, which the sort above makes deterministic.
+  //
+  // CAVEAT: the winner may sit in a different cohort from the payment, so a
+  // merged customer's revenue can land in the wrong period. Under-counting
+  // one cohort beats double-counting across several.
+  const claimed = new Map<string, string>();
+  let aliasDupes = 0;
+  let aliasDollars = 0;
+
   for (let i = 0; i < uids.length; i += CONCURRENCY) {
     const batch = uids.slice(i, i + CONCURRENCY);
     await Promise.all(
@@ -168,6 +204,32 @@ async function main() {
             return;
           }
           if (rev.gross <= 0) return;
+
+          // Alias check. Only the winning uid keeps the revenue.
+          if (rev.customerId) {
+            const holder = claimed.get(rev.customerId);
+            if (holder && holder !== uid) {
+              aliasDupes++;
+              aliasDollars += rev.gross;
+              if (APPLY) {
+                await db.collection("Users").doc(uid).set(
+                  {
+                    revenue_usd_total: 0,
+                    proceeds_usd_total: 0,
+                    commission_usd_total: 0,
+                    tax_usd_total: 0,
+                    rc_customer_id: rev.customerId,
+                    revenue_alias_of: holder,
+                    revenue_synced_at: FieldValue.serverTimestamp(),
+                    revenue_source: "rc_v2_sync",
+                  },
+                  { merge: true }
+                );
+              }
+              return;
+            }
+            if (!holder) claimed.set(rev.customerId, uid);
+          }
 
           withRevenue++;
           totalGross += rev.gross;
@@ -189,6 +251,8 @@ async function main() {
                 commission_usd_total: rev.commission,
                 tax_usd_total: rev.tax,
                 revenue_by_store: rev.byStore,
+                rc_customer_id: rev.customerId,
+                revenue_alias_of: null,
                 revenue_synced_at: FieldValue.serverTimestamp(),
                 revenue_source: "rc_v2_sync",
               },
@@ -223,6 +287,7 @@ async function main() {
       totalGross > 0 ? ((totalTax / totalGross) * 100).toFixed(1) : "0"
     }%)`
   );
+  console.log(`  alias duplicates     ${aliasDupes} uids zeroed, $${aliasDollars.toFixed(2)} not double-counted`);
   console.log(`\n  commission by store:`);
   for (const [k, v] of Object.entries(storeTotals)) {
     const rate = v.gross > 0 ? ((v.commission / v.gross) * 100).toFixed(1) : "—";

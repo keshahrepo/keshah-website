@@ -630,8 +630,24 @@ function trackedBorder(metricKey: string, tracks: Set<string>): string {
 
 // ── Revenue strip ───────────────────────────────────────────────────
 //
-// Money for the current slice. Proceeds are after store commission and
-// tax, using the store's own figures as reported by RevenueCat.
+// LIFETIME revenue of the users in this slice — NOT revenue earned during
+// the period. Those differ and the gap is large: users who signed up
+// before a cohort's window keep renewing inside it, so RevenueCat's
+// monthly figure counts money this card never will. In September 2026,
+// 1,552 pre-cohort payers sat outside a 5.18-cohort view that reported
+// $14.8k against RevenueCat's ~$22k for the month. Both were right.
+//
+// Period revenue isn't computable from what's stored: revenue_usd_total
+// is a lifetime total per user with no transaction dates behind it.
+// Answering "what did this cohort pay us in September" needs per-
+// transaction records — the RevenueEvents subcollection the webhook now
+// writes is the start of that, but only from 2026-09-30 forward.
+//
+// Read this as the LTV of a release's signups, which is the right metric
+// for comparing one release against the next.
+//
+// Proceeds are after store commission and tax, using the store's own
+// figures as reported by RevenueCat.
 //
 // Capture started 2026-09-30, so any cohort before that reads $0 —
 // nothing existed to record it. Backfilling would need a RevenueCat API
@@ -645,11 +661,20 @@ function RevenueStrip({ m }: { m: CohortMetrics }) {
 
   const money = (v: number) =>
     `$${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+
   const perPaid = m.outcomes.converted > 0 ? m.proceedsUsd / m.outcomes.converted : null;
 
   const items = [
-    { label: "Revenue", value: money(m.revenueUsd), sub: "gross, before store cut" },
-    { label: "Proceeds", value: money(m.proceedsUsd), sub: "after commission + tax" },
+    {
+      label: "Cohort revenue",
+      value: money(m.revenueUsd),
+      sub: "lifetime from these signups",
+    },
+    {
+      label: "Cohort proceeds",
+      value: money(m.proceedsUsd),
+      sub: "after store cut + tax",
+    },
     {
       label: "Proceeds per paid user",
       value: perPaid === null ? "—" : money(perPaid),
