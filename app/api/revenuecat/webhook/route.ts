@@ -310,11 +310,18 @@ async function reconcileFirestoreDoc(
     updates.extra_user_tags = [...tags, "paidStoppage"];
   }
 
-  if (existing.user_type !== "freev2") updates.user_type = "freev2";
+  // Legacy VIPs (old full-experience buyers on the aftercare program) can
+  // also hold an RC subscription. Converting them to freev2 on a renewal
+  // dropped them out of their aftercare routine into stoppage.
+  // The app reads a missing user_type as vip, so old docs may not have it.
+  const isLegacyVip =
+    existing.user_type === "vip" ||
+    (!existing.user_type && (existing.pro === true || existing.aftercare_active_stage != null));
+  if (!isLegacyVip && existing.user_type !== "freev2") updates.user_type = "freev2";
   // Seed the stage only for brand-new users. Overwriting on every paid
   // event (RENEWAL etc.) knocked REGROWTH kit users back to stoppage each
   // month, which then routed them into maintenance mid-kit.
-  if (!existing.treatment_stage) {
+  if (!isLegacyVip && !existing.treatment_stage) {
     updates.treatment_stage = "FREE_STOPPAGE";
   }
   if (existing.eligible_for_special_regrowth_features !== true) {
