@@ -53,8 +53,11 @@ export async function middleware(req: NextRequest) {
 
       // Outreach role (1:1 lead messaging) sees only its own section: the
       // lead list to text from, and the conversion results for those texts.
+      // Lands on Results, not the bare /dashboard/outreach lead list —
+      // that page is no longer in the nav, so arriving there would leave
+      // no way back. The prefix check still allows it by direct URL.
       if (role === "outreach" && !pathname.startsWith("/dashboard/outreach")) {
-        return NextResponse.redirect(new URL("/dashboard/outreach", req.url));
+        return NextResponse.redirect(new URL("/dashboard/outreach/results", req.url));
       }
 
       // Manager role can only access /dashboard/today, /dashboard/recruit, /dashboard/manage, and /dashboard/resources

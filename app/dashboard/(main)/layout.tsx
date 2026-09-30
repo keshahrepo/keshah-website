@@ -37,9 +37,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/dashboard/applications", label: "Recruit", icon: "chat", roles: ["admin"] },
       { href: "/dashboard/support", label: "Support", icon: "support", roles: ["admin"] },
       { href: "/dashboard/onboarding", label: "Onboarding", icon: "funnel", roles: ["admin"] },
-      { href: "/dashboard/onboarding-web", label: "Onboarding Web", icon: "funnel", roles: ["admin"] },
       { href: "/dashboard/trial", label: "Trial", icon: "funnel2", roles: ["admin"] },
-      { href: "/dashboard/trial-web", label: "Trial Web", icon: "funnel2", roles: ["admin"] },
       {
         href: "/dashboard/calls",
         label: "Calls",
@@ -63,7 +61,6 @@ const NAV_SECTIONS: NavSection[] = [
     title: "Outreach",
     roles: ["admin", "outreach"],
     items: [
-      { href: "/dashboard/outreach", label: "Leads to text", icon: "chat", roles: ["admin", "outreach"] },
       { href: "/dashboard/outreach/results", label: "Results", icon: "funnel2", roles: ["admin", "outreach"] },
     ],
   },
