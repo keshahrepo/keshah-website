@@ -16,7 +16,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import Script from "next/script";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "../../careers.module.css";
 import apply from "./apply.module.css";
 
@@ -64,6 +64,8 @@ type Step =
   | { kind: "text"; key: keyof Form; title: string; subtitle?: string; placeholder?: string; type?: "text" | "email" | "tel"; autoComplete?: string; optional?: boolean }
   | { kind: "select"; key: keyof Form; title: string; subtitle?: string; options: { value: string; label: string }[] }
   | { kind: "yesno"; key: keyof Form; title: string; subtitle?: string; noSub?: string }
+  | { kind: "analysis"; title: string; subtitle?: string }
+  | { kind: "qualified"; title: string; subtitle?: string }
   | { kind: "calendly"; title: string; subtitle?: string };
 
 const STEPS: Step[] = [
@@ -78,14 +80,34 @@ const STEPS: Step[] = [
   ] },
   { kind: "yesno", key: "can_commit", title: "Can you commit ~1 hr/day, Mon–Fri?", noSub: "This role may not be the right fit" },
   { kind: "text", key: "social_handle", title: "TikTok or Instagram handle?", subtitle: "Optional — helps us get a sense of how you post already.", placeholder: "@yourhandle", optional: true },
+  // Review-your-responses loading beat → qualified-fit reveal. Classic
+  // Noom / Hims pattern — creates investment + reciprocity right before
+  // the Calendly ask. Analysis auto-advances on a 3.6s timer. Qualified
+  // screen hands off to Calendly on tap.
+  { kind: "analysis", title: "Reviewing your responses…" },
+  { kind: "qualified", title: "You've been invited to interview." },
   { kind: "calendly", title: "Pick your interview time.", subtitle: "30-min group interview with Aadi, our founder. Small group — 6-8 people." },
 ];
+
+// Rotating checklist shown during the analysis beat. Each item fades in
+// at ~800ms intervals; after the last one, the screen auto-advances.
+const ANALYSIS_STEPS: string[] = [
+  "Reviewing your responses",
+  "Checking schedule fit",
+  "Matching to our creator roster",
+  "Finalizing your invite",
+];
+const ANALYSIS_TICK_MS = 800;
 
 export default function ApplyQuiz() {
   const [stepIdx, setStepIdx] = useState(0);
   const [form, setForm] = useState<Form>(EMPTY);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // How many of the analysis checklist items have "completed". Advances
+  // once every ANALYSIS_TICK_MS while on the analysis step. When it hits
+  // ANALYSIS_STEPS.length, the step auto-advances to the qualified reveal.
+  const [analysisProgress, setAnalysisProgress] = useState(0);
   const draftIdRef = useRef<string>("");
   const submittedRef = useRef<boolean>(false);
   const step = STEPS[stepIdx];
@@ -154,6 +176,30 @@ export default function ApplyQuiz() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepIdx]);
 
+  // Drive the analysis loading screen. Ticks one checklist item at a
+  // time until all are "complete", then auto-advances to the qualified
+  // reveal. Resets progress every time we re-enter the analysis step.
+  useEffect(() => {
+    if (step.kind !== "analysis") return;
+    setAnalysisProgress(0);
+    let i = 0;
+    const timer = setInterval(() => {
+      i += 1;
+      setAnalysisProgress(i);
+      if (i >= ANALYSIS_STEPS.length) {
+        clearInterval(timer);
+        // Small beat after the last checkmark so the user sees it
+        // confirm before we move them on.
+        setTimeout(() => {
+          setStepIdx((idx) => idx + 1);
+          setError(null);
+        }, 500);
+      }
+    }, ANALYSIS_TICK_MS);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepIdx]);
+
   // Pure — must not touch state (this is called during render for
   // the disabled-state of the Continue button).
   function canContinue(): boolean {
@@ -169,6 +215,10 @@ export default function ApplyQuiz() {
       }
       case "yesno":
         return form[step.key] === "yes" || form[step.key] === "no";
+      case "analysis":
+        return false; // Auto-advances on a timer.
+      case "qualified":
+        return true;  // Primary button advances to Calendly.
       case "calendly":
         return false; // No advance button — Calendly handles the handoff.
     }
@@ -238,6 +288,30 @@ export default function ApplyQuiz() {
     }
   }
 
+  // Personalized "why you qualified" bullets built from quiz answers.
+  // Non-generic enough to feel considered, not so specific they feel
+  // creepy or made-up. Order: creator-roster framing (uses gender),
+  // schedule framing (uses can_commit + grad year), social-presence
+  // framing (only if they left a handle).
+  const qualifiedBullets = useMemo<string[]>(() => {
+    const out: string[] = [];
+    if (form.gender === "female") {
+      out.push("We're actively building out our women's creator roster.");
+    } else if (form.gender === "male") {
+      out.push("We're actively building out our men's creator roster.");
+    }
+    if (form.graduation_year) {
+      out.push(
+        `Your ${form.graduation_year} graduation timeline matches when we're ramping.`,
+      );
+    }
+    out.push("You've committed to the daily cadence we need from creators.");
+    if (form.social_handle.trim()) {
+      out.push("Having an existing social presence gives you a head start.");
+    }
+    return out.slice(0, 3);
+  }, [form.gender, form.graduation_year, form.social_handle]);
+
   // Calendly embed URL with name + email prefilled. Also pass the
   // internal applicant doc id as a UTM-style param so the Calendly
   // webhook can match the booking back to the right applicant.
@@ -294,7 +368,10 @@ export default function ApplyQuiz() {
 
         {/* Back arrow (only after first step) */}
         <div style={{ minHeight: 24, display: "flex", alignItems: "center" }}>
-          {stepIdx > 0 && step.kind !== "calendly" && (
+          {stepIdx > 0 &&
+            step.kind !== "calendly" &&
+            step.kind !== "analysis" &&
+            step.kind !== "qualified" && (
             <button
               type="button"
               onClick={goBack}
@@ -412,6 +489,189 @@ export default function ApplyQuiz() {
               </div>
             )}
 
+            {step.kind === "analysis" && (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 14,
+                  marginTop: 12,
+                }}
+              >
+                {ANALYSIS_STEPS.map((label, i) => {
+                  const done = i < analysisProgress;
+                  const active = i === analysisProgress;
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 12,
+                        opacity: done || active ? 1 : 0.3,
+                        transition: "opacity 400ms ease",
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 20,
+                          height: 20,
+                          borderRadius: "50%",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          background: done ? "#FFFFFF" : "transparent",
+                          border: done
+                            ? "1px solid #FFFFFF"
+                            : "1px solid rgba(255,255,255,0.3)",
+                          transition: "all 300ms ease",
+                        }}
+                      >
+                        {done ? (
+                          <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                            <path
+                              d="M3 7.5l3 3 5-6"
+                              stroke="#0a0a0a"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        ) : active ? (
+                          <span
+                            style={{
+                              width: 10,
+                              height: 10,
+                              borderRadius: "50%",
+                              border: "1.5px solid rgba(255,255,255,0.6)",
+                              borderTopColor: "transparent",
+                              animation: "spin 700ms linear infinite",
+                            }}
+                          />
+                        ) : null}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 16,
+                          color: done ? "#FFFFFF" : "rgba(255,255,255,0.85)",
+                          fontWeight: done ? 500 : 400,
+                        }}
+                      >
+                        {label}
+                      </span>
+                    </div>
+                  );
+                })}
+                <style>{`@keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }`}</style>
+              </div>
+            )}
+
+            {step.kind === "qualified" && (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 16,
+                  marginTop: 12,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    letterSpacing: 1.2,
+                    textTransform: "uppercase",
+                    color: "rgba(255,255,255,0.6)",
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: "50%",
+                      background: "#FFFFFF",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                      <path
+                        d="M3 7.5l3 3 5-6"
+                        stroke="#0a0a0a"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </span>
+                  Qualified fit
+                </div>
+
+                <p
+                  style={{
+                    fontSize: 16,
+                    lineHeight: 1.5,
+                    color: "rgba(255,255,255,0.85)",
+                    margin: 0,
+                  }}
+                >
+                  Based on your responses, you&apos;d be a strong fit for the KESHAH creator team.
+                </p>
+
+                <ul
+                  style={{
+                    listStyle: "none",
+                    padding: 0,
+                    margin: "4px 0 0",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 10,
+                  }}
+                >
+                  {qualifiedBullets.map((text, i) => (
+                    <li
+                      key={i}
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 10,
+                        color: "rgba(255,255,255,0.85)",
+                        fontSize: 15,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      <span
+                        style={{
+                          flexShrink: 0,
+                          marginTop: 6,
+                          width: 5,
+                          height: 5,
+                          borderRadius: "50%",
+                          background: "rgba(255,255,255,0.5)",
+                        }}
+                      />
+                      <span>{text}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <p
+                  style={{
+                    fontSize: 13,
+                    color: "rgba(255,255,255,0.5)",
+                    marginTop: 8,
+                    margin: 0,
+                  }}
+                >
+                  Next: pick your interview time with Aadi, our founder.
+                </p>
+              </div>
+            )}
+
             {step.kind === "calendly" && (
               <>
                 <div
@@ -442,9 +702,11 @@ export default function ApplyQuiz() {
 
         <div className={styles.spacerLarge} />
 
-        {/* Bottom sticky CTA. Hidden on yesno (auto-advances) and on
-            calendly (handoff to Calendly's own flow). */}
-        {step.kind !== "yesno" && step.kind !== "calendly" && (
+        {/* Bottom sticky CTA. Hidden on yesno (auto-advances), analysis
+            (auto-advances on timer), and calendly (handoff). */}
+        {step.kind !== "yesno" &&
+          step.kind !== "analysis" &&
+          step.kind !== "calendly" && (
           <div className={`${styles.bottom} ${styles.fadeButton}`}>
             <button
               type="button"
@@ -453,7 +715,9 @@ export default function ApplyQuiz() {
               disabled={!canGo || submitting}
               aria-disabled={!canGo || submitting}
             >
-              {step.kind === "text" && step.optional
+              {step.kind === "qualified"
+                ? "Pick your interview time →"
+                : step.kind === "text" && step.optional
                 ? form[step.key]
                   ? "Continue"
                   : "Skip"
