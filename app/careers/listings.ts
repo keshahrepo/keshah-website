@@ -43,7 +43,7 @@ export const LISTINGS: Listing[] = [
       {
         heading: "About KESHAH",
         body:
-          "KESHAH is a drug-free hair loss app founded by a Berkeley EECS graduate, with 80M+ views across short-form video in the last 6 months. We're hiring college students to create daily short-form content and learn how content drives growth at a startup.",
+          "KESHAH is a hair care app founded by a Berkeley EECS graduate, with 80M+ views across short-form video in the last 6 months. We're hiring college students to create daily short-form content and learn how content drives growth at a startup.",
       },
       {
         heading: "What you'll do",
