@@ -49,7 +49,7 @@ export default function Home() {
               className={styles.qr}
             />
             <div className={styles.qrLabel}>
-              <div className={styles.qrTitle}>Scan to download</div>
+              <div className={styles.qrTitle}>Scan to download &amp; learn more</div>
               <div className={styles.qrSub}>
                 Opens KESHAH in the App Store or Google Play.
               </div>
