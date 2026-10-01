@@ -799,6 +799,31 @@ export default function ApplyQuiz() {
                     Saving your application…
                   </div>
                 )}
+                {/* Safety-valve for applicants where none of the posted
+                    slots work. Without this they'd bail — now they can
+                    reach us for an off-schedule time. */}
+                <div
+                  style={{
+                    marginTop: 16,
+                    fontSize: 13,
+                    color: "rgba(255,255,255,0.55)",
+                    textAlign: "center",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  None of these times work?{" "}
+                  <a
+                    href="mailto:contact@keshah.com?subject=Interview%20time%20request"
+                    style={{
+                      color: "#fff",
+                      textDecoration: "underline",
+                      textUnderlineOffset: 3,
+                    }}
+                  >
+                    Email us at contact@keshah.com
+                  </a>{" "}
+                  and we&apos;ll find one that does.
+                </div>
               </>
             )}
 
