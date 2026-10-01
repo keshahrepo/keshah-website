@@ -811,7 +811,7 @@ export default function ApplyQuiz() {
                     lineHeight: 1.5,
                   }}
                 >
-                  None of these times work?{" "}
+                  If none of these times work for your schedule, email{" "}
                   <a
                     href="mailto:contact@keshah.com?subject=Interview%20time%20request"
                     style={{
@@ -820,9 +820,9 @@ export default function ApplyQuiz() {
                       textUnderlineOffset: 3,
                     }}
                   >
-                    Email us at contact@keshah.com
+                    contact@keshah.com
                   </a>{" "}
-                  and we&apos;ll find one that does.
+                  to request an alternative.
                 </div>
               </>
             )}
