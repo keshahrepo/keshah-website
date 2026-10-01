@@ -6,32 +6,23 @@
 // staggered fade-in matching post_auth_flow_2 (title 0.0-0.4, options
 // 0.2-0.7, button 0.5-1.0, all 700ms easeOut, kicked off at mount).
 //
-// State machine: single form object + stepIndex. Step configs live in
-// the STEPS array; render is a switch on step.kind. All chrome (logo
-// header, spacers, bottom sticky button) comes from careers.module.css.
+// Last step is a Calendly embed where applicants pick a group-interview
+// time. Prefills name + email from what we already collected so the
+// Calendly form is one click. Submission to Firestore fires the moment
+// the user reaches the Calendly step so we capture the applicant even
+// if they close the tab before confirming a slot — Calendly's own
+// webhook flips status to "booked" when a time is picked.
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import Script from "next/script";
+import { useEffect, useRef, useState } from "react";
 import styles from "../../careers.module.css";
 import apply from "./apply.module.css";
 
 const SLUG = "paid-creator-intern";
 const DRAFT_STORAGE_KEY = "keshah_careers_draft_id_v1";
-const MAX_VIDEO_BYTES = 200 * 1024 * 1024;
-const ACCEPTED_TYPES = new Set(["video/mp4", "video/quicktime"]);
-
-const REFERENCE_VIDEO_BY_GENDER: Record<"male" | "female", string> = {
-  male: "/careers/reference-men.mp4",
-  female: "/careers/reference-women.mp4",
-};
-
-// Test-video script. Edit here to change what applicants read on-screen
-// + copy to clipboard. Keep to ~30-45s spoken.
-// TODO(aadi): finalize this script.
-const TEST_VIDEO_SCRIPT =
-  `If you're losing your hair, this might be the reason nothing you've tried has worked.\n\nPinch the top of your scalp. If you can't pull the skin up much, it's tight — and tight scalp means the blood can't reach your hair follicles.\n\nOnce your scalp loosens up, your hair has a real shot at growing back. That's what KESHAH does — no drugs, just 20 minutes a day of scalp exercises. Try it free.`;
+const CALENDLY_URL = "https://calendly.com/aadi-keshah/group-interview";
 
 function newDraftId(): string {
   const t = Date.now().toString(36);
@@ -53,7 +44,6 @@ type Form = {
   graduation_year: string;
   can_commit: "" | YesNo;
   social_handle: string;
-  consent: boolean;
 };
 
 const EMPTY: Form = {
@@ -65,7 +55,6 @@ const EMPTY: Form = {
   graduation_year: "",
   can_commit: "",
   social_handle: "",
-  consent: false,
 };
 
 // ── Steps ────────────────────────────────────────────────────────
@@ -75,10 +64,7 @@ type Step =
   | { kind: "text"; key: keyof Form; title: string; subtitle?: string; placeholder?: string; type?: "text" | "email" | "tel"; autoComplete?: string; optional?: boolean }
   | { kind: "select"; key: keyof Form; title: string; subtitle?: string; options: { value: string; label: string }[] }
   | { kind: "yesno"; key: keyof Form; title: string; subtitle?: string; noSub?: string }
-  | { kind: "reference"; title: string; subtitle?: string }
-  | { kind: "script"; title: string; subtitle?: string }
-  | { kind: "upload"; title: string; subtitle?: string }
-  | { kind: "consent"; title: string; subtitle?: string };
+  | { kind: "calendly"; title: string; subtitle?: string };
 
 const STEPS: Step[] = [
   { kind: "text", key: "full_name", title: "What's your full name?", placeholder: "First and last", autoComplete: "name" },
@@ -92,31 +78,17 @@ const STEPS: Step[] = [
   ] },
   { kind: "yesno", key: "can_commit", title: "Can you commit ~1 hr/day, Mon–Fri?", noSub: "This role may not be the right fit" },
   { kind: "text", key: "social_handle", title: "TikTok or Instagram handle?", subtitle: "Optional — helps us get a sense of how you post already.", placeholder: "@yourhandle", optional: true },
-  { kind: "reference", title: "Watch this first.", subtitle: "This is the style we're looking for." },
-  { kind: "script", title: "Here's your script.", subtitle: "Film one short video reading this. No editing needed." },
-  { kind: "upload", title: "Upload your test video.", subtitle: "MP4 or MOV, up to 60 seconds." },
-  { kind: "consent", title: "One last thing.", subtitle: "Confirm you understand what happens with your video." },
+  { kind: "calendly", title: "Pick your interview time.", subtitle: "30-min group interview with Aadi, our founder. Small group — 6-8 people." },
 ];
 
 export default function ApplyQuiz() {
-  const router = useRouter();
   const [stepIdx, setStepIdx] = useState(0);
   const [form, setForm] = useState<Form>(EMPTY);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const draftIdRef = useRef<string>("");
+  const submittedRef = useRef<boolean>(false);
   const step = STEPS[stepIdx];
-
-  // Video upload state
-  const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
-  const [videoObjectPath, setVideoObjectPath] = useState<string | null>(null);
-  const [uploadPct, setUploadPct] = useState(0);
-  const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Clipboard-copy feedback
-  const [copied, setCopied] = useState(false);
 
   // Bootstrap draft id from localStorage on mount.
   useEffect(() => {
@@ -133,7 +105,7 @@ export default function ApplyQuiz() {
     setForm((f) => ({ ...f, [k]: v }));
 
   // Fire-and-forget draft save. Called on Continue (once per step advance).
-  async function saveDraft(overrides?: Partial<Form> & { video_object_path?: string | null; video_original_name?: string | null; video_size_bytes?: number | null }) {
+  async function saveDraft(overrides?: Partial<Form>) {
     const id = draftIdRef.current;
     if (!id) return;
     const merged = { ...form, ...(overrides ?? {}) };
@@ -152,10 +124,6 @@ export default function ApplyQuiz() {
           graduation_year: merged.graduation_year,
           can_commit: merged.can_commit,
           social_handle: merged.social_handle,
-          consent: merged.consent,
-          video_object_path: overrides?.video_object_path ?? videoObjectPath,
-          video_original_name: overrides?.video_original_name ?? videoFile?.name ?? null,
-          video_size_bytes: overrides?.video_size_bytes ?? videoFile?.size ?? null,
         }),
         keepalive: true,
       });
@@ -173,7 +141,18 @@ export default function ApplyQuiz() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, form, videoObjectPath]);
+  }, [step, form]);
+
+  // When the user lands on the Calendly step, submit the application
+  // record once. This is what captures them even if they bail without
+  // picking a slot.
+  useEffect(() => {
+    if (step.kind !== "calendly") return;
+    if (submittedRef.current) return;
+    submittedRef.current = true;
+    submit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepIdx]);
 
   // Pure — must not touch state (this is called during render for
   // the disabled-state of the Continue button).
@@ -190,13 +169,8 @@ export default function ApplyQuiz() {
       }
       case "yesno":
         return form[step.key] === "yes" || form[step.key] === "no";
-      case "reference":
-      case "script":
-        return true;
-      case "upload":
-        return !!videoObjectPath && !uploading;
-      case "consent":
-        return form.consent === true;
+      case "calendly":
+        return false; // No advance button — Calendly handles the handoff.
     }
   }
 
@@ -206,8 +180,6 @@ export default function ApplyQuiz() {
     if (stepIdx < STEPS.length - 1) {
       setStepIdx((i) => i + 1);
       setError(null);
-    } else {
-      submit();
     }
   }
 
@@ -220,8 +192,6 @@ export default function ApplyQuiz() {
 
   async function submit() {
     setError(null);
-    // Validate everything at once — safety net in case a user
-    // hand-tampered the step machine (e.g. keyboard skip).
     const missing: string[] = [];
     if (!form.full_name.trim()) missing.push("full name");
     if (!form.email.trim()) missing.push("email");
@@ -230,10 +200,9 @@ export default function ApplyQuiz() {
     if (!form.college.trim()) missing.push("college");
     if (!form.graduation_year) missing.push("graduation year");
     if (!form.can_commit) missing.push("commitment");
-    if (!videoObjectPath) missing.push("test video");
-    if (!form.consent) missing.push("consent");
     if (missing.length > 0) {
       setError(`Missing: ${missing.join(", ")}. Tap back to fill them in.`);
+      submittedRef.current = false; // allow retry
       return;
     }
     setSubmitting(true);
@@ -252,124 +221,40 @@ export default function ApplyQuiz() {
           graduation_year: form.graduation_year,
           can_commit: form.can_commit,
           social_handle: form.social_handle,
-          video_object_path: videoObjectPath,
-          video_original_name: videoFile?.name ?? null,
-          video_size_bytes: videoFile?.size ?? null,
-          consent: form.consent,
         }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || "Something went wrong. Try again.");
       }
-      try {
-        window.localStorage.removeItem(DRAFT_STORAGE_KEY);
-      } catch {}
-      const firstName = form.full_name.trim().split(/\s+/)[0] ?? "there";
-      router.push(`/careers/paid-creator-intern/apply/thanks?name=${encodeURIComponent(firstName)}`);
+      // Keep the local draft id in storage until Calendly confirms the
+      // booking (thanks page clears it). If the user bails here without
+      // picking a slot, a return visit will update the same record.
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      submittedRef.current = false; // allow retry on next render
     } finally {
       setSubmitting(false);
     }
   }
 
-  // Video upload flow (only on upload step) ─────────────────────────
-  function pickVideo() {
-    fileInputRef.current?.click();
-  }
+  // Calendly embed URL with name + email prefilled. Also pass the
+  // internal applicant doc id as a UTM-style param so the Calendly
+  // webhook can match the booking back to the right applicant.
+  const calendlyEmbedUrl = (() => {
+    const u = new URL(CALENDLY_URL);
+    if (form.full_name.trim()) u.searchParams.set("name", form.full_name.trim());
+    if (form.email.trim()) u.searchParams.set("email", form.email.trim().toLowerCase());
+    if (draftIdRef.current) u.searchParams.set("utm_source", draftIdRef.current);
+    // Hide default Calendly chrome — our page already has a header +
+    // we don't want duplicate branding stacked on top.
+    u.searchParams.set("hide_gdpr_banner", "1");
+    u.searchParams.set("primary_color", "ffffff");
+    u.searchParams.set("background_color", "0a0a0a");
+    u.searchParams.set("text_color", "ffffff");
+    return u.toString();
+  })();
 
-  async function onVideoChosen(file: File | null) {
-    setError(null);
-    if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
-    setVideoPreviewUrl(null);
-    setVideoObjectPath(null);
-    setUploadPct(0);
-    if (!file) return;
-    if (!ACCEPTED_TYPES.has(file.type)) {
-      setError("Please upload an MP4 or MOV file.");
-      return;
-    }
-    if (file.size > MAX_VIDEO_BYTES) {
-      setError("That video's too big — 200MB max.");
-      return;
-    }
-    setVideoFile(file);
-    setVideoPreviewUrl(URL.createObjectURL(file));
-    await uploadVideo(file);
-  }
-
-  async function uploadVideo(file: File) {
-    setUploading(true);
-    setUploadPct(0);
-    try {
-      const res = await fetch("/api/careers/upload-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          filename: file.name,
-          contentType: file.type,
-          sizeBytes: file.size,
-        }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Couldn't prepare upload.");
-      }
-      const { uploadUrl, objectPath } = (await res.json()) as {
-        uploadUrl: string;
-        objectPath: string;
-      };
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("PUT", uploadUrl);
-        xhr.setRequestHeader("Content-Type", file.type);
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) setUploadPct(Math.round((e.loaded / e.total) * 100));
-        };
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            setUploadPct(100);
-            resolve();
-          } else reject(new Error(`Upload failed (${xhr.status}).`));
-        };
-        xhr.onerror = () =>
-          reject(new Error("Your upload didn't go through. Please check your connection and try again."));
-        xhr.send(file);
-      });
-      setVideoObjectPath(objectPath);
-      saveDraft({
-        video_object_path: objectPath,
-        video_original_name: file.name,
-        video_size_bytes: file.size,
-      });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setVideoFile(null);
-      if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
-      setVideoPreviewUrl(null);
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  const refVideoUrl = useMemo(
-    () =>
-      form.gender === "male" || form.gender === "female"
-        ? REFERENCE_VIDEO_BY_GENDER[form.gender]
-        : null,
-    [form.gender]
-  );
-
-  async function copyScript() {
-    try {
-      await navigator.clipboard.writeText(TEST_VIDEO_SCRIPT);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
-    } catch {}
-  }
-
-  const isFinal = stepIdx === STEPS.length - 1;
   const canGo = canContinue();
 
   return (
@@ -409,7 +294,7 @@ export default function ApplyQuiz() {
 
         {/* Back arrow (only after first step) */}
         <div style={{ minHeight: 24, display: "flex", alignItems: "center" }}>
-          {stepIdx > 0 && (
+          {stepIdx > 0 && step.kind !== "calendly" && (
             <button
               type="button"
               onClick={goBack}
@@ -527,103 +412,28 @@ export default function ApplyQuiz() {
               </div>
             )}
 
-            {step.kind === "reference" && (
-              <div className={apply.videoWrap}>
-                {refVideoUrl ? (
-                  <video src={refVideoUrl} controls playsInline className={apply.refVideo} />
-                ) : (
-                  <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 14, textAlign: "center", padding: "40px 0" }}>
-                    (Reference video will appear here after you pick your gender.)
-                  </div>
-                )}
-              </div>
-            )}
-
-            {step.kind === "script" && (
+            {step.kind === "calendly" && (
               <>
-                <div className={apply.scriptCard}>
-                  <p className={apply.scriptText}>{TEST_VIDEO_SCRIPT}</p>
-                  <div className={apply.scriptCopyRow}>
-                    <button type="button" className={apply.scriptCopyBtn} onClick={copyScript}>
-                      {copied ? "Copied ✓" : "Copy script"}
-                    </button>
-                  </div>
-                </div>
-                <ul className={apply.tipsList}>
-                  <li>Film vertically</li>
-                  <li>Face a window or good light</li>
-                  <li>Look at the lens, not the screen</li>
-                  <li>One take is fine — don&apos;t worry about being perfect</li>
-                </ul>
-              </>
-            )}
-
-            {step.kind === "upload" && (
-              <div className={apply.uploadArea}>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="video/mp4,video/quicktime,.mp4,.mov"
-                  onChange={(e) => onVideoChosen(e.target.files?.[0] ?? null)}
-                  style={{ display: "none" }}
+                <div
+                  className="calendly-inline-widget"
+                  data-url={calendlyEmbedUrl}
+                  style={{
+                    minWidth: 320,
+                    width: "100%",
+                    height: 720,
+                    marginTop: 8,
+                  }}
                 />
-
-                {!videoFile ? (
-                  <button type="button" className={apply.uploadBtn} onClick={pickVideo}>
-                    Record or upload your video
-                  </button>
-                ) : (
-                  <div className={apply.uploadedBox}>
-                    {videoPreviewUrl && (
-                      <video src={videoPreviewUrl} controls playsInline className={apply.uploadedPreview} />
-                    )}
-                    <div className={apply.uploadedRow}>
-                      <div className={apply.uploadedName}>{videoFile.name}</div>
-                      {uploading ? (
-                        <div className={apply.uploadedStatus}>Uploading {uploadPct}%</div>
-                      ) : videoObjectPath ? (
-                        <div className={apply.uploadedStatusOk}>Uploaded ✓</div>
-                      ) : (
-                        <div className={apply.uploadedStatus}>Failed</div>
-                      )}
-                    </div>
-                    {uploading && (
-                      <div className={apply.progressTrack}>
-                        <div className={apply.progressFill} style={{ width: `${uploadPct}%` }} />
-                      </div>
-                    )}
-                    <button type="button" className={apply.replaceLink} onClick={pickVideo} disabled={uploading}>
-                      Replace video
-                    </button>
+                <Script
+                  src="https://assets.calendly.com/assets/external/widget.js"
+                  strategy="afterInteractive"
+                />
+                {submitting && (
+                  <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13, marginTop: 8 }}>
+                    Saving your application…
                   </div>
                 )}
-                <div className={apply.uploadHint}>MP4 or MOV, up to 60 seconds</div>
-              </div>
-            )}
-
-            {step.kind === "consent" && (
-              <button
-                type="button"
-                className={`${apply.consentBox} ${form.consent ? apply.consentBoxChecked : ""}`}
-                onClick={() => set("consent", !form.consent)}
-                style={{ background: "transparent", cursor: "pointer" }}
-              >
-                <span className={apply.consentCheck}>
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <path
-                      d="M3 7.5l3 3 5-6"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </span>
-                <span className={apply.consentLabel}>
-                  I understand my test video is used only to review my
-                  application and won&apos;t be posted publicly.
-                </span>
-              </button>
+              </>
             )}
 
             {error && <div className={apply.error}>{error}</div>}
@@ -632,9 +442,9 @@ export default function ApplyQuiz() {
 
         <div className={styles.spacerLarge} />
 
-        {/* Bottom sticky CTA. Hidden on yesno step because Yes auto-advances
-            and No is a hard-stop. */}
-        {step.kind !== "yesno" && (
+        {/* Bottom sticky CTA. Hidden on yesno (auto-advances) and on
+            calendly (handoff to Calendly's own flow). */}
+        {step.kind !== "yesno" && step.kind !== "calendly" && (
           <div className={`${styles.bottom} ${styles.fadeButton}`}>
             <button
               type="button"
@@ -643,11 +453,7 @@ export default function ApplyQuiz() {
               disabled={!canGo || submitting}
               aria-disabled={!canGo || submitting}
             >
-              {submitting
-                ? "Submitting…"
-                : isFinal
-                ? "Submit application"
-                : step.kind === "text" && step.optional
+              {step.kind === "text" && step.optional
                 ? form[step.key]
                   ? "Continue"
                   : "Skip"

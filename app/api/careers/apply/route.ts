@@ -49,8 +49,10 @@ export async function POST(req: Request) {
     if (!required(p.college)) missing.push("college");
     if (!required(p.graduation_year)) missing.push("graduation_year");
     if (!required(p.can_commit)) missing.push("can_commit");
-    if (!required(p.video_object_path)) missing.push("video_object_path");
-    if (p.consent !== true) missing.push("consent");
+    // video_object_path + consent intentionally not required — the
+    // test-video step is replaced by the Calendly group interview; the
+    // real "did they commit" signal is whether they booked a time slot
+    // (tracked separately via Calendly, status transitions to "booked").
     if (missing.length > 0) {
       return NextResponse.json(
         { error: "Missing required fields.", fields: missing },
@@ -79,11 +81,16 @@ export async function POST(req: Request) {
       graduation_year: p.graduation_year!.trim(),
       can_commit: p.can_commit!.trim(),
       social_handle: (p.social_handle ?? "").trim() || null,
-      video_object_path: p.video_object_path!.trim(),
+      // Video fields kept nullable for compatibility with any lingering
+      // records; current flow doesn't collect them.
+      video_object_path: (p.video_object_path ?? "").trim() || null,
       video_original_name: (p.video_original_name ?? "").trim() || null,
       video_size_bytes: p.video_size_bytes ?? null,
-      consent: true,
-      status: "completed",
+      consent: p.consent === true,
+      // "awaiting_booking" = application captured, user is about to
+      // (or just did) see the Calendly step. Transitions to "booked"
+      // when the Calendly webhook fires on confirmed booking.
+      status: "awaiting_booking",
       submitted_at: now,
       last_updated_at: now,
       user_agent: req.headers.get("user-agent") ?? null,
@@ -99,7 +106,13 @@ export async function POST(req: Request) {
       const snap = await ref.get();
       if (snap.exists) {
         const cur = snap.data() as { status?: string };
-        if (cur.status === "accepted" || cur.status === "denied") {
+        // Never downgrade a decided or booked record back to
+        // awaiting_booking just because the user re-submits.
+        if (
+          cur.status === "accepted" ||
+          cur.status === "denied" ||
+          cur.status === "booked"
+        ) {
           return NextResponse.json({ ok: true, id: draftId });
         }
       }
