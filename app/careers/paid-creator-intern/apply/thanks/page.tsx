@@ -71,30 +71,47 @@ function ThanksInner() {
         </div>
       </div>
 
-      {/* Right column — booking confirmation + download CTA. */}
+      {/* Right column — booking confirmation + numbered next steps. */}
       <div className="thanks-copy">
-        <h1 className="thanks-title">One thing before your interview.</h1>
+        <h1 className="thanks-title">You&apos;re in. Here&apos;s what to do next.</h1>
 
-        <p className="thanks-body">
-          {bookingTime ? (
-            <>
-              Your group interview is confirmed for{" "}
-              <span style={{ fontWeight: 600 }}>{bookingTime}</span>. Check
-              your calendar for joining details.
-            </>
-          ) : (
-            <>
-              Your group interview is confirmed. Check your calendar for
-              joining details.
-            </>
-          )}
-        </p>
-
-        <p className="thanks-context">
-          KESHAH is the product you&apos;ll be creating content around.
-          Hands-on experience with the app gives you something concrete to
-          speak to in your interview. We may ask about it on the call.
-        </p>
+        <ol className="thanks-steps">
+          <li className="thanks-step">
+            <span className="thanks-step-num">1</span>
+            <div className="thanks-step-body">
+              <div className="thanks-step-head">Save your interview time.</div>
+              <div className="thanks-step-sub">
+                {bookingTime ? (
+                  <>
+                    Your group interview is confirmed for{" "}
+                    <span style={{ color: "#fff", fontWeight: 600 }}>
+                      {bookingTime}
+                    </span>
+                    . Check your email for the Zoom link.
+                  </>
+                ) : (
+                  <>
+                    Your group interview is confirmed. Check your email for
+                    the Zoom link.
+                  </>
+                )}
+              </div>
+            </div>
+          </li>
+          <li className="thanks-step">
+            <span className="thanks-step-num">2</span>
+            <div className="thanks-step-body">
+              <div className="thanks-step-head">
+                Download KESHAH and go through onboarding + the quiz.
+              </div>
+              <div className="thanks-step-sub">
+                KESHAH is the product you&apos;ll be creating content around.
+                We may ask about your experience on the call, so you want
+                hands-on context before you join.
+              </div>
+            </div>
+          </li>
+        </ol>
 
         {/* Desktop CTA — inverted QR card, same pattern as root. */}
         <div className="thanks-qr-card">
@@ -228,19 +245,61 @@ export default function ThanksPage() {
           margin: 0;
         }
 
-        .thanks-body {
-          font-size: 16px;
-          color: rgba(255, 255, 255, 0.85);
-          line-height: 1.5;
-          margin: 0;
-          letter-spacing: -0.2px;
+        /* Numbered next-steps list. Big round step numbers so the
+           order is impossible to miss; bold head + muted sub mimics
+           Apple-doc "Step 1 / Step 2" style. */
+        .thanks-steps {
+          list-style: none;
+          padding: 0;
+          margin: 4px 0 0;
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+          text-align: left;
         }
 
-        .thanks-context {
+        .thanks-step {
+          display: flex;
+          gap: 16px;
+          align-items: flex-start;
+        }
+
+        .thanks-step-num {
+          flex-shrink: 0;
+          width: 30px;
+          height: 30px;
+          border-radius: 50%;
+          background: #fff;
+          color: #000;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 700;
+          font-size: 14px;
+          letter-spacing: -0.2px;
+          margin-top: 2px;
+        }
+
+        .thanks-step-body {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          flex: 1;
+          min-width: 0;
+        }
+
+        .thanks-step-head {
+          font-size: 16px;
+          font-weight: 600;
+          color: #fff;
+          line-height: 1.3;
+          letter-spacing: -0.3px;
+        }
+
+        .thanks-step-sub {
           font-size: 14px;
           color: rgba(255, 255, 255, 0.65);
           line-height: 1.55;
-          margin: 0;
         }
 
         /* QR card — black card w/ a thin outline, white (inverted) QR.
