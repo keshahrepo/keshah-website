@@ -87,7 +87,7 @@ function ThanksInner() {
                     <span style={{ color: "#fff", fontWeight: 600 }}>
                       {bookingTime}
                     </span>
-                    . Check your email for the Zoom link.
+                    . Check your email for the Google Meet link.
                   </>
                 ) : (
                   <>
@@ -215,7 +215,7 @@ export default function ThanksPage() {
         .thanks-hero {
           flex: 1;
           display: flex;
-          flex-direction: column-reverse;
+          flex-direction: column;
           gap: 32px;
           align-items: center;
           justify-content: center;
@@ -436,7 +436,7 @@ export default function ThanksPage() {
         /* Desktop — phone on LEFT, copy + QR on right. Matches root. */
         @media (min-width: 720px) {
           .thanks-hero {
-            flex-direction: row-reverse;
+            flex-direction: row;
             gap: 56px;
             padding: 32px 48px 64px;
             align-items: center;
