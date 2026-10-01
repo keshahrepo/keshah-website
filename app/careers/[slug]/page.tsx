@@ -168,11 +168,11 @@ export default async function RoleDetail({
             />
           </svg>
         </a>
-        <div className={styles.applyNote}>
-          {onSite
-            ? "Takes about 5 minutes. You'll pick a time for a 30-min group interview with Aadi."
-            : "Mention when you'd be free for a 30-min group interview this week"}
-        </div>
+        {!onSite && (
+          <div className={styles.applyNote}>
+            Mention when you&apos;d be free for a 30-min group interview this week
+          </div>
+        )}
       </div>
     </main>
   );

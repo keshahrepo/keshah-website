@@ -76,7 +76,7 @@ type Step =
 
 const STEPS: Step[] = [
   { kind: "text", key: "full_name", title: "What's your full name?", placeholder: "First and last", autoComplete: "name" },
-  { kind: "text", key: "email", title: "What's the best email for you?", subtitle: "We'll only reach out about your application.", placeholder: "you@example.com", type: "email", autoComplete: "email" },
+  { kind: "text", key: "email", title: "What's the best email for you?", placeholder: "you@example.com", type: "email", autoComplete: "email" },
   { kind: "text", key: "phone", title: "And your phone number?", placeholder: "e.g. (555) 555-5555", type: "tel", autoComplete: "tel" },
   { kind: "select", key: "gender", title: "What's your gender?", options: [{ value: "male", label: "Male" }, { value: "female", label: "Female" }] },
   { kind: "text", key: "college", title: "Which college or university?", placeholder: "e.g. UC Berkeley", autoComplete: "organization" },
