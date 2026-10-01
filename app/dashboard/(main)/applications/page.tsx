@@ -1,14 +1,16 @@
 "use client";
 
 // Admin Recruit tab — inbound applications from the careers site.
-// Four status buckets: Pending (partial fills, didn't submit),
-// Completed (submitted, awaiting review), Accepted, Denied.
+// Five status buckets:
+//   Pending — draft, user didn't finish the quiz
+//   Awaiting booking — finished the quiz, reached the Calendly step,
+//                      but Calendly hasn't confirmed a booking yet
+//   Booked — Calendly webhook confirmed a slot; ready for interview
+//   Accepted / Denied — post-interview decision
 //
-// Row expand shows the applicant's test video (fetched via a signed
-// read URL) and all form details. Accept opens Gmail's compose window
-// pre-filled with the offer email + contract link; Deny just marks
-// the row as denied (no email is sent — silent rejection until the
-// team wants to wire a rejection template).
+// Row expand shows all form answers + Calendly booking details.
+// Accept opens Gmail's compose window pre-filled with the offer email
+// + contract link; Deny marks silently (no email).
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -23,12 +25,18 @@ const CONTRACT_URL_BY_SLUG: Record<string, string> = {
 
 const TAB_LABELS: Record<TabKey, string> = {
   pending: "Pending",
-  completed: "Completed",
+  awaiting_booking: "Awaiting booking",
+  booked: "Booked",
   accepted: "Accepted",
   denied: "Denied",
 };
 
-type TabKey = "pending" | "completed" | "accepted" | "denied";
+type TabKey =
+  | "pending"
+  | "awaiting_booking"
+  | "booked"
+  | "accepted"
+  | "denied";
 
 type Application = {
   id: string;
@@ -40,19 +48,24 @@ type Application = {
   college: string | null;
   graduation_year: string | null;
   can_commit: string | null;
+  comfortable_on_camera: string | null;
+  wants_virality: string | null;
+  posted_before: string | null;
   social_handle: string | null;
-  video_object_path: string | null;
-  video_original_name: string | null;
-  video_size_bytes: number | null;
+  calendly_event_start_time: string | null;
+  calendly_join_url: string | null;
+  calendly_reschedule_url: string | null;
+  calendly_cancel_url: string | null;
   status: TabKey;
   created_at: string | null;
   submitted_at: string | null;
+  booked_at: string | null;
   last_updated_at: string | null;
   decided_at: string | null;
 };
 
 export default function ApplicationsPage() {
-  const [tab, setTab] = useState<TabKey>("completed");
+  const [tab, setTab] = useState<TabKey>("booked");
   const [rows, setRows] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -80,12 +93,16 @@ export default function ApplicationsPage() {
   const grouped = useMemo(() => {
     const g: Record<TabKey, Application[]> = {
       pending: [],
-      completed: [],
+      awaiting_booking: [],
+      booked: [],
       accepted: [],
       denied: [],
     };
     for (const r of rows) {
-      const k = (r.status ?? "pending") as TabKey;
+      // Legacy "completed" (pre-group-interview flow) folds into
+      // awaiting_booking so old rows still show up somewhere sane.
+      const raw = (r.status ?? "pending") as string;
+      const k = (raw === "completed" ? "awaiting_booking" : raw) as TabKey;
       if (k in g) g[k].push(r);
     }
     return g;
@@ -93,7 +110,10 @@ export default function ApplicationsPage() {
 
   const visible = grouped[tab];
 
-  async function updateStatus(id: string, status: "accepted" | "denied" | "completed") {
+  async function updateStatus(
+    id: string,
+    status: "accepted" | "denied" | "booked",
+  ) {
     // Optimistic — flip locally, then persist. Rollback on failure.
     const prev = rows;
     setRows((rs) =>
@@ -246,7 +266,7 @@ export default function ApplicationsPage() {
               updateStatus(row.id, "accepted");
             }}
             onDeny={() => updateStatus(row.id, "denied")}
-            onReopen={() => updateStatus(row.id, "completed")}
+            onReopen={() => updateStatus(row.id, "booked")}
           />
         ))}
       </div>
@@ -269,30 +289,15 @@ function ApplicationRow({
   onDeny: () => void;
   onReopen: () => void;
 }) {
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [loadingVideo, setLoadingVideo] = useState(false);
-
-  useEffect(() => {
-    if (!expanded || !row.video_object_path) return;
-    let cancelled = false;
-    setLoadingVideo(true);
-    fetch(`/api/careers/${row.id}/video-url`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(r)))
-      .then((body: { url?: string }) => {
-        if (!cancelled) setVideoUrl(body.url ?? null);
-      })
-      .catch(() => {
-        if (!cancelled) setVideoUrl(null);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingVideo(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [expanded, row.id, row.video_object_path]);
-
   const relTime = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : "—");
+  const bookingLabel = row.calendly_event_start_time
+    ? new Date(row.calendly_event_start_time).toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : null;
 
   return (
     <div
@@ -333,7 +338,7 @@ function ApplicationRow({
           {row.graduation_year ? ` · ${row.graduation_year}` : ""}
         </div>
         <div style={{ color: "rgba(255,255,255,0.65)" }}>
-          {row.video_object_path ? "Video ✓" : "No video"}
+          {bookingLabel ?? (row.status === "pending" ? "—" : "Awaiting")}
         </div>
         <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 12 }}>
           {relTime(row.last_updated_at ?? row.submitted_at ?? row.created_at)}
@@ -354,46 +359,63 @@ function ApplicationRow({
           style={{
             padding: 16,
             borderTop: "1px solid rgba(255,255,255,0.08)",
-            display: "grid",
-            gridTemplateColumns: "220px 1fr",
-            gap: 20,
           }}
         >
-          <div>
-            {row.video_object_path ? (
-              loadingVideo ? (
-                <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 12 }}>Loading video…</div>
-              ) : videoUrl ? (
-                <video
-                  src={videoUrl}
-                  controls
-                  playsInline
-                  style={{ width: "100%", aspectRatio: "9/16", background: "#000", borderRadius: 10 }}
-                />
-              ) : (
-                <div style={{ color: "#F26B4C", fontSize: 12 }}>Video failed to load.</div>
-              )
-            ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {/* Booking panel — only visible for booked / past-booked rows. */}
+            {(row.calendly_event_start_time || row.calendly_join_url) && (
               <div
                 style={{
-                  width: "100%",
-                  aspectRatio: "9/16",
-                  background: "rgba(255,255,255,0.04)",
+                  padding: "12px 14px",
+                  background: "rgba(74,222,128,0.08)",
+                  border: "1px solid rgba(74,222,128,0.25)",
                   borderRadius: 10,
                   display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "rgba(255,255,255,0.4)",
-                  fontSize: 12,
+                  flexDirection: "column",
+                  gap: 6,
                 }}
               >
-                No video uploaded
+                <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: "rgba(255,255,255,0.55)", fontWeight: 600 }}>
+                  Interview booked
+                </div>
+                <div style={{ fontSize: 14, color: "#fff" }}>
+                  {row.calendly_event_start_time
+                    ? new Date(row.calendly_event_start_time).toLocaleString(undefined, {
+                        weekday: "long",
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                        timeZoneName: "short",
+                      })
+                    : "Time unknown"}
+                </div>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 4 }}>
+                  {row.calendly_join_url && (
+                    <a
+                      href={row.calendly_join_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: "#4ade80", fontSize: 12, textDecoration: "underline" }}
+                    >
+                      Join call
+                    </a>
+                  )}
+                  {row.calendly_reschedule_url && (
+                    <a
+                      href={row.calendly_reschedule_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: "rgba(255,255,255,0.65)", fontSize: 12, textDecoration: "underline" }}
+                    >
+                      Reschedule link
+                    </a>
+                  )}
+                </div>
               </div>
             )}
-          </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, fontSize: 13 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, fontSize: 13 }}>
               <Detail label="Full name" value={row.full_name} />
               <Detail label="Email" value={row.email} />
               <Detail label="Phone" value={row.phone} />
@@ -401,14 +423,13 @@ function ApplicationRow({
               <Detail label="College" value={row.college} />
               <Detail label="Grad year" value={row.graduation_year} />
               <Detail label="Can commit" value={row.can_commit} />
+              <Detail label="On-camera" value={row.comfortable_on_camera} />
+              <Detail label="Wants virality" value={row.wants_virality} />
+              <Detail label="Posted before" value={row.posted_before} />
               <Detail label="Social" value={row.social_handle} />
-              <Detail label="Video filename" value={row.video_original_name} />
-              <Detail
-                label="Size"
-                value={row.video_size_bytes ? `${Math.round(row.video_size_bytes / 1024 / 1024)} MB` : null}
-              />
               <Detail label="Created" value={relTime(row.created_at)} />
               <Detail label="Submitted" value={relTime(row.submitted_at)} />
+              <Detail label="Booked at" value={relTime(row.booked_at)} />
             </div>
 
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
