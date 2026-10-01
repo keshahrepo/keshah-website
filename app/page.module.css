@@ -4,6 +4,11 @@
    QR card is inverted (white dots on black) via filter: invert(1). */
 
 .page {
+  /* 100dvh (not min-height) so mobile hits a hard viewport cap and
+     doesn't scroll — the whole landing needs to be visible in one
+     glance on a phone. Overflow is clipped so nothing bleeds below
+     the fold on small devices. */
+  height: 100dvh;
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
@@ -11,18 +16,20 @@
   color: #fff;
   font-family: "Poppins", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  overflow: hidden;
 }
 
 .header {
-  padding: 20px 32px 0;
+  padding: 14px 24px 0;
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .logo {
   display: block;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   object-fit: contain;
 }
 
@@ -30,14 +37,15 @@
   flex: 1;
   display: flex;
   flex-direction: column-reverse;
-  gap: 40px;
+  gap: 18px;
   align-items: center;
   justify-content: center;
-  padding: 24px 24px 48px;
+  padding: 12px 20px 20px;
   max-width: 1200px;
   margin: 0 auto;
   width: 100%;
   box-sizing: border-box;
+  min-height: 0;
 }
 
 .copy {
@@ -45,30 +53,22 @@
   max-width: 440px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 14px;
   text-align: center;
+  flex-shrink: 0;
 }
 
 .title {
   font-family: "Poppins", sans-serif;
-  font-size: 36px;
+  font-size: 26px;
   font-weight: 600;
   color: #fff;
-  letter-spacing: -1.4px;
+  letter-spacing: -1.1px;
   line-height: 1.1;
   margin: 0;
 }
 
-.subtitle {
-  font-size: 16px;
-  color: rgba(255, 255, 255, 0.65);
-  line-height: 1.5;
-  margin: 0;
-  letter-spacing: -0.2px;
-}
-
-/* QR card — black card w/ a thin outline, white (inverted) QR centered.
-   Hidden on mobile where there's no second device to scan with. */
+/* QR card — hidden on mobile where there's no second device to scan. */
 .qrCard {
   display: none;
   align-items: center;
@@ -116,6 +116,7 @@
   gap: 10px;
   justify-content: center;
   flex-wrap: wrap;
+  margin-top: 4px;
 }
 
 .storeBtnPrimary,
@@ -123,13 +124,14 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 18px;
+  padding: 11px 18px;
   border-radius: 10px;
   text-decoration: none;
   font-weight: 600;
   font-size: 14px;
   letter-spacing: -0.2px;
   font-family: inherit;
+  line-height: 1;
 }
 
 .storeBtnPrimary {
@@ -137,43 +139,51 @@
   color: #000;
 }
 
+.storeBtnPrimary svg { color: #000; }
+
 .storeBtnSecondary {
   background: transparent;
   color: #fff;
   border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
-/* Phone mockup — CSS frame around the app screenshot. The screenshot's
-   dark bg blends seamlessly with the frame so no masking needed. */
+.storeBtnSecondary svg { color: #fff; }
+
+/* Phone mockup — CSS frame around the app screenshot. Scales down
+   on narrow phones so the whole landing fits without scrolling. */
 .phoneWrap {
   width: 100%;
   display: flex;
   justify-content: center;
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-height: 0;
 }
 
 .phone {
   position: relative;
-  width: 260px;
+  /* Shrinks under tight vertical constraints so title + buttons stay
+     above the fold on short viewports. Hard max keeps it from
+     ballooning on tablets. */
+  width: min(44vw, 220px);
+  max-height: 60vh;
   aspect-ratio: 9 / 19.5;
   background: #000;
-  border-radius: 38px;
-  padding: 6px;
+  border-radius: 32px;
+  padding: 5px;
   box-shadow:
     0 0 0 2px rgba(255, 255, 255, 0.08),
-    0 30px 60px rgba(0, 0, 0, 0.6),
+    0 20px 40px rgba(0, 0, 0, 0.55),
     inset 0 0 0 2px #0a0a0a;
 }
 
-/* Dynamic-island-ish pill. Pure cosmetic; sits over the top of the
-   screen so the mockup reads as a phone, not a floating screenshot. */
+/* Dynamic-island-ish pill. */
 .phoneNotch {
   position: absolute;
-  top: 10px;
+  top: 8px;
   left: 50%;
   transform: translateX(-50%);
-  width: 86px;
-  height: 20px;
+  width: 68px;
+  height: 16px;
   background: #000;
   border-radius: 999px;
   z-index: 2;
@@ -186,13 +196,25 @@
   height: 100%;
   object-fit: cover;
   object-position: top center;
-  border-radius: 32px;
+  border-radius: 28px;
   background: #000;
 }
 
 /* Desktop — two-column layout, phone on the LEFT, copy + QR on the right.
    720px is the mobile→desktop breakpoint everywhere else in the site. */
 @media (min-width: 720px) {
+  .page {
+    /* Desktop can scroll gracefully — unlock the hard cap. */
+    height: auto;
+    overflow: visible;
+  }
+
+  .header {
+    padding: 20px 32px 0;
+  }
+
+  .logo { width: 36px; height: 36px; }
+
   .hero {
     flex-direction: row-reverse;
     gap: 72px;
@@ -203,6 +225,7 @@
     text-align: left;
     align-items: flex-start;
     max-width: 460px;
+    gap: 20px;
   }
 
   .title {
@@ -211,36 +234,24 @@
     line-height: 1.05;
   }
 
-  .subtitle {
-    font-size: 18px;
-    max-width: 420px;
-  }
-
-  .qrCard {
-    display: flex;
-  }
+  .qrCard { display: flex; }
 
   /* On desktop the QR is the primary CTA. Keep store badges as a
-     fallback below, but at reduced emphasis. */
+     fallback below, at reduced emphasis. */
   .storeButtons {
     justify-content: flex-start;
     opacity: 0.9;
   }
 
-  .phoneWrap {
-    width: auto;
-  }
+  .phoneWrap { width: auto; }
 
   .phone {
     width: 300px;
+    max-height: none;
   }
 }
 
 @media (min-width: 1200px) {
-  .title {
-    font-size: 60px;
-  }
-  .phone {
-    width: 320px;
-  }
+  .title { font-size: 60px; }
+  .phone { width: 320px; }
 }
