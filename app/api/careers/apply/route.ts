@@ -21,6 +21,9 @@ type Payload = {
   college?: string;
   graduation_year?: string;
   can_commit?: string;
+  comfortable_on_camera?: string;
+  wants_virality?: string;
+  posted_before?: string;
   social_handle?: string;
   video_object_path?: string;
   video_original_name?: string;
@@ -80,6 +83,9 @@ export async function POST(req: Request) {
       college: p.college!.trim(),
       graduation_year: p.graduation_year!.trim(),
       can_commit: p.can_commit!.trim(),
+      comfortable_on_camera: (p.comfortable_on_camera ?? "").trim() || null,
+      wants_virality: (p.wants_virality ?? "").trim() || null,
+      posted_before: (p.posted_before ?? "").trim() || null,
       social_handle: (p.social_handle ?? "").trim() || null,
       // Video fields kept nullable for compatibility with any lingering
       // records; current flow doesn't collect them.

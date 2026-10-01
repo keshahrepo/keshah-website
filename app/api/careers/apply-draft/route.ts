@@ -19,6 +19,9 @@ type Payload = {
   college?: string;
   graduation_year?: string;
   can_commit?: string;
+  comfortable_on_camera?: string;
+  wants_virality?: string;
+  posted_before?: string;
   social_handle?: string;
   video_object_path?: string;
   video_original_name?: string;
@@ -80,6 +83,9 @@ export async function POST(req: Request) {
       college: (p.college ?? "").trim() || null,
       graduation_year: (p.graduation_year ?? "").trim() || null,
       can_commit: (p.can_commit ?? "").trim() || null,
+      comfortable_on_camera: (p.comfortable_on_camera ?? "").trim() || null,
+      wants_virality: (p.wants_virality ?? "").trim() || null,
+      posted_before: (p.posted_before ?? "").trim() || null,
       social_handle: (p.social_handle ?? "").trim() || null,
       video_object_path: (p.video_object_path ?? "").trim() || null,
       video_original_name: (p.video_original_name ?? "").trim() || null,

@@ -43,6 +43,9 @@ type Form = {
   college: string;
   graduation_year: string;
   can_commit: "" | YesNo;
+  comfortable_on_camera: "" | YesNo;
+  wants_virality: "" | YesNo;
+  posted_before: "" | YesNo;
   social_handle: string;
 };
 
@@ -54,6 +57,9 @@ const EMPTY: Form = {
   college: "",
   graduation_year: "",
   can_commit: "",
+  comfortable_on_camera: "",
+  wants_virality: "",
+  posted_before: "",
   social_handle: "",
 };
 
@@ -63,7 +69,7 @@ const EMPTY: Form = {
 type Step =
   | { kind: "text"; key: keyof Form; title: string; subtitle?: string; placeholder?: string; type?: "text" | "email" | "tel"; autoComplete?: string; optional?: boolean }
   | { kind: "select"; key: keyof Form; title: string; subtitle?: string; options: { value: string; label: string }[] }
-  | { kind: "yesno"; key: keyof Form; title: string; subtitle?: string; noSub?: string }
+  | { kind: "yesno"; key: keyof Form; title: string; subtitle?: string; yesLabel?: string; noLabel?: string; noSub?: string }
   | { kind: "analysis"; title: string; subtitle?: string }
   | { kind: "qualified"; title: string; subtitle?: string }
   | { kind: "calendly"; title: string; subtitle?: string };
@@ -78,7 +84,10 @@ const STEPS: Step[] = [
     { value: "2026", label: "2026" }, { value: "2027", label: "2027" },
     { value: "2028", label: "2028" }, { value: "2029", label: "2029" },
   ] },
-  { kind: "yesno", key: "can_commit", title: "Can you commit ~1 hr/day, Mon–Fri?", noSub: "This role may not be the right fit" },
+  { kind: "yesno", key: "can_commit", title: "Can you commit ~1 hr/day, Mon–Fri?", yesLabel: "Yes, I can commit", noLabel: "No, I can't", noSub: "This role may not be the right fit" },
+  { kind: "yesno", key: "comfortable_on_camera", title: "Are you comfortable on camera?", subtitle: "This role is on-camera — short-form videos filmed on your phone.", yesLabel: "Yes, I'm comfortable", noLabel: "Not really", noSub: "This role may not be the right fit" },
+  { kind: "yesno", key: "wants_virality", title: "Do you want to learn how to go viral with short-form content?", subtitle: "We'll teach you our playbook from the inside.", yesLabel: "Yes, that's exactly why I'm here", noLabel: "Not really" },
+  { kind: "yesno", key: "posted_before", title: "Have you ever posted on TikTok or Instagram before?", subtitle: "Either answer is fine — this just helps us know where to start.", yesLabel: "Yes, I've posted before", noLabel: "No, I'd be starting fresh" },
   { kind: "text", key: "social_handle", title: "TikTok or Instagram handle?", subtitle: "Optional — helps us get a sense of how you post already.", placeholder: "@yourhandle", optional: true },
   // Review-your-responses loading beat → qualified-fit reveal. Classic
   // Noom / Hims pattern — creates investment + reciprocity right before
@@ -145,6 +154,9 @@ export default function ApplyQuiz() {
           college: merged.college,
           graduation_year: merged.graduation_year,
           can_commit: merged.can_commit,
+          comfortable_on_camera: merged.comfortable_on_camera,
+          wants_virality: merged.wants_virality,
+          posted_before: merged.posted_before,
           social_handle: merged.social_handle,
         }),
         keepalive: true,
@@ -270,6 +282,9 @@ export default function ApplyQuiz() {
           college: form.college,
           graduation_year: form.graduation_year,
           can_commit: form.can_commit,
+          comfortable_on_camera: form.comfortable_on_camera,
+          wants_virality: form.wants_virality,
+          posted_before: form.posted_before,
           social_handle: form.social_handle,
         }),
       });
@@ -300,17 +315,27 @@ export default function ApplyQuiz() {
     } else if (form.gender === "male") {
       out.push("We're actively building out our men's creator roster.");
     }
+    if (form.comfortable_on_camera === "yes") {
+      out.push("You're comfortable on camera — that's half the role.");
+    }
+    if (form.posted_before === "yes" || form.social_handle.trim()) {
+      out.push("You've posted before — you've got a head start on the technique.");
+    } else if (form.posted_before === "no") {
+      out.push("You're starting fresh — we'll teach you from the first video.");
+    }
     if (form.graduation_year) {
       out.push(
-        `Your ${form.graduation_year} graduation timeline matches when we're ramping.`,
+        `Your ${form.graduation_year} graduation timeline fits our ramp.`,
       );
     }
-    out.push("You've committed to the daily cadence we need from creators.");
-    if (form.social_handle.trim()) {
-      out.push("Having an existing social presence gives you a head start.");
-    }
     return out.slice(0, 3);
-  }, [form.gender, form.graduation_year, form.social_handle]);
+  }, [
+    form.gender,
+    form.graduation_year,
+    form.social_handle,
+    form.comfortable_on_camera,
+    form.posted_before,
+  ]);
 
   // Calendly embed URL with name + email prefilled. Also pass the
   // internal applicant doc id as a UTM-style param so the Calendly
@@ -476,14 +501,23 @@ export default function ApplyQuiz() {
                     }
                   }}
                 >
-                  Yes, I can commit
+                  {step.yesLabel ?? "Yes"}
                 </button>
                 <button
                   type="button"
                   className={apply.noBtn}
-                  onClick={() => set(step.key, "no" as never)}
+                  onClick={() => {
+                    // "No" is a soft record on hard-filter steps and a
+                    // normal advance on soft steps. Soft = no noSub.
+                    set(step.key, "no" as never);
+                    saveDraft({ [step.key]: "no" as never });
+                    if (!step.noSub && stepIdx < STEPS.length - 1) {
+                      setStepIdx((i) => i + 1);
+                      setError(null);
+                    }
+                  }}
                 >
-                  <span>No, I can&apos;t</span>
+                  <span>{step.noLabel ?? "No"}</span>
                   {step.noSub && <span className={apply.noBtnSub}>{step.noSub}</span>}
                 </button>
               </div>
@@ -619,7 +653,7 @@ export default function ApplyQuiz() {
                     margin: 0,
                   }}
                 >
-                  Based on your responses, you&apos;d be a strong fit for the KESHAH creator team.
+                  Based on your responses, you may be a strong fit for the KESHAH creator team.
                 </p>
 
                 <ul
