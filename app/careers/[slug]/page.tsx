@@ -46,7 +46,7 @@ export default async function RoleDetail({
   const onSite = ON_SITE_APPLY[listing.slug];
   const subject = encodeURIComponent(`Application: ${listing.title}`);
   const body = encodeURIComponent(
-    `Hi KESHAH team,\n\nI'd like to apply for the ${listing.title} role.\n\nName:\nSchool (if applicable):\nLink to short test video:\n\n—`
+    `Hi KESHAH team,\n\nI'd like to apply for the ${listing.title} role.\n\nName:\nSchool (if applicable):\nTimes I'm free this week for a 30-min group interview:\n\n—`
   );
   const applyHref = onSite ?? `mailto:${APPLY_EMAIL}?subject=${subject}&body=${body}`;
 
@@ -170,8 +170,8 @@ export default async function RoleDetail({
         </a>
         <div className={styles.applyNote}>
           {onSite
-            ? "Takes about 10 minutes. Your test video is your application."
-            : "Include a short test video link (Loom, unlisted YouTube, or Drive)"}
+            ? "Takes about 5 minutes. You'll pick a time for a 30-min group interview with Aadi."
+            : "Mention when you'd be free for a 30-min group interview this week"}
         </div>
       </div>
     </main>
