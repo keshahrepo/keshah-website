@@ -75,9 +75,8 @@ export const LISTINGS: Listing[] = [
     compensation:
       "Base $400/mo + $15 bonus per video over 100K views, following a paid two-week trial.",
     applicationProcess: [
-      "Apply and pick a time for a 30-min group interview with Aadi, our founder",
-      "Download KESHAH and go through the onboarding and quiz before your call",
-      "Join the group interview on Zoom",
+      "Apply",
+      "If deemed a fit, select a time for a 30-min group interview with Aadi, our founder",
       "Selected applicants begin a paid two-week trial",
       "Following a successful trial, you officially join the KESHAH creator team",
     ],
