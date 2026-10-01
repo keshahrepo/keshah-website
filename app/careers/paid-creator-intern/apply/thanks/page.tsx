@@ -162,7 +162,7 @@ function ThanksInner() {
               letterSpacing: -0.2,
             }}
           >
-            Download KESHAH and spend 10 min going through it.
+            Download KESHAH and go through the onboarding and quiz in the app.
           </div>
           <div
             style={{
@@ -171,9 +171,7 @@ function ThanksInner() {
               lineHeight: 1.5,
             }}
           >
-            We&apos;ll ask about your experience on the call — what caught
-            your attention, what you&apos;d make a TikTok about. The
-            applicants who come prepped stand out.
+            We may ask questions about your experience on the call.
           </div>
 
           <div
