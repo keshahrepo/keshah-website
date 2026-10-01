@@ -98,7 +98,7 @@ export default async function RoleDetail({
             have to scroll to the bottom. */}
         <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 40 }}>
           <a href={applyHref} className={styles.applyBtn} style={{ maxWidth: 280 }}>
-            {onSite ? "Start application" : `Apply — email ${APPLY_EMAIL}`}
+            {onSite ? "Start your application" : `Apply — email ${APPLY_EMAIL}`}
           </a>
           {onSite && (
             <span style={{ fontSize: 13, color: "rgba(255,255,255,0.5)" }}>
@@ -157,7 +157,7 @@ export default async function RoleDetail({
 
       <div className={styles.applyBar}>
         <a href={applyHref} className={styles.applyBtn}>
-          {onSite ? "Start application" : `Apply — email ${APPLY_EMAIL}`}
+          {onSite ? "Start your application" : `Apply — email ${APPLY_EMAIL}`}
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
             <path
               d="M3 7h8M8 3l4 4-4 4"
