@@ -1,10 +1,7 @@
-/* Mirrors the mobile app's GenderSelectionPage exactly.
-   App reference: lib/screens/gender/select_gender_page.dart
-                  lib/screens/gender/widgets/gender_selection_content.dart
-   Colors: kBlack #000 bg, kWhite #fff fg.
-   Title:  Poppins SemiBold 28pt, letter-spacing -1.2, line-height 1.25.
-   Cards:  14px radius, 20/16 padding, white-15% border, white-100% selected.
-   Next:   white background, 40px-ish radius (KeshahButton), full width. */
+/* keshah.com root — download splash.
+   Dark bg, hero + phone mockup side-by-side on desktop; stacked on mobile.
+   Phone mockup is a CSS frame around the existing app-screenshot image.
+   QR card is inverted (white dots on black) via filter: invert(1). */
 
 .page {
   min-height: 100dvh;
@@ -14,9 +11,6 @@
   color: #fff;
   font-family: "Poppins", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
-  /* No overflow:hidden — short desktop viewports had content clipped
-     off the top when it didn't fit. Page now scrolls gracefully on
-     narrow windows. */
 }
 
 .header {
@@ -32,104 +26,221 @@
   object-fit: contain;
 }
 
-.body {
+.hero {
   flex: 1;
   display: flex;
+  flex-direction: column-reverse;
+  gap: 40px;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 24px 48px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.copy {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
   flex-direction: column;
-  padding: 24px 0 0;
-  min-height: 0;
+  gap: 20px;
+  text-align: center;
 }
 
 .title {
   font-family: "Poppins", sans-serif;
-  font-size: 28px;
+  font-size: 36px;
   font-weight: 600;
   color: #fff;
-  letter-spacing: -1.2px;
-  line-height: 1.25;
-  margin: 0 0 32px;
-  padding: 0 32px;
+  letter-spacing: -1.4px;
+  line-height: 1.1;
+  margin: 0;
 }
 
-.options {
+.subtitle {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.65);
+  line-height: 1.5;
+  margin: 0;
+  letter-spacing: -0.2px;
+}
+
+/* QR card — black card w/ a thin outline, white (inverted) QR centered.
+   Hidden on mobile where there's no second device to scan with. */
+.qrCard {
+  display: none;
+  align-items: center;
+  gap: 18px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  text-align: left;
+}
+
+.qr {
+  width: 112px;
+  height: 112px;
+  display: block;
+  flex-shrink: 0;
+  /* Flip black-on-white → white-on-black so the code reads cleanly
+     on the dark surface. QR scanners handle inverted codes fine. */
+  filter: invert(1);
+  border-radius: 6px;
+}
+
+.qrLabel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 0 32px;
+  gap: 4px;
 }
 
-.option {
+.qrTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: -0.2px;
+}
+
+.qrSub {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.4;
+}
+
+/* Store badges — mobile CTA. */
+.storeButtons {
   display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.storeBtnPrimary,
+.storeBtnSecondary {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 14px;
-  cursor: pointer;
-  transition: border-color 120ms ease, transform 120ms ease;
-  -webkit-tap-highlight-color: transparent;
-  appearance: none;
-  width: 100%;
+  gap: 8px;
+  padding: 12px 18px;
+  border-radius: 10px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.2px;
   font-family: inherit;
 }
 
-.option:active {
-  transform: scale(0.99);
+.storeBtnPrimary {
+  background: #fff;
+  color: #000;
 }
 
-.optionSelected {
-  border: 1.5px solid #fff;
-}
-
-.optionLabel {
-  font-family: "Poppins", sans-serif;
-  font-size: 15px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.5);
-  text-align: left;
-  letter-spacing: -0.1px;
-}
-
-.optionLabelSelected {
+.storeBtnSecondary {
+  background: transparent;
   color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
-/* Desktop polish — the app is mobile-only, so on web we keep the splash
-   centered with a phone-screen-sized max width so it doesn't sprawl
-   across a 1440px monitor. */
-@media (min-width: 768px) {
-  .page {
-    align-items: center;
-    justify-content: center;
+/* Phone mockup — CSS frame around the app screenshot. The screenshot's
+   dark bg blends seamlessly with the frame so no masking needed. */
+.phoneWrap {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.phone {
+  position: relative;
+  width: 260px;
+  aspect-ratio: 9 / 19.5;
+  background: #000;
+  border-radius: 38px;
+  padding: 6px;
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.08),
+    0 30px 60px rgba(0, 0, 0, 0.6),
+    inset 0 0 0 2px #0a0a0a;
+}
+
+/* Dynamic-island-ish pill. Pure cosmetic; sits over the top of the
+   screen so the mockup reads as a phone, not a floating screenshot. */
+.phoneNotch {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 86px;
+  height: 20px;
+  background: #000;
+  border-radius: 999px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.phoneScreen {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  border-radius: 32px;
+  background: #000;
+}
+
+/* Desktop — two-column layout, phone on the right, copy + QR on the left.
+   720px is the mobile→desktop breakpoint everywhere else in the site. */
+@media (min-width: 720px) {
+  .hero {
+    flex-direction: row;
+    gap: 72px;
+    padding: 32px 48px 64px;
   }
 
-  .header,
-  .body {
-    width: 100%;
-    max-width: 440px;
-  }
-
-  .header {
-    padding: 24px 32px 0;
-  }
-
-  .body {
-    padding: 32px 0 0;
-    flex: 0 0 auto;
+  .copy {
+    text-align: left;
+    align-items: flex-start;
+    max-width: 460px;
   }
 
   .title {
-    font-size: 32px;
-    letter-spacing: -1.3px;
-    margin-bottom: 36px;
+    font-size: 52px;
+    letter-spacing: -2px;
+    line-height: 1.05;
   }
 
-  .option {
-    padding: 18px 22px;
+  .subtitle {
+    font-size: 18px;
+    max-width: 420px;
   }
 
-  .optionLabel {
-    font-size: 16px;
+  .qrCard {
+    display: flex;
+  }
+
+  /* On desktop the QR is the primary CTA. Keep store badges as a
+     fallback below, but at reduced emphasis. */
+  .storeButtons {
+    justify-content: flex-start;
+    opacity: 0.9;
+  }
+
+  .phoneWrap {
+    width: auto;
+  }
+
+  .phone {
+    width: 300px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .title {
+    font-size: 60px;
+  }
+  .phone {
+    width: 320px;
   }
 }
