@@ -86,7 +86,7 @@ const STEPS: Step[] = [
   ] },
   { kind: "yesno", key: "can_commit", title: "Can you commit ~1 hr/day, Mon–Fri?", yesLabel: "Yes, I can commit", noLabel: "No, I can't", noSub: "This role may not be the right fit" },
   { kind: "yesno", key: "comfortable_on_camera", title: "Are you comfortable on camera?", subtitle: "This role is on-camera — short-form videos filmed on your phone.", yesLabel: "Yes, I'm comfortable", noLabel: "Not really", noSub: "This role may not be the right fit" },
-  { kind: "yesno", key: "wants_virality", title: "Do you want to learn how to go viral with short-form content?", subtitle: "We'll teach you our playbook from the inside.", yesLabel: "Yes, that's exactly why I'm here", noLabel: "Not really" },
+  { kind: "yesno", key: "wants_virality", title: "Do you want to learn how to go viral with short-form content?", subtitle: "Selected interns learn the same system which has helped us generate 80M+ views in the last 6 months.", yesLabel: "Yes, that's exactly why I'm here", noLabel: "Not really" },
   { kind: "yesno", key: "posted_before", title: "Have you ever posted on TikTok or Instagram before?", subtitle: "Either answer is fine — this just helps us know where to start.", yesLabel: "Yes, I've posted before", noLabel: "No, I'd be starting fresh" },
   { kind: "text", key: "social_handle", title: "TikTok or Instagram handle?", subtitle: "Optional — helps us get a sense of how you post already.", placeholder: "@yourhandle", optional: true },
   // Review-your-responses loading beat → qualified-fit reveal. Classic
