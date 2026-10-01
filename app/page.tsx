@@ -14,7 +14,7 @@
 import Image from "next/image";
 import styles from "./page.module.css";
 
-const APP_STORE_URL = "https://apps.apple.com/us/app/keshah/id6471162305";
+const APP_STORE_URL = "https://apps.apple.com/us/app/keshah/id6450676544";
 const PLAY_STORE_URL =
   "https://play.google.com/store/apps/details?id=com.keshahapp.hair";
 

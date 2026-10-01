@@ -18,7 +18,7 @@ import { Suspense, useEffect } from "react";
 
 const DRAFT_STORAGE_KEY = "keshah_careers_draft_id_v1";
 
-const APP_STORE_URL = "https://apps.apple.com/us/app/keshah/id6471162305";
+const APP_STORE_URL = "https://apps.apple.com/us/app/keshah/id6450676544";
 const PLAY_STORE_URL =
   "https://play.google.com/store/apps/details?id=com.keshahapp.hair";
 
