@@ -190,11 +190,11 @@
   background: #000;
 }
 
-/* Desktop — two-column layout, phone on the right, copy + QR on the left.
+/* Desktop — two-column layout, phone on the LEFT, copy + QR on the right.
    720px is the mobile→desktop breakpoint everywhere else in the site. */
 @media (min-width: 720px) {
   .hero {
-    flex-direction: row;
+    flex-direction: row-reverse;
     gap: 72px;
     padding: 32px 48px 64px;
   }
