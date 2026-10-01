@@ -84,10 +84,10 @@ const STEPS: Step[] = [
     { value: "2026", label: "2026" }, { value: "2027", label: "2027" },
     { value: "2028", label: "2028" }, { value: "2029", label: "2029" },
   ] },
-  { kind: "yesno", key: "can_commit", title: "Can you commit ~1 hr/day, Mon–Fri?", yesLabel: "Yes, I can commit", noLabel: "No, I can't", noSub: "This role may not be the right fit" },
-  { kind: "yesno", key: "comfortable_on_camera", title: "Are you comfortable on camera?", subtitle: "This role is on-camera — short-form videos filmed on your phone.", yesLabel: "Yes, I'm comfortable", noLabel: "Not really", noSub: "This role may not be the right fit" },
-  { kind: "yesno", key: "wants_virality", title: "Do you want to learn how to go viral with short-form content?", subtitle: "Selected interns learn the same system which has helped us generate 80M+ views in the last 6 months.", yesLabel: "Yes, that's exactly why I'm here", noLabel: "Not really" },
-  { kind: "yesno", key: "posted_before", title: "Have you ever posted on TikTok or Instagram before?", subtitle: "Either answer is fine — this just helps us know where to start.", yesLabel: "Yes, I've posted before", noLabel: "No, I'd be starting fresh" },
+  { kind: "yesno", key: "can_commit", title: "Can you commit ~1 hr/day, Mon–Fri?", yesLabel: "Yes, I can", noLabel: "No, I can't", noSub: "This role may not be the right fit" },
+  { kind: "yesno", key: "comfortable_on_camera", title: "Are you comfortable on camera?", subtitle: "This role is on-camera. Short-form videos filmed on your phone.", yesLabel: "Yes, I am", noLabel: "No, I'm not", noSub: "This role may not be the right fit" },
+  { kind: "yesno", key: "wants_virality", title: "Do you want to learn how to go viral with short-form content?", subtitle: "Selected interns learn the same system which has helped us generate 80M+ views in the last 6 months.", yesLabel: "Yes, I do", noLabel: "Not particularly" },
+  { kind: "yesno", key: "posted_before", title: "Have you ever posted on TikTok or Instagram before?", subtitle: "Either answer is fine. This just helps us know where to start.", yesLabel: "Yes, I have", noLabel: "No, I haven't" },
   { kind: "text", key: "social_handle", title: "TikTok or Instagram handle?", subtitle: "Optional — helps us get a sense of how you post already.", placeholder: "@yourhandle", optional: true },
   // Review-your-responses loading beat → qualified-fit reveal. Classic
   // Noom / Hims pattern — creates investment + reciprocity right before
@@ -95,7 +95,7 @@ const STEPS: Step[] = [
   // screen hands off to Calendly on tap.
   { kind: "analysis", title: "Reviewing your responses…" },
   { kind: "qualified", title: "You've been invited to interview." },
-  { kind: "calendly", title: "Pick your interview time.", subtitle: "30-min group interview with Aadi, our founder. Small group — 6-8 people." },
+  { kind: "calendly", title: "Select your interview time.", subtitle: "30-min group interview with Aadi, our founder. Groups of 6-8 applicants." },
 ];
 
 // Rotating checklist shown during the analysis beat. Mirrors the
@@ -320,21 +320,21 @@ export default function ApplyQuiz() {
   const qualifiedBullets = useMemo<string[]>(() => {
     const out: string[] = [];
     if (form.gender === "female") {
-      out.push("We need more women on the team right now.");
+      out.push("We're actively hiring more women for the creator team.");
     } else if (form.gender === "male") {
-      out.push("We need more guys on the team right now.");
+      out.push("We're actively hiring more men for the creator team.");
     }
     if (form.comfortable_on_camera === "yes") {
-      out.push("Being comfortable on camera is a big part of this role.");
+      out.push("Camera comfort is a core requirement for this role.");
     }
     if (form.posted_before === "yes" || form.social_handle.trim()) {
-      out.push("You've posted before, so you're a step ahead.");
+      out.push("Prior posting experience gives you a head start.");
     } else if (form.posted_before === "no") {
-      out.push("You're new to posting, that's totally fine. We start from scratch.");
+      out.push("No prior experience required. Our team trains creators from scratch.");
     }
     if (form.graduation_year) {
       out.push(
-        `You graduate in ${form.graduation_year}, right when we're hiring more creators.`,
+        `Your ${form.graduation_year} graduation aligns with our hiring timeline.`,
       );
     }
     return out.slice(0, 3);
@@ -822,7 +822,7 @@ export default function ApplyQuiz() {
               aria-disabled={!canGo || submitting}
             >
               {step.kind === "qualified"
-                ? "Pick your interview time →"
+                ? "Select your interview time →"
                 : step.kind === "text" && step.optional
                 ? form[step.key]
                   ? "Continue"

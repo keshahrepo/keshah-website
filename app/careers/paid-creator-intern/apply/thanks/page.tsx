@@ -20,15 +20,14 @@ import styles from "../../../careers.module.css";
 
 const DRAFT_STORAGE_KEY = "keshah_careers_draft_id_v1";
 
+// Fallback Calendly link for applicants who land here without a
+// booking (closed the embed mid-way, backed out, etc.).
+const CALENDLY_URL = "https://calendly.com/aadi-keshah/group-interview";
+
 // App Store IDs — update if the store links change.
 const APP_STORE_URL = "https://apps.apple.com/us/app/keshah/id6471162305";
 const PLAY_STORE_URL =
   "https://play.google.com/store/apps/details?id=com.keshahapp.hair";
-
-function sanitizeName(raw: string | null | undefined): string {
-  const v = (raw ?? "").trim();
-  return v.replace(/[^A-Za-z\-'\s]/g, "").slice(0, 40) || "there";
-}
 
 // Calendly sends event_start_time as an ISO 8601 string in the invitee's
 // local time (e.g. "2026-10-07T15:00:00-07:00"). Format it in a friendly
@@ -55,11 +54,6 @@ function formatBookingTime(iso: string | null): string | null {
 function ThanksInner() {
   const params = useSearchParams();
 
-  // Prefer invitee_full_name (comes from Calendly's form), fall back to
-  // ?name= passed from the apply page in older flows.
-  const firstName = sanitizeName(
-    params.get("invitee_full_name")?.split(/\s+/)[0] ?? params.get("name"),
-  );
   const bookingTime = formatBookingTime(params.get("event_start_time"));
   const hasBooking = !!bookingTime;
 
@@ -88,7 +82,9 @@ function ThanksInner() {
         }}
       >
         <h1 className={`${styles.title} ${styles.fadeTitle}`}>
-          {hasBooking ? `You're in, ${firstName}.` : `Thanks, ${firstName}.`}
+          {hasBooking
+            ? "One thing before your interview."
+            : "Application received."}
         </h1>
 
         {hasBooking ? (
@@ -104,9 +100,10 @@ function ThanksInner() {
               margin: 0,
             }}
           >
-            Your group interview is booked for{" "}
+            Your group interview is confirmed for{" "}
             <span style={{ color: "#FFFFFF", fontWeight: 600 }}>{bookingTime}</span>.
-            We&apos;ve emailed the Zoom link and will text you an hour before.
+            Check your calendar for joining details. Please complete the
+            following before your call.
           </p>
         ) : (
           <p
@@ -121,14 +118,14 @@ function ThanksInner() {
               margin: 0,
             }}
           >
-            Application received. Finish booking your group interview and
-            you&apos;re set.
+            Finish booking your group interview below to secure your spot.
           </p>
         )}
 
-        {/* The real ask: download the app before the call. This is both
-            legitimacy signal ("we have a shipping product") and prep —
-            we ask about the app on the call. */}
+        {/* The real ask (booked state): download the app before the
+            call. This is both legitimacy signal ("we have a shipping
+            product") and prep — we may ask about the app on the call. */}
+        {hasBooking && (
         <div
           className={styles.fadeOptions}
           style={{
@@ -142,17 +139,6 @@ function ThanksInner() {
             gap: 14,
           }}
         >
-          <div
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              letterSpacing: 1.2,
-              color: "rgba(255,255,255,0.55)",
-              textTransform: "uppercase",
-            }}
-          >
-            One thing before your call
-          </div>
           <div
             style={{
               fontSize: 17,
@@ -231,6 +217,39 @@ function ThanksInner() {
             </a>
           </div>
         </div>
+        )}
+
+        {/* Not-booked state: the applicant landed here without a
+            Calendly slot (closed the embed, backed out, etc.). Give
+            them a one-tap way to pick a time so they're not stranded. */}
+        {!hasBooking && (
+          <a
+            href={CALENDLY_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={styles.fadeOptions}
+            style={{
+              marginTop: 4,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              background: "#FFFFFF",
+              color: "#0a0a0a",
+              padding: "14px 20px",
+              borderRadius: 12,
+              textDecoration: "none",
+              fontWeight: 600,
+              fontSize: 15,
+              letterSpacing: -0.2,
+            }}
+          >
+            Select a time
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path d="M3 7h8M8 3l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </a>
+        )}
 
         <p
           className={styles.fadeButton}
