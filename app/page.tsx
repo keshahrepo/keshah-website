@@ -34,7 +34,7 @@ export default function Home() {
 
       <div className={styles.hero}>
         <div className={styles.copy}>
-          <h1 className={styles.title}>Stop your hair loss.</h1>
+          <h1 className={styles.title}>Stop your hair loss + keep it.</h1>
           <p className={styles.subtitle}>
             20 minutes a day. No drugs. The science behind it, in your pocket.
           </p>
