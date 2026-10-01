@@ -123,8 +123,9 @@ function ThanksInner() {
         )}
 
         {/* The real ask (booked state): download the app before the
-            call. This is both legitimacy signal ("we have a shipping
-            product") and prep — we may ask about the app on the call. */}
+            call. Framed to make clear this is the app you'll be
+            creating content around — otherwise the download task
+            reads as random/unrelated. */}
         {hasBooking && (
         <div
           className={styles.fadeOptions}
@@ -148,7 +149,7 @@ function ThanksInner() {
               letterSpacing: -0.2,
             }}
           >
-            Download KESHAH and go through the onboarding and quiz in the app.
+            Download KESHAH and go through the onboarding and quiz.
           </div>
           <div
             style={{
@@ -157,10 +158,15 @@ function ThanksInner() {
               lineHeight: 1.5,
             }}
           >
-            We may ask questions about your experience on the call.
+            KESHAH is the product you&apos;ll be creating content around.
+            Hands-on experience with the app gives you something concrete
+            to speak to in your interview — we may ask about it on the call.
           </div>
 
+          {/* Mobile: store badges. Hidden on desktop where tapping store
+              links from a laptop just dead-ends on a web page. */}
           <div
+            className="thanks-mobile-cta"
             style={{
               display: "flex",
               gap: 10,
@@ -216,6 +222,62 @@ function ThanksInner() {
               Google Play
             </a>
           </div>
+
+          {/* Desktop: QR code to scan with phone. Points to the smart
+              link that routes to the right store. */}
+          <div
+            className="thanks-desktop-cta"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 16,
+              marginTop: 8,
+              padding: "14px 14px",
+              background: "#FFFFFF",
+              borderRadius: 12,
+            }}
+          >
+            <img
+              src="/careers/keshah-qr-code.svg"
+              alt="Scan to download KESHAH"
+              width={120}
+              height={120}
+              style={{ display: "block", borderRadius: 4 }}
+            />
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+                color: "#0a0a0a",
+                flex: 1,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 15,
+                  fontWeight: 700,
+                  letterSpacing: -0.2,
+                }}
+              >
+                Scan with your phone
+              </div>
+              <div
+                style={{
+                  fontSize: 13,
+                  color: "rgba(10,10,10,0.65)",
+                  lineHeight: 1.45,
+                }}
+              >
+                Opens KESHAH in the App Store or Google Play.
+              </div>
+            </div>
+          </div>
+
+          <style>{`
+            @media (min-width: 720px) { .thanks-mobile-cta { display: none !important; } }
+            @media (max-width: 719px) { .thanks-desktop-cta { display: none !important; } }
+          `}</style>
         </div>
         )}
 
@@ -268,14 +330,6 @@ function ThanksInner() {
           </a>
         </p>
       </section>
-
-      <div className={styles.spacerLarge} />
-
-      <div className={`${styles.bottom} ${styles.fadeButton}`}>
-        <Link href="/careers" className={styles.primaryBtn} style={{ textDecoration: "none", textAlign: "center" }}>
-          Back to all roles
-        </Link>
-      </div>
     </>
   );
 }
