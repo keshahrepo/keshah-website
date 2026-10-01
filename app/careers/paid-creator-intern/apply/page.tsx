@@ -98,15 +98,18 @@ const STEPS: Step[] = [
   { kind: "calendly", title: "Pick your interview time.", subtitle: "30-min group interview with Aadi, our founder. Small group — 6-8 people." },
 ];
 
-// Rotating checklist shown during the analysis beat. Each item fades in
-// at ~800ms intervals; after the last one, the screen auto-advances.
+// Rotating checklist shown during the analysis beat. Mirrors the
+// mobile app's BuildingYourPlan loading pattern — uneven per-step
+// delays so the loader doesn't read as a stopwatch, horizontal
+// progress bar fills in lockstep with the ticks.
 const ANALYSIS_STEPS: string[] = [
   "Reviewing your responses",
   "Checking schedule fit",
-  "Matching to our creator roster",
+  "Matching to our team",
   "Finalizing your invite",
 ];
-const ANALYSIS_TICK_MS = 800;
+const ANALYSIS_TICK_DELAYS = [1300, 2600, 1700, 2900];
+const ANALYSIS_HOLD_MS = 900;
 
 export default function ApplyQuiz() {
   const [stepIdx, setStepIdx] = useState(0);
@@ -189,26 +192,32 @@ export default function ApplyQuiz() {
   }, [stepIdx]);
 
   // Drive the analysis loading screen. Ticks one checklist item at a
-  // time until all are "complete", then auto-advances to the qualified
+  // time at uneven delays (mobile pattern), updating analysisProgress
+  // which drives both the checklist state AND the progress-bar width.
+  // After the last tick + a hold, auto-advances to the qualified
   // reveal. Resets progress every time we re-enter the analysis step.
   useEffect(() => {
     if (step.kind !== "analysis") return;
     setAnalysisProgress(0);
-    let i = 0;
-    const timer = setInterval(() => {
-      i += 1;
-      setAnalysisProgress(i);
-      if (i >= ANALYSIS_STEPS.length) {
-        clearInterval(timer);
-        // Small beat after the last checkmark so the user sees it
-        // confirm before we move them on.
-        setTimeout(() => {
-          setStepIdx((idx) => idx + 1);
-          setError(null);
-        }, 500);
-      }
-    }, ANALYSIS_TICK_MS);
-    return () => clearInterval(timer);
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
+    let elapsed = 0;
+    for (let i = 0; i < ANALYSIS_TICK_DELAYS.length; i++) {
+      elapsed += ANALYSIS_TICK_DELAYS[i];
+      const tickNumber = i + 1;
+      timeouts.push(
+        setTimeout(() => setAnalysisProgress(tickNumber), elapsed),
+      );
+    }
+    // Hold on 100% a beat so the final check lands before we advance.
+    timeouts.push(
+      setTimeout(() => {
+        setStepIdx((idx) => idx + 1);
+        setError(null);
+      }, elapsed + ANALYSIS_HOLD_MS),
+    );
+    return () => {
+      for (const t of timeouts) clearTimeout(t);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepIdx]);
 
@@ -311,21 +320,21 @@ export default function ApplyQuiz() {
   const qualifiedBullets = useMemo<string[]>(() => {
     const out: string[] = [];
     if (form.gender === "female") {
-      out.push("We're actively building out our women's creator roster.");
+      out.push("We need more women on the team right now.");
     } else if (form.gender === "male") {
-      out.push("We're actively building out our men's creator roster.");
+      out.push("We need more guys on the team right now.");
     }
     if (form.comfortable_on_camera === "yes") {
-      out.push("You're comfortable on camera — that's half the role.");
+      out.push("Being comfortable on camera is a big part of this role.");
     }
     if (form.posted_before === "yes" || form.social_handle.trim()) {
-      out.push("You've posted before — you've got a head start on the technique.");
+      out.push("You've posted before, so you're a step ahead.");
     } else if (form.posted_before === "no") {
-      out.push("You're starting fresh — we'll teach you from the first video.");
+      out.push("You're new to posting, that's totally fine. We start from scratch.");
     }
     if (form.graduation_year) {
       out.push(
-        `Your ${form.graduation_year} graduation timeline fits our ramp.`,
+        `You graduate in ${form.graduation_year}, right when we're hiring more creators.`,
       );
     }
     return out.slice(0, 3);
@@ -340,18 +349,27 @@ export default function ApplyQuiz() {
   // Calendly embed URL with name + email prefilled. Also pass the
   // internal applicant doc id as a UTM-style param so the Calendly
   // webhook can match the booking back to the right applicant.
+  //
+  // Hand-build the query string with encodeURIComponent instead of
+  // URLSearchParams — URLSearchParams encodes space as "+", which
+  // Calendly renders literally (e.g. "Aaditya+Agrawal" in the invitee
+  // name field). encodeURIComponent uses %20 for space, which Calendly
+  // decodes correctly.
   const calendlyEmbedUrl = (() => {
-    const u = new URL(CALENDLY_URL);
-    if (form.full_name.trim()) u.searchParams.set("name", form.full_name.trim());
-    if (form.email.trim()) u.searchParams.set("email", form.email.trim().toLowerCase());
-    if (draftIdRef.current) u.searchParams.set("utm_source", draftIdRef.current);
+    const parts: string[] = [];
+    const add = (k: string, v: string) => {
+      parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(v)}`);
+    };
+    if (form.full_name.trim()) add("name", form.full_name.trim());
+    if (form.email.trim()) add("email", form.email.trim().toLowerCase());
+    if (draftIdRef.current) add("utm_source", draftIdRef.current);
     // Hide default Calendly chrome — our page already has a header +
     // we don't want duplicate branding stacked on top.
-    u.searchParams.set("hide_gdpr_banner", "1");
-    u.searchParams.set("primary_color", "ffffff");
-    u.searchParams.set("background_color", "0a0a0a");
-    u.searchParams.set("text_color", "ffffff");
-    return u.toString();
+    add("hide_gdpr_banner", "1");
+    add("primary_color", "ffffff");
+    add("background_color", "0a0a0a");
+    add("text_color", "ffffff");
+    return `${CALENDLY_URL}?${parts.join("&")}`;
   })();
 
   const canGo = canContinue();
@@ -528,75 +546,129 @@ export default function ApplyQuiz() {
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  gap: 14,
+                  gap: 20,
                   marginTop: 12,
                 }}
               >
-                {ANALYSIS_STEPS.map((label, i) => {
-                  const done = i < analysisProgress;
-                  const active = i === analysisProgress;
-                  return (
+                {/* Horizontal progress bar — mirrors mobile BuildingYourPlan
+                    pattern (6px track, white fill, percent label on right). */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                  }}
+                >
+                  <div
+                    style={{
+                      flex: 1,
+                      position: "relative",
+                      height: 6,
+                      background: "rgba(255,255,255,0.08)",
+                      borderRadius: 3,
+                      overflow: "hidden",
+                    }}
+                  >
                     <div
-                      key={i}
                       style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 12,
-                        opacity: done || active ? 1 : 0.3,
-                        transition: "opacity 400ms ease",
+                        position: "absolute",
+                        inset: 0,
+                        width: `${Math.max(2, (analysisProgress / ANALYSIS_STEPS.length) * 100)}%`,
+                        background: "#FFFFFF",
+                        borderRadius: 3,
+                        transition: `width ${
+                          analysisProgress > 0
+                            ? ANALYSIS_TICK_DELAYS[analysisProgress - 1] ?? 800
+                            : 400
+                        }ms ease-out`,
                       }}
-                    >
-                      <span
+                    />
+                  </div>
+                  <div
+                    style={{
+                      width: 36,
+                      textAlign: "right",
+                      fontFamily: "var(--font-sans)",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: "#FFFFFF",
+                      letterSpacing: -0.2,
+                    }}
+                  >
+                    {Math.round((analysisProgress / ANALYSIS_STEPS.length) * 100)}%
+                  </div>
+                </div>
+
+                {/* Checklist — green check at 100%, dim at not-yet. */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 14,
+                  }}
+                >
+                  {ANALYSIS_STEPS.map((label, i) => {
+                    const done = i < analysisProgress;
+                    return (
+                      <div
+                        key={i}
                         style={{
-                          width: 20,
-                          height: 20,
-                          borderRadius: "50%",
-                          display: "inline-flex",
+                          display: "flex",
                           alignItems: "center",
-                          justifyContent: "center",
-                          background: done ? "#FFFFFF" : "transparent",
-                          border: done
-                            ? "1px solid #FFFFFF"
-                            : "1px solid rgba(255,255,255,0.3)",
-                          transition: "all 300ms ease",
+                          gap: 14,
+                          opacity: done ? 1 : 0.35,
+                          transition: "opacity 400ms ease",
                         }}
                       >
-                        {done ? (
-                          <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
-                            <path
-                              d="M3 7.5l3 3 5-6"
-                              stroke="#0a0a0a"
-                              strokeWidth="1.8"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        ) : active ? (
-                          <span
-                            style={{
-                              width: 10,
-                              height: 10,
-                              borderRadius: "50%",
-                              border: "1.5px solid rgba(255,255,255,0.6)",
-                              borderTopColor: "transparent",
-                              animation: "spin 700ms linear infinite",
-                            }}
-                          />
-                        ) : null}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 16,
-                          color: done ? "#FFFFFF" : "rgba(255,255,255,0.85)",
-                          fontWeight: done ? 500 : 400,
-                        }}
-                      >
-                        {label}
-                      </span>
-                    </div>
-                  );
-                })}
-                <style>{`@keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }`}</style>
+                        <span
+                          style={{
+                            width: 22,
+                            height: 22,
+                            borderRadius: "50%",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            background: done
+                              ? "#359033"
+                              : "rgba(255,255,255,0.06)",
+                            border: done
+                              ? "1.4px solid #359033"
+                              : "1.4px solid rgba(255,255,255,0.25)",
+                            transition: "all 300ms ease",
+                          }}
+                        >
+                          {done && (
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 14 14"
+                              fill="none"
+                            >
+                              <path
+                                d="M3 7.5l3 3 5-6"
+                                stroke="#FFFFFF"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          )}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 15,
+                            fontWeight: 500,
+                            color: "#FFFFFF",
+                            letterSpacing: -0.2,
+                            lineHeight: 1.35,
+                          }}
+                        >
+                          {label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
