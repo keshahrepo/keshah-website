@@ -116,15 +116,25 @@ export async function POST(req: Request) {
   }
 
   // Fallback: match by email on the most recent application for that
-  // address. Only takes effect if the draft_id lookup missed.
+  // address. Only takes effect if the draft_id lookup missed. Sort is
+  // done client-side so Firestore doesn't need a composite index on
+  // (email, last_updated_at).
   if (!docId && email) {
     const q = await db
       .collection("careers_applications")
       .where("email", "==", email)
-      .orderBy("last_updated_at", "desc")
-      .limit(1)
+      .limit(5)
       .get();
-    if (!q.empty) docId = q.docs[0].id;
+    if (!q.empty) {
+      const sorted = q.docs
+        .map((d) => {
+          const u = d.data() as { last_updated_at?: { toMillis?: () => number } };
+          const ms = u.last_updated_at?.toMillis?.() ?? 0;
+          return { id: d.id, ms };
+        })
+        .sort((a, b) => b.ms - a.ms);
+      docId = sorted[0].id;
+    }
   }
 
   if (!docId) {
