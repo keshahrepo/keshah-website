@@ -30,7 +30,17 @@ interface Data {
     looser: { cohort: number; paid: number; pct: number };
     noChange: { cohort: number; paid: number; pct: number };
   };
-  completion: Record<string, { eligible: number; completed: number; pct: number }>;
+  completion: Record<
+    string,
+    {
+      eligible: number;
+      completed: number;
+      pct: number;
+      cohortReached: number;
+      cohortCompleted: number;
+      cohortPct: number;
+    }
+  >;
   stubborn: { count: number; total: number; pct: number };
   stopPlus: { day13NoChange: number; accepted: number; pct: number };
 }
@@ -53,8 +63,8 @@ const PRESETS = [
 ];
 const TIERS: { key: string; label: string }[] = [
   { key: "all", label: "All" },
-  { key: "tier1", label: "Tier 1" },
-  { key: "tier2", label: "Tier 2" },
+  { key: "tier_1", label: "Tier 1" },
+  { key: "tier_2", label: "Tier 2" },
 ];
 
 export default function ScalpCheckInsPage() {
@@ -185,7 +195,11 @@ export default function ScalpCheckInsPage() {
       </div>
 
       {/* Card 3: Thesis check */}
-      <SectionHeader title="Thesis check — trial → paid by rater cohort" hint="Loosening detectors vs no-change raters. If detectors pay more, the belief-instrument hypothesis holds." />
+      <SectionHeader
+        title="Thesis check — trial → paid by rater cohort"
+        hint="Loosening detectors vs no-change raters, mature trials only (trial started > 8 days ago). Paid = converted trial (first renewal charged). If detectors pay more, the belief-instrument hypothesis holds."
+        tooltip="Paid = converted_trial. converted_at / pro / paidStoppage are set when the trial STARTS, so they are not used. Users still inside their 8-day trial window are excluded so they don't count as unpaid. Looser rater = looser than Day 0 on any of Day 3/6/13; no-change = at least one check-in, never looser."
+      />
       <div style={cardStyle()}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           {[
@@ -200,7 +214,7 @@ export default function ScalpCheckInsPage() {
                   {loading ? "…" : (t && t.cohort > 0 ? `${t.pct.toFixed(1)}%` : "—")}
                 </div>
                 <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: 4 }}>
-                  {t ? `${t.paid} paid of ${t.cohort}` : ""}
+                  {t ? `${t.paid} paid · n = ${t.cohort} mature trials` : ""}
                 </div>
               </div>
             );
@@ -209,31 +223,45 @@ export default function ScalpCheckInsPage() {
       </div>
 
       {/* Card 4: Supporting */}
-      <SectionHeader title="Supporting" hint="Check-in completion rates + STOP+ opt-in signal." />
+      <SectionHeader
+        title="Supporting"
+        hint="Check-in completion over users the check-in was actually shown to, + STOP+ signal."
+        tooltip="Eligible = the app would have shown that day's check-in: the user finished every task that day (the modal fires post-routine), and for Day 6 the Day 3 reading wasn't looser (Day 13: the Day 6 reading wasn't looser). Day 6/13 are skipped by design for users who already loosened. 'Share of cohort' is readings over everyone whose baseline is at least N days old."
+      />
       <div style={cardStyle()}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
           {[3, 6, 13].map((d) => {
             const row = data?.completion?.[String(d)];
             return (
               <div key={d} style={{ padding: 12, background: "rgba(255,255,255,0.04)", borderRadius: 10 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.2, color: "rgba(255,255,255,0.5)" }}>Day {d} completion</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.2, color: "rgba(255,255,255,0.5)" }}>Day {d} completion (of shown)</div>
                 <div style={{ fontSize: 22, fontWeight: 600, color: "#fff", marginTop: 4, fontVariantNumeric: "tabular-nums" }}>
                   {loading ? "…" : (row && row.eligible > 0 ? `${Math.round(row.pct)}%` : "—")}
                 </div>
                 <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>
-                  {row ? `${row.completed}/${row.eligible} eligible` : ""}
+                  {row ? `${row.completed} completed / ${row.eligible} eligible` : ""}
+                </div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>
+                  {row && row.cohortReached > 0
+                    ? `Share of cohort: ${Math.round(row.cohortPct)}% (${row.cohortCompleted}/${row.cohortReached} reached day ${d})`
+                    : ""}
                 </div>
               </div>
             );
           })}
         </div>
         <div style={{ marginTop: 16, padding: 14, background: "rgba(255,255,255,0.04)", borderRadius: 10 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.2, color: "rgba(255,255,255,0.5)" }}>Day 13 no-change → Start Stop+ tap rate</div>
+          <div
+            style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.2, color: "rgba(255,255,255,0.5)", cursor: "help" }}
+            title="The app writes no field recording WHERE the switch came from — the Day 13 'Start Stop+' tap only sets treatment_stage = FREE_STOPPAGE_PLUS. So this counts Day 13 no-change users currently on Stop+ from any source (a manual/admin switch would count too)."
+          >
+            Day 13 no-change → On Stop+ (any source) ⓘ
+          </div>
           <div style={{ fontSize: 22, fontWeight: 600, color: "#fff", marginTop: 4, fontVariantNumeric: "tabular-nums" }}>
             {loading ? "…" : (data && data.stopPlus.day13NoChange > 0 ? `${Math.round(data.stopPlus.pct)}%` : "—")}
           </div>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>
-            {data ? `${data.stopPlus.accepted} accepted of ${data.stopPlus.day13NoChange} shown the CTA` : ""}
+            {data ? `${data.stopPlus.accepted} on Stop+ of ${data.stopPlus.day13NoChange} shown the CTA` : ""}
           </div>
         </div>
       </div>
@@ -242,10 +270,15 @@ export default function ScalpCheckInsPage() {
 }
 
 // ── Local UI helpers ──────────────────────────────────────────────
-function SectionHeader({ title, hint }: { title: string; hint: string }) {
+function SectionHeader({ title, hint, tooltip }: { title: string; hint: string; tooltip?: string }) {
   return (
     <div style={{ marginTop: 32, marginBottom: 12 }}>
-      <div style={{ fontSize: 15, fontWeight: 600, color: "#fff" }}>{title}</div>
+      <div style={{ fontSize: 15, fontWeight: 600, color: "#fff" }}>
+        {title}
+        {tooltip && (
+          <span title={tooltip} style={{ marginLeft: 6, fontSize: 12, color: "rgba(255,255,255,0.4)", cursor: "help" }}>ⓘ</span>
+        )}
+      </div>
       <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>{hint}</div>
     </div>
   );

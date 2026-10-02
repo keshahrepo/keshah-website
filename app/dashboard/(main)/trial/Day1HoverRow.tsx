@@ -14,8 +14,8 @@ export function Day1HoverRow({
   neverOpened,
   maxTotal,
 }: {
-  count: number;                // users who did ≥1 exercise on Day 1
-  eligible: number;             // users old enough to have reached Day 1 (i.e., all trials)
+  count: number;                // users who completed ALL Day 1 exercises
+  eligible: number;             // users for whom Day 1 has fully elapsed (≥ 1 day since trial start)
   distribution: number[];       // distribution[k] = users who did exactly k exercises (after opening)
   neverOpened: number;          // users who never opened Day 1's screen
   maxTotal: number;             // how many exercises Day 1 has (max seen across users)
@@ -123,7 +123,7 @@ export function Day1HoverRow({
               marginBottom: 6,
             }}
           >
-            Day 1 breakdown ({eligible.toLocaleString()} eligible)
+            Day 1 breakdown ({eligible.toLocaleString()} trials past Day 1)
           </div>
           <div style={{ display: "grid", gap: 4 }}>
             {tooltipRows.map((r) => {

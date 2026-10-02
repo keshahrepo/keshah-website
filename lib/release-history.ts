@@ -157,6 +157,10 @@ export function getInFlightRelease(
 // Absence from this map defaults to "higher_better".
 export const METRIC_DIRECTIONS: Record<string, "higher_better" | "lower_better"> = {
   outcome_cancelled: "lower_better",
+  // /dashboard/trial split of the old "cancelled" tile.
+  outcome_payment_failed: "lower_better",
+  outcome_cancelled_in_trial: "lower_better",
+  outcome_other: "lower_better",
 };
 
 // ── All valid metric keys used across dashboard pages ───────────────
@@ -168,6 +172,9 @@ export const METRIC_KEYS = {
     outcome_converted: "Converted to paid",
     outcome_cancelled: "Cancelled trial",
     outcome_still_in_trial: "Still in trial",
+    outcome_payment_failed: "Payment failed at renewal (likely)",
+    outcome_cancelled_in_trial: "Cancelled during trial",
+    outcome_other: "Other / unknown outcome",
     // Funnel rows
     funnel_started: "Trial started",
     funnel_day_gte_1: "Did ≥ 1 day",

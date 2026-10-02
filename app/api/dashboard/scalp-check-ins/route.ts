@@ -10,13 +10,31 @@
 // Cohort filter:
 //   - user has scalp_tension_baseline set (went through Day 0 baseline)
 //   - date filter on the baseline capture time (scalp_tension_baseline_at)
-//   - optional tier filter (tier1 / tier2 / all)
+//   - optional tier filter (tier_1 / tier_2 / all). country_tier is
+//     stored as "tier_1"/"tier_2"; legacy "tier1"/"tier2" also accepted
+//     both as the query param and as the stored value.
+//
+// Definitions (kept in sync with /dashboard/trial):
+//   - paid = converted_trial set (trial → paid renewal). converted_at,
+//     pro and the paidStoppage tag are written when the TRIAL STARTS,
+//     so they are NOT a paid signal.
+//   - mature trial = started_trial.at more than 8 days ago (7-day trial
+//     plus a day for the store renewal to land). Conversion is only
+//     computed over mature trials so in-flight trials don't drag it down.
 
 import { NextResponse } from "next/server";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 
 const DEFAULT_FROM = "2026-09-02"; // p18 ship window
 const CHECK_IN_DAYS = [3, 6, 13] as const;
+const DAY_MS = 86_400_000;
+const MATURE_MS = 8 * DAY_MS;
+
+function normTier(raw: unknown): "tier_1" | "tier_2" | null {
+  if (raw === "tier_1" || raw === "tier1") return "tier_1";
+  if (raw === "tier_2" || raw === "tier2") return "tier_2";
+  return null;
+}
 
 interface Reading {
   day: number;
@@ -28,11 +46,17 @@ interface UserRow {
   uid: string;
   baseline: number;
   baselineAtMs: number;
-  tier: string | null; // 'tier1' | 'tier2' | null
+  tier: "tier_1" | "tier_2" | null;
   readings: Map<number, number>; // day → rating
+  // progress.dayN fully completed (every entry is_completed: true). The
+  // app only shows a check-in after all of that day's tasks are done.
+  dayFull: Map<number, boolean>;
   stubbornScalp: boolean;
-  switchedToStopPlus: boolean;
-  paid: boolean;
+  onStopPlus: boolean;
+  // started_trial.at > 8 days ago. Users without started_trial are
+  // never mature (excluded from the thesis split).
+  matureTrial: boolean;
+  paid: boolean; // !!converted_trial
 }
 
 function ts(v: unknown): number | null {
@@ -44,6 +68,11 @@ function ts(v: unknown): number | null {
     const d = new Date(v).getTime();
     return isNaN(d) ? null : d;
   }
+  if (typeof v === "object" && v !== null) {
+    const s = (v as { _seconds?: number; seconds?: number })._seconds ??
+      (v as { seconds?: number }).seconds;
+    if (typeof s === "number") return s * 1000;
+  }
   return null;
 }
 
@@ -53,7 +82,9 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const fromStr = url.searchParams.get("from") ?? DEFAULT_FROM;
     const toStr = url.searchParams.get("to") ?? new Date().toISOString().slice(0, 10);
-    const tierFilter = url.searchParams.get("tier") ?? "all"; // 'all' | 'tier1' | 'tier2'
+    const tierParam = url.searchParams.get("tier") ?? "all"; // 'all' | 'tier_1' | 'tier_2' (legacy 'tier1' | 'tier2')
+    const tierFilter = normTier(tierParam) ?? "all";
+    const nowMs = Date.now();
 
     const fromMs = new Date(fromStr + "T00:00:00Z").getTime();
     const toMs = new Date(toStr + "T23:59:59Z").getTime();
@@ -89,14 +120,8 @@ export async function GET(req: Request) {
       const baselineAtMs = ts(d.scalp_tension_baseline_at);
       if (baselineAtMs === null) continue;
 
-      const tier =
-        typeof d.country_tier === "string"
-          ? (d.country_tier as string)
-          : null;
-      if (tierFilter !== "all") {
-        const wantTier = tierFilter === "tier1" ? "tier1" : "tier2";
-        if (tier !== wantTier) continue;
-      }
+      const tier = normTier(d.country_tier);
+      if (tierFilter !== "all" && tier !== tierFilter) continue;
 
       const rawReadings = Array.isArray(d.scalp_check_readings)
         ? (d.scalp_check_readings as unknown[])
@@ -112,19 +137,34 @@ export async function GET(req: Request) {
         readings.set(day, rating);
       }
 
+      const progress = (d.progress ?? {}) as Record<string, unknown>;
+      const dayFull = new Map<number, boolean>();
+      for (const day of CHECK_IN_DAYS) {
+        const entries = progress[`day${day}`];
+        dayFull.set(
+          day,
+          Array.isArray(entries) &&
+            entries.length > 0 &&
+            entries.every(
+              (e) => typeof e === "object" && e !== null && (e as { is_completed?: unknown }).is_completed === true,
+            ),
+        );
+      }
+
+      const startedTrial = d.started_trial as { at?: unknown } | undefined;
+      const trialStartMs = startedTrial ? ts(startedTrial.at) : null;
+
       rows.push({
         uid: doc.id,
         baseline,
         baselineAtMs,
         tier,
         readings,
+        dayFull,
         stubbornScalp: d.stubborn_scalp === true,
-        switchedToStopPlus: d.treatment_stage === "FREE_STOPPAGE_PLUS",
-        paid:
-          d.converted_at != null ||
-          d.pro === true ||
-          (Array.isArray(d.extra_user_tags) &&
-            (d.extra_user_tags as unknown[]).includes("paidStoppage")),
+        onStopPlus: d.treatment_stage === "FREE_STOPPAGE_PLUS",
+        matureTrial: trialStartMs !== null && trialStartMs < nowMs - MATURE_MS,
+        paid: !!d.converted_trial,
       });
     }
 
@@ -198,11 +238,15 @@ export async function GET(req: Request) {
     // Compares paid conversion between the two groups. If loosening
     // detectors pay meaningfully more, the belief-instrument thesis
     // holds.
+    // Paid = converted_trial; only MATURE trials (started > 8 days ago)
+    // are counted so users still inside their trial don't read as
+    // "didn't pay".
     let looserCohort = 0;
     let looserPaid = 0;
     let noChangeCohort = 0;
     let noChangePaid = 0;
     for (const r of rows) {
+      if (!r.matureTrial) continue;
       let hasAnyReading = false;
       let hasLooser = false;
       for (const day of CHECK_IN_DAYS) {
@@ -235,16 +279,45 @@ export async function GET(req: Request) {
     };
 
     // ── 5. Supporting metrics ───────────────────────────────────
-    // Check-in completion rate = users with a reading on Day N /
-    // users who reached tenure ≥ N. Assumes tenure = today - baselineAt.
-    const nowMs = Date.now();
-    const completion: Record<number, { eligible: number; completed: number; pct: number }> = {};
+    // Check-in completion = completed / ELIGIBLE, where eligible means
+    // the app would actually have shown the check-in (matches
+    // _maybeShowScalpCheckIn in the mobile app):
+    //   - the user fully completed that day's tasks (progress.dayN all
+    //     is_completed) — the modal only fires post-routine, and
+    //   - Day 6: Day 3 reading was not looser than baseline
+    //     Day 13: Day 6 reading was not looser than baseline
+    //     (a missing earlier reading counts as "not looser", as in the app)
+    // Secondary "share of cohort" = readings / users whose baseline is
+    // at least N days old (the old, design-blind denominator).
+    const wasLooser = (r: UserRow, day: number): boolean => {
+      const v = r.readings.get(day);
+      return v !== undefined && v < r.baseline;
+    };
+    const completion: Record<
+      number,
+      {
+        eligible: number;
+        completed: number;
+        pct: number;
+        cohortReached: number;
+        cohortCompleted: number;
+        cohortPct: number;
+      }
+    > = {};
     for (const day of CHECK_IN_DAYS) {
       let eligible = 0;
       let completed = 0;
+      let cohortReached = 0;
+      let cohortCompleted = 0;
       for (const r of rows) {
-        const tenureDays = Math.floor((nowMs - r.baselineAtMs) / 86_400_000);
-        if (tenureDays < day) continue;
+        const tenureDays = Math.floor((nowMs - r.baselineAtMs) / DAY_MS);
+        if (tenureDays >= day) {
+          cohortReached++;
+          if (r.readings.has(day)) cohortCompleted++;
+        }
+        const gateOpen =
+          day === 3 ? true : day === 6 ? !wasLooser(r, 3) : !wasLooser(r, 6);
+        if (!gateOpen || !r.dayFull.get(day)) continue;
         eligible++;
         if (r.readings.has(day)) completed++;
       }
@@ -252,6 +325,9 @@ export async function GET(req: Request) {
         eligible,
         completed,
         pct: eligible === 0 ? 0 : (completed / eligible) * 100,
+        cohortReached,
+        cohortCompleted,
+        cohortPct: cohortReached === 0 ? 0 : (cohortCompleted / cohortReached) * 100,
       };
     }
 
@@ -259,10 +335,13 @@ export async function GET(req: Request) {
     const stubbornPct =
       rows.length === 0 ? 0 : (stubbornCount / rows.length) * 100;
 
-    // Day 13 no-change → Stop+ tap rate. Denominator = users who saw
-    // the Day 13 no-change branch (Day 13 reading, today >= baseline).
-    // Numerator = same users whose treatment_stage flipped to
-    // FREE_STOPPAGE_PLUS.
+    // Day 13 no-change → on Stop+. Denominator = users who saw the
+    // Day 13 no-change branch (Day 13 reading, today >= baseline).
+    // Numerator = same users whose treatment_stage is FREE_STOPPAGE_PLUS.
+    // The app writes no switch-source field (dashboard_screen.dart only
+    // sets treatment_stage on the Start Stop+ tap), so a switch made any
+    // other way (admin script, support) is indistinguishable — the card
+    // is labelled "any source".
     let day13NoChange = 0;
     let day13StopPlusTaps = 0;
     for (const r of rows) {
@@ -270,7 +349,7 @@ export async function GET(req: Request) {
       if (d13 === undefined) continue;
       if (d13 < r.baseline) continue; // looser branch — no CTA shown
       day13NoChange++;
-      if (r.switchedToStopPlus) day13StopPlusTaps++;
+      if (r.onStopPlus) day13StopPlusTaps++;
     }
     const stopPlusAcceptPct =
       day13NoChange === 0 ? 0 : (day13StopPlusTaps / day13NoChange) * 100;

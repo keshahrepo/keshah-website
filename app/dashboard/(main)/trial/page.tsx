@@ -69,9 +69,38 @@ const GENDER_TABS: Array<{ key: GenderFilter; label: string }> = [
   { key: "female", label: "Women" },
 ];
 
-type Answer = "yes" | "no" | "not_sure";
-interface CheckInCounts { yes: number; no: number; not_sure: number; total: number }
-const emptyCheckIn = (): CheckInCounts => ({ yes: 0, no: 0, not_sure: 0, total: 0 });
+// ── Shared definitions ──────────────────────────────────────────────
+// Paid = converted_trial (first renewal charged). converted_at, pro and
+// the paidStoppage tag are written when the TRIAL STARTS, so they are
+// never used as "paid" here.
+// Mature trial = started_trial.at more than 8 days ago (7-day trial + a
+// day for the store renewal to land). Conversion rates are computed
+// over mature trials so in-flight trials don't read as "didn't pay".
+const MATURE_MS = 8 * DAY_MS;
+const HOUR_MS = 3_600_000;
+// Store renewal windows, hours after trial start. iOS charges ~168h
+// after trial start (observed cluster 166–172h), Google Play ~196h
+// (194–200h). A cancel stamped inside this window on a non-converted
+// trial is almost always the store giving up on a failed renewal charge
+// (BILLING_ERROR), not the user. Inferred — the webhook doesn't store
+// cancel_reason yet.
+const RENEWAL_WINDOW_H = {
+  ios: [160, 176] as const,
+  android: [188, 204] as const,
+};
+
+type Outcome = "converted" | "payment_failed" | "cancelled_in_trial" | "still_in_trial" | "other";
+
+// Check-in outcome for one scheduled day (3 or 6). New builds write
+// scalp_check_readings [{day, rating, at}] compared against
+// scalp_tension_baseline (they also write yes/no into the legacy
+// scalp_check_answers, which can't tell "same" from "tighter"). Legacy
+// answers are only used for old users with no readings at all.
+type CheckInBucket =
+  | "looser" | "same" | "tighter"
+  | "legacy_yes" | "legacy_no" | "legacy_not_sure"
+  | "skipped_d3_looser"
+  | "finished_no_checkin" | "opened_not_finished" | "never_opened";
 
 interface TrialUser {
   createdMs: number;
@@ -81,10 +110,13 @@ interface TrialUser {
   perDay: boolean[];
   day1Done: number;
   day1Total: number;
-  checkIn3: Answer | null;
-  checkIn6: Answer | null;
-  converted: boolean;
-  cancelled: boolean;
+  // null = not in the check-in universe (no baseline and no legacy answers)
+  checkIn3: CheckInBucket | null;
+  checkIn6: CheckInBucket | null;
+  converted: boolean;               // !!converted_trial
+  cancelled: boolean;               // subscription_status === "cancelled" (auto-renew turned off)
+  cancelledAtMs: number | null;     // subscription_cancelled_at
+  isAndroid: boolean;               // started_trial.product_id contains ":" (Play "sub:base-plan")
   // Lifetime revenue on the user doc, accumulated by the RevenueCat webhook
   // from the store's own price / tax / commission figures. Only accrues from
   // 30 Sep 2026, when capture was added, so earlier cohorts read 0.
@@ -93,6 +125,10 @@ interface TrialUser {
 }
 
 function tsToMs(raw: unknown): number | null {
+  if (typeof raw === "string") {
+    const t = Date.parse(raw);
+    return isNaN(t) ? null : t;
+  }
   if (!raw || typeof raw !== "object") return null;
   const t = raw as { toMillis?: () => number; _seconds?: number; seconds?: number };
   if (typeof t.toMillis === "function") return t.toMillis();
@@ -100,15 +136,59 @@ function tsToMs(raw: unknown): number | null {
   return typeof s === "number" ? s * 1000 : null;
 }
 
+function isMature(u: TrialUser, now: number): boolean {
+  return u.startedAtMs !== null && u.startedAtMs < now - MATURE_MS;
+}
+
+function classifyOutcome(u: TrialUser, now: number): Outcome {
+  if (u.converted) return "converted";
+  if (u.startedAtMs !== null && u.cancelled && u.cancelledAtMs !== null) {
+    const h = (u.cancelledAtMs - u.startedAtMs) / HOUR_MS;
+    const [lo, hi] = u.isAndroid ? RENEWAL_WINDOW_H.android : RENEWAL_WINDOW_H.ios;
+    if (h >= lo && h <= hi) return "payment_failed";
+    if (h < lo) return "cancelled_in_trial";
+  }
+  if (u.startedAtMs !== null && !isMature(u, now) && !u.cancelled) return "still_in_trial";
+  return "other";
+}
+
+const CHECKIN_BUCKETS: CheckInBucket[] = [
+  "looser", "same", "tighter",
+  "legacy_yes", "legacy_no", "legacy_not_sure",
+  "skipped_d3_looser",
+  "finished_no_checkin", "opened_not_finished", "never_opened",
+];
+interface CheckInStats {
+  total: number;
+  rows: Record<CheckInBucket, { n: number; paid: number }>;
+}
+const emptyCheckIn = (): CheckInStats => ({
+  total: 0,
+  rows: Object.fromEntries(CHECKIN_BUCKETS.map((b) => [b, { n: 0, paid: 0 }])) as CheckInStats["rows"],
+});
+
 // ── Metrics for one cohort ──────────────────────────────────────────
 
 interface CohortMetrics {
   total: number;
   perDayCounts: number[];
   perDayEligible: number[];
-  checkIn3: CheckInCounts;
-  checkIn6: CheckInCounts;
-  outcomes: { converted: number; cancelled: number; stillInTrial: number };
+  checkIn3: CheckInStats;
+  checkIn6: CheckInStats;
+  outcomes: {
+    converted: number;
+    convertedLaterCancelled: number;
+    paymentFailed: number;
+    cancelledInTrial: number;
+    cancelledFirstHour: number;
+    stillInTrial: number;
+    other: number;
+    mature: number;
+    matureConverted: number;
+    maturePaymentFailed: number;
+    matureCancelledInTrial: number;
+    matureOther: number;
+  };
   revenueUsd: number;
   proceedsUsd: number;
   funnel: Array<{ key: string; label: string; count: number }>;
@@ -122,9 +202,37 @@ interface CohortMetrics {
 
 function computeMetrics(users: TrialUser[], allSignupsInCohort: number, now: number): CohortMetrics {
   const total = users.length;
-  const converted = users.filter((u) => u.converted).length;
-  const cancelled = users.filter((u) => u.cancelled).length;
-  const stillInTrial = Math.max(0, total - converted - cancelled);
+  const outcomes: CohortMetrics["outcomes"] = {
+    converted: 0, convertedLaterCancelled: 0, paymentFailed: 0,
+    cancelledInTrial: 0, cancelledFirstHour: 0, stillInTrial: 0, other: 0,
+    mature: 0, matureConverted: 0, maturePaymentFailed: 0,
+    matureCancelledInTrial: 0, matureOther: 0,
+  };
+  for (const u of users) {
+    const o = classifyOutcome(u, now);
+    const mature = isMature(u, now);
+    if (mature) outcomes.mature++;
+    if (o === "converted") {
+      outcomes.converted++;
+      if (u.cancelled) outcomes.convertedLaterCancelled++;
+      if (mature) outcomes.matureConverted++;
+    } else if (o === "payment_failed") {
+      outcomes.paymentFailed++;
+      if (mature) outcomes.maturePaymentFailed++;
+    } else if (o === "cancelled_in_trial") {
+      outcomes.cancelledInTrial++;
+      if (mature) outcomes.matureCancelledInTrial++;
+      if (u.cancelledAtMs !== null && u.startedAtMs !== null && u.cancelledAtMs - u.startedAtMs < HOUR_MS) {
+        outcomes.cancelledFirstHour++;
+      }
+    } else if (o === "still_in_trial") {
+      outcomes.stillInTrial++;
+    } else {
+      outcomes.other++;
+      if (mature) outcomes.matureOther++;
+    }
+  }
+  const converted = outcomes.converted;
   const revenueUsd = users.reduce((a, u) => a + u.revenueUsd, 0);
   const proceedsUsd = users.reduce((a, u) => a + u.proceedsUsd, 0);
 
@@ -140,13 +248,16 @@ function computeMetrics(users: TrialUser[], allSignupsInCohort: number, now: num
   // Track through MAX_TRACKED_DAY (14) so the panel can show Day 10 and
   // Day 14 alongside the trial days. Trial-related metrics (funnel,
   // gradient) still only use days 1..TRIAL_DAYS.
+  // Eligible for day N only once day N has fully elapsed for the user
+  // (tenure ≥ N whole days since started_trial.at). Previously tenure ≥
+  // N-1, which counted users still mid-day as "didn't complete".
   const perDayCounts = new Array(MAX_TRACKED_DAY).fill(0);
   const perDayEligible = new Array(MAX_TRACKED_DAY).fill(0);
   for (const u of users) {
     if (u.startedAtMs === null) continue;
     const tenureDays = Math.floor((now - u.startedAtMs) / DAY_MS);
     for (let i = 0; i < MAX_TRACKED_DAY; i++) {
-      if (tenureDays >= i) {
+      if (tenureDays >= i + 1) {
         perDayEligible[i]++;
         if (u.perDay[i]) perDayCounts[i]++;
       }
@@ -159,15 +270,23 @@ function computeMetrics(users: TrialUser[], allSignupsInCohort: number, now: num
   let day1NeverOpened = 0;
   for (const u of users) {
     if (u.startedAtMs === null) continue;
+    // Same eligibility as the Day 1 row: Day 1 fully elapsed.
+    if (Math.floor((now - u.startedAtMs) / DAY_MS) < 1) continue;
     if (u.day1Total === 0) { day1NeverOpened++; continue; }
     day1Distribution[u.day1Done] = (day1Distribution[u.day1Done] ?? 0) + 1;
   }
 
   const checkIn3 = emptyCheckIn();
   const checkIn6 = emptyCheckIn();
+  // Check-in cards: mature trials only so conversion per outcome is final.
   for (const u of users) {
-    if (u.checkIn3) { checkIn3[u.checkIn3]++; checkIn3.total++; }
-    if (u.checkIn6) { checkIn6[u.checkIn6]++; checkIn6.total++; }
+    if (!isMature(u, now)) continue;
+    for (const [bucket, stats] of [[u.checkIn3, checkIn3], [u.checkIn6, checkIn6]] as const) {
+      if (!bucket) continue;
+      stats.total++;
+      stats.rows[bucket].n++;
+      if (u.converted) stats.rows[bucket].paid++;
+    }
   }
 
   return {
@@ -176,7 +295,7 @@ function computeMetrics(users: TrialUser[], allSignupsInCohort: number, now: num
     perDayEligible,
     checkIn3,
     checkIn6,
-    outcomes: { converted, cancelled, stillInTrial },
+    outcomes,
     revenueUsd,
     proceedsUsd,
     funnel,
@@ -235,8 +354,13 @@ export default async function TrialPage({
     .where("created_at", "<=", Timestamp.fromDate(latestTo))
     .select(
       "started_trial", "converted_trial", "subscription_status", "progress",
+      // When auto-renew was turned off — used to split cancellations into
+      // in-trial vs failed renewal charge.
+      "subscription_cancelled_at",
       "revenue_usd_total", "proceeds_usd_total",
       "scalp_check_answers", "selected_gender", "email", "created_at",
+      // v2 check-in signal: readings vs Day 0 baseline.
+      "scalp_check_readings", "scalp_tension_baseline",
       // Install-source filter — backfilled from RC by
       // /api/rc/backfill-attribution. Slices paid-ad vs organic cohorts.
       "install_source",
@@ -350,6 +474,7 @@ export default async function TrialPage({
 
     const progress = (d.progress as Record<string, Array<{ is_completed?: boolean }> | undefined> | undefined) ?? {};
     const perDay: boolean[] = [];
+    const perDayOpened: boolean[] = [];
     let daysCompleted = 0, day1Done = 0, day1Total = 0;
     // Loop through MAX_TRACKED_DAY so we can also record Day 10 / 14
     // fully-complete status. daysCompleted still only counts trial
@@ -365,15 +490,50 @@ export default async function TrialPage({
       const totalCount = opened ? entries!.length : 0;
       const dayFullyDone = totalCount > 0 && doneCount === totalCount;
       perDay.push(dayFullyDone);
+      perDayOpened.push(opened);
       if (dayFullyDone && day <= TRIAL_DAYS) daysCompleted++;
       if (day === 1) { day1Total = totalCount; day1Done = doneCount; }
     }
 
     const answers = (d.scalp_check_answers as Record<string, string> | undefined) ?? {};
-    const parseAns = (raw: string | undefined): Answer | null =>
-      raw === "yes" || raw === "no" || raw === "not_sure" ? raw : null;
+    const baselineRaw = d.scalp_tension_baseline as unknown;
+    const baselineNum =
+      typeof baselineRaw === "number" ? baselineRaw
+      : typeof baselineRaw === "string" ? Number.parseInt(baselineRaw, 10)
+      : NaN;
+    const baseline = Number.isFinite(baselineNum) && baselineNum >= 1 && baselineNum <= 5 ? baselineNum : null;
+    const readings = new Map<number, number>();
+    const rawReadings = Array.isArray(d.scalp_check_readings) ? (d.scalp_check_readings as unknown[]) : [];
+    for (const entry of rawReadings) {
+      if (typeof entry !== "object" || entry === null) continue;
+      const e = entry as { day?: unknown; rating?: unknown };
+      const day = Number(e.day);
+      const rating = Number(e.rating);
+      if (!Number.isFinite(day) || !Number.isFinite(rating)) continue;
+      readings.set(day, rating); // retries: keep the latest
+    }
+    const hasLegacyAnswers = Object.keys(answers).length > 0;
+    const inCheckInUniverse = baseline !== null || (rawReadings.length === 0 && hasLegacyAnswers);
+    const checkInBucket = (day: 3 | 6): CheckInBucket | null => {
+      if (!inCheckInUniverse) return null;
+      if (rawReadings.length > 0 && baseline !== null) {
+        const r = readings.get(day);
+        if (r !== undefined) return r < baseline ? "looser" : r === baseline ? "same" : "tighter";
+        // App skips Day 6 when Day 3 was already looser.
+        const r3 = readings.get(3);
+        if (day === 6 && r3 !== undefined && r3 < baseline) return "skipped_d3_looser";
+      } else if (rawReadings.length === 0) {
+        const a = answers[String(day)];
+        if (a === "yes") return "legacy_yes";
+        if (a === "no") return "legacy_no";
+        if (a === "not_sure") return "legacy_not_sure";
+      }
+      if (perDay[day - 1]) return "finished_no_checkin";
+      if (perDayOpened[day - 1]) return "opened_not_finished";
+      return "never_opened";
+    };
 
-    const startedTrial = d.started_trial as { at?: unknown } | undefined;
+    const startedTrial = d.started_trial as { at?: unknown; product_id?: unknown } | undefined;
 
     const user: TrialUser = {
       createdMs,
@@ -383,10 +543,12 @@ export default async function TrialPage({
       perDay,
       day1Done,
       day1Total,
-      checkIn3: parseAns(answers["3"]),
-      checkIn6: parseAns(answers["6"]),
+      checkIn3: checkInBucket(3),
+      checkIn6: checkInBucket(6),
       converted: !!d.converted_trial,
       cancelled: d.subscription_status === "cancelled",
+      cancelledAtMs: tsToMs(d.subscription_cancelled_at),
+      isAndroid: typeof startedTrial?.product_id === "string" && startedTrial.product_id.includes(":"),
       revenueUsd: typeof d.revenue_usd_total === "number" ? d.revenue_usd_total : 0,
       proceedsUsd: typeof d.proceeds_usd_total === "number" ? d.proceeds_usd_total : 0,
     };
@@ -477,7 +639,7 @@ export default async function TrialPage({
 
       <PaidQualityCard users={newUsers} />
 
-      <EngagementGradientPanel users={newUsers} />
+      <EngagementGradientPanel users={newUsers.filter((u) => isMature(u, now))} />
 
       <PerDayPanel
         counts={newM.perDayCounts}
@@ -705,6 +867,27 @@ function RevenueStrip({ m }: { m: CohortMetrics }) {
 }
 
 // ── Outcomes strip ──────────────────────────────────────────────────
+//
+// Every trial lands in exactly one outcome (tiles sum to 100% of trials):
+//   Converted            converted_trial set (even if they later turned
+//                        off auto-renew — shown as a sub-note)
+//   Payment failed       not converted, auto-renew off with the cancel
+//                        stamped inside the store renewal window (iOS
+//                        160–176h, Android 188–204h after trial start).
+//                        Inferred: the webhook doesn't store cancel_reason.
+//   Cancelled in trial   not converted, auto-renew off before the window
+//   Still in trial       started < 8 days ago, no conversion, not cancelled
+//   Other / unknown      anything else (e.g. mature, never cancelled, never
+//                        converted; or cancelled after the window)
+// Headline conversion uses MATURE trials only (started > 8 days ago).
+
+function InfoTip({ text }: { text: string }) {
+  return (
+    <span title={text} style={{ marginLeft: 4, cursor: "help", color: "rgba(255,255,255,0.4)", fontWeight: 400, letterSpacing: 0, textTransform: "none" }}>
+      ⓘ
+    </span>
+  );
+}
 
 function OutcomesStrip({ m, base, tracks }: {
   m: CohortMetrics;
@@ -712,39 +895,115 @@ function OutcomesStrip({ m, base, tracks }: {
   tracks: Set<string>;
 }) {
   const total = m.total || 1;
-  const items = [
-    { key: "outcome_converted",     label: "Converted",     count: m.outcomes.converted,   baseCount: base?.outcomes.converted,   baseTotal: base?.total, color: "#359033" },
-    { key: "outcome_cancelled",     label: "Cancelled",     count: m.outcomes.cancelled,   baseCount: base?.outcomes.cancelled,   baseTotal: base?.total, color: "#C03E06" },
-    { key: "outcome_still_in_trial", label: "Still in trial", count: m.outcomes.stillInTrial, baseCount: base?.outcomes.stillInTrial, baseTotal: base?.total, color: "rgba(255,255,255,0.55)" },
+  const o = m.outcomes;
+  const pctOf = (n: number, d: number) => (d > 0 ? (n / d) * 100 : 0);
+  const matureRate = pctOf(o.matureConverted, o.mature);
+  const allRate = pctOf(o.converted, m.total);
+  const baseMatureRate = base && base.outcomes.mature > 0 ? pctOf(base.outcomes.matureConverted, base.outcomes.mature) : null;
+  const fmt = (v: number) => `${v.toFixed(1)}%`;
+
+  const items: Array<{
+    key: string; label: string; count: number; color: string;
+    baseCount?: number; tip: string; sub: React.ReactNode;
+  }> = [
+    {
+      key: "outcome_converted", label: "Converted", count: o.converted, color: "#359033",
+      baseCount: base?.outcomes.converted,
+      tip: "converted_trial is set: the first renewal charge went through. Counted as converted even if they later turned off auto-renew.",
+      sub: <>
+        {o.mature > 0 && <div>{fmt(pctOf(o.matureConverted, o.mature))} of mature trials</div>}
+        <div>{o.convertedLaterCancelled.toLocaleString()} later turned off auto-renew</div>
+      </>,
+    },
+    {
+      key: "outcome_payment_failed", label: "Payment failed (likely)", count: o.paymentFailed, color: "#E06A3F",
+      baseCount: base?.outcomes.paymentFailed,
+      tip: "Inferred, not confirmed: not converted, and auto-renew was turned off inside the store's renewal window (iOS 160–176h, Google Play 188–204h after trial start). That's when the store retries the first charge and gives up, so these are almost always failed payments rather than user cancels. The webhook doesn't store cancel_reason yet.",
+      sub: <>
+        {o.mature > 0 && <div>{fmt(pctOf(o.maturePaymentFailed, o.mature))} of mature trials</div>}
+        <div>cancel landed at renewal time</div>
+      </>,
+    },
+    {
+      key: "outcome_cancelled_in_trial", label: "Cancelled during trial", count: o.cancelledInTrial, color: "#C03E06",
+      baseCount: base?.outcomes.cancelledInTrial,
+      tip: "Not converted, and auto-renew was turned off before the renewal window. Includes users still inside their 8 days who already cancelled.",
+      sub: <>
+        {o.mature > 0 && <div>{fmt(pctOf(o.matureCancelledInTrial, o.mature))} of mature trials</div>}
+        <div>{o.cancelledFirstHour.toLocaleString()} within the first hour</div>
+      </>,
+    },
+    {
+      key: "outcome_still_in_trial", label: "Still in trial", count: o.stillInTrial, color: "rgba(255,255,255,0.55)",
+      baseCount: base?.outcomes.stillInTrial,
+      tip: "Trial started less than 8 days ago, not converted and auto-renew still on. Outcome not known yet.",
+      sub: <div>started &lt; 8 days ago</div>,
+    },
+    {
+      key: "outcome_other", label: "Other / unknown", count: o.other, color: "rgba(255,255,255,0.3)",
+      baseCount: base?.outcomes.other,
+      tip: "Anything else: e.g. trial over but neither converted nor cancelled on record, or cancelled after the renewal window.",
+      sub: o.mature > 0 ? <div>{fmt(pctOf(o.matureOther, o.mature))} of mature trials</div> : null,
+    },
   ];
+
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginBottom: 20 }}>
-      {items.map((it) => {
-        const pct = (it.count / total) * 100;
-        const basePct = it.baseCount !== undefined && it.baseTotal ? (it.baseCount / it.baseTotal) * 100 : null;
-        return (
-          <div key={it.key} style={{
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.08)",
-            borderLeft: trackedBorder(it.key, tracks),
-            borderRadius: 12,
-            padding: "14px 16px",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, fontWeight: 600, letterSpacing: 1.2, textTransform: "uppercase", color: "rgba(255,255,255,0.55)", marginBottom: 8 }}>
-              <span style={{ width: 8, height: 8, borderRadius: 2, background: it.color }} />
-              {it.label}
+    <>
+      <div style={{
+        display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 12,
+        background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+        borderLeft: trackedBorder("outcome_converted", tracks),
+        borderRadius: 12, padding: "14px 16px", marginBottom: 10,
+      }}>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1.2, textTransform: "uppercase", color: "rgba(255,255,255,0.55)" }}>
+          Trial → paid
+          <InfoTip text="Converted (converted_trial) ÷ trials that started more than 8 days ago, so every trial counted has had its chance to renew. The all-trials rate also includes trials still running, which drags it down." />
+        </div>
+        <div style={{ fontSize: 26, fontWeight: 600, color: "#fff", fontVariantNumeric: "tabular-nums" }}>
+          {o.mature > 0 ? fmt(matureRate) : "—"}
+          <DeltaChip metricKey="outcome_converted" newPct={matureRate} basePct={baseMatureRate} />
+        </div>
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", fontVariantNumeric: "tabular-nums" }}>
+          {o.matureConverted.toLocaleString()} / {o.mature.toLocaleString()} mature trials (started &gt; 8 days ago)
+        </div>
+        <div style={{ marginLeft: "auto", fontSize: 12, color: "rgba(255,255,255,0.4)", fontVariantNumeric: "tabular-nums" }}>
+          All trials incl. still running: {fmt(allRate)} ({o.converted.toLocaleString()} / {m.total.toLocaleString()})
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10, marginBottom: 20 }}>
+        {items.map((it) => {
+          const pct = (it.count / total) * 100;
+          const basePct = it.baseCount !== undefined && base?.total ? (it.baseCount / base.total) * 100 : null;
+          return (
+            <div key={it.key} style={{
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderLeft: trackedBorder(it.key, tracks),
+              borderRadius: 12,
+              padding: "14px 16px",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, fontWeight: 600, letterSpacing: 1.2, textTransform: "uppercase", color: "rgba(255,255,255,0.55)", marginBottom: 8 }}>
+                <span style={{ width: 8, height: 8, borderRadius: 2, background: it.color, flexShrink: 0 }} />
+                <span>{it.label}<InfoTip text={it.tip} /></span>
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 600, color: "#fff", fontVariantNumeric: "tabular-nums" }}>
+                {it.count.toLocaleString()}
+                <span style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", fontWeight: 400, marginLeft: 8 }}>
+                  {pct.toFixed(1)}%
+                </span>
+                <DeltaChip metricKey={it.key} newPct={pct} basePct={basePct} />
+              </div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 4, display: "grid", gap: 2, fontVariantNumeric: "tabular-nums" }}>
+                {it.sub}
+              </div>
             </div>
-            <div style={{ fontSize: 22, fontWeight: 600, color: "#fff", fontVariantNumeric: "tabular-nums" }}>
-              {it.count.toLocaleString()}
-              <span style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", fontWeight: 400, marginLeft: 8 }}>
-                {pct.toFixed(1)}%
-              </span>
-              <DeltaChip metricKey={it.key} newPct={pct} basePct={basePct} />
-            </div>
-          </div>
-        );
-      })}
-    </div>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: -12, marginBottom: 20 }}>
+        Tile % = share of all {m.total.toLocaleString()} trials in this view (tiles add up to 100%).
+      </div>
+    </>
   );
 }
 
@@ -767,7 +1026,7 @@ function PerDayPanel({
   return (
     <PanelWrap
       title="Per-day completion"
-      subtitle="% of trials that completed each specific day, over trials old enough to have reached it. Order-independent."
+      subtitle="% of trials that fully completed each specific day, over trials for whom that day has fully passed (at least N days since trial start). Order-independent."
     >
       <div style={{ display: "grid", gap: 6 }}>
         {DISPLAYED_DAYS.map((day) => {
@@ -844,30 +1103,57 @@ function PanelWrap({ title, subtitle, children }: { title: string; subtitle?: st
   );
 }
 
-// ── Check-in card + gender tabs (unchanged from original) ──────────
+// ── Check-in cards ─────────────────────────────────────────────────
+// Outcome of the Day 3 / Day 6 scalp check-in vs the Day 0 baseline
+// (scalp_check_readings vs scalp_tension_baseline), with trial → paid
+// conversion per outcome. Mature trials only. Old users with no readings
+// fall back to the legacy yes/no/not-sure answers (rows only appear when
+// non-empty).
 
-function CheckInCard({ day, counts }: { day: number; counts: CheckInCounts }) {
+const CHECKIN_ROW_META: Record<CheckInBucket, { label: string; color: string; tip?: string }> = {
+  looser:              { label: "Looser than Day 0", color: "#359033" },
+  same:                { label: "Same as Day 0", color: "#DAA520" },
+  tighter:             { label: "Tighter than Day 0", color: "#C03E06" },
+  legacy_yes:          { label: "Legacy: yes, looser", color: "rgba(53,144,51,0.6)", tip: "Old build, no rating recorded — yes/no answer only." },
+  legacy_no:           { label: "Legacy: no, not looser", color: "rgba(192,62,6,0.6)", tip: "Old build, no rating recorded — 'no' can mean same OR tighter." },
+  legacy_not_sure:     { label: "Legacy: not sure", color: "rgba(218,165,32,0.6)", tip: "Old build, no rating recorded." },
+  skipped_d3_looser:   { label: "Not asked: Day 3 was looser", color: "rgba(255,255,255,0.3)", tip: "The app skips Day 6 when Day 3 already loosened." },
+  finished_no_checkin: { label: "Finished day, no check-in", color: "rgba(255,255,255,0.45)", tip: "Completed every task that day but no reading was saved (closed the modal, or an older build)." },
+  opened_not_finished: { label: "Opened day, didn't finish", color: "rgba(255,255,255,0.3)", tip: "The check-in only shows after all of that day's tasks are done." },
+  never_opened:        { label: "Never reached day", color: "rgba(255,255,255,0.18)", tip: "Never opened that day's routine." },
+};
+
+function CheckInCard({ day, counts }: { day: number; counts: CheckInStats }) {
   const total = counts.total;
-  interface Row { key: Answer; label: string; color: string; count: number; pct: number }
-  const rows: Row[] = [
-    { key: "yes", label: "Yes — looser", color: "#359033", count: counts.yes, pct: 0 },
-    { key: "not_sure", label: "Not sure", color: "#DAA520", count: counts.not_sure, pct: 0 },
-    { key: "no", label: "No — still tight", color: "#C03E06", count: counts.no, pct: 0 },
-  ];
-  for (const r of rows) r.pct = total === 0 ? 0 : (r.count / total) * 100;
-  rows.sort((a, b) => b.count - a.count);
-  const maxCount = rows[0]?.count || 1;
+  const rows = CHECKIN_BUCKETS
+    .map((key) => ({ key, ...CHECKIN_ROW_META[key], ...counts.rows[key] }))
+    .filter((r) => r.n > 0 || r.key === "looser" || r.key === "same" || r.key === "tighter" || r.key === "never_opened")
+    .map((r) => ({
+      ...r,
+      label: r.key === "never_opened" ? `Never reached day ${day}` : r.label,
+      share: total === 0 ? 0 : (r.n / total) * 100,
+      conv: r.n === 0 ? null : (r.paid / r.n) * 100,
+    }));
+  const maxCount = Math.max(1, ...rows.map((r) => r.n));
+  const answered = counts.rows.looser.n + counts.rows.same.n + counts.rows.tighter.n
+    + counts.rows.legacy_yes.n + counts.rows.legacy_no.n + counts.rows.legacy_not_sure.n;
 
   return (
     <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: 18 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 16, gap: 12 }}>
-        <div style={{ fontSize: 15, fontWeight: 600, color: "#fff" }}>Day {day} check-in</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4, gap: 12 }}>
+        <div style={{ fontSize: 15, fontWeight: 600, color: "#fff" }}>
+          Day {day} check-in → paid
+          <InfoTip text={`Day ${day} pinch rating compared with the Day 0 baseline (looser = lower rating). Universe: mature trials (started > 8 days ago) with a Day 0 baseline, plus old users who only have legacy yes/no answers. Paid = converted_trial.`} />
+        </div>
         <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>
-          <span style={{ color: "#fff", fontWeight: 600 }}>{total.toLocaleString()}</span> answered
+          <span style={{ color: "#fff", fontWeight: 600 }}>{answered.toLocaleString()}</span> answered of {total.toLocaleString()} mature trials
         </div>
       </div>
+      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 14 }}>
+        Share of mature trials with a baseline, and trial → paid rate for each outcome.
+      </div>
       {total === 0 ? (
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>No responses yet.</div>
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>No mature trials with a baseline yet.</div>
       ) : (
         <div style={{ display: "grid", gap: 10 }}>
           {rows.map((r) => (
@@ -875,15 +1161,19 @@ function CheckInCard({ day, counts }: { day: number; counts: CheckInCounts }) {
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "rgba(255,255,255,0.9)" }}>
                   <span style={{ width: 8, height: 8, borderRadius: 2, background: r.color, display: "inline-block" }} />
-                  <span>{r.label}</span>
+                  <span>{r.label}{r.tip && <InfoTip text={r.tip} />}</span>
                 </div>
                 <div style={{ fontSize: 13, fontVariantNumeric: "tabular-nums", color: "#fff", fontWeight: 500, display: "flex", gap: 8 }}>
-                  <span>{r.pct.toFixed(1)}%</span>
-                  <span style={{ color: "rgba(255,255,255,0.4)", fontWeight: 400 }}>{r.count.toLocaleString()}</span>
+                  <span>{r.share.toFixed(1)}%</span>
+                  <span style={{ color: "rgba(255,255,255,0.4)", fontWeight: 400 }}>{r.n.toLocaleString()}</span>
+                  <span style={{ color: "rgba(255,255,255,0.75)", fontWeight: 400, minWidth: 120, textAlign: "right" }}>
+                    {r.conv === null ? "—" : `${r.conv.toFixed(1)}% paid`}
+                    <span style={{ color: "rgba(255,255,255,0.35)", marginLeft: 6 }}>{r.paid}/{r.n}</span>
+                  </span>
                 </div>
               </div>
               <div style={{ height: 6, background: "rgba(255,255,255,0.05)", borderRadius: 3, overflow: "hidden" }}>
-                <div style={{ width: `${Math.max((r.count / maxCount) * 100, r.count > 0 ? 2 : 0)}%`, height: "100%", background: r.color, borderRadius: 3 }} />
+                <div style={{ width: `${Math.max((r.n / maxCount) * 100, r.n > 0 ? 2 : 0)}%`, height: "100%", background: r.color, borderRadius: 3 }} />
               </div>
             </div>
           ))}
@@ -1026,7 +1316,8 @@ function EngagementGradientPanel({ users }: { users: TrialUser[] }) {
         Trial engagement → paid
       </div>
       <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", marginBottom: 14 }}>
-        Paid conversion rate sliced by how many trial days each user fully completed (all tasks done).
+        Paid conversion (converted trial) sliced by how many trial days each user fully completed (all tasks done).
+        Mature trials only (started &gt; 8 days ago, {users.length.toLocaleString()} trials) so trials still running don&apos;t count as unpaid.
         Base rate: <span style={{ color: "#fff" }}>{(baseRate * 100).toFixed(1)}%</span>.
       </div>
 
