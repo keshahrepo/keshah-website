@@ -101,6 +101,7 @@ const QUESTIONS: Question[] = [
       { value: "founder_aadi", label: "Aadi (founder)" },
       { value: "educator_jennifer", label: "Jennifer" },
       { value: "educator_donna", label: "Donna" },
+      { value: "educator_isai", label: "Isai" },
       { value: "friend_or_family", label: "Friend or family" },
       { value: "other", label: "Other" },
     ],
