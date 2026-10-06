@@ -1,12 +1,13 @@
 // Change an application's status from the admin Recruit tab.
 // Allowed transitions: any → accepted | denied. Also lets an admin
-// walk one back to "completed" if a click was a mis-tap.
+// walk one back to "completed" / "booked" if a click was a mis-tap
+// (the Recruit tab's Reopen button sends "booked").
 
 import { NextResponse } from "next/server";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 
-const ALLOWED = new Set(["accepted", "denied", "completed"]);
+const ALLOWED = new Set(["accepted", "denied", "completed", "booked"]);
 
 export async function POST(
   req: Request,

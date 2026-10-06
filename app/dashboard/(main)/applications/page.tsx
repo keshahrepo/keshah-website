@@ -12,7 +12,9 @@
 // Accept opens Gmail's compose window pre-filled with the offer email
 // + contract link; Deny marks silently (no email).
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { SessionLiveView, SessionsPanel } from "./sessions";
 
 // Public URL of the contract PDF applicants get linked to. Drop the
 // file at /public/careers/paid-creator-intern-contract.pdf and this
@@ -65,6 +67,17 @@ type Application = {
 };
 
 export default function ApplicationsPage() {
+  // useSearchParams needs a Suspense boundary in the App Router.
+  return (
+    <Suspense fallback={null}>
+      <ApplicationsInner />
+    </Suspense>
+  );
+}
+
+function ApplicationsInner() {
+  const router = useRouter();
+  const sessionSlug = useSearchParams().get("session");
   const [tab, setTab] = useState<TabKey>("booked");
   const [rows, setRows] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
@@ -132,7 +145,9 @@ export default function ApplicationsPage() {
     }
   }
 
-  function openGmailAccept(row: Application) {
+  function openGmailAccept(
+    row: Pick<Application, "email" | "full_name" | "listing_slug">,
+  ) {
     if (!row.email) {
       alert("This application has no email address.");
       return;
@@ -174,6 +189,26 @@ export default function ApplicationsPage() {
           Inbound applications from the careers site.
         </p>
       </header>
+
+      {sessionSlug ? (
+        <SessionLiveView
+          slug={sessionSlug}
+          onBack={() => {
+            router.push("/dashboard/applications");
+            load();
+          }}
+          onStatus={async (row, status) => {
+            if (status === "accepted") openGmailAccept(row);
+            await updateStatus(row.id, status);
+          }}
+        />
+      ) : (
+      <>
+      <SessionsPanel
+        onOpenSession={(slug) =>
+          router.push(`/dashboard/applications?session=${encodeURIComponent(slug)}`)
+        }
+      />
 
       <nav style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
         {(Object.keys(TAB_LABELS) as TabKey[]).map((k) => {
@@ -270,6 +305,8 @@ export default function ApplicationsPage() {
           />
         ))}
       </div>
+      </>
+      )}
     </main>
   );
 }

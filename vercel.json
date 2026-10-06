@@ -29,6 +29,10 @@
     {
       "path": "/api/rc/backfill-attribution",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/interview/follow-up",
+      "schedule": "*/30 * * * *"
     }
   ]
 }

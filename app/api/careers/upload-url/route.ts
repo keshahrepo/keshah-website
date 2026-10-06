@@ -38,9 +38,11 @@ export async function POST(req: Request) {
 
     // Server-side guardrails so someone can't request an upload URL for
     // an 800MB blob and bloat the bucket.
-    if (!/^video\/(mp4|quicktime)$/.test(contentType)) {
+    // webm / 3gpp / x-m4v: what some Android cameras hand back from the
+    // /interview page's native-camera capture.
+    if (!/^video\/(mp4|quicktime|webm|3gpp|x-m4v)$/.test(contentType)) {
       return NextResponse.json(
-        { error: "Only MP4 or MOV videos are accepted." },
+        { error: "Only MP4, MOV or WebM videos are accepted." },
         { status: 400 }
       );
     }
