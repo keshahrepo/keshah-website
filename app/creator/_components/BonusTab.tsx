@@ -101,8 +101,11 @@ export default function BonusTab({ today }: { today: string }) {
             label={`${c.platform === "tiktok" ? "TikTok" : "Instagram"} · ${c.views_claimed.toLocaleString()} views`}
             subtitle={
               <>
-                <span style={{ wordBreak: "break-all" }}>
-                  Posted {fmtDateShort(c.posted_on)} · {c.video_url}
+                <span>
+                  Posted {fmtDateShort(c.posted_on)} ·{" "}
+                  <a href={c.video_url} target="_blank" rel="noreferrer" style={{ color: "#fff" }}>
+                    Open video
+                  </a>
                 </span>
                 {c.admin_note && c.source !== "auto" && <span style={{ display: "block", color: C.dim, marginTop: 2 }}>{c.admin_note}</span>}
               </>

@@ -296,10 +296,11 @@ export function TaskRow({
               background: "rgba(158,158,158,0.5)",
               display: "flex",
               alignItems: "center",
-              justifyContent: "center",
+              justifyContent: "flex-end",
+              paddingRight: 20,
             }}
           >
-            <Icon name="lock" size={24} color="#fff" />
+            <Icon name="lock" size={22} color="#fff" />
           </div>
         )}
       </div>

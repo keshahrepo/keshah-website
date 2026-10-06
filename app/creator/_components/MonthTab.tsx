@@ -54,12 +54,12 @@ function MonthCalendar({ m }: { m: MonthData }) {
           const date = `${m.month}-${String(n).padStart(2, "0")}`;
           const today = date === m.today;
           return (
-            <div key={i} style={{ height: 52, padding: 6, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div key={i} style={{ height: 52, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <div
                 style={{
-                  width: "100%",
-                  maxWidth: 40,
-                  aspectRatio: "1",
+                  width: 34,
+                  height: 34,
+                  flexShrink: 0,
                   borderRadius: "50%",
                   border: today ? "1px solid #fff" : "1px solid transparent",
                   display: "flex",
