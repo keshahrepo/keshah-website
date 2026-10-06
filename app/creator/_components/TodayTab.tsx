@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { PostedVideo } from "@/lib/creators/types";
+import type { PicksPayload, PublicProven } from "@/lib/creators/proven-db";
 import { postKey } from "@/lib/creators/scrape";
 import { fmtDateShort, localDateIn } from "@/lib/creators/time";
 import type { MonthData, PortalData } from "./types";
@@ -117,8 +118,56 @@ function TestTipsCard() {
   );
 }
 
+/** The proven video (or founder idea) a given row remakes, at the top of its screen. */
+function PickCard({ video, canSwap, swapping, onSwap }: { video: PublicProven; canSwap: boolean; swapping: boolean; onSwap: (() => void) | null }) {
+  const [open, setOpen] = useState(false);
+  const idea = video.kind === "idea";
+  const link = video.source_url || video.reference_url;
+  const where = video.platform === "tiktok" ? "TikTok" : video.platform === "instagram" ? "Instagram" : "";
+  return (
+    <div style={{ background: C.card, border: C.border, borderRadius: 16, padding: 20, marginBottom: 24 }}>
+      <Eyebrow>{idea ? "Film this idea" : "Remake this video"}</Eyebrow>
+      <H style={{ fontSize: 16, lineHeight: 1.4, marginBottom: 10 }}>{video.hook_line || "Open the original to see how it starts."}</H>
+      {idea && video.talking_points.length > 0 && (
+        <ul style={{ margin: "0 0 12px", paddingLeft: 20 }}>
+          {video.talking_points.map((t, j) => (
+            <li key={j} style={{ fontSize: 13, lineHeight: 1.5, color: C.dim, marginBottom: 4 }}>
+              {t}
+            </li>
+          ))}
+        </ul>
+      )}
+      {link && (
+        <a href={link} target="_blank" rel="noreferrer" className="cp-focus" style={{ display: "inline-block", fontSize: 13, color: "#fff", textDecoration: "underline", marginBottom: 8 }}>
+          {idea ? "See the reference" : `See the original on ${where || "the app"}`}
+        </a>
+      )}
+      {!idea && video.transcript && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setOpen(!open)}
+            aria-expanded={open}
+            className="cp-focus"
+            style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", padding: "4px 0", color: C.faint, fontFamily: C.font, fontSize: 13, cursor: "pointer" }}
+          >
+            {open ? "Hide what they say" : "Read what they say"}
+            <Icon name="chevronRight" size={18} color={C.faint} style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform 0.2s" }} />
+          </button>
+          {open && <P style={{ fontSize: 13, lineHeight: 1.6, color: C.dim, marginTop: 6, whiteSpace: "pre-wrap" }}>{video.transcript}</P>}
+        </div>
+      )}
+      {onSwap && (
+        <Button variant="ghost" onClick={onSwap} disabled={swapping || !canSwap} style={{ width: "100%", marginTop: 12 }}>
+          {swapping ? "Swapping..." : canSwap ? "Swap for a different video" : "No other videos to swap in today"}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 /** One video as a task row. */
-function VideoRow({ i, row, label, auto, pulse, onOpen }: { i: number; row: PostedVideo; label: string; auto: boolean; pulse: boolean; onOpen: () => void }) {
+function VideoRow({ i, row, label, hook, auto, pulse, onOpen }: { i: number; row: PostedVideo; label: string; hook?: string; auto: boolean; pulse: boolean; onOpen: () => void }) {
   const done = isFull(row);
   const justDone = useJustDone(done);
   const tt = !!row.tiktok_url.trim();
@@ -128,7 +177,7 @@ function VideoRow({ i, row, label, auto, pulse, onOpen }: { i: number; row: Post
     <TaskRow
       thumb={<TaskThumb icon="videocam" />}
       title={label}
-      target={target}
+      target={hook ? <span style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{hook}</span> : target}
       meta={auto ? "Found automatically" : done ? "Both links in" : "Tap to add your links"}
       doneText="Both links in"
       done={done}
@@ -154,6 +203,9 @@ export default function TodayTab({ data, onSaved, onProfile }: { data: PortalDat
   const [deadline] = useState(() => Date.now() + data.today.ms_until_deadline);
   const [left, setLeft] = useState(data.today.ms_until_deadline);
   const [hooks, setHooks] = useState<Assignment[] | null>(null);
+  const [picks, setPicks] = useState<PicksPayload | null>(null);
+  const [swapping, setSwapping] = useState(false);
+  const [swapErr, setSwapErr] = useState<string | null>(null);
   const [found, setFound] = useState<FoundPosts | null>(null);
   const detail = usePushed<number>();
   // Creators who skipped Getting started can still be sent a contract, and may not have payment details yet.
@@ -175,7 +227,31 @@ export default function TodayTab({ data, onSaved, onProfile }: { data: PortalDat
     return () => clearInterval(t);
   }, [deadline]);
 
-  // Existing hook assignments (legacy portal feature), shown if any exist.
+  // Today's proven videos to remake (row i = pick slot i).
+  useEffect(() => {
+    api<PicksPayload>("/api/creator/picks")
+      .then(setPicks)
+      .catch(() => setPicks(null));
+  }, []);
+  // A saved row keeps the pick it was saved against; otherwise row i shows pick slot i.
+  const pickEntry = (idx: number) => {
+    const own = saved[idx]?.proven_id;
+    return (own && picks?.picks.find((p) => p.video.id === own)) || picks?.picks.find((p) => p.slot === idx);
+  };
+  const pickAt = (idx: number) => pickEntry(idx)?.video;
+
+  async function swap(slot: number) {
+    setSwapping(true);
+    setSwapErr(null);
+    try {
+      setPicks(await api<PicksPayload>("/api/creator/picks", { slot }));
+    } catch (e) {
+      setSwapErr((e as Error).message);
+    }
+    setSwapping(false);
+  }
+
+  // Existing hook assignments (legacy portal feature), shown only until proven videos are set up.
   useEffect(() => {
     api<{ assignments?: Assignment[] }>("/api/creator/me")
       .then((r) => setHooks(r.assignments ?? []))
@@ -298,12 +374,14 @@ export default function TodayTab({ data, onSaved, onProfile }: { data: PortalDat
           i={idx + (allDone ? 1 : 0)}
           row={row}
           label={rowLabel(idx)}
+          hook={pickAt(idx)?.hook_line}
           auto={isAuto(row.tiktok_url, "tiktok") || isAuto(row.instagram_url, "instagram")}
           pulse={idx === firstOpen && data.today.is_weekday && !expired}
           onOpen={() => {
             setRows(savedRef.current.map((x) => ({ ...x })));
             setErr(null);
             setOk(null);
+            setSwapErr(null);
             detail.open(idx);
           }}
         />
@@ -312,7 +390,7 @@ export default function TodayTab({ data, onSaved, onProfile }: { data: PortalDat
       {!allDone && statusCard}
       <Msg ok={detail.value === null ? ok : null} />
 
-      {hooks && hooks.length > 0 && (
+      {hooks && hooks.length > 0 && !picks?.picks.length && (
         <Card style={{ marginTop: 4 }}>
           <Eyebrow>Today&apos;s hooks</Eyebrow>
           {hooks.map((h) => (
@@ -348,6 +426,16 @@ export default function TodayTab({ data, onSaved, onProfile }: { data: PortalDat
 
       {i !== null && dRow && (
         <Screen title={rowLabel(i)} onBack={detail.close} closing={detail.closing}>
+          {pickAt(i) && (
+            <PickCard
+              video={pickAt(i)!}
+              canSwap={!!picks?.can_swap}
+              swapping={swapping}
+              // Once a video is posted for this row, the pick stays (it's how remakes are tracked).
+              onSwap={!expired && !saved[i]?.tiktok_url.trim() && !saved[i]?.instagram_url.trim() ? () => swap(pickEntry(i)!.slot) : null}
+            />
+          )}
+          {swapErr && <Msg error={swapErr} />}
           {dAuto && <P style={{ fontSize: 13, color: C.faint }}>We found this video automatically. You can still change the links.</P>}
           <Field label="TikTok link">
             <input
