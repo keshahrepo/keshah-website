@@ -86,9 +86,6 @@ function SetPasswordForm() {
     return (
       <div style={box}>
         <p style={{ color: "#fff", fontSize: 14, lineHeight: 1.5, marginBottom: 16 }}>{check.error}</p>
-        <p style={{ color: "rgba(255,255,255,0.55)", fontSize: 13, lineHeight: 1.5, marginBottom: 16 }}>
-          If you need a new link, message your manager on Slack.
-        </p>
         <a
           href="/creator/login"
           style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 48, borderRadius: 10, border: "1px solid rgba(255,255,255,0.15)", fontSize: 14, fontWeight: 600, color: "#fff", textDecoration: "none" }}
