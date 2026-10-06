@@ -336,6 +336,7 @@ function toPostingDay(id: string, d: DocumentData): PostingDay {
           tiktok_url: v?.tiktok_url ?? "",
           instagram_url: v?.instagram_url ?? "",
           ...(v?.inspired_by_url ? { inspired_by_url: v.inspired_by_url } : {}),
+          ...(v?.proven_id ? { proven_id: String(v.proven_id) } : {}),
         }))
       : [],
     logged_at: toIso(d.logged_at) ?? "",
@@ -532,12 +533,31 @@ export async function savePostingDay(
   }
   if (!Array.isArray(videos)) throw new CreatorDataError("videos must be a list");
   if (videos.length > MAX_VIDEO_ROWS) throw new CreatorDataError("Too many videos in one day");
+  // Remake attribution: row i remakes the day's pick in slot i (by the row's position on Today, before empty rows drop out).
+  const picksSnap = await creatorRef(id).collection("daily_picks").doc(date).get();
+  const pickIds: (string | undefined)[] = [];
+  for (const p of (picksSnap.exists && Array.isArray(picksSnap.data()!.picks) ? picksSnap.data()!.picks : []) as { slot: number; proven_id: string }[]) {
+    if (Number.isInteger(p?.slot) && p.proven_id) pickIds[p.slot] = String(p.proven_id);
+  }
+  // A row that already carries one of today's picks keeps it (saved rows can shift up when an earlier row is empty).
+  const dayPicks = new Set(pickIds.filter(Boolean));
+  const kept = new Set<string>();
+  const rowPick = videos.map((v) => {
+    const id = typeof v?.proven_id === "string" ? v.proven_id : "";
+    if (!id || !dayPicks.has(id) || kept.has(id)) return undefined;
+    kept.add(id);
+    return id;
+  });
   const clean: PostedVideo[] = [];
   videos.forEach((v, i) => {
     const tiktok_url = checkUrl(String(v?.tiktok_url ?? ""), "tiktok", `Video ${i + 1}: `);
     const instagram_url = checkUrl(String(v?.instagram_url ?? ""), "instagram", `Video ${i + 1}: `);
     const inspired_by_url = checkInspiredByUrl(String(v?.inspired_by_url ?? ""), `Video ${i + 1}: `);
-    if (tiktok_url || instagram_url) clean.push({ tiktok_url, instagram_url, ...(inspired_by_url ? { inspired_by_url } : {}) });
+    const byPos = pickIds[i] && !kept.has(pickIds[i]!) ? pickIds[i] : undefined;
+    const proven_id = rowPick[i] ?? byPos;
+    if (tiktok_url || instagram_url) {
+      clean.push({ tiktok_url, instagram_url, ...(inspired_by_url ? { inspired_by_url } : {}), ...(proven_id ? { proven_id } : {}) });
+    }
   });
   const dupe = (key: "tiktok_url" | "instagram_url") => {
     const seen = new Set<string>();

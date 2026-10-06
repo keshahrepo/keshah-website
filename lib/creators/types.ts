@@ -227,6 +227,11 @@ export interface PostedVideo {
    * Informational only; never part of the pay rule.
    */
   inspired_by_url?: string;
+  /**
+   * The proven video this row remakes (ProvenVideos id), set by the server from
+   * that day's daily pick in the same position. Best effort; never part of pay.
+   */
+  proven_id?: string;
 }
 
 export interface PostingDay {

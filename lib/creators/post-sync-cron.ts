@@ -6,6 +6,10 @@
 import { NextResponse } from "next/server";
 import { requireCronSecret } from "@/lib/support/auth";
 import { syncAllCreatorPosts, type SyncMode } from "./post-sync";
+import { runProvenDaily, type ProvenDailyResult } from "./proven-db";
+
+/** Cron routes run up to 300s; the proven-list step stops starting slow work this long before that. */
+const CRON_BUDGET_MS = 285_000;
 
 export async function handlePostSyncCron(req: Request, mode: SyncMode): Promise<NextResponse> {
   if (!requireCronSecret(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -13,9 +17,21 @@ export async function handlePostSyncCron(req: Request, mode: SyncMode): Promise<
     return NextResponse.json({ error: "SCRAPECREATORS_API_KEY not set" }, { status: 500 });
   }
   const only = new URL(req.url).searchParams.get("creator");
+  const startedAt = Date.now();
   try {
     const r = await syncAllCreatorPosts({ mode, ...(only ? { onlyIds: [only] } : {}) });
+    // Proven list (after the deep sync only): auto-suggest, remakes, stats, tired flags. Never fails the cron.
+    let proven: ProvenDailyResult | { error: string } | null = null;
+    if (mode === "deep") {
+      try {
+        proven = await runProvenDaily({ deadlineMs: startedAt + CRON_BUDGET_MS, ...(only ? { onlyIds: [only] } : {}) });
+      } catch (e) {
+        console.error("proven daily error:", e);
+        proven = { error: e instanceof Error ? e.message : String(e) };
+      }
+    }
     return NextResponse.json({
+      ...(proven ? { proven } : {}),
       mode,
       ran_at: r.ran_at,
       creators: r.results.length,

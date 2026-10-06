@@ -142,6 +142,10 @@ export interface FetchPostsOptions {
    */
   isBeyond?: (oldestUnpinned: ScrapedPost) => boolean;
   maxPages?: number;
+  /** TikTok only: "popular" pages most-viewed first (proven-list seed). Default latest. */
+  sortBy?: "latest" | "popular";
+  /** Extra stop rule checked after each page (all posts on that page), e.g. "nothing over 100K here". */
+  stopAfterPage?: (page: ScrapedPost[]) => boolean;
   fetchImpl?: typeof fetch;
   /** Called with each response's credits_remaining (for logging). */
   onCredits?: (n: number) => void;
@@ -164,9 +168,10 @@ export class ScrapeError extends Error {
   }
 }
 
-function pageUrl(platform: Platform, handle: string, cursor: string | null): string {
+function pageUrl(platform: Platform, handle: string, cursor: string | null, sortBy?: "latest" | "popular"): string {
   const q = new URLSearchParams({ handle: cleanHandle(handle) });
   if (platform === "tiktok") {
+    if (sortBy === "popular") q.set("sort_by", "popular");
     if (cursor) q.set("max_cursor", cursor);
     return `${apiBase()}/v3/tiktok/profile/videos?${q}`;
   }
@@ -209,7 +214,7 @@ export async function fetchRecentPosts(
   let credits: number | null = null;
   let truncated = false;
   while (pages < maxPages) {
-    const url = pageUrl(platform, handle, cursor);
+    const url = pageUrl(platform, handle, cursor, opts.sortBy);
     let raw: unknown;
     try {
       calls++;
@@ -230,9 +235,11 @@ export async function fetchRecentPosts(
     const oldest = unpinned.length ? unpinned.reduce((a, b) => (a.posted_at < b.posted_at ? a : b)) : null;
     const beyond = !oldest
       ? true
-      : opts.isBeyond
-        ? opts.isBeyond(oldest)
-        : Date.parse(oldest.posted_at) < (opts.sinceMs ?? Infinity);
+      : opts.stopAfterPage?.(page.posts)
+        ? true
+        : opts.isBeyond
+          ? opts.isBeyond(oldest)
+          : Date.parse(oldest.posted_at) < (opts.sinceMs ?? Infinity);
     if (!page.has_more || !page.cursor || page.cursor === cursor || beyond) break;
     if (pages >= maxPages) {
       truncated = true;
@@ -266,6 +273,89 @@ export async function handleExists(
     const b = obj(await res.json().catch(() => ({})));
     if (b.error === "not_found" || b.account_deactivated === true) return false;
     return true;
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------- transcripts + single videos
+
+/** WebVTT (TikTok transcripts) to plain text: no header, cue numbers, timestamps or tags; repeated lines dropped. */
+export function vttToText(vtt: string): string {
+  const out: string[] = [];
+  for (const raw of String(vtt ?? "").split(/\r?\n/)) {
+    const line = raw.replace(/<[^>]+>/g, "").trim();
+    if (!line || /^WEBVTT/i.test(line) || /^(NOTE|STYLE|REGION)\b/.test(line) || /^\d+$/.test(line) || /-->/.test(line)) continue;
+    if (out[out.length - 1] === line) continue;
+    out.push(line);
+  }
+  return out.join(" ").replace(/\s+/g, " ").trim();
+}
+
+/** Plain transcript text from a transcript response (TikTok VTT string, or Instagram transcripts[].text). */
+export function parseTranscript(platform: Platform, raw: unknown): string {
+  const d = obj(raw);
+  if (platform === "tiktok") return typeof d.transcript === "string" ? vttToText(d.transcript) : "";
+  const list = Array.isArray(d.transcripts) ? d.transcripts : [];
+  return list
+    .map((t) => (typeof obj(t).text === "string" ? String(obj(t).text).trim() : ""))
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Transcript for one video (1 credit). TikTok uses its native captions (no AI
+ * fallback, which costs 10). Instagram is AI-made, takes 10-30s and only works
+ * under 2 minutes. Returns "" when there's no speech / no transcript; throws
+ * ScrapeError on API trouble.
+ */
+export async function fetchTranscript(
+  platform: Platform,
+  url: string,
+  opts: { apiKey: string; fetchImpl?: typeof fetch },
+): Promise<{ text: string; credits_remaining: number | null }> {
+  const q = new URLSearchParams({ url });
+  const path = platform === "tiktok" ? `/v1/tiktok/video/transcript?${q}&language=en` : `/v2/instagram/media/transcript?${q}`;
+  const res = await (opts.fetchImpl ?? fetch)(`${apiBase()}${path}`, { headers: { "x-api-key": opts.apiKey }, cache: "no-store" });
+  const text = await res.text();
+  if (res.status === 404) return { text: "", credits_remaining: null };
+  if (!res.ok) throw new ScrapeError(`HTTP ${res.status}: ${text.slice(0, 200)}`, res.status);
+  let body: unknown = {};
+  try {
+    body = JSON.parse(text);
+  } catch {
+    throw new ScrapeError(`Bad JSON: ${text.slice(0, 120)}`);
+  }
+  return { text: parseTranscript(platform, body), credits_remaining: creditsOf(obj(body)) };
+}
+
+/** Largest view-ish count anywhere in a single-video response (shapes differ by platform and version). */
+export function parseVideoViews(raw: unknown): number | null {
+  let best: number | null = null;
+  const keys = new Set(["play_count", "ig_play_count", "video_play_count", "video_view_count", "view_count", "playCount"]);
+  const walk = (v: unknown, depth: number) => {
+    if (!v || typeof v !== "object" || depth > 6) return;
+    for (const [k, x] of Object.entries(v as Json)) {
+      if (keys.has(k) && typeof x === "number" && Number.isFinite(x)) best = Math.max(best ?? 0, x);
+      else if (x && typeof x === "object") walk(x, depth + 1);
+    }
+  };
+  walk(raw, 0);
+  return best;
+}
+
+/** Current views of one video by URL (1 credit). null when it can't be read. */
+export async function fetchVideoViews(
+  platform: Platform,
+  url: string,
+  opts: { apiKey: string; fetchImpl?: typeof fetch },
+): Promise<number | null> {
+  const q = new URLSearchParams({ url });
+  const path = platform === "tiktok" ? `/v2/tiktok/video?${q}` : `/v1/instagram/post?${q}`;
+  try {
+    return parseVideoViews(await getJson(`${apiBase()}${path}`, opts.apiKey, opts.fetchImpl ?? fetch));
   } catch {
     return null;
   }

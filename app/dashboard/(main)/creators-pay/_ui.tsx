@@ -161,6 +161,7 @@ export function SubNav() {
   const pathname = usePathname();
   const items = [
     { href: "/dashboard/creators-pay", label: "Creators" },
+    { href: "/dashboard/creators-pay/proven", label: "Proven videos" },
     { href: "/dashboard/creators-pay/payouts", label: "Payout run" },
     { href: "/dashboard/creators-pay/records", label: "Records" },
     { href: "/dashboard/creators-pay/settings", label: "Contract signing & settings" },
