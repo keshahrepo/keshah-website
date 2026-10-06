@@ -52,8 +52,9 @@ import type {
 export const CREATORS_COLLECTION = "ContentCreators";
 
 // ------------------------------------------------------------------ proceeds
-// Proceeds come from Users.proceeds_usd_total (real store proceeds, after
-// Apple/Google's cut, written by the RevenueCat sync). A converted user with
+// Proceeds come from the user's FIRST paid charge only (first_proceeds_usd,
+// falling back to proceeds_usd_total): real RevenueCat store proceeds after
+// Apple/Google's cut. Renewals are deliberately not credited to creators. A converted user with
 // no recorded proceeds yet is filled in at the creator's own average, or this
 // fallback when the creator has none recorded at all.
 export const FALLBACK_PROCEEDS_PER_PURCHASE_USD = 70;
@@ -457,7 +458,7 @@ export interface Attribution {
   purchases: number;
   /** Purchases whose conversion falls inside the selected month. */
   purchasesInWindow: number;
-  /** Real proceeds recorded for all attributed users (lifetime). */
+  /** First-charge proceeds for all attributed users (no renewals). */
   recordedProceedsUsd: number;
   /** Converted users with a recorded proceeds total. */
   purchasesWithProceeds: number;
@@ -477,7 +478,7 @@ export async function attributionFor(tags: string[], windowStartMs: number, wind
   const snap = await db()
     .collection("Users")
     .where("attribution_campaign", "in", clean)
-    .select("started_trial", "converted_trial", "converted_at", "proceeds_usd_total")
+    .select("started_trial", "converted_trial", "converted_at", "proceeds_usd_total", "first_proceeds_usd")
     .get();
   const out = { ...empty };
   let windowRecorded = 0;
@@ -485,7 +486,15 @@ export async function attributionFor(tags: string[], windowStartMs: number, wind
   for (const doc of snap.docs) {
     const d = doc.data();
     if (d.started_trial) out.trials++;
-    const proceeds = typeof d.proceeds_usd_total === "number" ? d.proceeds_usd_total : null;
+    // First paid charge only; renewals don't count toward a creator.
+    // Before first_proceeds_usd is set, the total is the first charge: every
+    // tracked conversion is on a 3-month plan and too recent to have renewed.
+    const proceeds =
+      typeof d.first_proceeds_usd === "number"
+        ? d.first_proceeds_usd
+        : typeof d.proceeds_usd_total === "number"
+          ? d.proceeds_usd_total
+          : null;
     if (proceeds !== null) out.recordedProceedsUsd += proceeds;
     if (d.converted_trial) {
       out.purchases++;

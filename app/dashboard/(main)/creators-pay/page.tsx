@@ -165,7 +165,7 @@ export default function CreatorsPayPage() {
                   <th style={th}>100K / 1M</th>
                   <th style={th}>Bonuses</th>
                   <th style={th}>Trials / Paid</th>
-                  <th style={th} title="Real store proceeds after Apple/Google's cut, from users who started paying this month">Proceeds*</th>
+                  <th style={th} title="First payment from each user who started paying this month, after Apple/Google's cut. Renewals not counted.">Proceeds*</th>
                   <th style={th} title="Proceeds ÷ pay, this month">ROI*</th>
                 </tr>
               </thead>
@@ -286,8 +286,8 @@ export default function CreatorsPayPage() {
             </table>
           </div>
           <p style={{ ...muted, lineHeight: 1.6 }}>
-            * Proceeds are real store revenue after Apple and Google&apos;s cut, from users who started paying in {month} (all
-            time shown below it). A paid user with nothing recorded yet counts at that creator&apos;s average. ROI
+            * Proceeds are each new paying user&apos;s first payment, after Apple and Google&apos;s cut, from users who started
+            paying in {month} (all time shown below it). Renewals are not counted. A paid user with nothing recorded yet counts at that creator&apos;s average. ROI
             flag = {month} proceeds ÷ {month} pay: green ≥ {data.estimate.green_at}×, amber ≥{" "}
             {data.estimate.amber_at}×, otherwise red. Trials / paid = all-time users whose attribution campaign exactly matches one of
             the creator’s campaign tags. 100K / 1M = approved claims crossing in {month}.

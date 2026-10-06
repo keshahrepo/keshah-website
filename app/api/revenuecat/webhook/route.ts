@@ -348,6 +348,18 @@ async function recordRevenue(
     await db.runTransaction(async (tx) => {
       const existingEvent = await tx.get(eventRef);
       if (existingEvent.exists) return; // already counted
+      // first_proceeds_usd = proceeds from the user's first paid charge only
+      // (creator pay judges a creator on new paying users, not renewals).
+      // Set once. If the user already had proceeds from before this field
+      // existed, that earlier total is their first charge.
+      const userSnap = await tx.get(docRef);
+      const userData = userSnap.data() ?? {};
+      const firstProceeds =
+        typeof userData.first_proceeds_usd === "number"
+          ? null
+          : typeof userData.proceeds_usd_total === "number" && userData.proceeds_usd_total > 0
+            ? userData.proceeds_usd_total
+            : proceedsUsd;
 
       tx.set(eventRef, {
         event_type: evt.type,
@@ -373,6 +385,7 @@ async function recordRevenue(
           last_revenue_at: FieldValue.serverTimestamp(),
           last_revenue_usd: usd,
           last_revenue_product_id: evt.product_id ?? null,
+          ...(firstProceeds !== null ? { first_proceeds_usd: firstProceeds } : {}),
         },
         { merge: true }
       );
