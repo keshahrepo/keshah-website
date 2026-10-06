@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { Guide, GuideStep } from "@/lib/creators/guide-content";
 import { C, Eyebrow } from "./ui";
 
@@ -27,7 +27,7 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-function CopyBlock({ label, value }: { label: string; value: string }) {
+export function CopyBlock({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div
@@ -56,13 +56,14 @@ function CopyBlock({ label, value }: { label: string; value: string }) {
         }}
         style={{
           flexShrink: 0,
-          padding: "8px 12px",
+          minHeight: 40,
+          padding: "0 14px",
           borderRadius: 10,
           border: "none",
           background: copied ? "rgba(74,222,128,0.15)" : "#fff",
           color: copied ? C.green : "#000",
           fontFamily: C.font,
-          fontSize: 12,
+          fontSize: 13,
           fontWeight: 600,
           cursor: "pointer",
         }}
@@ -105,7 +106,7 @@ function StepCard({
           style={{
             display: "block",
             width: "100%",
-            maxWidth: 320,
+            maxWidth: 280,
             height: "auto",
             margin: "0 auto 14px",
             borderRadius: 16,
@@ -167,12 +168,50 @@ function StepCard({
   );
 }
 
+function Disclosure({ label, children }: { label: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          width: "100%",
+          minHeight: 48,
+          padding: "0 14px",
+          borderRadius: 12,
+          border: C.border,
+          background: open ? "rgba(255,255,255,0.06)" : "transparent",
+          color: "#fff",
+          fontFamily: C.font,
+          fontSize: 14,
+          fontWeight: 600,
+          cursor: "pointer",
+          textAlign: "left",
+        }}
+      >
+        <span>{label}</span>
+        <span aria-hidden style={{ color: C.faint, fontSize: 22, lineHeight: 1, transform: open ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>
+          ›
+        </span>
+      </button>
+      {open && <div style={{ marginTop: 12 }}>{children}</div>}
+    </div>
+  );
+}
+
 export default function StepGuide({
   guide,
   sectionIds,
   link,
   keshahEmail,
   showSectionTitles = true,
+  collapsible = false,
+  toggleLabel,
 }: {
   guide: Guide;
   /** Only render these sections (by id). Defaults to all. */
@@ -182,18 +221,28 @@ export default function StepGuide({
   /** Creator's name@keshah.com email, shown on sign-up steps. */
   keshahEmail?: string;
   showSectionTitles?: boolean;
+  /** Each section starts closed behind a tap-to-open row (keeps long picture guides out of the way). */
+  collapsible?: boolean;
+  /** Row label when collapsible and section titles are hidden. */
+  toggleLabel?: string;
 }) {
   const sections = sectionIds ? guide.sections.filter((s) => sectionIds.includes(s.id)) : guide.sections;
+  const steps = (section: (typeof sections)[number]) =>
+    section.steps.map((step, i) => <StepCard key={i} step={step} n={i + 1} link={link} keshahEmail={keshahEmail} />);
   return (
     <div style={{ fontFamily: C.font, color: C.text }}>
-      {sections.map((section) => (
-        <div key={section.id} style={{ marginBottom: 20 }}>
-          {showSectionTitles && <Eyebrow style={{ margin: "4px 2px 10px" }}>{section.title}</Eyebrow>}
-          {section.steps.map((step, i) => (
-            <StepCard key={i} step={step} n={i + 1} link={link} keshahEmail={keshahEmail} />
-          ))}
-        </div>
-      ))}
+      {sections.map((section) =>
+        collapsible ? (
+          <Disclosure key={section.id} label={showSectionTitles ? section.title : toggleLabel ?? "Show me how, step by step"}>
+            {steps(section)}
+          </Disclosure>
+        ) : (
+          <div key={section.id} style={{ marginBottom: 20 }}>
+            {showSectionTitles && <Eyebrow style={{ margin: "4px 2px 10px" }}>{section.title}</Eyebrow>}
+            {steps(section)}
+          </div>
+        ),
+      )}
     </div>
   );
 }

@@ -19,6 +19,9 @@ interface ContractInfo {
 }
 
 const linkStyle = {
+  minHeight: 48,
+  boxSizing: "border-box",
+  alignItems: "center",
   padding: "12px 18px",
   borderRadius: 12,
   border: C.border,
@@ -26,7 +29,7 @@ const linkStyle = {
   fontSize: 14,
   fontWeight: 600,
   textDecoration: "none",
-  display: "inline-block",
+  display: "inline-flex",
 } as const;
 
 /** Read + sign. Used as the first Getting started step and in the Contract tab. */
@@ -97,7 +100,7 @@ export function ContractSigner({ onSigned, compact }: { onSigned?: () => void; c
       <iframe
         src={c.document_url!}
         title="Your contract"
-        style={{ width: "100%", height: 420, border: C.border, borderRadius: 12, background: "#fff", marginBottom: 10 }}
+        style={{ width: "100%", height: "min(60vh, 520px)", border: C.border, borderRadius: 12, background: "#fff", marginBottom: 10 }}
       />
       <div style={{ marginBottom: 16 }}>
         <a href={c.document_url!} target="_blank" rel="noreferrer" style={linkStyle}>
@@ -105,12 +108,12 @@ export function ContractSigner({ onSigned, compact }: { onSigned?: () => void; c
         </a>
       </div>
 
-      <label style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 8, cursor: "pointer" }}>
+      <label style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 8, padding: "6px 0", cursor: "pointer" }}>
         <input
           type="checkbox"
           checked={consent}
           onChange={(e) => setConsent(e.target.checked)}
-          style={{ marginTop: 3, width: 18, height: 18, flexShrink: 0, accentColor: "#fff" }}
+          style={{ marginTop: 2, width: 22, height: 22, flexShrink: 0, accentColor: "#fff" }}
         />
         <span style={{ fontSize: 14, color: "#fff", lineHeight: 1.5 }}>{c.consent.label}</span>
       </label>

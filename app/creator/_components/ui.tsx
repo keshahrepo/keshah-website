@@ -46,7 +46,13 @@ export function H({ children, style }: { children: ReactNode; style?: CSSPropert
 }
 
 export function P({ children, style }: { children: ReactNode; style?: CSSProperties }) {
-  return <p style={{ fontSize: 14, lineHeight: 1.55, color: C.dim, margin: "0 0 10px", ...style }}>{children}</p>;
+    // Longhand margins only: callers override marginBottom/marginTop, and mixing
+  // those with the `margin` shorthand makes React warn on re-render.
+  return (
+    <p style={{ fontSize: 14, lineHeight: 1.55, color: C.dim, marginTop: 0, marginRight: 0, marginLeft: 0, marginBottom: 10, ...style }}>
+      {children}
+    </p>
+  );
 }
 
 export function Button({
@@ -71,8 +77,9 @@ export function Button({
       onClick={onClick}
       disabled={disabled}
       style={{
+        minHeight: 48,
         padding: "12px 18px",
-        borderRadius: 12,
+        borderRadius: 14,
         border: primary ? "none" : C.border,
         background: primary ? "#fff" : "transparent",
         color: primary ? "#000" : "#fff",
@@ -97,7 +104,9 @@ export const inputStyle: CSSProperties = {
   borderRadius: 12,
   color: "#fff",
   fontFamily: C.font,
-  fontSize: 14,
+  // 16px or iOS Safari zooms the page when the field is focused.
+  fontSize: 16,
+  minHeight: 48,
   outline: "none",
   boxSizing: "border-box",
   colorScheme: "dark",
@@ -105,16 +114,16 @@ export const inputStyle: CSSProperties = {
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label style={{ display: "block", marginBottom: 12 }}>
-      <span style={{ display: "block", fontSize: 12, color: C.faint, marginBottom: 6 }}>{label}</span>
+    <label style={{ display: "block", marginBottom: 14 }}>
+      <span style={{ display: "block", fontSize: 13, color: C.dim, marginBottom: 6 }}>{label}</span>
       {children}
     </label>
   );
 }
 
 export function Msg({ error, ok }: { error?: string | null; ok?: string | null }) {
-  if (error) return <p style={{ color: C.red, fontSize: 13, margin: "8px 0" }}>{error}</p>;
-  if (ok) return <p style={{ color: C.green, fontSize: 13, margin: "8px 0" }}>{ok}</p>;
+  if (error) return <p role="alert" style={{ color: C.red, fontSize: 14, lineHeight: 1.5, margin: "10px 0" }}>{error}</p>;
+  if (ok) return <p role="status" style={{ color: C.green, fontSize: 14, lineHeight: 1.5, margin: "10px 0" }}>{ok}</p>;
   return null;
 }
 

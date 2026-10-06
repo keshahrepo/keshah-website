@@ -9,7 +9,7 @@ import InvoicesTab from "./_components/InvoicesTab";
 import MonthTab from "./_components/MonthTab";
 import TodayTab from "./_components/TodayTab";
 import type { PortalData } from "./_components/types";
-import { C, P, api } from "./_components/ui";
+import { Button, C, Card, P, api } from "./_components/ui";
 
 const TABS = [
   ["today", "Today"],
@@ -47,46 +47,65 @@ export default function CreatorPortal() {
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: C.font }}>
-      <div style={{ maxWidth: 520, margin: "0 auto", padding: "20px 16px 60px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+      <style>{`
+        .cp-wrap { max-width: 600px; margin: 0 auto; padding: 20px 16px 64px; }
+        .cp-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 18px; }
+        @media (min-width: 640px) {
+          .cp-wrap { padding: 48px 24px 80px; }
+          .cp-tabs { grid-template-columns: repeat(6, 1fr); }
+        }
+      `}</style>
+      <div className="cp-wrap">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <div>
             <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.3px" }}>KESHAH</div>
-            <div style={{ fontSize: 12, color: C.faint }}>{data ? data.creator.name : "Creator portal"}</div>
+            <div style={{ fontSize: 13, color: C.faint }}>{data ? data.creator.name : "Creator portal"}</div>
           </div>
           <button
             onClick={signOut}
-            style={{ background: "none", border: "none", color: C.faint, fontFamily: C.font, fontSize: 12, cursor: "pointer" }}
+            style={{
+              background: "none",
+              border: C.border,
+              borderRadius: 999,
+              color: C.dim,
+              fontFamily: C.font,
+              fontSize: 13,
+              padding: "0 16px",
+              minHeight: 40,
+              cursor: "pointer",
+            }}
           >
             Sign out
           </button>
         </div>
 
         {!data ? (
-          <P>{err ?? "Loading..."}</P>
+          err ? (
+            <Card>
+              <P>{err}</P>
+              <Button variant="ghost" onClick={load}>
+                Try again
+              </Button>
+            </Card>
+          ) : (
+            <P style={{ textAlign: "center", padding: "40px 0" }}>Loading your portal...</P>
+          )
         ) : !inPortal ? (
           <GettingStarted data={data} onDone={load} />
         ) : (
           <>
-            <div
-              style={{
-                display: "flex",
-                gap: 6,
-                overflowX: "auto",
-                marginBottom: 16,
-                paddingBottom: 4,
-                scrollbarWidth: "none",
-              }}
-            >
+            <nav className="cp-tabs" aria-label="Portal sections">
               {TABS.map(([k, label]) => (
                 <button
                   key={k}
+                  aria-current={tab === k ? "page" : undefined}
                   onClick={() => {
                     setTab(k);
                     if (k === "month" || k === "today") load();
                   }}
                   style={{
-                    flexShrink: 0,
-                    padding: "8px 14px",
+                    minHeight: 44,
+                    padding: "0 6px",
                     borderRadius: 999,
                     border: tab === k ? "1px solid #fff" : C.border,
                     background: tab === k ? "#fff" : "transparent",
@@ -94,13 +113,14 @@ export default function CreatorPortal() {
                     fontFamily: C.font,
                     fontSize: 13,
                     fontWeight: 600,
+                    whiteSpace: "nowrap",
                     cursor: "pointer",
                   }}
                 >
                   {label}
                 </button>
               ))}
-            </div>
+            </nav>
             {tab === "today" && <TodayTab key={data.today.date} data={data} onSaved={load} />}
             {tab === "month" && <MonthTab m={data.month} />}
             {tab === "bonus" && <BonusTab today={data.today.date} />}

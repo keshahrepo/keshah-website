@@ -71,12 +71,27 @@ export default function InvoicesTab() {
                   Check the lines. If something looks wrong, message your manager on Slack before you submit.
                 </P>
                 <Button onClick={() => submit(cur.number)} disabled={busy} style={{ width: "100%" }}>
-                  {busy ? "Submitting..." : "Confirm & submit"}
+                  {busy ? "Submitting..." : "Confirm and submit"}
                 </Button>
               </>
             ) : (
-              <a href={`/creator/invoices/${encodeURIComponent(cur.number)}`} style={{ display: "block", marginTop: 12, color: "#fff", fontSize: 14 }}>
-                View / print invoice
+              <a
+                href={`/creator/invoices/${encodeURIComponent(cur.number)}`}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minHeight: 48,
+                  marginTop: 14,
+                  borderRadius: 14,
+                  border: C.border,
+                  color: "#fff",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  textDecoration: "none",
+                }}
+              >
+                View or print the invoice
               </a>
             )}
           </>
@@ -90,7 +105,7 @@ export default function InvoicesTab() {
           <a
             key={inv.number}
             href={`/creator/invoices/${encodeURIComponent(inv.number)}`}
-            style={{ display: "block", padding: "10px 0", borderTop: C.border, color: "#fff", textDecoration: "none" }}
+            style={{ display: "block", padding: "12px 0", borderTop: C.border, color: "#fff", textDecoration: "none" }}
           >
             <Row>
               <div>

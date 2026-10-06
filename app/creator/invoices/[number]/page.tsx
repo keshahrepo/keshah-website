@@ -50,14 +50,14 @@ export default function InvoicePrintPage() {
     <div style={{ background: "#fff", minHeight: "100vh", color: "#111", fontFamily: font }}>
       <style>{`@media print { .no-print { display: none !important; } @page { margin: 18mm; } body { background: #fff; } }`}</style>
       <div className="no-print" style={{ background: "#000", padding: "12px 16px", display: "flex", gap: 12, justifyContent: "space-between", alignItems: "center" }}>
-        <a href="/creator" style={{ color: "#fff", fontSize: 13, textDecoration: "none" }}>
+        <a href="/creator" style={{ color: "#fff", fontSize: 14, textDecoration: "none", display: "inline-flex", alignItems: "center", minHeight: 44 }}>
           ← Back to portal
         </a>
         <button
           onClick={() => window.print()}
-          style={{ background: "#fff", color: "#000", border: "none", borderRadius: 10, padding: "8px 14px", fontFamily: font, fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+          style={{ background: "#fff", color: "#000", border: "none", borderRadius: 12, padding: "0 16px", minHeight: 44, fontFamily: font, fontWeight: 600, fontSize: 14, cursor: "pointer" }}
         >
-          Print / Save as PDF
+          Print or save as PDF
         </button>
       </div>
 

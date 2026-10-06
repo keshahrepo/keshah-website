@@ -121,11 +121,11 @@ export default function MonthTab({ m }: { m: MonthData }) {
         <Eyebrow>Day by day</Eyebrow>
         {pastOrToday.length === 0 && <P style={{ marginBottom: 0 }}>Nothing yet this month.</P>}
         {pastOrToday.map((d) => (
-          <Row key={d.date} style={{ padding: "7px 0", borderTop: C.border }}>
+          <Row key={d.date} style={{ padding: "10px 0", borderTop: C.border }}>
             <div style={{ fontSize: 14 }}>{fmtDateShort(d.date)}</div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <span style={{ fontSize: 12, color: C.faint }}>{d.videos}/5</span>
-              <Pill color={statusColor[d.state]}>{stateLabel[d.state]}</Pill>
+              <Pill color={statusColor[d.state]}>{d.date === m.today && d.state === "pending" ? "Today" : stateLabel[d.state]}</Pill>
             </div>
           </Row>
         ))}

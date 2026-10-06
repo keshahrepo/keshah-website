@@ -10,11 +10,12 @@ const inputStyle: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,0.1)",
   borderRadius: 10,
   color: "#fff",
-  fontSize: 14,
+  fontSize: 16,
+  minHeight: 48,
   outline: "none",
   boxSizing: "border-box",
 };
-const labelStyle: React.CSSProperties = { fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.5)", display: "block", marginBottom: 6 };
+const labelStyle: React.CSSProperties = { fontSize: 13, fontWeight: 500, color: "rgba(255,255,255,0.6)", display: "block", marginBottom: 6 };
 const box: React.CSSProperties = {
   background: "rgba(255,255,255,0.04)",
   border: "1px solid rgba(255,255,255,0.08)",
@@ -64,7 +65,12 @@ function SetPasswordForm() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token, password }),
-    });
+    }).catch(() => null);
+    if (!res) {
+      setError("Couldn't reach the server. Check your connection and try again.");
+      setLoading(false);
+      return;
+    }
     if (res.ok) {
       router.push("/creator");
       return;
@@ -80,8 +86,14 @@ function SetPasswordForm() {
     return (
       <div style={box}>
         <p style={{ color: "#fff", fontSize: 14, lineHeight: 1.5, marginBottom: 16 }}>{check.error}</p>
-        <a href="/creator/login" style={{ fontSize: 13, color: "#60a5fa", textDecoration: "none" }}>
-          Go to the login page &rarr;
+        <p style={{ color: "rgba(255,255,255,0.55)", fontSize: 13, lineHeight: 1.5, marginBottom: 16 }}>
+          If you need a new link, message your manager on Slack.
+        </p>
+        <a
+          href="/creator/login"
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 48, borderRadius: 10, border: "1px solid rgba(255,255,255,0.15)", fontSize: 14, fontWeight: 600, color: "#fff", textDecoration: "none" }}
+        >
+          Go to the login page
         </a>
       </div>
     );
@@ -103,12 +115,13 @@ function SetPasswordForm() {
         <label style={labelStyle}>Type it again</label>
         <input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} style={inputStyle} />
       </div>
-      {error && <p style={{ color: "#f87171", fontSize: 13, marginBottom: 16, textAlign: "center" }}>{error}</p>}
+      {error && <p role="alert" style={{ color: "#f87171", fontSize: 14, marginBottom: 16, textAlign: "center" }}>{error}</p>}
       <button
         type="submit"
         disabled={loading}
         style={{
           width: "100%",
+          minHeight: 48,
           padding: "12px 0",
           background: "#fff",
           color: "#000",

@@ -62,6 +62,8 @@ export default function CreatorLoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
               placeholder="your@email.com"
+              autoComplete="email"
+              autoCapitalize="none"
               style={{
                 width: "100%",
                 padding: "12px 16px",
@@ -69,7 +71,8 @@ export default function CreatorLoginPage() {
                 border: "1px solid rgba(255,255,255,0.1)",
                 borderRadius: 10,
                 color: "#fff",
-                fontSize: 14,
+                fontSize: 16,
+                minHeight: 48,
                 outline: "none",
                 boxSizing: "border-box",
               }}
@@ -86,6 +89,7 @@ export default function CreatorLoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               placeholder="Enter your password"
+              autoComplete="current-password"
               style={{
                 width: "100%",
                 padding: "12px 16px",
@@ -93,7 +97,8 @@ export default function CreatorLoginPage() {
                 border: "1px solid rgba(255,255,255,0.1)",
                 borderRadius: 10,
                 color: "#fff",
-                fontSize: 14,
+                fontSize: 16,
+                minHeight: 48,
                 outline: "none",
                 boxSizing: "border-box",
               }}
@@ -101,7 +106,7 @@ export default function CreatorLoginPage() {
           </div>
 
           {error && (
-            <p style={{ color: "#f87171", fontSize: 13, marginBottom: 16, textAlign: "center" }}>{error}</p>
+            <p role="alert" style={{ color: "#f87171", fontSize: 14, marginBottom: 16, textAlign: "center" }}>{error}</p>
           )}
 
           <button
@@ -109,6 +114,7 @@ export default function CreatorLoginPage() {
             disabled={loading}
             style={{
               width: "100%",
+              minHeight: 48,
               padding: "12px 0",
               background: "#fff",
               color: "#000",
@@ -122,6 +128,9 @@ export default function CreatorLoginPage() {
           >
             {loading ? "Signing in..." : "Sign in"}
           </button>
+          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", textAlign: "center", margin: "16px 0 0", lineHeight: 1.5 }}>
+            Forgot your password? Message your manager on Slack and they&apos;ll send you a new link.
+          </p>
         </form>
 
         <a
@@ -129,13 +138,14 @@ export default function CreatorLoginPage() {
           style={{
             display: "block",
             textAlign: "center",
-            fontSize: 12,
-            color: "rgba(255,255,255,0.3)",
+            fontSize: 13,
+            color: "rgba(255,255,255,0.4)",
             textDecoration: "none",
-            marginTop: 12,
+            marginTop: 8,
+            padding: "12px 0",
           }}
         >
-          Manager or Admin? Sign in here &rarr;
+          Manager or admin? Sign in here &rarr;
         </a>
       </div>
     </div>
