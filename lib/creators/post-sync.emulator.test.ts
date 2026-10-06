@@ -91,8 +91,9 @@ test("full sync against the emulator (mocked ScrapeCreators)", { skip: !enabled 
     assert.equal(r1.ok, true);
     assert.equal(r1.platforms.tiktok!.posts, 10);
     assert.equal(r1.platforms.instagram!.posts, 12);
-    assert.equal(calls.length, 4, "page 1 + page 2 for each platform (page 1 oldest still inside 35 days)");
-    assert.equal(r1.credits_remaining, 97, "latest page's credits_remaining");
+    assert.equal(r1.mode, "shallow");
+    assert.equal(calls.length, 2, "shallow = page 1 per platform");
+    assert.equal(r1.credits_remaining, 98);
     assert.deepEqual(r1.posted_days_detected, ["2026-10-05"]);
     assert.equal(r1.start_date_set, "2026-10-05");
     assert.deepEqual(r1.days_written, ["2026-10-05"]);
@@ -140,6 +141,15 @@ test("full sync against the emulator (mocked ScrapeCreators)", { skip: !enabled 
     const oct5 = detectedDays(listed).find((d) => d.date === "2026-10-05")!;
     assert.equal(oct5.posted, true);
 
+    // ---- deep run: pages on (page 1 oldest is inside 32 days), page 2 says has_more=0
+    calls.length = 0;
+    const rd = await syncCreatorPosts(id, { mode: "deep", apiKey: "test", fetchImpl, now: new Date("2026-10-07T03:45:00Z"), log: () => {} });
+    assert.equal(calls.length, 4);
+    assert.equal(rd.deep_pages_last, 4);
+    assert.equal(rd.credits_remaining, 97, "latest page's credits_remaining");
+    assert.equal((await ref.get()).data()!.post_sync.last_deep_pages, 4);
+    assert.deepEqual(rd.claims_created, [], "deep re-run is idempotent");
+
     // ---- run 2: 1M views -> same claim upgraded, nothing duplicated
     ttViews = 1_250_000;
     const now2 = new Date("2026-10-08T15:00:00Z");
@@ -149,7 +159,7 @@ test("full sync against the emulator (mocked ScrapeCreators)", { skip: !enabled 
     assert.deepEqual(r2.days_written, []);
     assert.equal((await ref.collection("bonus_claims").get()).size, 1);
     const p2 = (await ref.collection("posts").doc(`tiktok_${TT_ID_OCT5}`).get()).data()!;
-    assert.equal(p2.views_history.length, 2);
+    assert.equal(p2.views_history.length, 2); // run 1 (150K) + run 2 (1.25M); deep run saw no change
     assert.equal(p2.first_seen_at, now1.toISOString());
 
     // pay: Oct 5 posted counts once; bonus lands on October

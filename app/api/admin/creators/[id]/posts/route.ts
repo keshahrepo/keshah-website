@@ -44,7 +44,8 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   });
 }
 
-// POST /api/admin/creators/:id/posts — "Sync now" for one creator (1-6 ScrapeCreators credits).
+// POST /api/admin/creators/:id/posts[?mode=deep] — "Sync now" for one creator.
+// Shallow (default): 2 ScrapeCreators credits. Deep: up to 40 (about 31 at 5 videos/day).
 export async function POST(req: NextRequest, { params }: Ctx) {
   const denied = await requireAdmin(req);
   if (denied) return denied;
@@ -53,7 +54,8 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     return NextResponse.json({ error: "SCRAPECREATORS_API_KEY not set" }, { status: 500 });
   }
   try {
-    const result = await syncCreatorPosts(id);
+    const mode = req.nextUrl.searchParams.get("mode") === "deep" ? "deep" : "shallow";
+    const result = await syncCreatorPosts(id, { mode });
     return NextResponse.json({ result, post_sync: await getPostSyncState(id) });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

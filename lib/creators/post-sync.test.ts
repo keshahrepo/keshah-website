@@ -5,7 +5,13 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fetchRecentPosts, parseInstagramPage, parseTikTokPage, postKey, type ScrapedPost } from "./scrape";
 import {
+  ALERT_CREDIT_DAYS,
+  DEEP_MAX_PAGES,
+  DEEP_PAGES_GUESS,
   MAX_DAY_ROWS,
+  SHALLOW_RUNS_PER_DAY,
+  creditEstimate,
+  deepStop,
   VIEWS_HISTORY_MAX,
   applyObservation,
   autoClaimId,
@@ -356,4 +362,59 @@ test("fetch: retries once, then throws", async () => {
   await assert.rejects(fetchRecentPosts("instagram", "h", { apiKey: "k", sinceMs: since, fetchImpl: bad.f }), /HTTP 502/);
   assert.equal(bad.calls.length, 2);
   assert.match(bad.calls[0], /\/v1\/instagram\/user\/reels\?handle=h$/);
+});
+
+// ---------------------------------------------------------------- deep sync + credit math
+
+test("deep stop rule: local date before (local today - 32 days)", () => {
+  // now = Oct 6 02:00Z = Oct 5 in Los Angeles -> cutoff Sep 3 (LA); Oct 6 in Paris -> cutoff Sep 4
+  const now = "2026-10-06T02:00:00Z";
+  const p = (iso: string) => post("tiktok", "8000000001", iso);
+  const la = deepStop(now, "America/Los_Angeles");
+  assert.equal(la(p("2026-09-03T12:00:00Z")), false); // Sep 3 LA: still inside
+  assert.equal(la(p("2026-09-03T06:00:00Z")), true); // Sep 2 23:00 LA
+  const paris = deepStop(now, "Europe/Paris");
+  assert.equal(paris(p("2026-09-03T12:00:00Z")), true); // Sep 3 < Sep 4
+  assert.equal(paris(p("2026-09-03T22:30:00Z")), false); // Sep 4 00:30 Paris
+});
+
+test("deep fetch pages until a page's oldest post is beyond the cutoff", async () => {
+  const now = "2026-10-06T12:00:00Z";
+  const t = (iso: string) => Date.parse(iso) / 1000;
+  const { f, calls } = mockFetch([
+    ttPage([1, 2], t("2026-10-01T12:00:00Z"), true, "c1"),
+    ttPage([3, 4], t("2026-09-10T12:00:00Z"), true, "c2"),
+    ttPage([5, 6], t("2026-09-01T12:00:00Z"), true, "c3"), // older than Sep 4 cutoff -> stop after this page
+    ttPage([7], t("2026-08-01T12:00:00Z"), true, "c4"),
+  ]);
+  const r = await fetchRecentPosts("tiktok", "h", { apiKey: "k", maxPages: DEEP_MAX_PAGES, isBeyond: deepStop(now, "America/Chicago"), fetchImpl: f });
+  assert.equal(calls.length, 3);
+  assert.equal(r.pages, 3);
+  assert.equal(r.posts.length, 6);
+  assert.equal(r.truncated, false);
+});
+
+test("deep fetch stops at the 20-page cap and flags truncation", async () => {
+  const inside = Date.parse("2026-10-05T12:00:00Z") / 1000;
+  const pages = Array.from({ length: 25 }, (_, i) => ttPage([i], inside, true, `c${i}`));
+  const { f, calls } = mockFetch(pages);
+  const r = await fetchRecentPosts("tiktok", "h", { apiKey: "k", maxPages: DEEP_MAX_PAGES, isBeyond: deepStop("2026-10-06T12:00:00Z", "UTC"), fetchImpl: f });
+  assert.equal(calls.length, 20);
+  assert.equal(r.truncated, true);
+});
+
+test("credit estimate: creators x 4 shallow x 2 + deep pages; alert under 7 days", () => {
+  assert.equal(SHALLOW_RUNS_PER_DAY, 4);
+  assert.equal(ALERT_CREDIT_DAYS, 7);
+  const e = creditEstimate([31, 31, 20], 700);
+  assert.equal(e.creators, 3);
+  assert.equal(e.daily_credits, 3 * 8 + 82); // 106
+  assert.equal(e.alert_below, 742);
+  assert.equal(e.days_left, 6);
+  assert.equal(e.low, true);
+  assert.equal(creditEstimate([31, 31, 20], 800).low, false);
+  assert.equal(creditEstimate([31, 31, 20], null).low, false);
+  assert.equal(creditEstimate([], 10).low, false);
+  // one creator at 5 videos/day with no deep run yet: 8 + 31 = 39/day
+  assert.equal(creditEstimate([DEEP_PAGES_GUESS], 1000).daily_credits, 39);
 });

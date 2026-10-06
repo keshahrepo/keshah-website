@@ -1,7 +1,15 @@
 /**
  * Automatic creator post tracking (ScrapeCreators -> Firestore).
  *
- * Every sync (cron every 3h, or admin "Sync now"), per creator:
+ * Two-tier cadence (schedules below, wired in vercel.json):
+ *   - SHALLOW every 6h (/api/cron/creator-posts): page 1 per platform. Day
+ *     detection + fresh views on the newest posts. Also what admin "Sync now" runs.
+ *   - DEEP once a day (/api/cron/creator-posts-deep): pages back until the
+ *     oldest post on a page is from before (creator-local today - 32 days), max
+ *     20 pages per platform, so views / bonus crossings stay current across
+ *     the whole 30-day bonus window.
+ *
+ * Every sync, per creator:
  *   1. Fetch recent TikToks + Instagram Reels (lib/creators/scrape.ts).
  *   2. Upsert ContentCreators/{id}/posts/{platform}_{post_id} (views, views_history,
  *      crossed_100k_at / crossed_1m_at).
@@ -16,7 +24,8 @@
  *      The first posted weekday sets start_date when it's unset, but only for
  *      creators whose onboarding is complete.
  *   5. post_sync health on the creator doc; founder alert email (max 1/day)
- *      when a creator fails 3 syncs in a row or credits run low.
+ *      when a creator fails 3 syncs in a row, or credits_remaining drops below
+ *      7 days of estimated usage (Settings/creator_portal.post_sync_estimate).
  *
  * Pure helpers are exported for tests (lib/creators/post-sync.test.ts).
  */
@@ -36,13 +45,32 @@ import type {
   YyyyMmDd,
 } from "./types";
 
-export const POST_WINDOW_DAYS = 35;
-export const MAX_PAGES = 3;
+// ---- cadence (keep in sync with vercel.json "crons")
+export type SyncMode = "shallow" | "deep";
+export const SHALLOW_CRON = "15 */6 * * *";
+export const DEEP_CRON = "45 3 * * *";
+export const SHALLOW_RUNS_PER_DAY = 4;
+export const SHALLOW_MAX_PAGES = 1;
+export const DEEP_MAX_PAGES = 20;
+/** Deep sync pages back until a page's oldest post is from before (local today - this). */
+export const DEEP_WINDOW_DAYS = 32;
+/**
+ * Deep pages per creator assumed before their first deep run: at 5 posts/day,
+ * 32 days ~ 160 posts per platform = ~17 TikTok pages (10/page incl. pinned)
+ * + ~14 Instagram pages (12/page).
+ */
+export const DEEP_PAGES_GUESS = 31;
+/** Low-credit alert fires when credits_remaining < estimated daily usage x this. */
+export const ALERT_CREDIT_DAYS = 7;
+/** Creators synced in parallel (each creator fetches its 2 platforms in parallel too). */
+export const SHALLOW_CONCURRENCY = 3;
+/** Deep runs page ~17 times per platform per creator, so run more creators at once to fit 300s. */
+export const DEEP_CONCURRENCY = 8;
+
 export const VIEWS_HISTORY_MAX = 60;
 export const VIEWS_100K = 100_000;
 export const VIEWS_1M = 1_000_000;
 export const ALERT_CONSECUTIVE_FAILURES = 3;
-export const ALERT_CREDITS_BELOW = 500;
 export const ALERT_MIN_INTERVAL_MS = 24 * 3600 * 1000;
 /** Same cap as db.savePostingDay's MAX_VIDEO_ROWS, so a creator can still re-save the day. */
 export const MAX_DAY_ROWS = 20;
@@ -238,9 +266,44 @@ export function bonusAction(
   return { op: "create", id, claim };
 }
 
+export interface CreditEstimate {
+  creators: number;
+  /** creators x SHALLOW_RUNS_PER_DAY x 2 + deep pages (last deep run per creator). */
+  daily_credits: number;
+  credits_remaining: number | null;
+  /** floor(credits_remaining / daily_credits), null when unknown. */
+  days_left: number | null;
+  /** Alert threshold: daily_credits x ALERT_CREDIT_DAYS. */
+  alert_below: number;
+  low: boolean;
+}
+
+/** Credit math for the low-credit alert. `deepPages` = last deep run's pages per synced creator. */
+export function creditEstimate(deepPages: number[], creditsRemaining: number | null): CreditEstimate {
+  const creators = deepPages.length;
+  const daily = creators * SHALLOW_RUNS_PER_DAY * 2 + deepPages.reduce((s, n) => s + n, 0);
+  const alertBelow = daily * ALERT_CREDIT_DAYS;
+  return {
+    creators,
+    daily_credits: daily,
+    credits_remaining: creditsRemaining,
+    days_left: creditsRemaining != null && daily > 0 ? Math.floor(creditsRemaining / daily) : null,
+    alert_below: alertBelow,
+    low: creditsRemaining != null && daily > 0 && creditsRemaining < alertBelow,
+  };
+}
+
+/** Deep sync stop rule: the post's local date is before (today - DEEP_WINDOW_DAYS). */
+export function deepStop(nowIso: string, timezone: string): (p: ScrapedPost) => boolean {
+  const cutoff = addDays(localDate(nowIso, timezone), -DEEP_WINDOW_DAYS);
+  return (p) => localDate(p.posted_at, timezone) < cutoff;
+}
+
 // ================================================================ Firestore
 
 export interface SyncDeps {
+  /** Default "shallow". */
+  mode?: SyncMode;
   apiKey?: string;
   fetchImpl?: typeof fetch;
   now?: Date;
@@ -255,6 +318,7 @@ export interface PlatformSyncResult {
   handle: string;
   posts: number;
   calls: number;
+  pages?: number;
   error?: string;
 }
 
@@ -273,6 +337,9 @@ export interface CreatorSyncResult {
   claims_created: string[];
   claims_upgraded: string[];
   consecutive_failures: number;
+  mode: SyncMode;
+  /** Pages fetched by the most recent DEEP run (this run if deep), for the credit estimate. */
+  deep_pages_last: number;
 }
 
 function firestore(deps: SyncDeps): Firestore {
@@ -311,6 +378,8 @@ export async function syncCreatorPosts(creatorOrId: string | CreatorProfile, dep
     claims_created: [],
     claims_upgraded: [],
     consecutive_failures: 0,
+    mode: deps.mode ?? "shallow",
+    deep_pages_last: DEEP_PAGES_GUESS,
   };
   const handles: Partial<Record<Platform, string>> = {};
   const clean = (h: string) => String(h ?? "").trim().replace(/^@+/, "").replace(/\s+/g, "");
@@ -322,15 +391,18 @@ export async function syncCreatorPosts(creatorOrId: string | CreatorProfile, dep
   if (!apiKey) throw new Error("SCRAPECREATORS_API_KEY is not set");
 
   // 1. fetch
-  const sinceMs = now.getTime() - POST_WINDOW_DAYS * DAY_MS;
+  const deep = result.mode === "deep";
+  const fetchOpts = deep
+    ? { maxPages: DEEP_MAX_PAGES, isBeyond: deepStop(nowIso, tz) }
+    : { maxPages: SHALLOW_MAX_PAGES };
   const fetched: Partial<Record<Platform, FetchPostsResult>> = {};
   await Promise.all(
     (Object.keys(handles) as Platform[]).map(async (platform) => {
       const handle = handles[platform]!;
       try {
-        const r = await fetchRecentPosts(platform, handle, { apiKey, sinceMs, maxPages: MAX_PAGES, fetchImpl: deps.fetchImpl });
+        const r = await fetchRecentPosts(platform, handle, { apiKey, ...fetchOpts, fetchImpl: deps.fetchImpl });
         fetched[platform] = r;
-        result.platforms[platform] = { ok: true, handle, posts: r.posts.length, calls: r.calls };
+        result.platforms[platform] = { ok: true, handle, posts: r.posts.length, calls: r.calls, pages: r.pages };
         if (r.credits_remaining != null) {
           result.credits_remaining =
             result.credits_remaining == null ? r.credits_remaining : Math.min(result.credits_remaining, r.credits_remaining);
@@ -342,7 +414,7 @@ export async function syncCreatorPosts(creatorOrId: string | CreatorProfile, dep
     }),
   );
   log(
-    `[creator-posts] ${creator.name} (${creator.id}): ` +
+    `[creator-posts] ${result.mode} ${creator.name} (${creator.id}): ` +
       (Object.entries(result.platforms) as [Platform, PlatformSyncResult][])
         .map(([p, r]) => `${p}=${r.ok ? `${r.posts} posts/${r.calls} calls` : `ERROR ${r.error}`}`)
         .join(" ") +
@@ -398,7 +470,8 @@ export async function syncCreatorPosts(creatorOrId: string | CreatorProfile, dep
   if (fetched.tiktok && fetched.instagram) {
     const buckets = bucketByLocalDate(allPosts, tz);
     const today = localDate(nowIso, tz);
-    // A fetch that stopped at MAX_PAGES with more to go may have cut its oldest day short.
+    // A fetch that stopped at its page cap with more to go may have cut its oldest day short
+    // (day-writing only; views/bonuses above apply to every fetched post).
     let coverageFrom: YyyyMmDd = "0000-00-00";
     for (const p of ["tiktok", "instagram"] as Platform[]) {
       const r = fetched[p]!;
@@ -468,6 +541,9 @@ export async function syncCreatorPosts(creatorOrId: string | CreatorProfile, dep
   // 5. health
   const prev = (creatorRaw.post_sync ?? {}) as Partial<PostSyncState>;
   const failures = result.ok ? 0 : (Number(prev.consecutive_failures) || 0) + 1;
+  const deepPagesThisRun = Object.values(result.platforms).reduce((s, r) => s + (r?.pages ?? 0), 0);
+  const deepPages = deep && result.ok ? deepPagesThisRun : Number(prev.last_deep_pages) || DEEP_PAGES_GUESS;
+  result.deep_pages_last = deepPages;
   result.consecutive_failures = failures;
   const errorText = Object.entries(result.platforms)
     .filter(([, r]) => r && !r.ok)
@@ -477,6 +553,8 @@ export async function syncCreatorPosts(creatorOrId: string | CreatorProfile, dep
     last_run_at: nowIso,
     consecutive_failures: failures,
     credits_remaining: result.credits_remaining ?? prev.credits_remaining ?? null,
+    last_deep_pages: deepPages,
+    ...(deep && result.ok ? { last_deep_at: nowIso } : prev.last_deep_at ? { last_deep_at: prev.last_deep_at } : {}),
     ...(result.ok
       ? { last_ok_at: nowIso, last_error: prev.last_error ?? null, last_error_at: prev.last_error_at ?? null }
       : { last_ok_at: prev.last_ok_at, last_error: errorText, last_error_at: nowIso }),
@@ -490,6 +568,7 @@ export interface SyncAllResult {
   ran_at: string;
   results: CreatorSyncResult[];
   credits_remaining: number | null;
+  estimate: CreditEstimate;
   alert_sent: boolean;
   alert_reason?: string;
 }
@@ -507,7 +586,7 @@ export async function syncAllCreatorPosts(deps: SyncDeps & { onlyIds?: string[];
   );
   const results: CreatorSyncResult[] = [];
   const queue = [...creators];
-  const workers = Array.from({ length: Math.max(1, deps.concurrency ?? 3) }, async () => {
+  const workers = Array.from({ length: Math.max(1, deps.concurrency ?? (deps.mode === "deep" ? DEEP_CONCURRENCY : SHALLOW_CONCURRENCY)) }, async () => {
     for (let c = queue.shift(); c; c = queue.shift()) {
       try {
         results.push(await syncCreatorPosts(c, { ...deps, db, now }));
@@ -516,6 +595,7 @@ export async function syncAllCreatorPosts(deps: SyncDeps & { onlyIds?: string[];
         results.push({
           creator_id: c.id, name: c.name, ok: false, skipped: `crashed: ${errMsg(e)}`, platforms: {},
           credits_remaining: null, posted_days_detected: [], days_written: [], claims_created: [], claims_upgraded: [], consecutive_failures: 0,
+          mode: deps.mode ?? "shallow", deep_pages_last: DEEP_PAGES_GUESS,
         });
       }
     }
@@ -525,15 +605,30 @@ export async function syncAllCreatorPosts(deps: SyncDeps & { onlyIds?: string[];
     (m, r) => (r.credits_remaining == null ? m : m == null ? r.credits_remaining : Math.min(m, r.credits_remaining)),
     null,
   );
-  log(`[creator-posts] synced ${results.length} creators, credits_remaining=${credits ?? "?"}`);
+  const estimate = creditEstimate(results.map((r) => r.deep_pages_last), credits);
+  log(
+    `[creator-posts] ${deps.mode ?? "shallow"} synced ${results.length} creators, credits_remaining=${credits ?? "?"}, ` +
+      `est ${estimate.daily_credits}/day, days_left=${estimate.days_left ?? "?"}`,
+  );
+  // A one-creator debug run (?creator=) would understate usage, so only full runs store the estimate.
+  if (!deps.onlyIds) {
+    await db.collection("Settings").doc("creator_portal").set(
+      { post_sync_estimate: { ...estimate, mode: deps.mode ?? "shallow", computed_at: now.toISOString() } },
+      { merge: true },
+    );
+  }
 
   const failing = results.filter((r) => r.consecutive_failures >= ALERT_CONSECUTIVE_FAILURES);
-  const lowCredits = credits != null && credits < ALERT_CREDITS_BELOW;
+  const lowCredits = estimate.low;
   let alert_sent = false;
   let alert_reason: string | undefined;
   if (failing.length || lowCredits) {
     alert_reason = [
-      lowCredits ? `ScrapeCreators credits low: ${credits} left (alert under ${ALERT_CREDITS_BELOW}).` : "",
+      lowCredits
+        ? `ScrapeCreators credits are running low: ${credits} left. ` +
+          `The sync uses about ${estimate.daily_credits} a day for ${estimate.creators} creators. ` +
+          `About ${estimate.days_left} days of credits left.`
+        : "",
       ...failing.map((r) => {
         const errs = Object.entries(r.platforms).filter(([, p]) => p && !p.ok).map(([p, x]) => `${p} @${x!.handle}: ${x!.error}`);
         return `${r.name} (${r.creator_id}): ${r.consecutive_failures} failed syncs in a row. ${errs.join("; ")}`;
@@ -541,7 +636,7 @@ export async function syncAllCreatorPosts(deps: SyncDeps & { onlyIds?: string[];
     ].filter(Boolean).join("\n");
     alert_sent = await maybeAlert(db, now, alert_reason, deps, log);
   }
-  return { ran_at: now.toISOString(), results, credits_remaining: credits, alert_sent, ...(alert_reason ? { alert_reason } : {}) };
+  return { ran_at: now.toISOString(), results, credits_remaining: credits, estimate, alert_sent, ...(alert_reason ? { alert_reason } : {}) };
 }
 
 async function maybeAlert(db: Firestore, now: Date, reason: string, deps: SyncDeps, log: (m: string) => void): Promise<boolean> {

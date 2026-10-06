@@ -126,7 +126,12 @@ export function postKey(url: string, platform: Platform): string {
 export interface FetchPostsOptions {
   apiKey: string;
   /** Keep paging while the oldest non-pinned post on the page is newer than this. */
-  sinceMs: number;
+  sinceMs?: number;
+  /**
+   * Alternative stop rule (wins over sinceMs): stop once this returns true for
+   * the page's oldest non-pinned post, e.g. "posted before <local date>".
+   */
+  isBeyond?: (oldestUnpinned: ScrapedPost) => boolean;
   maxPages?: number;
   fetchImpl?: typeof fetch;
   /** Called with each response's credits_remaining (for logging). */
@@ -177,7 +182,8 @@ async function getJson(url: string, apiKey: string, fetchImpl: typeof fetch): Pr
 
 /**
  * Page 1, then more pages (max `maxPages`, default 3) only while has_more and
- * the page's oldest non-pinned post is still newer than `sinceMs`. Each page
+ * the page's oldest non-pinned post is still inside the window (`isBeyond`
+ * false, or newer than `sinceMs`). Each page
  * is retried once; a second failure throws ScrapeError.
  */
 export async function fetchRecentPosts(
@@ -211,9 +217,14 @@ export async function fetchRecentPosts(
       opts.onCredits?.(credits);
     }
     for (const p of page.posts) seen.set(p.post_id, p);
-    const unpinned = page.posts.filter((p) => !p.pinned).map((p) => Date.parse(p.posted_at));
-    const oldest = unpinned.length ? Math.min(...unpinned) : -Infinity;
-    if (!page.has_more || !page.cursor || page.cursor === cursor || oldest < opts.sinceMs) break;
+    const unpinned = page.posts.filter((p) => !p.pinned);
+    const oldest = unpinned.length ? unpinned.reduce((a, b) => (a.posted_at < b.posted_at ? a : b)) : null;
+    const beyond = !oldest
+      ? true
+      : opts.isBeyond
+        ? opts.isBeyond(oldest)
+        : Date.parse(oldest.posted_at) < (opts.sinceMs ?? Infinity);
+    if (!page.has_more || !page.cursor || page.cursor === cursor || beyond) break;
     if (pages >= maxPages) {
       truncated = true;
       break;

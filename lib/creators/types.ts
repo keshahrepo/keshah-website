@@ -296,6 +296,9 @@ export interface PostSyncState {
   last_error_at?: IsoInstant | null;
   consecutive_failures: number;
   credits_remaining?: number | null;
+  /** Pages the last successful DEEP run fetched (both platforms), for the credit estimate. */
+  last_deep_pages?: number;
+  last_deep_at?: IsoInstant;
 }
 
 export interface Adjustment {
