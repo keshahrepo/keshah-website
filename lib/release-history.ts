@@ -39,12 +39,25 @@ export interface Release {
 // probably doesn't shift any user-visible cohort — don't add an entry.
 export const RELEASES: Release[] = [
   {
-    // In-flight placeholder — next mobile release.
+    // Submitted for review 2026-10-06. Set `date` (+ `time`, UTC) the
+    // day it goes live in both stores, and relabel to "5.19 launch".
     slug: "5_19_next",
-    label: "5.19 (in flight)",
+    label: "5.19 (in review)",
     date: null,
-    description: "In flight — assign ideas via /dashboard/pipeline.",
-    tracks: [],
+    description:
+      "Proof page + \"Will this actually work for me?\" card (days 1-15), " +
+      "daily member spotlight on the all-done screen, all-done rework " +
+      "(scalp check-in with members/your charts, streak beside All done), " +
+      "trial paywall timeline with day-5 reminder push, commitment " +
+      "\"daily routine\" screen, founder story doctor beat, live member " +
+      "counts, speed control on talking videos, frosted nav, instant " +
+      "creator attribution on signup.",
+    tracks: [
+      "funnel_started",
+      "funnel_day_gte_1",
+      "outcome_converted",
+      "retention_d14",
+    ],
     audience: "mobile",
   },
   {
