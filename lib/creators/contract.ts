@@ -38,6 +38,7 @@ import { getStorage } from "firebase-admin/storage";
 import type { DocumentData } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { emailConfigured, sendEmail } from "@/lib/email";
+import { CREATOR_FROM_NAME, CREATOR_SIGNOFF } from "./invite";
 import { CREATORS_COLLECTION, CreatorDataError, DEFAULT_TIMEZONE, STORAGE_BUCKET, markContractStepDone } from "./db";
 import { adoptedSignatureText } from "./signature";
 import { isValidTimezone } from "./time";
@@ -367,7 +368,8 @@ export async function sendContract(id: string, opts: { email?: boolean } = {}): 
       await sendEmail({
         to,
         subject: "Your KESHAH contract is ready to sign",
-        text: `Hey ${first},\n\nYour contract is ready. Log in to the creator portal and it's the first thing you'll see:\n${portalUrl()}\n\nRead it through, then sign it right there. It takes a couple of minutes.\n\nAadi`,
+        text: `Hey ${first},\n\nYour contract is ready. Log in to the creator portal and it's the first thing you'll see:\n${portalUrl()}\n\nRead it through, then sign it right there. It takes a couple of minutes.\n\n${CREATOR_SIGNOFF}`,
+        fromName: CREATOR_FROM_NAME,
       });
       emailed = true;
     } catch (e) {
@@ -581,7 +583,7 @@ async function emailSignedCopies(
       who: "creator",
       to: x.audit.signer_email,
       subject: "Your signed KESHAH contract",
-      text: `Hey ${x.firstName || "there"},\n\nThanks for signing. Your copy of the contract is attached, and you can always download it again from the Contract tab in the portal.\n\n${facts}\n\nAadi`,
+      text: `Hey ${x.firstName || "there"},\n\nThanks for signing. Your copy of the contract is attached, and you can always download it again from the Contract tab in the portal.\n\n${facts}\n\n${CREATOR_SIGNOFF}`,
     });
   }
   const founder = process.env.KESHAH_GMAIL_USER;
@@ -595,7 +597,7 @@ async function emailSignedCopies(
   }
   for (const j of jobs) {
     try {
-      await sendEmail({ to: j.to, subject: j.subject, text: j.text, attachments });
+      await sendEmail({ to: j.to, subject: j.subject, text: j.text, attachments, fromName: CREATOR_FROM_NAME });
       result[j.who] = true;
       await logEvent(id, { type: "emailed", at: new Date().toISOString(), actor: "system", detail: `${j.who}: ${j.to}`, signed_sha256: x.signedSha });
     } catch (e) {

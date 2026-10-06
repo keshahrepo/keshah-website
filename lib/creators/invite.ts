@@ -37,9 +37,9 @@ export function newInvite(now: Date = new Date()): { token: string; invite: Crea
 
 /** Why an invite can't be used, or null when it's fine. */
 export function inviteProblem(invite: Partial<CreatorInvite> | null | undefined, now: Date = new Date()): string | null {
-  if (!invite?.token_hash) return "This link isn't valid. Ask Aadi for a new one.";
-  if (invite.used_at) return "This link was already used. Log in with your password, or ask Aadi for a new link.";
-  if (!invite.expires_at || Date.parse(invite.expires_at) <= now.getTime()) return "This link has expired. Ask Aadi for a new one.";
+  if (!invite?.token_hash) return "This link isn't valid. Ask McKenzie for a new one.";
+  if (invite.used_at) return "This link was already used. Log in with your password, or ask McKenzie for a new link.";
+  if (!invite.expires_at || Date.parse(invite.expires_at) <= now.getTime()) return "This link has expired. Ask McKenzie for a new one.";
   return null;
 }
 
@@ -56,6 +56,10 @@ export function setPasswordUrl(siteUrl: string, token: string): string {
 function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
+
+/** Creator-program emails come from the creator coordinator. */
+export const CREATOR_FROM_NAME = "McKenzie from KESHAH";
+export const CREATOR_SIGNOFF = "McKenzie\nCreator Coordinator, KESHAH";
 
 export function welcomeEmail(input: { firstName: string; link: string; keshahEmail?: string; contractReady: boolean }): {
   subject: string;
@@ -78,7 +82,7 @@ export function welcomeEmail(input: { firstName: string; link: string; keshahEma
   const text = [
     `Hey ${first},`,
     "",
-    "It's Aadi from KESHAH. You're in, and I'm really glad to have you on the team.",
+    "It's McKenzie. I coordinate the creator program at KESHAH. You're in, and Aadi and I are really glad to have you on the team.",
     "",
     "First, set a password for your creator portal. This link works once and expires in 7 days:",
     input.link,
@@ -89,20 +93,20 @@ export function welcomeEmail(input: { firstName: string; link: string; keshahEma
     "",
     "If anything's unclear, just reply to this email.",
     "",
-    "Aadi",
+    CREATOR_SIGNOFF,
   ].join("\n");
 
   const p = (s: string) => `<p style="margin:0 0 16px">${s}</p>`;
   const html = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#111;max-width:520px">
 ${p(`Hey ${esc(first)},`)}
-${p("It's Aadi from KESHAH. You're in, and I'm really glad to have you on the team.")}
+${p("It's McKenzie. I coordinate the creator program at KESHAH. You're in, and Aadi and I are really glad to have you on the team.")}
 ${p("First, set a password for your creator portal. This link works once and expires in 7 days.")}
 <p style="margin:0 0 24px"><a href="${esc(input.link)}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:10px">Set your password</a></p>
 ${inboxLine ? p(esc(inboxLine)) : ""}
 ${p("Here's what happens next:")}
 <ol style="margin:0 0 16px;padding-left:20px">${steps.map((s) => `<li style="margin-bottom:6px">${esc(s)}</li>`).join("")}</ol>
 ${p("If anything's unclear, just reply to this email.")}
-${p("Aadi")}
+${p("McKenzie<br>Creator Coordinator, KESHAH")}
 <p style="margin:24px 0 0;font-size:12px;color:#888">If the button doesn't work, paste this into your browser:<br>${esc(input.link)}</p>
 </div>`;
 

@@ -30,12 +30,14 @@ export async function sendEmail(opts: {
   text: string;
   html?: string;
   attachments?: { filename: string; content: Buffer; contentType?: string }[];
+  /** Display name on the From line. Defaults to "Aadi from KESHAH". */
+  fromName?: string;
 }): Promise<void> {
   if (!emailConfigured()) {
     throw new Error("Email not configured (KESHAH_GMAIL_USER / KESHAH_GMAIL_APP_PASSWORD).");
   }
   await getTransporter().sendMail({
-    from: `Aadi from KESHAH <${process.env.KESHAH_GMAIL_USER}>`,
+    from: `${opts.fromName ?? "Aadi from KESHAH"} <${process.env.KESHAH_GMAIL_USER}>`,
     to: opts.to,
     subject: opts.subject,
     text: opts.text,

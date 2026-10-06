@@ -15,7 +15,7 @@ import { emailConfigured, sendEmail } from "@/lib/email";
 import { CREATORS_COLLECTION, CreatorDataError, mapCreatorStatus } from "./db";
 import { contractSetupProblem, getContractSettings, getTemplate, sendContract } from "./contract";
 import { groupsClientFromEnv, groupsConfigured, provisionCreatorGroup } from "./google-groups";
-import { newInvite, setPasswordUrl, welcomeEmail } from "./invite";
+import { CREATOR_FROM_NAME, newInvite, setPasswordUrl, welcomeEmail } from "./invite";
 import type { AcceptRecord, AcceptStepKey, AcceptStepRecord } from "./types";
 
 export const ACCEPT_STEPS: AcceptStepKey[] = ["group", "invite", "contract"];
@@ -135,7 +135,7 @@ export async function acceptCreator(id: string, opts: AcceptOptions): Promise<Ac
             });
             // Plain text only: reads like a personal Gmail message, which
             // keeps it in Primary instead of Promotions.
-            await sendEmail({ to: personal, subject: mail.subject, text: mail.text });
+            await sendEmail({ to: personal, subject: mail.subject, text: mail.text, fromName: CREATOR_FROM_NAME });
             inviteEmailedNow = true;
             await record("invite", "done", `Emailed ${personal}. Link expires ${invite.expires_at.slice(0, 10)}.`);
           } catch (e) {
