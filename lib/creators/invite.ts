@@ -110,7 +110,7 @@ export function welcomeEmail(input: {
     "• On-camera content creator. You'll film and post 5 short videos every weekday to KESHAH-owned TikTok and Instagram accounts.",
     "• Weekdays only (Mon to Fri), and you choose your own filming hours.",
     "• Pay starts at $500 a month and grows to $1,100 the longer you're with us, plus view bonuses: $15 when a video passes 100K views and $100 when it passes 1M.",
-    "• Your first 10 posting days are a trial.",
+    "• Your first two weeks are a paid trial, at your normal pay.",
     "• We give you proven videos to remake, scripts and direction. You bring the energy.",
     "",
     "Our best creators can also be invited to become Format Creators, inventing new formats for an extra $500 a month.",
