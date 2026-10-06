@@ -52,6 +52,7 @@ const NAV_SECTIONS: NavSection[] = [
       },
       { href: "/dashboard/retention", label: "Retention", icon: "repeat", roles: ["admin"] },
       { href: "/dashboard/scalp-check-ins", label: "Scalp check-ins", icon: "activity", roles: ["admin"] },
+      { href: "/dashboard/creators-pay", label: "Creator pay", icon: "users", roles: ["admin"] },
     ],
   },
   {
