@@ -79,7 +79,7 @@ export default function PayoutsPage() {
             <Btn onClick={() => setMonth(shiftMonth(month, 1))} disabled={all}>
               →
             </Btn>
-            <label style={{ ...muted, display: "flex", gap: 4, alignItems: "center", marginLeft: 8 }}>
+            <label style={{ ...muted, display: "flex", gap: 6, alignItems: "center", marginLeft: 8, whiteSpace: "nowrap", cursor: "pointer" }}>
               <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> all months
             </label>
           </div>

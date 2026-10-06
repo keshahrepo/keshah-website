@@ -136,39 +136,44 @@ export default function CreatorsPayPage() {
               <span style={muted}>{data.legacyCount} older creator logins without pay setup are hidden</span>
             )}
           </div>
-          <div style={{ ...card, padding: 0, overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1100 }}>
+          <div className="cp-scroll" style={{ ...card, padding: 0, overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1180 }}>
               <thead>
                 <tr>
-                  <th style={th}>Creator</th>
+                  <th style={th} className="cp-sticky-col">Creator</th>
                   <th style={th}>Level</th>
                   <th style={th}>Days posted</th>
                   <th style={th} title="Missed weekdays: amber at 2+, red at 4+">Missed</th>
+                  <th style={th}>Owed</th>
+                  <th style={th}>Onboarding</th>
+                  <th style={th}>Contract / W-9</th>
+                  <th style={th}>Latest invoice</th>
                   <th style={th}>100K / 1M</th>
                   <th style={th}>Bonuses</th>
-                  <th style={th}>Owed</th>
                   <th style={th}>Trials / Paid</th>
                   <th style={th} title="ESTIMATE: purchases × estimated proceeds per purchase">Est. proceeds*</th>
                   <th style={th} title="ESTIMATE: est. proceeds ÷ total pay, last 2 months">ROI*</th>
-                  <th style={th}>Contract / W-9</th>
-                  <th style={th}>Onboarding</th>
-                  <th style={th}>Latest invoice</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.creator.id}>
-                    <td style={td}>
+                    <td style={{ ...td, minWidth: 170 }} className="cp-sticky-col">
                       <Link href={`/dashboard/creators-pay/${r.creator.id}?month=${month}`} style={{ color: "#fff", fontWeight: 500 }}>
                         {r.creator.legal_name || r.creator.name || r.creator.id}
                       </Link>
                       <div style={{ marginTop: 4, display: "flex", gap: 4, flexWrap: "wrap" }}>
                         <Pill>{r.creator.status_display}</Pill>
+                        {r.onboarding.done < r.onboarding.total && (
+                          <Pill color="#60a5fa">
+                            setup {r.onboarding.done}/{r.onboarding.total}
+                          </Pill>
+                        )}
                         {r.pendingDaysOff > 0 && <Pill color="#fbbf24">{r.pendingDaysOff} day-off req</Pill>}
                         {r.pendingClaims > 0 && <Pill color="#fbbf24">{r.pendingClaims} claim{r.pendingClaims > 1 ? "s" : ""} to review</Pill>}
                       </div>
                     </td>
-                    <td style={td}>
+                    <td style={{ ...td, whiteSpace: "nowrap" }}>
                       {r.levelBaseCents === null ? (
                         <span style={muted}>Not started</span>
                       ) : (
@@ -202,11 +207,36 @@ export default function CreatorsPayPage() {
                         </>
                       )}
                     </td>
+                    <td style={{ ...td, fontWeight: 600 }}>{fmtUsd(r.totalOwedCents)}</td>
+                    <td style={td}>
+                      {r.onboarding.done}/{r.onboarding.total}
+                    </td>
+                    <td style={td}>
+                      <div>
+                        {check(r.creator.contract.status === "signed")} contract
+                        {r.creator.contract.status === "sent" && <span style={muted}> (sent)</span>}
+                      </div>
+                      <div>{check(r.creator.w9_on_file)} W-9</div>
+                    </td>
+                    <td style={td}>
+                      {r.latestInvoice ? (
+                        <>
+                          <div>
+                            {r.latestInvoice.number} <span style={muted}>{r.latestInvoice.month}</span>
+                          </div>
+                          <span style={{ color: INVOICE_COLORS[r.latestInvoice.status] ?? "#fff", fontSize: 12 }}>
+                            {r.latestInvoice.status}
+                            {r.latestInvoice.paid_at ? ` ${r.latestInvoice.paid_at.slice(0, 10)}` : ""}
+                          </span>
+                        </>
+                      ) : (
+                        <span style={muted}>none</span>
+                      )}
+                    </td>
                     <td style={td}>
                       {r.claims100k} / {r.claims1m}
                     </td>
                     <td style={td}>{fmtUsd(r.bonusCents)}</td>
-                    <td style={{ ...td, fontWeight: 600 }}>{fmtUsd(r.totalOwedCents)}</td>
                     <td style={td}>
                       {r.creator.campaign_tags.length ? (
                         <>
@@ -226,31 +256,6 @@ export default function CreatorsPayPage() {
                         {r.roiRatio === null ? "–" : `${r.roiRatio.toFixed(2)}×`}
                       </span>
                       <div style={muted}>pay {fmtUsd(r.payWindowCents)}</div>
-                    </td>
-                    <td style={td}>
-                      <div>
-                        {check(r.creator.contract.status === "signed")} contract
-                        {r.creator.contract.status === "sent" && <span style={muted}> (sent)</span>}
-                      </div>
-                      <div>{check(r.creator.w9_on_file)} W-9</div>
-                    </td>
-                    <td style={td}>
-                      {r.onboarding.done}/{r.onboarding.total}
-                    </td>
-                    <td style={td}>
-                      {r.latestInvoice ? (
-                        <>
-                          <div>
-                            {r.latestInvoice.number} <span style={muted}>{r.latestInvoice.month}</span>
-                          </div>
-                          <span style={{ color: INVOICE_COLORS[r.latestInvoice.status] ?? "#fff", fontSize: 12 }}>
-                            {r.latestInvoice.status}
-                            {r.latestInvoice.paid_at ? ` ${r.latestInvoice.paid_at.slice(0, 10)}` : ""}
-                          </span>
-                        </>
-                      ) : (
-                        <span style={muted}>none</span>
-                      )}
                     </td>
                   </tr>
                 ))}

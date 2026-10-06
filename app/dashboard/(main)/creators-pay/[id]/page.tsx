@@ -18,6 +18,7 @@ import {
   card,
   fileUrl,
   fmtUsd,
+  fmtUsdShort,
   h3,
   input,
   muted,
@@ -182,15 +183,15 @@ function CreatorDetail() {
       <SubNav />
       <ErrorText>{err}</ErrorText>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginBottom: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 24 }}>
         <MetricCard
           label="Level"
-          value={d.summary ? `${fmtUsd(d.summary.levelBaseCents)}/mo` : "–"}
-          subtitle={d.completedMonths !== null ? `${d.completedMonths} completed months` : "not started: pay starts on the first posting day"}
+          value={d.summary ? `${fmtUsdShort(d.summary.levelBaseCents)}/mo` : "–"}
+          subtitle={d.completedMonths !== null ? `${d.completedMonths} completed months` : "Pay starts on the first posting day"}
         />
         <MetricCard
           label="Next level"
-          value={d.nextLevel?.nextBaseCents ? fmtUsd(d.nextLevel.nextBaseCents) : "top"}
+          value={d.nextLevel?.nextBaseCents ? `${fmtUsdShort(d.nextLevel.nextBaseCents)}/mo` : d.summary ? "Top" : "–"}
           subtitle={d.nextLevel?.earliestMonth ? `earliest ${d.nextLevel.earliestMonth}` : undefined}
         />
         <MetricCard
@@ -319,8 +320,8 @@ function AcceptPanel({ c, isNew, reload }: { c: Creator; isNew: boolean; reload:
                 const st = steps[k];
                 return (
                   <tr key={k}>
-                    <td style={{ ...td, width: 150 }}>{label}</td>
-                    <td style={{ ...td, width: 90 }}>
+                    <td style={{ ...td, width: 130 }}>{label}</td>
+                    <td style={{ ...td, width: 80 }}>
                       {st ? <Pill color={STEP_COLORS[st.status]}>{st.status}</Pill> : <span style={muted}>not run</span>}
                     </td>
                     <td style={td}>
@@ -706,7 +707,7 @@ function PostingLog({ d }: { d: Detail }) {
             <span style={muted}>nothing logged</span>
           )}
           {sel && (
-            <ol style={{ margin: "8px 0 0 18px", padding: 0 }}>
+            <ol style={{ margin: "8px 0 0 18px", padding: 0, listStyleType: "decimal" }}>
               {sel.videos.map((v, i) => (
                 <li key={i} style={{ marginBottom: 4 }}>
                   {["tiktok_url", "instagram_url", "url"].map((k) =>
@@ -720,6 +721,11 @@ function PostingLog({ d }: { d: Detail }) {
                       </span>
                     ) : null,
                   )}
+                  {v.inspired_by_url ? (
+                    <a href={String(v.inspired_by_url)} target="_blank" rel="noreferrer" style={{ color: "rgba(255,255,255,0.6)", marginRight: 10 }}>
+                      inspired by
+                    </a>
+                  ) : null}
                 </li>
               ))}
             </ol>
@@ -941,7 +947,7 @@ function Adjustments({ d, reload }: { d: Detail; reload: () => void }) {
           </Btn>
         </div>
       ))}
-      <div style={{ display: "grid", gridTemplateColumns: "120px 120px 1fr auto", gap: 8, marginTop: 12, alignItems: "end" }}>
+      <div className="cp-stack" style={{ display: "grid", gridTemplateColumns: "170px 130px 1fr auto", gap: 8, marginTop: 12, alignItems: "end" }}>
         <Field label="Month">
           <input type="month" style={input} value={month} onChange={(e) => setMonth(e.target.value)} />
         </Field>

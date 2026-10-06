@@ -54,6 +54,12 @@ export function fmtUsd(cents: number | null | undefined): string {
   return `${sign}$${(Math.abs(c) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+/** "$650/mo"-style: drops ".00" on whole dollars (for big headline numbers). */
+export function fmtUsdShort(cents: number | null | undefined): string {
+  const c = cents ?? 0;
+  return c % 100 === 0 ? fmtUsd(c).replace(/\.00$/, "") : fmtUsd(c);
+}
+
 export function currentMonth(): string {
   return new Date().toISOString().slice(0, 7);
 }
@@ -168,11 +174,15 @@ export function SubNav() {
             key={i.href}
             href={i.href}
             style={{
-              padding: "7px 14px",
+              display: "inline-flex",
+              alignItems: "center",
+              minHeight: 34,
+              padding: "0 14px",
               fontSize: 12,
               fontWeight: 500,
               borderRadius: 20,
               textDecoration: "none",
+              whiteSpace: "nowrap",
               background: active ? "#fff" : "rgba(255,255,255,0.06)",
               color: active ? "#000" : "rgba(255,255,255,0.5)",
             }}

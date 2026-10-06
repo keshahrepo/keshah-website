@@ -64,7 +64,7 @@ export default function CreatorSettingsPage() {
         <>
           <div style={{ ...card, borderColor: s.ready ? "rgba(74,222,128,0.35)" : "rgba(251,191,36,0.35)" }}>
             <h3 style={h3}>{s.ready ? "Ready to send contracts" : "Not ready to send contracts yet"}</h3>
-            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8 }}>
+            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8, listStyleType: "disc" }}>
               <li style={{ color: s.contract.current_template_version ? "#4ade80" : "#fbbf24" }}>
                 {s.contract.current_template_version
                   ? `Contract version ${s.contract.current_template_version} is current`
