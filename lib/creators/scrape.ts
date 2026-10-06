@@ -1,0 +1,224 @@
+/**
+ * ScrapeCreators client + response parsers for creator post tracking.
+ *
+ *   GET https://api.scrapecreators.com/v3/tiktok/profile/videos?handle=<h>[&max_cursor=<c>]
+ *   GET https://api.scrapecreators.com/v1/instagram/user/reels?handle=<h>[&max_id=<id>]
+ *   header x-api-key: SCRAPECREATORS_API_KEY
+ *
+ * Each call costs one credit. Responses carry `credits_remaining`.
+ * Parsers are pure (tested against trimmed fixtures in __fixtures__/).
+ */
+import type { Platform } from "./types";
+
+export const SCRAPECREATORS_BASE = "https://api.scrapecreators.com";
+
+/** One post, normalised across platforms. */
+export interface ScrapedPost {
+  platform: Platform;
+  /** TikTok aweme_id, Instagram shortcode. Both strings (IG numeric pks overflow JS numbers). */
+  post_id: string;
+  /** Canonical URL (no tracking query). */
+  url: string;
+  /** ISO instant (UTC). */
+  posted_at: string;
+  caption: string;
+  views: number;
+  pinned: boolean;
+}
+
+export interface ScrapedPage {
+  posts: ScrapedPost[];
+  has_more: boolean;
+  /** Pass back as max_cursor (TikTok) / max_id (Instagram). */
+  cursor: string | null;
+  credits_remaining: number | null;
+}
+
+type Json = Record<string, unknown>;
+const obj = (v: unknown): Json => (v && typeof v === "object" ? (v as Json) : {});
+const num = (v: unknown): number => {
+  const n = typeof v === "string" ? Number(v) : typeof v === "number" ? v : NaN;
+  return Number.isFinite(n) ? n : 0;
+};
+const creditsOf = (d: Json): number | null =>
+  typeof d.credits_remaining === "number" ? d.credits_remaining : null;
+
+export function cleanHandle(h: string): string {
+  return String(h ?? "").trim().replace(/^@+/, "").replace(/\s+/g, "");
+}
+
+// ---------------------------------------------------------------- parsing
+
+export function parseTikTokPage(raw: unknown, handle: string): ScrapedPage {
+  const d = obj(raw);
+  const list = Array.isArray(d.aweme_list) ? d.aweme_list : [];
+  const h = cleanHandle(handle);
+  const posts: ScrapedPost[] = [];
+  for (const it of list) {
+    const a = obj(it);
+    const id = String(a.aweme_id ?? "").trim();
+    const created = num(a.create_time);
+    if (!/^\d+$/.test(id) || !created) continue;
+    const share = typeof a.share_url === "string" ? a.share_url : "";
+    const kind = /\/photo\//.test(share) ? "photo" : "video";
+    posts.push({
+      platform: "tiktok",
+      post_id: id,
+      url: `https://www.tiktok.com/@${h}/${kind}/${id}`,
+      posted_at: new Date(created * 1000).toISOString(),
+      caption: typeof a.desc === "string" ? a.desc.slice(0, 500) : "",
+      views: num(obj(a.statistics).play_count),
+      pinned: num(a.is_top) === 1 || a.is_top === true,
+    });
+  }
+  const cursor = d.max_cursor != null && d.max_cursor !== "" ? String(d.max_cursor) : null;
+  return { posts, has_more: num(d.has_more) === 1 || d.has_more === true, cursor, credits_remaining: creditsOf(d) };
+}
+
+export function parseInstagramPage(raw: unknown): ScrapedPage {
+  const d = obj(raw);
+  const items = Array.isArray(d.items) ? d.items : [];
+  const posts: ScrapedPost[] = [];
+  for (const it of items) {
+    const m = obj(obj(it).media ?? it);
+    const code = typeof m.code === "string" ? m.code.trim() : "";
+    const taken = num(m.taken_at);
+    if (!code || !taken) continue;
+    const pinnedIds = [m.clips_tab_pinned_user_ids, m.timeline_pinned_user_ids];
+    posts.push({
+      platform: "instagram",
+      post_id: code,
+      url: `https://www.instagram.com/reel/${code}/`,
+      posted_at: new Date(taken * 1000).toISOString(),
+      caption: typeof obj(m.caption).text === "string" ? String(obj(m.caption).text).slice(0, 500) : "",
+      views: Math.max(num(m.play_count), num(m.ig_play_count), num(m.view_count)),
+      pinned: pinnedIds.some((p) => Array.isArray(p) && p.length > 0),
+    });
+  }
+  const p = obj(d.paging_info);
+  const cursor = typeof p.max_id === "string" && p.max_id ? p.max_id : null;
+  return { posts, has_more: p.more_available === true && !!cursor, cursor, credits_remaining: creditsOf(d) };
+}
+
+// ---------------------------------------------------------------- URL keys
+
+/**
+ * Stable identity for a post URL so manual links and auto links compare equal:
+ * TikTok -> "tiktok:<numeric id>", Instagram -> "instagram:<shortcode>".
+ * Falls back to the lower-cased URL without query/trailing slash (short links
+ * like vm.tiktok.com can't be resolved offline).
+ */
+export function postKey(url: string, platform: Platform): string {
+  const s = String(url ?? "").trim();
+  if (!s) return "";
+  if (platform === "tiktok") {
+    const m = s.match(/\/(?:video|photo)\/(\d{8,})/);
+    if (m) return `tiktok:${m[1]}`;
+  } else {
+    const m = s.match(/instagram\.com\/(?:[^/?#]+\/)?(?:reel|reels|p|tv)\/([A-Za-z0-9_-]+)/);
+    if (m) return `instagram:${m[1]}`;
+  }
+  return `${platform}:${s.replace(/[?#].*$/, "").replace(/\/+$/, "").toLowerCase()}`;
+}
+
+// ---------------------------------------------------------------- fetching
+
+export interface FetchPostsOptions {
+  apiKey: string;
+  /** Keep paging while the oldest non-pinned post on the page is newer than this. */
+  sinceMs: number;
+  maxPages?: number;
+  fetchImpl?: typeof fetch;
+  /** Called with each response's credits_remaining (for logging). */
+  onCredits?: (n: number) => void;
+}
+
+export interface FetchPostsResult {
+  posts: ScrapedPost[];
+  pages: number;
+  /** Requests made, including retries (= credits charged on success). */
+  calls: number;
+  credits_remaining: number | null;
+  /** Stopped at maxPages while the API still had more inside the window (oldest day may be incomplete). */
+  truncated: boolean;
+}
+
+export class ScrapeError extends Error {
+  constructor(message: string, public readonly status?: number) {
+    super(message);
+    this.name = "ScrapeError";
+  }
+}
+
+function pageUrl(platform: Platform, handle: string, cursor: string | null): string {
+  const q = new URLSearchParams({ handle: cleanHandle(handle) });
+  if (platform === "tiktok") {
+    if (cursor) q.set("max_cursor", cursor);
+    return `${SCRAPECREATORS_BASE}/v3/tiktok/profile/videos?${q}`;
+  }
+  if (cursor) q.set("max_id", cursor);
+  return `${SCRAPECREATORS_BASE}/v1/instagram/user/reels?${q}`;
+}
+
+async function getJson(url: string, apiKey: string, fetchImpl: typeof fetch): Promise<unknown> {
+  const res = await fetchImpl(url, { headers: { "x-api-key": apiKey }, cache: "no-store" });
+  const text = await res.text();
+  if (!res.ok) throw new ScrapeError(`HTTP ${res.status}: ${text.slice(0, 200)}`, res.status);
+  let body: unknown;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    throw new ScrapeError(`Bad JSON: ${text.slice(0, 120)}`);
+  }
+  const b = obj(body);
+  if (b.success === false) throw new ScrapeError(`API error: ${String(b.message ?? b.error ?? "success=false").slice(0, 200)}`);
+  return body;
+}
+
+/**
+ * Page 1, then more pages (max `maxPages`, default 3) only while has_more and
+ * the page's oldest non-pinned post is still newer than `sinceMs`. Each page
+ * is retried once; a second failure throws ScrapeError.
+ */
+export async function fetchRecentPosts(
+  platform: Platform,
+  handle: string,
+  opts: FetchPostsOptions,
+): Promise<FetchPostsResult> {
+  const fetchImpl = opts.fetchImpl ?? fetch;
+  const maxPages = opts.maxPages ?? 3;
+  const seen = new Map<string, ScrapedPost>();
+  let cursor: string | null = null;
+  let pages = 0;
+  let calls = 0;
+  let credits: number | null = null;
+  let truncated = false;
+  while (pages < maxPages) {
+    const url = pageUrl(platform, handle, cursor);
+    let raw: unknown;
+    try {
+      calls++;
+      raw = await getJson(url, opts.apiKey, fetchImpl);
+    } catch (e) {
+      if (e instanceof ScrapeError && e.status && e.status >= 400 && e.status < 500 && e.status !== 429) throw e;
+      calls++;
+      raw = await getJson(url, opts.apiKey, fetchImpl);
+    }
+    pages++;
+    const page = platform === "tiktok" ? parseTikTokPage(raw, handle) : parseInstagramPage(raw);
+    if (page.credits_remaining != null) {
+      credits = page.credits_remaining;
+      opts.onCredits?.(credits);
+    }
+    for (const p of page.posts) seen.set(p.post_id, p);
+    const unpinned = page.posts.filter((p) => !p.pinned).map((p) => Date.parse(p.posted_at));
+    const oldest = unpinned.length ? Math.min(...unpinned) : -Infinity;
+    if (!page.has_more || !page.cursor || page.cursor === cursor || oldest < opts.sinceMs) break;
+    if (pages >= maxPages) {
+      truncated = true;
+      break;
+    }
+    cursor = page.cursor;
+  }
+  return { posts: [...seen.values()], pages, calls, credits_remaining: credits, truncated };
+}

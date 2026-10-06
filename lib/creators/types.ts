@@ -229,6 +229,14 @@ export interface PostingDay {
   videos: PostedVideo[];
   /** Last save. */
   logged_at: IsoInstant;
+  /**
+   * Stored doc only (not returned by db.toPostingDay): "auto" when the post sync
+   * created the day, "manual+auto" when it filled gaps in a creator's log.
+   * Absent = saved by the creator. auto_urls lists the links the sync added.
+   */
+  source?: "auto" | "manual+auto";
+  auto_urls?: string[];
+  auto_synced_at?: IsoInstant;
 }
 
 export interface DayOff {
@@ -251,6 +259,43 @@ export interface BonusClaim {
   admin_note?: string;
   claimed_at?: IsoInstant;
   reviewed_at?: IsoInstant;
+  /** "auto": created by the post sync (lib/creators/post-sync.ts). Absent = submitted by the creator. */
+  source?: "manual" | "auto";
+}
+
+/**
+ * ContentCreators/{id}/posts/{platform}_{post_id}: every post the ScrapeCreators
+ * sync has seen (lib/creators/post-sync.ts). Written by the sync only.
+ */
+export interface CreatorPost {
+  platform: Platform;
+  /** TikTok aweme_id / Instagram shortcode. */
+  post_id: string;
+  url: string;
+  handle: string;
+  posted_at: IsoInstant;
+  /** posted_at in the creator's timezone. */
+  local_date: YyyyMmDd;
+  caption: string;
+  views: number;
+  /** One entry per sync at most (when views changed or a day passed); newest last, capped. */
+  views_history: { at: IsoInstant; views: number }[];
+  pinned: boolean;
+  first_seen_at: IsoInstant;
+  last_synced_at: IsoInstant;
+  /** First sync that saw views >= 100K / 1M. */
+  crossed_100k_at: IsoInstant | null;
+  crossed_1m_at: IsoInstant | null;
+}
+
+/** ContentCreators/{id}.post_sync: health of the automatic post sync. */
+export interface PostSyncState {
+  last_run_at?: IsoInstant;
+  last_ok_at?: IsoInstant;
+  last_error?: string | null;
+  last_error_at?: IsoInstant | null;
+  consecutive_failures: number;
+  credits_remaining?: number | null;
 }
 
 export interface Adjustment {
