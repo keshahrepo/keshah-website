@@ -455,13 +455,13 @@ export function calendarFor(c: AdminCreator, h: CreatorHistory, month: YyyyMm): 
 export interface Attribution {
   trials: number;
   purchases: number;
-  /** Purchases whose conversion falls inside the ROI window. */
+  /** Purchases whose conversion falls inside the selected month. */
   purchasesInWindow: number;
   /** Real proceeds recorded for all attributed users (lifetime). */
   recordedProceedsUsd: number;
   /** Converted users with a recorded proceeds total. */
   purchasesWithProceeds: number;
-  /** Proceeds from users who converted inside the ROI window (missing ones filled at the average). */
+  /** Proceeds from users who converted in the selected month (missing ones filled at the average). */
   proceedsInWindowUsd: number;
 }
 
@@ -470,7 +470,7 @@ export interface Attribution {
  * campaign tags (Firestore `in`, max 30 tags). Trials = started_trial set,
  * purchases = converted_trial set.
  */
-export async function attributionFor(tags: string[], windowStartMs: number): Promise<Attribution> {
+export async function attributionFor(tags: string[], windowStartMs: number, windowEndMs: number = Infinity): Promise<Attribution> {
   const clean = [...new Set(tags.map((t) => t.trim()).filter(Boolean))].slice(0, 30);
   const empty = { trials: 0, purchases: 0, purchasesInWindow: 0, recordedProceedsUsd: 0, purchasesWithProceeds: 0, proceedsInWindowUsd: 0 };
   if (!clean.length) return empty;
@@ -494,7 +494,7 @@ export async function attributionFor(tags: string[], windowStartMs: number): Pro
         toMs((d.converted_trial as { at?: unknown })?.at) ??
         toMs(d.converted_at) ??
         (toMs((d.started_trial as { at?: unknown })?.at) ?? 0) + 7 * 86400000;
-      if (at >= windowStartMs) {
+      if (at >= windowStartMs && at < windowEndMs) {
         out.purchasesInWindow++;
         if (proceeds !== null) windowRecorded += proceeds;
         else windowMissing++;
@@ -547,8 +547,10 @@ export async function buildRow(c: AdminCreator, month: YyyyMm): Promise<CreatorR
   const s = summaryFor(c, h, month);
   const prevMonth = addMonths(month, -1);
   const sPrev = summaryFor(c, h, prevMonth);
-  const windowStartMs = Date.parse(`${prevMonth}-01T00:00:00Z`);
-  const attribution = await attributionFor(c.campaign_tags, windowStartMs);
+  // Proceeds and ROI are per selected month: users who started paying in it.
+  const windowStartMs = Date.parse(`${month}-01T00:00:00Z`);
+  const windowEndMs = Date.parse(`${addMonths(month, 1)}-01T00:00:00Z`);
+  const attribution = await attributionFor(c.campaign_tags, windowStartMs, windowEndMs);
 
   let completedMonths: number | null = null;
   let level: number | null = null;
@@ -564,7 +566,7 @@ export async function buildRow(c: AdminCreator, month: YyyyMm): Promise<CreatorR
   const approved = h.bonusClaims.filter((b) => b.status === "approved");
   const inMonth = (d?: string) => !!d && d.slice(0, 7) === month;
   const estProceedsWindowUsd = attribution.proceedsInWindowUsd;
-  const payWindowCents = (s?.totalCents ?? 0) + (sPrev?.totalCents ?? 0);
+  const payWindowCents = s?.totalCents ?? 0;
   const roiRatio = payWindowCents > 0 ? estProceedsWindowUsd / (payWindowCents / 100) : null;
   const inv = h.invoices[0];
 

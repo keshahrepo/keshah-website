@@ -165,8 +165,8 @@ export default function CreatorsPayPage() {
                   <th style={th}>100K / 1M</th>
                   <th style={th}>Bonuses</th>
                   <th style={th}>Trials / Paid</th>
-                  <th style={th} title="Real store proceeds after Apple/Google's cut, from users who paid in the last 2 months">Proceeds*</th>
-                  <th style={th} title="ESTIMATE: est. proceeds ÷ total pay, last 2 months">ROI*</th>
+                  <th style={th} title="Real store proceeds after Apple/Google's cut, from users who started paying this month">Proceeds*</th>
+                  <th style={th} title="Proceeds ÷ pay, this month">ROI*</th>
                 </tr>
               </thead>
               <tbody>
@@ -263,7 +263,7 @@ export default function CreatorsPayPage() {
                     </td>
                     <td style={td}>
                       <div>${Math.round(r.estProceedsWindowUsd).toLocaleString("en-US")}</div>
-                      <div style={muted}>{r.attribution.purchasesInWindow} paid, 2 mo</div>
+                      <div style={muted}>{r.attribution.purchasesInWindow} paid this month</div>
                       <div style={muted}>${Math.round(r.attribution.recordedProceedsUsd).toLocaleString("en-US")} all time</div>
                     </td>
                     <td style={td}>
@@ -286,9 +286,9 @@ export default function CreatorsPayPage() {
             </table>
           </div>
           <p style={{ ...muted, lineHeight: 1.6 }}>
-            * Proceeds are real store revenue after Apple and Google&apos;s cut, from users who started paying last month or this
-            month (plus all time below). A paid user with nothing recorded yet counts at that creator&apos;s average. ROI
-            flag = proceeds ÷ total pay over last month + this month: green ≥ {data.estimate.green_at}×, amber ≥{" "}
+            * Proceeds are real store revenue after Apple and Google&apos;s cut, from users who started paying in {month} (all
+            time shown below it). A paid user with nothing recorded yet counts at that creator&apos;s average. ROI
+            flag = {month} proceeds ÷ {month} pay: green ≥ {data.estimate.green_at}×, amber ≥{" "}
             {data.estimate.amber_at}×, otherwise red. Trials / paid = all-time users whose attribution campaign exactly matches one of
             the creator’s campaign tags. 100K / 1M = approved claims crossing in {month}.
           </p>
