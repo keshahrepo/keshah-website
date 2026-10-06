@@ -330,7 +330,11 @@ function toPostingDay(id: string, d: DocumentData): PostingDay {
   return {
     date: d.date || id,
     videos: Array.isArray(d.videos)
-      ? d.videos.map((v: Partial<PostedVideo>) => ({ tiktok_url: v?.tiktok_url ?? "", instagram_url: v?.instagram_url ?? "" }))
+      ? d.videos.map((v: Partial<PostedVideo>) => ({
+          tiktok_url: v?.tiktok_url ?? "",
+          instagram_url: v?.instagram_url ?? "",
+          ...(v?.inspired_by_url ? { inspired_by_url: v.inspired_by_url } : {}),
+        }))
       : [],
     logged_at: toIso(d.logged_at) ?? "",
   };
@@ -482,6 +486,19 @@ function checkUrl(raw: string, platform: Platform, label = ""): string {
   return s;
 }
 
+/** Optional "Inspired by" link on the test video: any full http(s) link, or "". */
+export function checkInspiredByUrl(raw: string, label = ""): string {
+  const s = raw.trim();
+  if (!s) return "";
+  try {
+    const u = new URL(s);
+    if (/^https?:$/.test(u.protocol) && u.hostname.includes(".")) return s.slice(0, 1000);
+  } catch {
+    // fall through
+  }
+  throw new CreatorDataError(`${label}The "Inspired by" box needs a full link, like one copied from the app's Share button.`);
+}
+
 /**
  * Save (replace) the day's video log. Rejects future dates and saves after
  * 11:59 pm on `date` in the creator's timezone, unless `skipDeadline`
@@ -514,9 +531,10 @@ export async function savePostingDay(
   videos.forEach((v, i) => {
     const tiktok_url = checkUrl(String(v?.tiktok_url ?? ""), "tiktok", `Video ${i + 1}: `);
     const instagram_url = checkUrl(String(v?.instagram_url ?? ""), "instagram", `Video ${i + 1}: `);
-    if (tiktok_url || instagram_url) clean.push({ tiktok_url, instagram_url });
+    const inspired_by_url = checkInspiredByUrl(String(v?.inspired_by_url ?? ""), `Video ${i + 1}: `);
+    if (tiktok_url || instagram_url) clean.push({ tiktok_url, instagram_url, ...(inspired_by_url ? { inspired_by_url } : {}) });
   });
-  const dupe = (key: keyof PostedVideo) => {
+  const dupe = (key: "tiktok_url" | "instagram_url") => {
     const seen = new Set<string>();
     for (const v of clean) {
       const k = v[key].replace(/[?#].*$/, "").replace(/\/+$/, "").toLowerCase();

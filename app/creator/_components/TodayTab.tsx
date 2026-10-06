@@ -6,6 +6,7 @@ import { fmtDateShort } from "@/lib/creators/time";
 import type { PortalData } from "./types";
 import StepGuide from "./StepGuide";
 import { POSTING_GUIDE } from "@/lib/creators/guide-content";
+import { INSPIRED_BY_LABEL, TEST_TIPS, TEST_TIPS_TITLE, TEST_VIDEO_INDEX, TEST_VIDEO_LABEL } from "@/lib/creators/test-tips";
 import { Button, C, Card, Eyebrow, H, Msg, P, Row, api, inputStyle } from "./ui";
 
 function countdown(ms: number): string {
@@ -21,6 +22,59 @@ interface Assignment {
   id: string;
   hook_title: string;
   onscreen_text?: string;
+}
+
+function TestTipsCard() {
+  const [open, setOpen] = useState(false);
+  return (
+    <Card style={{ padding: 0 }}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          width: "100%",
+          minHeight: 56,
+          padding: "0 18px",
+          background: "none",
+          border: "none",
+          color: "#fff",
+          fontFamily: C.font,
+          fontSize: 15,
+          fontWeight: 600,
+          textAlign: "left",
+          cursor: "pointer",
+        }}
+      >
+        <span>{TEST_TIPS_TITLE}</span>
+        <span aria-hidden style={{ color: C.faint, fontSize: 22, lineHeight: 1, transform: open ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>
+          ›
+        </span>
+      </button>
+      {open && (
+        <div style={{ padding: "0 18px 18px" }}>
+          {TEST_TIPS.map((sec) => {
+            const List = sec.style === "steps" ? "ol" : "ul";
+            return (
+              <div key={sec.title} style={{ marginTop: 14 }}>
+                <H style={{ fontSize: 15, marginBottom: 8 }}>{sec.title}</H>
+                <List style={{ margin: 0, paddingLeft: 22, listStyleType: sec.style === "steps" ? "decimal" : "disc" }}>
+                  {sec.items.map((item, j) => (
+                    <li key={j} style={{ fontSize: 14, lineHeight: 1.55, color: C.dim, marginBottom: 6 }}>
+                      {item}
+                    </li>
+                  ))}
+                </List>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
 }
 
 export default function TodayTab({ data, onSaved }: { data: PortalData; onSaved: () => void }) {
@@ -86,7 +140,7 @@ export default function TodayTab({ data, onSaved }: { data: PortalData; onSaved:
               {done}
               <span style={{ fontSize: 18, color: C.faint }}>/{target}</span>
             </div>
-            <div style={{ fontSize: 13, color: C.dim, marginTop: 4 }}>videos logged on both apps</div>
+            <div style={{ fontSize: 13, color: C.dim, marginTop: 6 }}>videos logged on both apps</div>
           </div>
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: 15, fontWeight: 600, color: expired ? C.red : left < 3 * 3600000 ? C.amber : "#fff" }}>
@@ -100,32 +154,59 @@ export default function TodayTab({ data, onSaved }: { data: PortalData; onSaved:
         )}
       </Card>
 
-      {rows.map((row, i) => (
-        <Card key={i} style={{ padding: 14 }}>
-          <Row style={{ marginBottom: 10 }}>
-            <Eyebrow style={{ marginBottom: 0 }}>Video {i + 1}</Eyebrow>
-            {isFull(row) && <span style={{ color: C.green, fontSize: 12, fontWeight: 600 }}>✓ Both links</span>}
-          </Row>
-          <input
-            style={{ ...inputStyle, marginBottom: 8 }}
-            value={row.tiktok_url}
-            onChange={(e) => set(i, "tiktok_url", e.target.value)}
-            placeholder="TikTok link"
-            inputMode="url"
-            autoCapitalize="none"
-            disabled={expired}
-          />
-          <input
-            style={inputStyle}
-            value={row.instagram_url}
-            onChange={(e) => set(i, "instagram_url", e.target.value)}
-            placeholder="Instagram link"
-            inputMode="url"
-            autoCapitalize="none"
-            disabled={expired}
-          />
-        </Card>
-      ))}
+      {rows.map((row, i) => {
+        const isTest = i === TEST_VIDEO_INDEX;
+        return (
+          <div key={i}>
+            <Card style={{ padding: 16, ...(isTest ? { border: "1px solid rgba(255,255,255,0.25)" } : {}) }}>
+              <Row style={{ marginBottom: 10 }}>
+                <Eyebrow style={{ marginBottom: 0 }}>{isTest ? `Video ${i + 1} · ${TEST_VIDEO_LABEL}` : `Video ${i + 1}`}</Eyebrow>
+                {isFull(row) && <span style={{ color: C.green, fontSize: 12, fontWeight: 600 }}>✓ Both links</span>}
+              </Row>
+              <input
+                style={{ ...inputStyle, marginBottom: 8 }}
+                value={row.tiktok_url}
+                onChange={(e) => set(i, "tiktok_url", e.target.value)}
+                placeholder="TikTok link"
+                inputMode="url"
+                autoCapitalize="none"
+                autoCorrect="off"
+                aria-label={`Video ${i + 1} TikTok link`}
+                disabled={expired}
+              />
+              <input
+                style={inputStyle}
+                value={row.instagram_url}
+                onChange={(e) => set(i, "instagram_url", e.target.value)}
+                placeholder="Instagram link"
+                inputMode="url"
+                autoCapitalize="none"
+                autoCorrect="off"
+                aria-label={`Video ${i + 1} Instagram link`}
+                disabled={expired}
+              />
+              {isTest && (
+                <label style={{ display: "block", marginTop: 12 }}>
+                  <span style={{ display: "block", fontSize: 13, color: C.dim, marginBottom: 6 }}>
+                    {INSPIRED_BY_LABEL} <span style={{ color: C.faint }}>· optional</span>
+                  </span>
+                  <input
+                    style={inputStyle}
+                    value={row.inspired_by_url ?? ""}
+                    onChange={(e) => set(i, "inspired_by_url", e.target.value)}
+                    placeholder="https://"
+                    inputMode="url"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    disabled={expired}
+                  />
+                </label>
+              )}
+            </Card>
+            {isTest && <TestTipsCard />}
+          </div>
+        );
+      })}
 
       <Msg error={err} ok={ok} />
       <Button onClick={save} disabled={saving || expired} style={{ width: "100%", marginBottom: 8 }}>
@@ -147,12 +228,10 @@ export default function TodayTab({ data, onSaved }: { data: PortalData; onSaved:
         </Card>
       )}
 
-      <details style={{ marginTop: 14 }}>
-        <summary style={{ cursor: "pointer", fontSize: 14, fontWeight: 600, padding: "10px 2px", color: C.dim }}>How to post</summary>
-        <div style={{ marginTop: 8 }}>
-          <StepGuide guide={POSTING_GUIDE} />
-        </div>
-      </details>
+      <div style={{ marginTop: 24 }}>
+        <Eyebrow>How to post</Eyebrow>
+        <StepGuide collapsible guide={POSTING_GUIDE} />
+      </div>
     </div>
   );
 }

@@ -216,6 +216,11 @@ export type Platform = "tiktok" | "instagram";
 export interface PostedVideo {
   tiktok_url: string;
   instagram_url: string;
+  /**
+   * Optional: the video that inspired the creator's daily test video (row 5).
+   * Informational only; never part of the pay rule.
+   */
+  inspired_by_url?: string;
 }
 
 export interface PostingDay {
