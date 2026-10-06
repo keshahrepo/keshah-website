@@ -132,6 +132,8 @@ export async function acceptCreator(id: string, opts: AcceptOptions): Promise<Ac
               link: inviteLink,
               keshahEmail: groupDone ? String(d.keshah_email || "") : undefined,
               contractReady: ready,
+              // Already working with us (migrated): portal intro, not an offer email.
+              existing: d.status === "active" || d.status === "leaving",
             });
             // Plain text only: reads like a personal Gmail message, which
             // keeps it in Primary instead of Promotions.

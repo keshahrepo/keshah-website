@@ -61,54 +61,84 @@ function esc(s: string): string {
 export const CREATOR_FROM_NAME = "McKenzie from KESHAH";
 export const CREATOR_SIGNOFF = "McKenzie\nCreator Coordinator, KESHAH";
 
-export function welcomeEmail(input: { firstName: string; link: string; keshahEmail?: string; contractReady: boolean }): {
+export function welcomeEmail(input: {
+  firstName: string;
+  link: string;
+  keshahEmail?: string;
+  contractReady: boolean;
+  /** Already working with us (e.g. moved over from the old setup): portal intro, not an offer. */
+  existing?: boolean;
+}): {
   subject: string;
   text: string;
   html: string;
 } {
   const first = input.firstName || "there";
-  const contractLine = input.contractReady
-    ? "Sign your contract. It's the first thing you'll see in the portal, and it only takes a couple of minutes."
-    : "Sign your contract. I'll have it in your portal shortly, and you'll sign it right there.";
-  const inboxLine = input.keshahEmail
-    ? `I also set up ${input.keshahEmail} for you. Use it when you make your KESHAH TikTok and Instagram accounts. Anything sent to it, like verification codes, comes straight to this inbox.`
-    : "";
-  const steps = [
-    "Set your password and log in.",
-    contractLine,
-    "Go through the Getting started steps. They walk you through everything, from setting up your accounts to your first post.",
-  ];
-
+  if (input.existing) {
+    const text = [
+      `Hi ${first},`,
+      "",
+      "We've built a creator portal, and your account is ready. It's where you'll see your videos, your pay for the month, your bonuses and your invoices, all in one place.",
+      "",
+      "First, set your password (this link works once and expires in 7 days):",
+      input.link,
+      "",
+      "A few things to know:",
+      "",
+      "• Your videos show up in the portal on their own within a few hours of posting. If one is missing near the deadline, you can paste its link.",
+      "• Bonuses are added automatically when a video passes 100K or 1M views.",
+      `• ${input.contractReady ? "Your new agreement is waiting in the portal for you to sign." : "Your new agreement will be in the portal shortly for you to sign."}`,
+      "• You'll also be asked to add your payment details and tax form so we can pay you.",
+      "",
+      "Let me know if anything is unclear. Just reply to this email.",
+      "",
+      "Best,",
+      CREATOR_SIGNOFF,
+    ].join("\n");
+    return { subject: "Your KESHAH creator portal", text, html: `<pre style="font-family:inherit;white-space:pre-wrap">${esc(text)}</pre>` };
+  }
+  const contractStep = input.contractReady
+    ? "Sign the agreement. It's the first thing you'll see in your portal, and it takes a couple of minutes."
+    : "Sign the agreement. It'll be in your portal shortly, and you'll sign it right there.";
   const text = [
-    `Hey ${first},`,
+    `Hi ${first},`,
     "",
-    "It's McKenzie. I coordinate the creator program at KESHAH. You're in, and Aadi and I are really glad to have you on the team.",
+    "Congratulations! We've decided to move forward with you for the content creator role at KESHAH. Your application stood out, and with a 5.7% acceptance rate for our creator program, we're excited to have you on board.",
     "",
-    "First, set a password for your creator portal. This link works once and expires in 7 days:",
+    "Quick recap of the role:",
+    "",
+    "• On-camera content creator. You'll film and post 5 short videos every weekday to KESHAH-owned TikTok and Instagram accounts.",
+    "• Weekdays only (Mon to Fri), and you choose your own filming hours.",
+    "• Pay starts at $500 a month and grows to $1,100 the longer you're with us, plus view bonuses: $15 when a video passes 100K views and $100 when it passes 1M.",
+    "• Your first 10 posting days are a trial.",
+    "• We give you proven videos to remake, scripts and direction. You bring the energy.",
+    "",
+    "Our best creators can also be invited to become Format Creators, inventing new formats for an extra $500 a month.",
+    "",
+    "Everything happens in your creator portal. First, set your password (this link works once and expires in 7 days):",
     input.link,
     "",
-    ...(inboxLine ? [inboxLine, ""] : []),
-    "Here's what happens next:",
-    ...steps.map((s, i) => `${i + 1}. ${s}`),
+    ...(input.keshahEmail
+      ? [
+          `We've also set up ${input.keshahEmail} for you. You'll use it to create your KESHAH TikTok and Instagram accounts, and anything sent to it, like verification codes, also lands in this inbox.`,
+          "",
+        ]
+      : []),
+    "Next steps:",
     "",
-    "If anything's unclear, just reply to this email.",
+    "1. Set your password and log in to the portal.",
+    `2. ${contractStep}`,
+    "3. Go through the Getting started steps. They cover Slack, setting up your accounts and your first 3 days.",
     "",
+    "Let me know if anything is unclear. Just reply to this email.",
+    "",
+    "Looking forward to having you on the KESHAH team!",
+    "",
+    "Best,",
     CREATOR_SIGNOFF,
   ].join("\n");
-
-  const p = (s: string) => `<p style="margin:0 0 16px">${s}</p>`;
-  const html = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#111;max-width:520px">
-${p(`Hey ${esc(first)},`)}
-${p("It's McKenzie. I coordinate the creator program at KESHAH. You're in, and Aadi and I are really glad to have you on the team.")}
-${p("First, set a password for your creator portal. This link works once and expires in 7 days.")}
-<p style="margin:0 0 24px"><a href="${esc(input.link)}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:10px">Set your password</a></p>
-${inboxLine ? p(esc(inboxLine)) : ""}
-${p("Here's what happens next:")}
-<ol style="margin:0 0 16px;padding-left:20px">${steps.map((s) => `<li style="margin-bottom:6px">${esc(s)}</li>`).join("")}</ol>
-${p("If anything's unclear, just reply to this email.")}
-${p("McKenzie<br>Creator Coordinator, KESHAH")}
-<p style="margin:24px 0 0;font-size:12px;color:#888">If the button doesn't work, paste this into your browser:<br>${esc(input.link)}</p>
-</div>`;
-
-  return { subject: `${first === "there" ? "Your" : `${first}, your`} KESHAH creator portal`, text, html };
+  // Kept for callers that expect html; sent as plain text so it reads like a
+  // personal email and lands in Primary.
+  const html = `<pre style="font-family:inherit;white-space:pre-wrap">${esc(text)}</pre>`;
+  return { subject: "Your offer from KESHAH", text, html };
 }

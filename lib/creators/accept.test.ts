@@ -158,10 +158,19 @@ test("password set the same way login verifies it", () => {
 });
 
 test("welcome email: no em dashes, has link and next steps", () => {
-  const m = welcomeEmail({ firstName: "Isai", link: "https://x/creator/set-password?token=t", keshahEmail: "isai@keshah.com", contractReady: false });
+  const m = welcomeEmail({ firstName: "Jen", link: "https://x/creator/set-password?token=t", keshahEmail: "jen@keshah.com", contractReady: false });
   for (const s of [m.subject, m.text, m.html]) assert.ok(!s.includes("—"), "no em dash");
+  assert.equal(m.subject, "Your offer from KESHAH");
   assert.ok(m.text.includes("https://x/creator/set-password?token=t"));
-  assert.ok(m.html.includes("Set your password"));
-  assert.ok(m.text.includes("isai@keshah.com"));
-  assert.ok(m.text.includes("I'll have it in your portal shortly"));
+  assert.ok(m.text.includes("jen@keshah.com"));
+  assert.ok(m.text.includes("It'll be in your portal shortly"));
+  assert.ok(m.text.includes("Next steps"));
+});
+
+test("welcome email for an existing creator is a portal intro, not an offer", () => {
+  const m = welcomeEmail({ firstName: "Isai", link: "https://x/l", contractReady: false, existing: true });
+  assert.equal(m.subject, "Your KESHAH creator portal");
+  assert.ok(!m.text.includes("Congratulations"));
+  assert.ok(m.text.includes("https://x/l"));
+  for (const s of [m.subject, m.text]) assert.ok(!s.includes("—"), "no em dash");
 });
