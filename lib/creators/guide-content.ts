@@ -15,7 +15,7 @@ export type GuideStep = {
   /** Text the creator can copy with one tap (e.g. the bio). */
   copy?: string;
   /** Where to show creator-specific data passed to StepGuide. */
-  slot?: "email" | "link";
+  slot?: "email" | "link" | "handle";
 };
 
 export type GuideSection = {
@@ -45,7 +45,7 @@ export const ACCOUNT_SETUP_GUIDE: Guide = {
         {
           image: `${IMG}/tiktok-1-signup.webp`,
           alt: "TikTok sign up screen with Use phone or email highlighted",
-          text: "Open TikTok and tap Use phone or email. Pick Email and sign up with your KESHAH email. TikTok sends a code to that email, and then you choose your own password.",
+          text: "Open TikTok and tap Use phone or email. Pick Email and sign up with your KESHAH email. TikTok sends a code to that email, and it arrives in your personal inbox too, so check there. Then you choose your own password.",
           slot: "email",
         },
         {
@@ -56,12 +56,13 @@ export const ACCOUNT_SETUP_GUIDE: Guide = {
         {
           image: `${IMG}/tiktok-3-name.webp`,
           alt: "TikTok Edit profile with Name, Username and Pronouns highlighted",
-          text: "Set your name to your first name. Set your username to firstname.lastname1, so Jen Smith would be jen.smith1. Then set your pronouns.",
+          text: "Set your name to your first name. Set your username to your first name with .keshah on the end, so Jen would be jen.keshah. If it's taken, add a number at the end, like jen.keshah1. Then set your pronouns.",
+          slot: "handle",
         },
         {
           image: `${IMG}/tiktok-4-photo.webp`,
           alt: "TikTok Edit profile with the profile photo highlighted",
-          text: "Tap Edit photo or avatar and add a profile photo.",
+          text: "Tap Edit photo or avatar. Add a natural photo of your face. Something that looks real, like a normal selfie, not too professional.",
         },
       ],
     },
@@ -72,13 +73,14 @@ export const ACCOUNT_SETUP_GUIDE: Guide = {
         {
           image: `${IMG}/instagram-1-email.webp`,
           alt: "Instagram Add phone or email screen with the email field highlighted",
-          text: "Open Instagram and create a new account. Tap the Email tab and use your KESHAH email. Instagram sends a code to that email.",
+          text: "Open Instagram and create a new account. Tap the Email tab and use your KESHAH email. Instagram sends a code to that email, and it arrives in your personal inbox too, so check there.",
           slot: "email",
         },
         {
           image: `${IMG}/instagram-2-username.webp`,
           alt: "Instagram Create username screen with the username field highlighted",
-          text: "Set your username to firstname.lastname1, the same one you used on TikTok.",
+          text: "Set your username to the same one you used on TikTok, like jen.keshah. If it's taken, add a number at the end, like jen.keshah1.",
+          slot: "handle",
         },
         {
           image: `${IMG}/instagram-3-password.webp`,
@@ -88,7 +90,7 @@ export const ACCOUNT_SETUP_GUIDE: Guide = {
         {
           image: `${IMG}/instagram-4-photo.webp`,
           alt: "Instagram profile with the profile picture highlighted",
-          text: "Go to your profile and tap your profile picture to add a photo.",
+          text: "Go to your profile and tap your profile picture. Add a natural photo of your face. Something that looks real, like a normal selfie, not too professional.",
         },
       ],
     },

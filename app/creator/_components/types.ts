@@ -45,9 +45,14 @@ export interface PortalData {
     founder_videos: { id: string; title: string; url: string }[];
     quiz: { id: string; question: string; options: string[] }[];
     accounts_step_text: string;
+    verification_code_text: string;
+    suggested_handle: string;
+    handle_taken_text: string;
     accounts_guide_url: string | null;
     warmup_days: number;
+    warmup_headline: string;
     warmup_text: string;
+    warmup_done_text: string;
     posting_guide_url: string | null;
     posting_rules: string[];
     videos_per_weekday: number;

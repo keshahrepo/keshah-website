@@ -8,7 +8,7 @@ import type { PortalData } from "./types";
 import StepGuide from "./StepGuide";
 import { POSTING_GUIDE } from "@/lib/creators/guide-content";
 import { CONCEPT_LABEL, CONCEPT_ROW_INDEXES, INSPIRED_BY_LABEL, TEST_TIPS, TEST_TIPS_TITLE } from "@/lib/creators/test-tips";
-import { Button, C, Card, Eyebrow, H, Msg, P, Row, api, inputStyle } from "./ui";
+import { Button, C, Card, CheckCircle, Eyebrow, H, Msg, P, ProgressBar, Row, api, inputStyle } from "./ui";
 
 function countdown(ms: number): string {
   if (ms <= 0) return "Deadline passed";
@@ -193,6 +193,7 @@ export default function TodayTab({ data, onSaved }: { data: PortalData; onSaved:
             <div style={{ fontSize: 12, color: C.faint, marginTop: 4 }}>Due 11:59 pm your time</div>
           </div>
         </Row>
+        <ProgressBar value={done / target} color={done >= target ? C.green : "#fff"} style={{ marginTop: 16 }} />
         {!data.today.is_weekday && (
           <P style={{ marginTop: 12, marginBottom: 0 }}>It&apos;s the weekend, so there&apos;s nothing due today.</P>
         )}
@@ -215,13 +216,24 @@ export default function TodayTab({ data, onSaved }: { data: PortalData; onSaved:
         const igViews = viewsOf(row.instagram_url, "instagram");
         return (
           <div key={i}>
-            <Card style={{ padding: 16, ...(isTest ? { border: "1px solid rgba(255,255,255,0.25)" } : {}) }}>
+            <Card
+              style={{
+                padding: 16,
+                ...(isFull(row) ? {} : { background: C.box, border: "1px solid transparent", borderRadius: 12 }),
+                ...(isTest ? { border: "1px solid rgba(255,255,255,0.25)" } : {}),
+              }}
+            >
               <Row style={{ marginBottom: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <Eyebrow style={{ marginBottom: 0 }}>{isTest ? `Video ${i + 1} · ${CONCEPT_LABEL}` : `Video ${i + 1}`}</Eyebrow>
                   {auto && <span style={{ fontSize: 11, color: C.faint }}>Found automatically</span>}
                 </div>
-                {isFull(row) && <span style={{ color: C.green, fontSize: 12, fontWeight: 600 }}>✓ Both links</span>}
+                {isFull(row) && (
+                  <span style={{ display: "flex", alignItems: "center", gap: 5, color: C.faint, fontSize: 12, fontWeight: 500 }}>
+                    <CheckCircle size={14} />
+                    Both links
+                  </span>
+                )}
               </Row>
               <input
                 style={{ ...inputStyle, marginBottom: 8 }}

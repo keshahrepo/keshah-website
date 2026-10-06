@@ -440,7 +440,7 @@ export default function CreatorPage() {
 2. Tap "Continue with Google" — sign in with your KESHAH Google account
 3. Tap "Edit" on your profile
 4. Set Name: [your first name]
-5. Set Username: [firstname].[lastname]1
+5. Set Username: [firstname].keshah (add a number at the end if it's taken)
 6. Set Pronouns
 7. Update your profile photo
 
@@ -451,7 +451,7 @@ IMPORTANT: Spend 5-10 minutes each day scrolling TikTok, liking, commenting etc.
 SETTING UP YOUR INSTAGRAM ACCOUNT
 
 1. Create a new Instagram account
-2. Set Username: [firstname].[lastname]1
+2. Set Username: [firstname].keshah (add a number at the end if it's taken)
 3. Use your KESHAH email address
 4. Update your profile photo
 

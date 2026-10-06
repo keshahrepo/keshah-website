@@ -34,7 +34,7 @@ export function CopyBlock({ label, value }: { label: string; value: string }) {
       style={{
         marginTop: 12,
         padding: "10px 12px",
-        borderRadius: 12,
+        borderRadius: 14,
         background: "rgba(255,255,255,0.06)",
         border: "1px solid rgba(255,255,255,0.1)",
         display: "flex",
@@ -54,14 +54,16 @@ export function CopyBlock({ label, value }: { label: string; value: string }) {
             setTimeout(() => setCopied(false), 1800);
           }
         }}
+        className="cp-btn"
+        aria-label={`Copy ${label.toLowerCase()}`}
         style={{
           flexShrink: 0,
           minHeight: 40,
-          padding: "0 14px",
-          borderRadius: 10,
+          padding: "0 16px",
+          borderRadius: 999,
           border: "none",
-          background: copied ? "rgba(74,222,128,0.15)" : "#fff",
-          color: copied ? C.green : "#000",
+          background: copied ? C.green : "#fff",
+          color: copied ? "#fff" : "#000",
           fontFamily: C.font,
           fontSize: 13,
           fontWeight: 600,
@@ -79,11 +81,13 @@ function StepCard({
   n,
   link,
   keshahEmail,
+  handle,
 }: {
   step: GuideStep;
   n: number;
   link?: string;
   keshahEmail?: string;
+  handle?: string;
 }) {
   return (
     <div
@@ -155,6 +159,7 @@ function StepCard({
       )}
 
       {step.slot === "email" && keshahEmail && <CopyBlock label="Your KESHAH email" value={keshahEmail} />}
+      {step.slot === "handle" && handle && <CopyBlock label="Your username" value={handle} />}
       {step.slot === "link" &&
         (link ? (
           <CopyBlock label="Your AppStack link" value={link} />
@@ -183,9 +188,9 @@ function Disclosure({ label, children }: { label: string; children: ReactNode })
           width: "100%",
           minHeight: 48,
           padding: "0 14px",
-          borderRadius: 12,
+          borderRadius: 14,
           border: C.border,
-          background: open ? "rgba(255,255,255,0.06)" : "transparent",
+          background: open ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.04)",
           color: "#fff",
           fontFamily: C.font,
           fontSize: 14,
@@ -209,6 +214,7 @@ export default function StepGuide({
   sectionIds,
   link,
   keshahEmail,
+  handle,
   showSectionTitles = true,
   collapsible = false,
   toggleLabel,
@@ -220,6 +226,8 @@ export default function StepGuide({
   link?: string;
   /** Creator's name@keshah.com email, shown on sign-up steps. */
   keshahEmail?: string;
+  /** Suggested username (e.g. jen.keshah), shown on username steps. */
+  handle?: string;
   showSectionTitles?: boolean;
   /** Each section starts closed behind a tap-to-open row (keeps long picture guides out of the way). */
   collapsible?: boolean;
@@ -228,7 +236,7 @@ export default function StepGuide({
 }) {
   const sections = sectionIds ? guide.sections.filter((s) => sectionIds.includes(s.id)) : guide.sections;
   const steps = (section: (typeof sections)[number]) =>
-    section.steps.map((step, i) => <StepCard key={i} step={step} n={i + 1} link={link} keshahEmail={keshahEmail} />);
+    section.steps.map((step, i) => <StepCard key={i} step={step} n={i + 1} link={link} keshahEmail={keshahEmail} handle={handle} />);
   return (
     <div style={{ fontFamily: C.font, color: C.text }}>
       {sections.map((section) =>
