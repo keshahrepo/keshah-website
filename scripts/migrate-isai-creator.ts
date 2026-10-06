@@ -184,11 +184,11 @@ async function main() {
   console.log("");
 
   // Weekdays from their Oct 1 start until they could log in the portal, all paid
-  // as approved days. Oct 1, 2: no posts while setup was being finished.
-  // Oct 5: they posted, but had no portal access yet to log the links.
+  // as approved days. Oct 1: no posts while setup was being finished.
+  // Oct 2, 5: they posted, but had no portal access yet to log the links.
   const CREDITED: Record<string, string> = {
     "2026-10-01": "Credited: portal setup still in progress",
-    "2026-10-02": "Credited: portal setup still in progress",
+    "2026-10-02": "Posted, before portal access to log links",
     "2026-10-05": "Posted, before portal access to log links",
   };
   console.log("  days_off approved (credited):");
