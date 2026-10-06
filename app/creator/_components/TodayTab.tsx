@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import type { PostedVideo } from "@/lib/creators/types";
 import { fmtDateShort } from "@/lib/creators/time";
 import type { PortalData } from "./types";
+import StepGuide from "./StepGuide";
+import { POSTING_GUIDE } from "@/lib/creators/guide-content";
 import { Button, C, Card, Eyebrow, H, Msg, P, Row, api, inputStyle } from "./ui";
 
 function countdown(ms: number): string {
@@ -144,6 +146,13 @@ export default function TodayTab({ data, onSaved }: { data: PortalData; onSaved:
           ))}
         </Card>
       )}
+
+      <details style={{ marginTop: 14 }}>
+        <summary style={{ cursor: "pointer", fontSize: 14, fontWeight: 600, padding: "10px 2px", color: C.dim }}>How to post</summary>
+        <div style={{ marginTop: 8 }}>
+          <StepGuide guide={POSTING_GUIDE} />
+        </div>
+      </details>
     </div>
   );
 }

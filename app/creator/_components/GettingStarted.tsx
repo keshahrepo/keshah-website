@@ -2,6 +2,8 @@
 
 import { useState, type ReactNode } from "react";
 import { ContractSigner } from "./ContractTab";
+import StepGuide from "./StepGuide";
+import { ACCOUNT_SETUP_GUIDE, POSTING_GUIDE } from "@/lib/creators/guide-content";
 import type { PortalData } from "./types";
 import { Button, C, Card, Eyebrow, Field, H, Msg, P, api, inputStyle } from "./ui";
 
@@ -54,7 +56,6 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<{ step: string; msg: string } | null>(null);
   const [opened, setOpened] = useState<Record<string, boolean>>({});
-  const [copied, setCopied] = useState(false);
   const [answers, setAnswers] = useState<(number | null)[]>(() => cfg.quiz.map(() => null));
   const [quizMsg, setQuizMsg] = useState<string | null>(null);
   const [signedNow, setSignedNow] = useState(false);
@@ -223,15 +224,8 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
         <div style={{ fontSize: 15, marginBottom: 12, wordBreak: "break-all" }}>
           {data.creator.keshah_email || <span style={{ color: C.faint }}>Not set up yet. Your manager will add it.</span>}
         </div>
-        {cfg.accounts_guide_url ? (
-          <P>
-            <a href={cfg.accounts_guide_url} target="_blank" rel="noreferrer" style={{ color: "#fff" }}>
-              Open the setup guide
-            </a>
-          </P>
-        ) : (
-          <P style={{ fontSize: 12, color: C.faint }}>Setup guide coming soon.</P>
-        )}
+        <StepGuide guide={ACCOUNT_SETUP_GUIDE} sectionIds={["tiktok", "instagram"]} keshahEmail={data.creator.keshah_email || undefined} />
+        <P>Once both accounts are set up, add your handles here.</P>
         <Field label="TikTok handle">
           <input style={inputStyle} value={tt} onChange={(e) => setTt(e.target.value)} placeholder="@yourhandle" autoCapitalize="none" />
         </Field>
@@ -294,15 +288,6 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
       </Step>
 
       <Step n={7} title="Posting guide" done={!!onb.rules_ack_at}>
-        {cfg.posting_guide_url ? (
-          <P>
-            <a href={cfg.posting_guide_url} target="_blank" rel="noreferrer" style={{ color: "#fff" }}>
-              Open the full posting guide
-            </a>
-          </P>
-        ) : (
-          <P style={{ fontSize: 12, color: C.faint }}>Full posting guide coming soon.</P>
-        )}
         <ul style={{ margin: "0 0 12px", paddingLeft: 18 }}>
           {cfg.posting_rules.map((r, i) => (
             <li key={i} style={{ fontSize: 14, lineHeight: 1.6, color: C.dim }}>
@@ -310,6 +295,7 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
             </li>
           ))}
         </ul>
+        <StepGuide guide={POSTING_GUIDE} />
         {errFor("rules")}
         {!onb.rules_ack_at && (
           <Button disabled={busy === "rules"} onClick={() => mark("rules")}>
@@ -318,22 +304,14 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
         )}
       </Step>
 
-      <Step n={8} title="Your link" done={!!onb.link_seen_at}>
+      <Step n={8} title="Add your bio and link" done={!!onb.link_seen_at}>
+        <StepGuide guide={ACCOUNT_SETUP_GUIDE} sectionIds={["bio"]} link={link || undefined} showSectionTitles={false} />
         {link ? (
-          <>
-            <P>This is your tracking link. It&apos;s how we see the people you send to KESHAH.</P>
-            <div style={{ ...inputStyle, marginBottom: 10, wordBreak: "break-all" }}>{link}</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <Button variant="ghost" onClick={() => navigator.clipboard?.writeText(link).then(() => setCopied(true), () => {})}>
-                {copied ? "Copied" : "Copy link"}
-              </Button>
-              {!onb.link_seen_at && (
-                <Button disabled={busy === "link"} onClick={() => mark("link")}>
-                  Got it
-                </Button>
-              )}
-            </div>
-          </>
+          !onb.link_seen_at && (
+            <Button disabled={busy === "link"} onClick={() => mark("link")}>
+              I&apos;ve added my bio and link
+            </Button>
+          )
         ) : (
           <P style={{ marginBottom: 0 }}>Your link is being set up. Your manager will add it here, and you can tick this step once it shows up.</P>
         )}
