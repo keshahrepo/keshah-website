@@ -27,6 +27,7 @@ import {
   th,
   uploadFile,
 } from "../_ui";
+import PaymentPanel, { type PaymentSummary } from "./PaymentPanel";
 
 interface Creator {
   id: string;
@@ -64,6 +65,8 @@ interface Creator {
   invite: { created_at: string; expires_at: string; used_at: string | null } | null;
   has_password: boolean;
   suggested_keshah_email: string;
+  payment_details?: PaymentSummary["payment_details"];
+  tax_form?: PaymentSummary["tax_form"];
 }
 type AcceptStepKey = "group" | "invite" | "contract";
 interface Line {
@@ -271,6 +274,7 @@ function CreatorDetail() {
       <Adjustments d={d} reload={load} />
       <Invoices d={d} reload={load} />
       <ContractW9 c={c} events={d.contractEvents ?? []} reload={load} />
+      {c.payment_details && c.tax_form && <PaymentPanel creatorId={c.id} p={{ payment_details: c.payment_details, tax_form: c.tax_form }} reload={load} />}
       <ProfileEditor c={c} reload={load} />
     </div>
   );
@@ -652,7 +656,7 @@ function ContractW9({ c, events, reload }: { c: Creator; events: Detail["contrac
         <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13, cursor: "pointer", marginLeft: "auto" }}>
           <input type="checkbox" checked={c.w9_on_file} onChange={(e) => toggleW9(e.target.checked)} />
           W-9 on file
-          <span style={muted}>(kept outside this system; no tax IDs stored here)</span>
+          <span style={muted}>(ticks itself when the creator signs a W-9 or W-8BEN in the portal)</span>
         </label>
       </div>
 

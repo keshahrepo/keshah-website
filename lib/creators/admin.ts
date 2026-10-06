@@ -35,6 +35,7 @@ import {
 } from "./pay";
 import { acceptCreator, acceptOf, type AcceptOptions, type AcceptResult } from "./accept";
 import { candidateAddresses } from "./google-groups";
+import { paymentDetailsOf, taxFormOf, type PaymentDetailsSummary, type TaxFormSummary } from "./payments";
 import type {
   AcceptRecord,
   Adjustment,
@@ -202,6 +203,10 @@ export interface AdminCreator {
   suggested_keshah_email: string;
   /** Automatic post sync health (lib/creators/post-sync.ts), null before the first run. */
   post_sync: PostSyncState | null;
+  /** Non-sensitive payment summary (bank name + last 4). Full details live encrypted in private/payment. */
+  payment_details: PaymentDetailsSummary;
+  /** W-9 / W-8BEN summary (no TIN beyond W-9 last 4). */
+  tax_form: TaxFormSummary;
 }
 
 export function toAdminCreator(id: string, d: DocumentData): AdminCreator {
@@ -245,6 +250,8 @@ export function toAdminCreator(id: string, d: DocumentData): AdminCreator {
     has_password: !!d.password_hash,
     suggested_keshah_email: candidateAddresses(String(d.legal_name || d.name || ""))[0] ?? "",
     post_sync: d.post_sync && typeof d.post_sync === "object" ? (plain(d.post_sync) as PostSyncState) : null,
+    payment_details: paymentDetailsOf(d),
+    tax_form: taxFormOf(d),
   };
 }
 

@@ -5,6 +5,10 @@ const nextConfig: NextConfig = {
   // (lib/creators/contract.ts); make sure it ships in that function's bundle.
   outputFileTracingIncludes: {
     "/api/creator/contract/sign": ["./lib/creators/fonts/**/*"],
+    // Tax forms fill the official IRS PDFs and stamp the same signature font
+    // (lib/creators/tax-forms.ts).
+    "/api/creator/payment/tax/sign": ["./lib/creators/fonts/**/*", "./lib/creators/forms/**/*"],
+    "/api/creator/payment/tax/preview": ["./lib/creators/fonts/**/*", "./lib/creators/forms/**/*"],
   },
   async redirects() {
     // All old funnel variants collapsed onto /start (the single

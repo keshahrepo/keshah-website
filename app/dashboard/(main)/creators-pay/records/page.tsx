@@ -98,6 +98,20 @@ export default function RecordsPage() {
       </div>
 
       <div style={card}>
+        <h3 style={h3}>Tax forms</h3>
+        <p style={{ ...muted, marginTop: -6, marginBottom: 10, lineHeight: 1.6 }}>
+          Every W-9 and W-8BEN creators have signed in the portal, as one ZIP for the accountant. The files are decrypted for this download
+          only, and each one is logged on that creator&apos;s access log. Bank details are never included here or in the evidence pack.
+        </p>
+        <a
+          href="/api/admin/creators/records/tax-forms"
+          style={{ padding: "7px 14px", fontSize: 12, fontWeight: 500, borderRadius: 20, background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.8)", textDecoration: "none" }}
+        >
+          Download tax forms ZIP
+        </a>
+      </div>
+
+      <div style={card}>
         <h3 style={h3}>Yearly totals per creator (by payment date)</h3>
         <p style={{ ...muted, marginTop: -6, marginBottom: 10 }}>1099-NEC is generally required at $600+ paid in a calendar year.</p>
         <ErrorText>{err}</ErrorText>

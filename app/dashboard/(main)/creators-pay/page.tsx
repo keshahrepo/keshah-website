@@ -31,6 +31,8 @@ interface Row {
     campaign_tags: string[];
     contract: { status: string };
     w9_on_file: boolean;
+    payment_details?: { status: "missing" | "submitted" | "payee_set_up" };
+    tax_form?: { type: "w9" | "w8ben" | null; status: "missing" | "submitted" };
     pay_ready: boolean;
     is_active: boolean;
     post_sync: { last_ok_at?: string; last_error?: string | null; last_error_at?: string | null; consecutive_failures: number } | null;
@@ -186,6 +188,11 @@ export default function CreatorsPayPage() {
                         {r.pendingDaysOff > 0 && <Pill color="#fbbf24">{r.pendingDaysOff} day-off req</Pill>}
                         {r.pendingClaims > 0 && <Pill color="#fbbf24">{r.pendingClaims} claim{r.pendingClaims > 1 ? "s" : ""} to review</Pill>}
                         {r.creator.post_sync && <SyncTag s={r.creator.post_sync} />}
+                        {r.creator.payment_details?.status !== "payee_set_up" && (
+                          <Pill color="#fbbf24">
+                            {r.creator.payment_details?.status === "submitted" ? "Payee not set up in Amex" : "Payment details missing"}
+                          </Pill>
+                        )}
                       </div>
                     </td>
                     <td style={{ ...td, whiteSpace: "nowrap" }}>
@@ -231,7 +238,9 @@ export default function CreatorsPayPage() {
                         {check(r.creator.contract.status === "signed")} contract
                         {r.creator.contract.status === "sent" && <span style={muted}> (sent)</span>}
                       </div>
-                      <div>{check(r.creator.w9_on_file)} W-9</div>
+                      <div>
+                        {check(r.creator.w9_on_file)} {r.creator.tax_form?.type === "w8ben" ? "W-8BEN" : "W-9"}
+                      </div>
                     </td>
                     <td style={td}>
                       {r.latestInvoice ? (

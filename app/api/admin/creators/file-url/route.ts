@@ -12,6 +12,10 @@ export async function GET(req: NextRequest) {
   if (!path || path.includes("..") || path.startsWith("/")) {
     return NextResponse.json({ error: "Bad path" }, { status: 400 });
   }
+  // Tax forms are encrypted and go through the logged download route instead.
+  if (/\/tax\//.test(path)) {
+    return NextResponse.json({ error: "Use Download tax form on the creator's page." }, { status: 400 });
+  }
   const url = await signedReadUrl(path);
   return NextResponse.redirect(url);
 }
