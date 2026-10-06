@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { fmtDateShort } from "@/lib/creators/time";
-import { Button, C, Card, Eyebrow, Field, Msg, P, Pill, Row, api, inputStyle, statusColor } from "./ui";
+import { Button, C, Card, Eyebrow, Field, Msg, P, Pill, Row, api, inputStyle, statusColor, Skel } from "./ui";
 
 interface Claim {
   id: string;
@@ -88,7 +88,7 @@ export default function BonusTab({ today }: { today: string }) {
 
       <Card>
         <Eyebrow>Your bonuses</Eyebrow>
-        {claims === null && <P style={{ marginBottom: 0 }}>Loading...</P>}
+        {claims === null && <><Skel h={14} style={{ marginBottom: 12 }} /><Skel h={14} w="60%" /></>}
         {claims?.length === 0 && <P style={{ marginBottom: 0 }}>No bonuses yet.</P>}
         {claims?.map((c) => (
           <div key={c.id} style={{ padding: "10px 0", borderTop: C.border }}>

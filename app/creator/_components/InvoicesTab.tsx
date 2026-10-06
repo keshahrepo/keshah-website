@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Invoice } from "@/lib/creators/types";
 import { fmtMonthLong, fmtUsd } from "@/lib/creators/time";
-import { Button, C, Card, buttonStyle, Eyebrow, H, Msg, P, Pill, Row, api, statusColor } from "./ui";
+import { Button, C, Card, buttonStyle, Eyebrow, H, Msg, P, Pill, Row, api, statusColor, Skel, SkelCard } from "./ui";
 
 const statusLabel: Record<string, string> = { draft: "Draft", submitted: "Submitted", approved: "Approved", paid: "Paid" };
 
@@ -48,7 +48,7 @@ export default function InvoicesTab() {
     }
   }
 
-  if (!data) return <Card><P style={{ marginBottom: 0 }}>{err ?? "Loading..."}</P></Card>;
+  if (!data) return err ? <Card><P style={{ marginBottom: 0 }}>{err}</P></Card> : <><SkelCard lines={3} height={260} /><SkelCard lines={2} height={180} /></>;
   const cur = data.current;
 
   return (

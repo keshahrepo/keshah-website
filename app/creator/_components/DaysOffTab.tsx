@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { fmtDateShort } from "@/lib/creators/time";
-import { Button, C, Card, Eyebrow, Field, Msg, P, Pill, Row, api, inputStyle, statusColor } from "./ui";
+import { Button, C, Card, Eyebrow, Field, Msg, P, Pill, Row, api, inputStyle, statusColor, Skel } from "./ui";
 
 interface DayOff {
   date: string;
@@ -62,7 +62,7 @@ export default function DaysOffTab({ today }: { today: string }) {
       </Card>
       <Card>
         <Eyebrow>Your requests</Eyebrow>
-        {list === null && <P style={{ marginBottom: 0 }}>Loading...</P>}
+        {list === null && <><Skel h={14} style={{ marginBottom: 12 }} /><Skel h={14} w="60%" /></>}
         {list?.length === 0 && <P style={{ marginBottom: 0 }}>No requests yet.</P>}
         {list?.map((d) => (
           <Row key={d.date} style={{ padding: "9px 0", borderTop: C.border }}>

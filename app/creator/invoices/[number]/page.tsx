@@ -40,14 +40,14 @@ export default function InvoicePrintPage() {
 
   const font = "'Poppins', -apple-system, sans-serif";
   if (!data) {
-    return <div style={{ padding: 24, fontFamily: font, color: "#111", background: "#fff", minHeight: "100vh" }}>{err ?? "Loading..."}</div>;
+    return <div style={{ padding: 24, fontFamily: font, color: "#111", background: "#fff", minHeight: "100dvh" }}>{err ?? "Loading..."}</div>;
   }
   const { invoice: inv, from, bill_to } = data;
   const issued = inv.submitted_at || inv.created_at;
   const cell = { padding: "10px 0", borderBottom: "1px solid #e5e5e5", fontSize: 13, verticalAlign: "top" as const };
 
   return (
-    <div style={{ background: "#fff", minHeight: "100vh", color: "#111", fontFamily: font }}>
+    <div style={{ background: "#fff", minHeight: "100dvh", color: "#111", fontFamily: font }}>
       <style>{`@media print { .no-print { display: none !important; } @page { margin: 18mm; } body { background: #fff; } }`}</style>
       <div className="no-print" style={{ background: "#000", padding: "12px 16px", display: "flex", gap: 12, justifyContent: "space-between", alignItems: "center" }}>
         <a href="/creator" style={{ color: "#fff", fontSize: 14, textDecoration: "none", display: "inline-flex", alignItems: "center", minHeight: 44 }}>

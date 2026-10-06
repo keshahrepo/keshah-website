@@ -31,7 +31,7 @@ export default function CreatorLoginPage() {
 
   return (
     <div style={{
-      minHeight: "100vh",
+      minHeight: "100dvh",
       background: "#000",
       display: "flex",
       alignItems: "center",

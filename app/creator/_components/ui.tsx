@@ -28,6 +28,8 @@ export const PORTAL_CSS = `
 @keyframes cp-pulse { 0% { box-shadow: 0 0 0 0 rgba(55,55,55,0.9) } 100% { box-shadow: 0 0 0 14px rgba(55,55,55,0) } }
 @keyframes cp-rise { 0% { transform: translateY(10px); opacity: 0 } 100% { transform: none; opacity: 1 } }
 @keyframes cp-fill { from { width: 0 } }
+@keyframes cp-shimmer { 0% { opacity: 0.55 } 50% { opacity: 1 } 100% { opacity: 0.55 } }
+.cp-skel { animation: cp-shimmer 1.4s ease-in-out infinite; }
 .cp-pop { animation: cp-pop 0.6s ease-out both; }
 .cp-pulse { animation: cp-pulse 1.5s ease-out infinite; }
 .cp-rise { animation: cp-rise 0.45s ease-out both; }
@@ -35,10 +37,32 @@ export const PORTAL_CSS = `
 .cp-btn:not(:disabled):active { transform: scale(0.97); }
 .cp-btn:focus-visible, .cp-focus:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) {
-  .cp-pop, .cp-pulse, .cp-rise { animation: none !important; }
+  .cp-pop, .cp-pulse, .cp-rise, .cp-skel { animation: none !important; }
   .cp-btn, .cp-btn:active { transition: none; transform: none; }
 }
 `;
+
+/** Placeholder block shown while data loads, sized like the content it stands in for. */
+export function Skel({ h, w = "100%", r = 8, style }: { h: number; w?: number | string; r?: number; style?: CSSProperties }) {
+  return <div className="cp-skel" aria-hidden style={{ height: h, width: w, borderRadius: r, background: "rgba(255,255,255,0.08)", ...style }} />;
+}
+
+/** True when the viewer asked for less motion. */
+export function prefersReducedMotion(): boolean {
+  return typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+}
+
+/** Card-shaped loading placeholder: an eyebrow line and a few text lines. */
+export function SkelCard({ lines = 2, height }: { lines?: number; height?: number }) {
+  return (
+    <div role="status" aria-label="Loading" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16, padding: 20, marginBottom: 14, minHeight: height, boxSizing: "border-box" }}>
+      <Skel h={10} w={90} style={{ marginBottom: 14 }} />
+      {Array.from({ length: lines }, (_, i) => (
+        <Skel key={i} h={14} w={i === lines - 1 ? "60%" : "100%"} style={{ marginBottom: 10 }} />
+      ))}
+    </div>
+  );
+}
 
 export function Card({ children, style }: { children: ReactNode; style?: CSSProperties }) {
   return (

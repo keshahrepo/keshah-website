@@ -1,0 +1,35 @@
+/*
+ * App-like page behaviour for the creator portal and interview pages only.
+ * Scoped with :has() on the wrapper their layouts render, so the marketing
+ * site keeps its normal browser behaviour.
+ */
+html:has(.native-root),
+html:has(.native-root) body {
+  overscroll-behavior: none;
+  overflow-x: clip;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+html:has(.native-root) :is(a, button, input, select, textarea, label, summary, [role="button"]) {
+  touch-action: manipulation;
+}
+
+/* Keep the page from shifting sideways when a tall tab gets a scrollbar. */
+@media (min-width: 640px) {
+  html:has(.native-root) {
+    scrollbar-gutter: stable;
+  }
+}
+
+/* iOS zooms into any field under 16px when it's focused. */
+@media (max-width: 767px) {
+  html:has(.native-root) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea) {
+    font-size: 16px !important;
+  }
+}
+
+.native-root {
+  display: contents;
+}

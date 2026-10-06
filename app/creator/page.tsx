@@ -9,7 +9,7 @@ import InvoicesTab from "./_components/InvoicesTab";
 import MonthTab from "./_components/MonthTab";
 import TodayTab from "./_components/TodayTab";
 import type { PortalData } from "./_components/types";
-import { Button, C, Card, P, PORTAL_CSS, api } from "./_components/ui";
+import { Button, C, Card, P, PORTAL_CSS, Skel, SkelCard, api, prefersReducedMotion } from "./_components/ui";
 
 const TABS = [
   ["today", "Today"],
@@ -64,10 +64,10 @@ export default function CreatorPortal() {
   const inPortal = !!data?.onboarding.completed_at;
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: C.font }}>
+    <div style={{ minHeight: "100dvh", background: C.bg, color: C.text, fontFamily: C.font }}>
       <style>{PORTAL_CSS}</style>
       <style>{`
-        .cp-wrap { max-width: 600px; margin: 0 auto; padding: 16px 16px 64px; }
+        .cp-wrap { max-width: 600px; margin: 0 auto; padding: calc(16px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 64px max(16px, env(safe-area-inset-left, 0px)); }
         .cp-wrap.has-nav { padding-bottom: calc(110px + env(safe-area-inset-bottom, 0px)); }
         /* Phone: frosted bottom bar like the app's nav. */
         .cp-tabs {
@@ -86,10 +86,10 @@ export default function CreatorPortal() {
         .cp-tab[aria-current="page"] { color: #fff; font-weight: 600; }
         .cp-tab:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
         @media (min-width: 640px) {
-          .cp-wrap { max-width: 680px; padding: 40px 24px 80px; }
+          .cp-wrap { max-width: 680px; padding: calc(40px + env(safe-area-inset-top, 0px)) 24px 80px; }
           .cp-wrap.has-nav { padding-bottom: 80px; }
           .cp-tabs {
-            position: sticky; top: 12px; bottom: auto; margin-bottom: 22px;
+            position: sticky; top: calc(12px + env(safe-area-inset-top, 0px)); bottom: auto; margin-bottom: 22px;
             display: flex; gap: 4px; padding: 5px;
             background: rgba(20,20,20,0.75); border: 1px solid rgba(255,255,255,0.1); border-radius: 999px;
           }
@@ -133,7 +133,14 @@ export default function CreatorPortal() {
               </Button>
             </Card>
           ) : (
-            <P style={{ textAlign: "center", padding: "40px 0" }}>Loading your portal...</P>
+            // Same rough shape as the first screen so nothing jumps when data lands.
+            <div>
+              <Skel h={10} w={110} style={{ marginBottom: 14 }} />
+              <Skel h={30} w="70%" style={{ marginBottom: 14 }} />
+              <SkelCard lines={3} height={190} />
+              <SkelCard lines={2} height={150} />
+              <SkelCard lines={2} height={150} />
+            </div>
           )
         ) : !inPortal ? (
           <GettingStarted data={data} onDone={load} />
@@ -147,7 +154,7 @@ export default function CreatorPortal() {
                   aria-current={tab === k ? "page" : undefined}
                   onClick={() => {
                     setTab(k);
-                    window.scrollTo({ top: 0 });
+                    if (window.scrollY > 0) window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });
                     if (k === "month" || k === "today") load();
                   }}
                 >

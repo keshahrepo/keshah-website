@@ -5,7 +5,7 @@ import { ContractSigner } from "./ContractTab";
 import StepGuide, { CopyBlock } from "./StepGuide";
 import { ACCOUNT_SETUP_GUIDE, BIO_TEXT, POSTING_GUIDE } from "@/lib/creators/guide-content";
 import type { PortalData } from "./types";
-import { Button, C, Card, CheckCircle, Eyebrow, Field, H, Msg, P, ProgressBar, Title, api, buttonStyle, inputStyle } from "./ui";
+import { Button, C, Card, CheckCircle, Eyebrow, Field, H, Msg, P, ProgressBar, Title, api, buttonStyle, inputStyle, prefersReducedMotion } from "./ui";
 
 type Onb = PortalData["onboarding"];
 
@@ -46,9 +46,27 @@ function Step({
   }, [done]);
 
   const expanded = open ?? !!current;
+  // When a step opens after the first render (tapped, or the next step opening
+  // after one is finished), bring its header gently into view instead of
+  // leaving the content wherever the layout change pushed it.
+  const boxRef = useRef<HTMLDivElement>(null);
+  const wasExpanded = useRef(expanded);
+  useEffect(() => {
+    if (expanded && !wasExpanded.current && boxRef.current) {
+      const el = boxRef.current;
+      requestAnimationFrame(() => {
+        const top = el.getBoundingClientRect().top;
+        if (top < 12 || top > window.innerHeight * 0.55) {
+          window.scrollBy({ top: top - 16, behavior: prefersReducedMotion() ? "auto" : "smooth" });
+        }
+      });
+    }
+    wasExpanded.current = expanded;
+  }, [expanded]);
   const sub = done ? doneNote : !expanded ? note : undefined;
   return (
     <div
+      ref={boxRef}
       className={current && !expanded ? "cp-pulse" : undefined}
       style={{
         background: done ? C.card : C.box,
@@ -206,7 +224,7 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
       } else if (r.quiz) {
         setQuizMsg(null);
       }
-      if (r.onboarding.complete) window.scrollTo({ top: 0, behavior: "smooth" });
+      if (r.onboarding.complete) window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });
     } catch (e) {
       setErr({ step, msg: (e as Error).message });
     }

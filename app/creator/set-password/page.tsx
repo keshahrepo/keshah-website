@@ -25,7 +25,7 @@ const box: React.CSSProperties = {
 
 export default function SetPasswordPage() {
   return (
-    <div style={{ minHeight: "100vh", background: "#000", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+    <div style={{ minHeight: "100dvh", background: "#000", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
       <div style={{ width: "100%", maxWidth: 380 }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <h1 style={{ margin: "0 0 10px", display: "flex", justifyContent: "center" }}><img src="/images/keshah-wordmark-white.png" alt="KESHAH" width={96} height={30} style={{ display: "block", height: 30, width: "auto" }} /></h1>

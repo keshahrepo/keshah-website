@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { adoptedSignatureText } from "@/lib/creators/signature";
-import { Button, C, Card, buttonStyle, Eyebrow, Field, H, Msg, P, api, inputStyle } from "./ui";
+import { Button, C, Card, buttonStyle, Eyebrow, Field, H, Msg, P, api, inputStyle, Skel } from "./ui";
 
 interface ContractInfo {
   status: "none" | "sent" | "signed";
@@ -38,7 +38,7 @@ export function ContractSigner({ onSigned, compact }: { onSigned?: () => void; c
   }, []);
   useEffect(load, [load]);
 
-  if (!c) return <P style={{ marginBottom: 0 }}>{err ?? "Loading..."}</P>;
+  if (!c) return err ? <P style={{ marginBottom: 0 }}>{err}</P> : <><Skel h={14} style={{ marginBottom: 12 }} /><Skel h={14} style={{ marginBottom: 12 }} /><Skel h={14} w="60%" /></>;
 
   if (c.status === "none" || (c.status === "sent" && !c.document_url)) {
     return <P style={{ marginBottom: 0 }}>Your contract is being prepared. We&apos;ll email you when it&apos;s ready to sign.</P>;
