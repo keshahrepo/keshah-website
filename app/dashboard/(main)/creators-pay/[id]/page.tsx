@@ -18,7 +18,7 @@ import {
   card,
   fileUrl,
   fmtUsd,
-  fmtUsdShort,
+  fmtMoney,
   h3,
   input,
   muted,
@@ -95,6 +95,46 @@ interface Claim {
   screenshot_path?: string;
   status: string;
   admin_note?: string;
+  source?: "auto" | "manual";
+}
+interface PostSync {
+  last_run_at?: string;
+  last_ok_at?: string;
+  last_error?: string | null;
+  last_error_at?: string | null;
+  consecutive_failures: number;
+  credits_remaining?: number | null;
+  last_deep_at?: string;
+}
+interface DetectedDay {
+  date: string;
+  weekday: boolean;
+  tiktok: number;
+  instagram: number;
+  posted: boolean;
+  views: number;
+}
+interface PostRow {
+  id: string;
+  platform: "tiktok" | "instagram";
+  url: string;
+  posted_at: string;
+  local_date: string;
+  caption: string;
+  views: number;
+  pinned: boolean;
+  crossed_100k_at: string | null;
+  crossed_1m_at: string | null;
+}
+/** GET /api/admin/creators/:id/posts?month= */
+interface PostsData {
+  month: string;
+  timezone: string;
+  handles: { tiktok: string; instagram: string };
+  post_sync: PostSync | null;
+  totals: { posts: number; views: number; posted_days: number };
+  days: DetectedDay[];
+  posts: PostRow[];
 }
 interface Detail {
   creator: Creator;
@@ -148,13 +188,23 @@ function CreatorDetail() {
   const [month, setMonth] = useState(sp.get("month") || new Date().toISOString().slice(0, 7));
   const [d, setD] = useState<Detail | null>(null);
   const [err, setErr] = useState("");
+  const [posts, setPosts] = useState<PostsData | null>(null);
+  const [postsErr, setPostsErr] = useState("");
+
+  const loadPosts = useCallback(() => {
+    setPostsErr("");
+    api<PostsData>(`/api/admin/creators/${id}/posts?month=${month}`)
+      .then(setPosts)
+      .catch((e) => setPostsErr(String(e.message ?? e)));
+  }, [id, month]);
 
   const load = useCallback(() => {
     setErr("");
     api<Detail>(`/api/admin/creators/${id}?month=${month}`)
       .then(setD)
       .catch((e) => setErr(String(e.message ?? e)));
-  }, [id, month]);
+    loadPosts();
+  }, [id, month, loadPosts]);
 
   useEffect(() => {
     load();
@@ -187,12 +237,12 @@ function CreatorDetail() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 24 }}>
         <MetricCard
           label="Level"
-          value={d.summary ? `${fmtUsdShort(d.summary.levelBaseCents)}/mo` : "–"}
+          value={d.summary ? `${fmtMoney(d.summary.levelBaseCents)}/mo` : "–"}
           subtitle={d.completedMonths !== null ? `${d.completedMonths} completed months` : "Pay starts on the first posting day"}
         />
         <MetricCard
           label="Next level"
-          value={d.nextLevel?.nextBaseCents ? `${fmtUsdShort(d.nextLevel.nextBaseCents)}/mo` : d.summary ? "Top" : "–"}
+          value={d.nextLevel?.nextBaseCents ? `${fmtMoney(d.nextLevel.nextBaseCents)}/mo` : d.summary ? "Top" : "–"}
           subtitle={d.nextLevel?.earliestMonth ? `earliest ${d.nextLevel.earliestMonth}` : undefined}
         />
         <MetricCard
@@ -202,8 +252,8 @@ function CreatorDetail() {
         />
         <MetricCard
           label={`Owed ${month}`}
-          value={fmtUsd(d.summary?.totalCents ?? 0)}
-          subtitle={d.summary ? `base ${fmtUsd(d.summary.baseDueCents)}` : undefined}
+          value={fmtMoney(d.summary?.totalCents ?? 0)}
+          subtitle={d.summary ? `base ${fmtMoney(d.summary.baseDueCents)}` : undefined}
         />
         <MetricCard
           label="Trials / paid"
@@ -214,7 +264,8 @@ function CreatorDetail() {
       </div>
 
       <AcceptPanel c={c} isNew={sp.get("new") === "1"} reload={load} />
-      <PostingLog d={d} />
+      <PostingLog d={d} detected={posts?.month === d.month ? posts.days : []} />
+      <Videos creatorId={c.id} month={d.month} data={posts?.month === d.month ? posts : null} err={postsErr} reload={load} />
       <DaysOff d={d} reload={load} />
       <BonusClaims d={d} reload={load} />
       <Adjustments d={d} reload={load} />
@@ -656,8 +707,9 @@ function ContractW9({ c, events, reload }: { c: Creator; events: Detail["contrac
 
 // ---------------------------------------------------------------- posting log
 
-function PostingLog({ d }: { d: Detail }) {
+function PostingLog({ d, detected }: { d: Detail; detected: DetectedDay[] }) {
   const [open, setOpen] = useState<string | null>(null);
+  const found = new Map(detected.map((x) => [x.date, x]));
   const first = d.calendar[0]?.date;
   const lead = first ? (new Date(`${first}T00:00:00Z`).getUTCDay() + 6) % 7 : 0; // Mon = 0
   const posting = new Map(d.postingDays.map((p) => [p.date, p]));
@@ -699,6 +751,11 @@ function PostingLog({ d }: { d: Detail }) {
                 {st.label}
                 {day.videos > 0 && day.state !== "posted" ? ` · ${day.videos}/5` : ""}
               </div>
+              {found.get(day.date) && (
+                <div style={{ fontSize: 10, opacity: 0.55 }} title="Found by the post sync: TikToks / Reels">
+                  found {found.get(day.date)!.tiktok}/{found.get(day.date)!.instagram}
+                </div>
+              )}
             </button>
           );
         })}
@@ -747,6 +804,176 @@ function PostingLog({ d }: { d: Detail }) {
             </ol>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- videos (post sync)
+
+const fmtUtc = (iso?: string | null) => (iso ? `${iso.replace("T", " ").slice(0, 16)} UTC` : "never");
+
+function Videos({
+  creatorId,
+  month,
+  data,
+  err,
+  reload,
+}: {
+  creatorId: string;
+  month: string;
+  data: PostsData | null;
+  err: string;
+  reload: () => void;
+}) {
+  const [busy, setBusy] = useState<"" | "shallow" | "deep">("");
+  const [confirmDeep, setConfirmDeep] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [syncErr, setSyncErr] = useState("");
+
+  async function sync(mode: "shallow" | "deep") {
+    setBusy(mode);
+    setMsg("");
+    setSyncErr("");
+    setConfirmDeep(false);
+    try {
+      const r = await api<{
+        result: { ok: boolean; skipped?: string; platforms: Record<string, { ok: boolean; posts: number; error?: string }>; days_written: string[]; claims_created: string[]; claims_upgraded: string[]; status_changed_to?: string };
+      }>(`/api/admin/creators/${creatorId}/posts${mode === "deep" ? "?mode=deep" : ""}`, { method: "POST" });
+      const x = r.result;
+      if (x.skipped) setSyncErr(`Not synced: ${x.skipped}.`);
+      else {
+        const found = Object.values(x.platforms).reduce((n, p) => n + (p?.posts ?? 0), 0);
+        const failed = Object.entries(x.platforms).filter(([, p]) => !p.ok).map(([k, p]) => `${k}: ${p.error}`);
+        setMsg(
+          [
+            `Synced. Saw ${found} posts`,
+            x.days_written.length ? `filled ${x.days_written.length} day${x.days_written.length === 1 ? "" : "s"}` : "",
+            x.claims_created.length + x.claims_upgraded.length ? `${x.claims_created.length + x.claims_upgraded.length} bonus${x.claims_created.length + x.claims_upgraded.length === 1 ? "" : "es"} added` : "",
+            x.status_changed_to ? `status is now ${x.status_changed_to}` : "",
+          ]
+            .filter(Boolean)
+            .join(", ") + ".",
+        );
+        if (failed.length) setSyncErr(failed.join("; "));
+      }
+      reload();
+    } catch (e) {
+      setSyncErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  const ps = data?.post_sync ?? null;
+  const failing = (ps?.consecutive_failures ?? 0) >= 3;
+  const noHandles = !!data && !data.handles.tiktok && !data.handles.instagram;
+
+  return (
+    <div style={card}>
+      <h3 style={h3}>Videos · {month}</h3>
+      {err && <ErrorText>{err}</ErrorText>}
+      {!data && !err && <p style={muted}>Loading...</p>}
+      {data && (
+        <>
+          <div style={{ fontSize: 13, display: "flex", gap: "4px 14px", flexWrap: "wrap", marginBottom: 6 }}>
+            {!ps ? (
+              <span style={muted}>Not synced yet.</span>
+            ) : (
+              <>
+                <span>
+                  <span style={muted}>Last OK</span> {fmtUtc(ps.last_ok_at)}
+                </span>
+                {ps.last_error && ps.last_error_at && (
+                  <span>
+                    <span style={muted}>Last error</span> {fmtUtc(ps.last_error_at)}: <span style={{ color: "#f87171" }}>{ps.last_error}</span>
+                  </span>
+                )}
+                <span style={{ color: failing ? "#f87171" : undefined, fontWeight: failing ? 600 : undefined }}>
+                  <span style={failing ? undefined : muted}>Failures in a row</span> {ps.consecutive_failures ?? 0}
+                </span>
+                <span>
+                  <span style={muted}>Credits left</span> {ps.credits_remaining != null ? ps.credits_remaining.toLocaleString() : "unknown"}
+                </span>
+              </>
+            )}
+          </div>
+          <p style={{ ...muted, marginBottom: 12 }}>
+            {noHandles
+              ? "Add their TikTok and Instagram handles in Profile to start tracking videos."
+              : `Tracking ${[data.handles.tiktok && `TikTok @${data.handles.tiktok}`, data.handles.instagram && `Instagram @${data.handles.instagram}`].filter(Boolean).join(" and ")}. Synced every 6 hours, with a deeper look back once a day.`}
+          </p>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+            <Btn kind="primary" onClick={() => sync("shallow")} disabled={!!busy || noHandles}>
+              {busy === "shallow" ? "Syncing..." : "Sync now"}
+            </Btn>
+            <span style={muted}>Uses 2 to 6 credits</span>
+            {confirmDeep ? (
+              <>
+                <Btn onClick={() => sync("deep")} disabled={!!busy}>
+                  Confirm deep sync
+                </Btn>
+                <Btn onClick={() => setConfirmDeep(false)} disabled={!!busy}>
+                  Cancel
+                </Btn>
+              </>
+            ) : (
+              <Btn onClick={() => setConfirmDeep(true)} disabled={!!busy || noHandles}>
+                {busy === "deep" ? "Deep syncing..." : "Deep sync"}
+              </Btn>
+            )}
+            <span style={muted}>Deep sync looks back 32 days and uses about 30 credits</span>
+          </div>
+          {msg && <p style={{ fontSize: 13, color: "#4ade80", margin: "0 0 8px" }}>{msg}</p>}
+          <ErrorText>{syncErr}</ErrorText>
+          <p style={{ ...muted, marginBottom: 8 }}>
+            {data.totals.posts} video{data.totals.posts === 1 ? "" : "s"} · {data.totals.views.toLocaleString()} views · {data.totals.posted_days} day
+            {data.totals.posted_days === 1 ? "" : "s"} with 5 on both apps
+          </p>
+          {data.posts.length > 0 && (
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
+                <thead>
+                  <tr>
+                    <th style={th}>Date</th>
+                    <th style={th}>Platform</th>
+                    <th style={th}>Caption</th>
+                    <th style={{ ...th, textAlign: "right" }}>Views</th>
+                    <th style={th}>Bonus</th>
+                    <th style={th}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.posts.map((p) => (
+                    <tr key={p.id}>
+                      <td style={{ ...td, whiteSpace: "nowrap" }}>
+                        {p.local_date}
+                        <div style={muted}>
+                          {new Date(p.posted_at).toLocaleTimeString("en-US", { timeZone: data.timezone || "UTC", hour: "numeric", minute: "2-digit" })}
+                        </div>
+                      </td>
+                      <td style={td}>
+                        <a href={p.url} target="_blank" rel="noreferrer" style={{ color: "#60a5fa" }}>
+                          {p.platform === "tiktok" ? "TikTok" : "Instagram"}
+                        </a>
+                      </td>
+                      <td style={{ ...td, maxWidth: 320 }}>
+                        <span title={p.caption} style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: p.caption ? undefined : "rgba(255,255,255,0.3)" }}>
+                          {p.caption || "no caption"}
+                        </span>
+                      </td>
+                      <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{p.views.toLocaleString()}</td>
+                      <td style={td}>
+                        {p.crossed_1m_at ? <Pill color="#4ade80">1M</Pill> : p.crossed_100k_at ? <Pill color="#4ade80">100K</Pill> : <span style={muted}>–</span>}
+                      </td>
+                      <td style={td}>{p.pinned && <Pill color="#fbbf24">Pinned</Pill>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -810,7 +1037,9 @@ function BonusClaims({ d, reload }: { d: Detail; reload: () => void }) {
   return (
     <div style={card}>
       <h3 style={h3}>Bonus claims</h3>
-      <p style={{ ...muted, marginTop: -6, marginBottom: 10 }}>$15 at 100K, $100 total at 1M, if crossed within 30 days of posting. Paid in the month crossed.</p>
+      <p style={{ ...muted, marginTop: -6, marginBottom: 10 }}>
+        $15 at 100K, $100 total at 1M, if crossed within 30 days of posting. Paid in the month crossed. Auto claims are added and approved by the post sync.
+      </p>
       {!d.bonusClaims.length && <p style={muted}>No claims.</p>}
       {d.bonusClaims.length > 0 && (
         <div style={{ overflowX: "auto" }}>
@@ -836,6 +1065,11 @@ function BonusClaims({ d, reload }: { d: Detail; reload: () => void }) {
                       <a href={b.video_url} target="_blank" rel="noreferrer" style={{ color: "#60a5fa" }}>
                         {b.platform === "tiktok" ? "TikTok" : "Instagram"}
                       </a>
+                      {b.source === "auto" && (
+                        <span style={{ marginLeft: 6 }}>
+                          <Pill color="#60a5fa">Auto</Pill>
+                        </span>
+                      )}
                       {b.screenshot_path && (
                         <>
                           {" · "}
@@ -956,7 +1190,7 @@ function Adjustments({ d, reload }: { d: Detail; reload: () => void }) {
       {d.adjustments.map((a) => (
         <div key={a.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
           <span style={{ ...muted, minWidth: 64 }}>{a.month}</span>
-          <span style={{ fontSize: 13, minWidth: 80, color: a.amount_cents < 0 ? "#f87171" : "#4ade80" }}>{fmtUsd(a.amount_cents)}</span>
+          <span style={{ fontSize: 13, minWidth: 80, color: a.amount_cents < 0 ? "#f87171" : "#4ade80" }}>{fmtMoney(a.amount_cents)}</span>
           <span style={{ fontSize: 13, flex: 1 }}>{a.note}</span>
           <Btn kind="danger" onClick={() => remove(a.id)}>
             Remove
@@ -1005,7 +1239,7 @@ function Invoices({ d, reload }: { d: Detail; reload: () => void }) {
       <h3 style={h3}>Invoices</h3>
       {d.summary && (
         <p style={{ ...muted, marginTop: -6, marginBottom: 10 }}>
-          Calculated for {d.month} so far: {fmtUsd(d.summary.totalCents)} ({d.draftLines.length} line{d.draftLines.length === 1 ? "" : "s"}). The creator
+          Calculated for {d.month} so far: {fmtMoney(d.summary.totalCents)} ({d.draftLines.length} line{d.draftLines.length === 1 ? "" : "s"}). The creator
           submits invoices from their portal.
         </p>
       )}

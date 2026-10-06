@@ -32,6 +32,7 @@ import {
   type MonthSummary,
 } from "./pay";
 import { FOUNDER_VIDEOS, QUIZ, WARMUP_DAYS } from "./onboarding-content";
+import { postKey } from "./scrape";
 import { isValidTimezone } from "./time";
 import type {
   Adjustment,
@@ -338,6 +339,7 @@ function toPostingDay(id: string, d: DocumentData): PostingDay {
         }))
       : [],
     logged_at: toIso(d.logged_at) ?? "",
+    ...(Array.isArray(d.auto_urls) && d.auto_urls.length ? { auto_urls: d.auto_urls.map(String) } : {}),
   };
 }
 
@@ -550,16 +552,68 @@ export async function savePostingDay(
   }
   const ref = creatorRef(id).collection("posting_days").doc(date);
   const existing = await ref.get();
+  // Keep the "found automatically" marks for links the post sync added that are still in the log.
+  const prevAuto: string[] = existing.exists && Array.isArray(existing.data()!.auto_urls) ? existing.data()!.auto_urls.map(String) : [];
+  const keyOf = (u: string, p: Platform) => postKey(u, p);
+  const savedKeys = new Set(clean.flatMap((v) => [v.tiktok_url && keyOf(v.tiktok_url, "tiktok"), v.instagram_url && keyOf(v.instagram_url, "instagram")]).filter(Boolean));
+  const autoUrls = prevAuto.filter((u) => savedKeys.has(keyOf(u, /tiktok\.com/i.test(u) ? "tiktok" : "instagram")));
   const doc: PostingDay & { first_logged_at: string; on_time: boolean } = {
     date,
     videos: clean,
     logged_at: nowIso,
     first_logged_at: (existing.exists && existing.data()!.first_logged_at) || nowIso,
     on_time: isOnTime(nowIso, date, creator.timezone),
+    ...(autoUrls.length
+      ? { auto_urls: autoUrls, source: "manual+auto" as const, ...(existing.data()!.auto_synced_at ? { auto_synced_at: existing.data()!.auto_synced_at } : {}) }
+      : {}),
   };
   await ref.set(doc);
   if (clean.length && !hasStarted(creator)) await setStartDateIfUnset(id, date);
-  return { date, videos: clean, logged_at: nowIso };
+  await advanceCreatorStatus(id).catch((e) => console.error("creator status advance failed:", e));
+  return { date, videos: clean, logged_at: nowIso, ...(autoUrls.length ? { auto_urls: autoUrls } : {}) };
+}
+
+/** Pure rule behind advanceCreatorStatus (exported for tests). */
+export function nextAutoStatus(from: CreatorStatus, onboarded: boolean, postingDays: PostingDay[]): CreatorStatus {
+  if (from !== "onboarding" && from !== "trial") return from;
+  if (from === "onboarding" && !onboarded) return from;
+  return trialStatus(postingDays).isInTrial ? "trial" : "active";
+}
+
+/**
+ * Automatic status steps, never backwards and never over an admin's choice:
+ *   onboarding -> trial   once every Getting started step is done
+ *   trial      -> active  once the trial is over (TRIAL_POSTED_DAYS posted
+ *                         weekdays, exactly as pay.ts trialStatus counts them)
+ * Only moves from those two statuses (leaving / ended / anything an admin set
+ * is left alone). Idempotent: safe to call after every onboarding step,
+ * posting-day save and post sync. Returns the new status when it changed.
+ */
+export async function advanceCreatorStatus(id: string, opts: { db?: Firestore; now?: Date } = {}): Promise<CreatorStatus | null> {
+  const db = opts.db ?? fs();
+  const ref = db.collection(CREATORS_COLLECTION).doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) return null;
+  const d = snap.data()!;
+  const from = mapCreatorStatus(d.status);
+  if (from !== "onboarding" && from !== "trial") return null;
+  let onboarded = true;
+  if (from === "onboarding") {
+    const onb = await ref.collection("onboarding").doc("state").get();
+    onboarded = onb.exists && isOnboarded(onb.data() as Partial<OnboardingState>, { contractSigned: d.contract?.status === "signed" });
+    if (!onboarded) return null;
+  }
+  const days = await ref.collection("posting_days").get();
+  const to = nextAutoStatus(from, onboarded, days.docs.map((x) => toPostingDay(x.id, x.data())));
+  if (to === from) return null;
+  const nowIso = (opts.now ?? new Date()).toISOString();
+  const changed = await db.runTransaction(async (tx) => {
+    const cur = await tx.get(ref);
+    if (!cur.exists || cur.data()!.status !== d.status) return false; // someone else changed it meanwhile
+    tx.update(ref, { status: to, status_changed_at: nowIso, status_auto: { from, to, at: nowIso } });
+    return true;
+  });
+  return changed ? to : null;
 }
 
 /** Pay starts on the first posting day: set start_date once, only if still unset. */
@@ -776,6 +830,7 @@ export async function markContractStepDone(id: string, at: string = new Date().t
     state.ready_at = at;
   }
   await onboardingRef(id).set(state);
+  if (state.completed_at) await advanceCreatorStatus(id).catch((e) => console.error("creator status advance failed:", e));
   return state;
 }
 
@@ -869,6 +924,7 @@ export async function setOnboardingStep(
     state.ready_at = now;
   }
   await onboardingRef(id).set(state);
+  if (state.completed_at) await advanceCreatorStatus(id).catch((e) => console.error("creator status advance failed:", e));
   return { state, ...(quiz ? { quiz } : {}) };
 }
 

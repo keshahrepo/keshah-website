@@ -13,6 +13,8 @@ interface Claim {
   status: "claimed" | "approved" | "rejected";
   admin_note: string | null;
   claimed_at: string | null;
+  /** "auto": added by the automatic post sync. */
+  source: "auto" | "manual";
 }
 
 const statusLabel: Record<string, string> = { claimed: "In review", approved: "Approved", rejected: "Not approved" };
@@ -72,11 +74,43 @@ export default function BonusTab({ today }: { today: string }) {
   return (
     <div>
       <Card>
-        <Eyebrow>Claim a views bonus</Eyebrow>
+        <Eyebrow>Views bonuses</Eyebrow>
         <P>
-          $15 when a video passes 100K views and $100 total when it passes 1M, within 30 days of posting. Each platform counts
+          You get $15 when a video passes 100K views and $100 in total when it passes 1M, within 30 days of posting. Each platform counts
           separately.
         </P>
+        <P style={{ marginBottom: 0 }}>
+          Bonuses are now added for you automatically. We check your videos every few hours, and when one passes 100K or 1M views within
+          30 days it shows up here and on your invoice. You only need to send a claim if one is missing.
+        </P>
+      </Card>
+
+      <Card>
+        <Eyebrow>Your bonuses</Eyebrow>
+        {claims === null && <P style={{ marginBottom: 0 }}>Loading...</P>}
+        {claims?.length === 0 && <P style={{ marginBottom: 0 }}>No bonuses yet.</P>}
+        {claims?.map((c) => (
+          <div key={c.id} style={{ padding: "10px 0", borderTop: C.border }}>
+            <Row>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>
+                {c.platform === "tiktok" ? "TikTok" : "Instagram"} · {c.views_claimed.toLocaleString()} views
+              </div>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                {c.source === "auto" && <Pill color={C.dim}>Automatic</Pill>}
+                <Pill color={statusColor[c.status]}>{statusLabel[c.status]}</Pill>
+              </div>
+            </Row>
+            <div style={{ fontSize: 12, color: C.faint, marginTop: 4, wordBreak: "break-all" }}>
+              Posted {fmtDateShort(c.posted_on)} · {c.video_url}
+            </div>
+            {c.admin_note && c.source !== "auto" && <div style={{ fontSize: 13, color: C.dim, marginTop: 4 }}>{c.admin_note}</div>}
+          </div>
+        ))}
+      </Card>
+
+      <Card>
+        <Eyebrow>Missing a bonus?</Eyebrow>
+        <P>If a video passed 100K or 1M views and it isn&apos;t in your list above after a day, claim it here. A screenshot of the views helps us check it faster.</P>
         <form onSubmit={submit}>
           <Field label="Platform">
             <div style={{ display: "flex", gap: 8 }}>
@@ -114,26 +148,6 @@ export default function BonusTab({ today }: { today: string }) {
             {busy ? "Sending..." : "Send claim"}
           </Button>
         </form>
-      </Card>
-
-      <Card>
-        <Eyebrow>Your claims</Eyebrow>
-        {claims === null && <P style={{ marginBottom: 0 }}>Loading...</P>}
-        {claims?.length === 0 && <P style={{ marginBottom: 0 }}>No claims yet.</P>}
-        {claims?.map((c) => (
-          <div key={c.id} style={{ padding: "10px 0", borderTop: C.border }}>
-            <Row>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>
-                {c.platform === "tiktok" ? "TikTok" : "Instagram"} · {c.views_claimed.toLocaleString()} views
-              </div>
-              <Pill color={statusColor[c.status]}>{statusLabel[c.status]}</Pill>
-            </Row>
-            <div style={{ fontSize: 12, color: C.faint, marginTop: 4, wordBreak: "break-all" }}>
-              Posted {fmtDateShort(c.posted_on)} · {c.video_url}
-            </div>
-            {c.admin_note && <div style={{ fontSize: 13, color: C.dim, marginTop: 4 }}>{c.admin_note}</div>}
-          </div>
-        ))}
       </Card>
     </div>
   );

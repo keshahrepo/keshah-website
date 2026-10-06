@@ -39,6 +39,7 @@ import type { DocumentData } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { emailConfigured, sendEmail } from "@/lib/email";
 import { CREATORS_COLLECTION, CreatorDataError, DEFAULT_TIMEZONE, STORAGE_BUCKET, markContractStepDone } from "./db";
+import { adoptedSignatureText } from "./signature";
 import { isValidTimezone } from "./time";
 import type { ContractAudit, ContractEvent, ContractSettings, ContractTemplate, CreatorContract } from "./types";
 
@@ -497,7 +498,8 @@ export async function signContract(
     countersigner_title: settings.founder_title,
     entity_name: settings.entity_name,
     signature_style: SIGNATURE_STYLE,
-    signature_adopted_text: typed,
+    // Typed text stays as typed above; the drawn signature is Title Case when typed all lower/upper.
+    signature_adopted_text: adoptedSignatureText(typed),
     ...(founder.kind === "drawn"
       ? { countersignature_style: "drawn image", countersignature_sha256: sha256Hex(founder.png) }
       : { countersignature_style: SIGNATURE_STYLE, countersignature_adopted_text: founder.text, countersignature_adopted_at: founder.adopted_at }),
@@ -925,6 +927,8 @@ export async function getSigningInfo(id: string): Promise<{
   pdf_path: string | null;
   signed_sha256: string | null;
   document_id: string | null;
+  /** True only when the signed copy was actually emailed to the creator (an "emailed" event for this signature). */
+  emailed_copy: boolean;
 }> {
   const snap = await creatorRef(id).get();
   if (!snap.exists) throw new CreatorDataError("Creator not found", 404);
@@ -940,5 +944,11 @@ export async function getSigningInfo(id: string): Promise<{
     pdf_path: c.pdf_path ?? null,
     signed_sha256: c.signed_sha256 ?? null,
     document_id: c.audit?.document_id ?? null,
+    emailed_copy: status === "signed" && !!c.signed_sha256 ? await creatorCopyEmailed(id, c.signed_sha256) : false,
   };
+}
+
+async function creatorCopyEmailed(id: string, signedSha: string): Promise<boolean> {
+  const snap = await creatorRef(id).collection("contract_events").where("type", "==", "emailed").get();
+  return snap.docs.some((d) => d.data().signed_sha256 === signedSha && String(d.data().detail ?? "").startsWith("creator:"));
 }

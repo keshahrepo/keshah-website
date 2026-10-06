@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
       signed_at: info.signed_at,
       signed_sha256: info.signed_sha256,
       document_id: info.document_id,
+      emailed_copy: info.emailed_copy,
       template: info.template,
       // Signed copy: short-lived link. Unsigned: streamed through our API (never a public URL).
       download_url: info.pdf_path ? await signedReadUrl(info.pdf_path, 15) : null,

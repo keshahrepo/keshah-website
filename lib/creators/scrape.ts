@@ -12,6 +12,15 @@ import type { Platform } from "./types";
 
 export const SCRAPECREATORS_BASE = "https://api.scrapecreators.com";
 
+/**
+ * Local test override: SCRAPECREATORS_BASE_URL may point at a mock server, but
+ * only on localhost, so a stray setting can never send the API key elsewhere.
+ */
+function apiBase(): string {
+  const o = process.env.SCRAPECREATORS_BASE_URL ?? "";
+  return /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(o) ? o : SCRAPECREATORS_BASE;
+}
+
 /** One post, normalised across platforms. */
 export interface ScrapedPost {
   platform: Platform;
@@ -159,10 +168,10 @@ function pageUrl(platform: Platform, handle: string, cursor: string | null): str
   const q = new URLSearchParams({ handle: cleanHandle(handle) });
   if (platform === "tiktok") {
     if (cursor) q.set("max_cursor", cursor);
-    return `${SCRAPECREATORS_BASE}/v3/tiktok/profile/videos?${q}`;
+    return `${apiBase()}/v3/tiktok/profile/videos?${q}`;
   }
   if (cursor) q.set("max_id", cursor);
-  return `${SCRAPECREATORS_BASE}/v1/instagram/user/reels?${q}`;
+  return `${apiBase()}/v1/instagram/user/reels?${q}`;
 }
 
 async function getJson(url: string, apiKey: string, fetchImpl: typeof fetch): Promise<unknown> {

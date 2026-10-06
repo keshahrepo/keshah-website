@@ -31,6 +31,7 @@ export async function handlePostSyncCron(req: Request, mode: SyncMode): Promise<
         posted_days_detected: x.posted_days_detected,
         days_written: x.days_written,
         start_date_set: x.start_date_set,
+        status_changed_to: x.status_changed_to,
         claims_created: x.claims_created,
         claims_upgraded: x.claims_upgraded,
       })),

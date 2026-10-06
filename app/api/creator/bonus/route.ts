@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
         has_screenshot: !!c.screenshot_path,
         crossed_100k_on: c.crossed_100k_on ?? null,
         crossed_1m_on: c.crossed_1m_on ?? null,
+        source: c.source === "auto" ? "auto" : "manual",
       })),
     });
   } catch (e) {

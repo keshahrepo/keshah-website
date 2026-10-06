@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { adoptedSignatureText } from "@/lib/creators/signature";
 import { Button, C, Card, Eyebrow, Field, H, Msg, P, api, inputStyle } from "./ui";
 
 interface ContractInfo {
@@ -8,6 +9,8 @@ interface ContractInfo {
   signed_at: string | null;
   signed_sha256: string | null;
   document_id: string | null;
+  /** The signed copy really was emailed (not just attempted). */
+  emailed_copy: boolean;
   template: { version: string; title: string; pages: number } | null;
   download_url: string | null;
   document_url: string | null;
@@ -57,8 +60,8 @@ export function ContractSigner({ onSigned, compact }: { onSigned?: () => void; c
     return (
       <>
         <P>
-          Signed{c.signed_at ? ` on ${new Date(c.signed_at).toLocaleDateString(undefined, { dateStyle: "long" })}` : ""}. A copy was emailed to
-          you.
+          Signed{c.signed_at ? ` on ${new Date(c.signed_at).toLocaleDateString(undefined, { dateStyle: "long" })}` : ""}.
+          {c.emailed_copy ? " A copy was emailed to you." : c.download_url ? " You can download your copy here any time." : ""}
         </P>
         {c.download_url && (
           <a href={c.download_url} target="_blank" rel="noreferrer" style={linkStyle}>
@@ -154,7 +157,7 @@ export function ContractSigner({ onSigned, compact }: { onSigned?: () => void; c
                 borderBottom: "1px solid #0d1a5966",
               }}
             >
-              {name.trim().replace(/\s+/g, " ")}
+              {adoptedSignatureText(name)}
             </div>
           </div>
         </div>

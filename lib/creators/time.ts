@@ -33,6 +33,19 @@ export function isValidTimezone(tz: string): boolean {
   }
 }
 
+/**
+ * Money for UI text: "$650", "$1,100", "$88.64" (cents only when non-zero).
+ * Invoices, the printable invoice and CSVs use fmtUsd (always 2 decimals).
+ */
+export function fmtMoney(cents: number | null | undefined): string {
+  const c = Math.round(cents ?? 0);
+  const sign = c < 0 ? "-" : "";
+  const abs = Math.abs(c);
+  const frac = abs % 100 === 0 ? 0 : 2;
+  return `${sign}$${(abs / 100).toLocaleString("en-US", { minimumFractionDigits: frac, maximumFractionDigits: frac })}`;
+}
+
+/** Full-cents money for invoices and records: "$650.00". */
 export function fmtUsd(cents: number): string {
   const sign = cents < 0 ? "-" : "";
   return `${sign}$${(Math.abs(cents) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

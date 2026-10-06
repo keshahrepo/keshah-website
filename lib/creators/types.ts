@@ -236,9 +236,10 @@ export interface PostingDay {
   /** Last save. */
   logged_at: IsoInstant;
   /**
-   * Stored doc only (not returned by db.toPostingDay): "auto" when the post sync
-   * created the day, "manual+auto" when it filled gaps in a creator's log.
-   * Absent = saved by the creator. auto_urls lists the links the sync added.
+   * "auto" when the post sync created the day, "manual+auto" when it filled
+   * gaps in a creator's log (stored doc only). Absent = saved by the creator.
+   * auto_urls lists the links the sync added (db.toPostingDay returns it, and
+   * savePostingDay keeps the ones still in the log).
    */
   source?: "auto" | "manual+auto";
   auto_urls?: string[];

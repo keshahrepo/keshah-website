@@ -32,7 +32,7 @@
 import type { Firestore } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { emailConfigured, sendEmail } from "@/lib/email";
-import { getCreator, getOnboarding, isOnboarded, isYyyyMmDd, listCreators } from "./db";
+import { advanceCreatorStatus, getCreator, getOnboarding, isOnboarded, isYyyyMmDd, listCreators } from "./db";
 import { BONUS_WINDOW_DAYS, VIDEOS_PER_WEEKDAY, isWeekday, localDate } from "./pay";
 import { fetchRecentPosts, postKey, type FetchPostsResult, type ScrapedPost } from "./scrape";
 import type {
@@ -340,6 +340,8 @@ export interface CreatorSyncResult {
   mode: SyncMode;
   /** Pages fetched by the most recent DEEP run (this run if deep), for the credit estimate. */
   deep_pages_last: number;
+  /** Set when this sync moved the creator's status (trial -> active, ...). */
+  status_changed_to?: string;
 }
 
 function firestore(deps: SyncDeps): Firestore {
@@ -537,6 +539,14 @@ export async function syncCreatorPosts(creatorOrId: string | CreatorProfile, dep
   }
 
   await runBonuses();
+
+  // Status steps (onboarding -> trial -> active). One doc read for creators past trial. Never fails the sync.
+  try {
+    const st = await advanceCreatorStatus(creator.id, { db, now });
+    if (st) result.status_changed_to = st;
+  } catch (e) {
+    log(`[creator-posts] ${creator.name} (${creator.id}) status advance failed: ${errMsg(e)}`);
+  }
 
   // 5. health
   const prev = (creatorRaw.post_sync ?? {}) as Partial<PostSyncState>;

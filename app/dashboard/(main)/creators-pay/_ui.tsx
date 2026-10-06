@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type CSSProperties, type ReactNode } from "react";
+import { fmtMoney as sharedFmtMoney } from "@/lib/creators/time";
 
 // Shared bits for the Creator Pay admin section. Styling mirrors the rest
 // of the dashboard: black ground, translucent white cards, 12–13px text.
@@ -54,11 +55,11 @@ export function fmtUsd(cents: number | null | undefined): string {
   return `${sign}$${(Math.abs(c) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-/** "$650/mo"-style: drops ".00" on whole dollars (for big headline numbers). */
-export function fmtUsdShort(cents: number | null | undefined): string {
-  const c = cents ?? 0;
-  return c % 100 === 0 ? fmtUsd(c).replace(/\.00$/, "") : fmtUsd(c);
-}
+/**
+ * UI money: "$650", "$88.64" (cents only when non-zero). Shared with the portal.
+ * fmtUsd above (always 2 decimals) is for invoices, payouts and records.
+ */
+export const fmtMoney = sharedFmtMoney;
 
 export function currentMonth(): string {
   return new Date().toISOString().slice(0, 7);
