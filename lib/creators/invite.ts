@@ -113,7 +113,7 @@ export function welcomeEmail(input: {
     "• Your first two weeks are a paid trial, at your normal pay.",
     "• We give you proven videos to remake, scripts and direction. You bring the energy.",
     "",
-    "Our best creators can also be invited to become Format Creators, inventing new formats for an extra $500 a month.",
+    "Our best creators can also be invited to become Format Creators, inventing the new formats everyone else uses.",
     "",
     "Everything happens in your creator portal. First, set your password (this link works once and expires in 7 days):",
     input.link,

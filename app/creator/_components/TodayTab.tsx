@@ -374,7 +374,12 @@ export default function TodayTab({ data, onSaved, onProfile }: { data: PortalDat
           i={idx + (allDone ? 1 : 0)}
           row={row}
           label={rowLabel(idx)}
-          hook={pickAt(idx)?.hook_line}
+          hook={
+            pickAt(idx)?.hook_line ??
+            (picks && !(data.creator.format_creator && CONCEPT_ROW_INDEXES.includes(idx))
+              ? "Your video for this slot is on its way. Check back soon."
+              : undefined)
+          }
           auto={isAuto(row.tiktok_url, "tiktok") || isAuto(row.instagram_url, "instagram")}
           pulse={idx === firstOpen && data.today.is_weekday && !expired}
           onOpen={() => {
