@@ -481,7 +481,7 @@ function checkUrl(raw: string, platform: Platform, label = ""): string {
   const ok = platform === "tiktok" ? /(^|\.)tiktok\.com$/.test(host) : /(^|\.)instagram\.com$/.test(host);
   if (!/^https?:$/.test(u.protocol) || !ok) {
     throw new CreatorDataError(
-      `${label}The ${platform === "tiktok" ? "TikTok" : "Instagram"} box needs a ${platform === "tiktok" ? "tiktok.com" : "instagram.com"} link.`,
+      `${label}The ${platform === "tiktok" ? "TikTok" : "Instagram"} box needs ${platform === "tiktok" ? "a tiktok.com" : "an instagram.com"} link.`,
     );
   }
   return s;

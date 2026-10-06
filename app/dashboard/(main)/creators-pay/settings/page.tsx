@@ -96,6 +96,7 @@ function Templates({ s, reload }: { s: Settings; reload: () => void }) {
   const [version, setVersion] = useState("");
   const [title, setTitle] = useState("Content Creator Agreement");
   const [file, setFile] = useState<File | null>(null);
+  const [fileKey, setFileKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [confirming, setConfirming] = useState(false);
@@ -113,6 +114,7 @@ function Templates({ s, reload }: { s: Settings; reload: () => void }) {
       await api("/api/admin/creators/settings/templates", { method: "POST", body: JSON.stringify({ version: version.trim(), title, pdf_base64 }) });
       setVersion("");
       setFile(null);
+      setFileKey((k) => k + 1); // clears the file picker
       setConfirming(false);
       reload();
     } catch (e) {
@@ -195,7 +197,7 @@ function Templates({ s, reload }: { s: Settings; reload: () => void }) {
           <input style={input} value={title} onChange={(e) => setTitle(e.target.value)} />
         </Field>
         <Field label="Final contract PDF">
-          <input type="file" accept="application/pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} style={{ ...input, padding: 6 }} />
+          <input key={fileKey} type="file" accept="application/pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} style={{ ...input, padding: 6 }} />
         </Field>
       </div>
       <ErrorText>{err}</ErrorText>

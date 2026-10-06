@@ -52,7 +52,8 @@ export default function CreatorPortal() {
         .cp-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 18px; }
         @media (min-width: 640px) {
           .cp-wrap { padding: 48px 24px 80px; }
-          .cp-tabs { grid-template-columns: repeat(6, 1fr); }
+          .cp-tabs { display: flex; }
+          .cp-tabs > button { flex: 1 1 auto; }
         }
       `}</style>
       <div className="cp-wrap">
@@ -105,7 +106,7 @@ export default function CreatorPortal() {
                   }}
                   style={{
                     minHeight: 44,
-                    padding: "0 6px",
+                    padding: "0 12px",
                     borderRadius: 999,
                     border: tab === k ? "1px solid #fff" : C.border,
                     background: tab === k ? "#fff" : "transparent",

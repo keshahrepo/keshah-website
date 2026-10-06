@@ -163,7 +163,7 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
       <div>
         <Card style={{ textAlign: "center", padding: 28 }}>
           <H style={{ fontSize: 22 }}>You&apos;re ready.</H>
-          <P>Your first posting day is the next weekday.</P>
+          <P>Log your first 5 videos on the Today tab. Your pay starts on that day.</P>
           <Button onClick={onDone} style={{ width: "100%" }}>
             Open my portal
           </Button>
