@@ -146,6 +146,8 @@ export interface FetchPostsOptions {
   sortBy?: "latest" | "popular";
   /** Extra stop rule checked after each page (all posts on that page), e.g. "nothing over 100K here". */
   stopAfterPage?: (page: ScrapedPost[]) => boolean;
+  /** Stop paging (truncated) once Date.now() passes this, so callers stay inside a request time limit. */
+  deadlineMs?: number;
   fetchImpl?: typeof fetch;
   /** Called with each response's credits_remaining (for logging). */
   onCredits?: (n: number) => void;
@@ -214,6 +216,10 @@ export async function fetchRecentPosts(
   let credits: number | null = null;
   let truncated = false;
   while (pages < maxPages) {
+    if (opts.deadlineMs && pages > 0 && Date.now() > opts.deadlineMs) {
+      truncated = true;
+      break;
+    }
     const url = pageUrl(platform, handle, cursor, opts.sortBy);
     let raw: unknown;
     try {

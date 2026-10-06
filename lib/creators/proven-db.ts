@@ -212,6 +212,9 @@ export async function findProvenVideos(opts: {
         apiKey,
         fetchImpl: opts.fetchImpl,
         sinceMs: 0, // no date stop: walk the whole profile up to the page cap
+        // Leave time to save what we found and fetch some transcripts before
+        // the request limit; the rest is picked up on the next press.
+        deadlineMs: deadline - 110_000,
         ...(src.platform === "tiktok"
           ? { sortBy: "popular" as const, maxPages: opts.tiktokMaxPages ?? SEED_TIKTOK_MAX_PAGES, stopAfterPage: (page: ScrapedPost[]) => !page.some((p) => p.views >= PROVEN_MIN_VIEWS) }
           : { maxPages: opts.instagramMaxPages ?? SEED_INSTAGRAM_MAX_PAGES }),
