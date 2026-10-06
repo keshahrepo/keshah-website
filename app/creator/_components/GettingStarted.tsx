@@ -15,6 +15,7 @@ function Step({
   done,
   current,
   doneNote,
+  note,
   children,
 }: {
   n: number;
@@ -24,6 +25,8 @@ function Step({
   current?: boolean;
   /** One line shown under a finished step's title. */
   doneNote?: string;
+  /** One line shown under an unfinished step's title while it's closed. */
+  note?: string;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState<boolean | null>(null);
@@ -73,8 +76,8 @@ function Step({
         </span>
         <span style={{ flex: 1, minWidth: 0 }}>
           <span style={{ display: "block", fontSize: 16, fontWeight: 600 }}>{title}</span>
-          {done && doneNote && !expanded && (
-            <span style={{ display: "block", fontSize: 13, color: C.faint, marginTop: 2 }}>{doneNote}</span>
+          {!expanded && (done ? doneNote : note) && (
+            <span style={{ display: "block", fontSize: 13, color: done ? C.faint : C.dim, marginTop: 2 }}>{done ? doneNote : note}</span>
           )}
         </span>
         <span aria-hidden style={{ color: C.faint, fontSize: 22, lineHeight: 1, transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>
@@ -336,7 +339,11 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
         )}
       </Step>
 
-      <Step n={6} title={`${cfg.warmup_days}-day warm-up`} done={warmDone} current={cur(6)} doneNote="All warm-up days done">
+      <Step n={6} title={`${cfg.warmup_days}-day warm-up`} done={warmDone}
+        current={cur(6)}
+        doneNote="All warm-up days done"
+        note={tickedToday ? `${warm.length} of ${cfg.warmup_days} days done. Tick the next one tomorrow.` : warm.length ? `${warm.length} of ${cfg.warmup_days} days done` : undefined}
+      >
         <P>{cfg.warmup_text}</P>
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           {Array.from({ length: cfg.warmup_days }, (_, i) => (

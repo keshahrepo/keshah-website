@@ -108,12 +108,12 @@ function SetPasswordForm() {
         Pick a password for your creator portal. You&apos;ll use it with your email to log in from now on.
       </p>
       <div style={{ marginBottom: 16 }}>
-        <label style={labelStyle}>New password</label>
-        <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} placeholder="At least 8 characters" style={inputStyle} />
+        <label htmlFor="sp-new" style={labelStyle}>New password</label>
+        <input id="sp-new" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} placeholder="At least 8 characters" style={inputStyle} />
       </div>
       <div style={{ marginBottom: 24 }}>
-        <label style={labelStyle}>Type it again</label>
-        <input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} style={inputStyle} />
+        <label htmlFor="sp-again" style={labelStyle}>Type it again</label>
+        <input id="sp-again" type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} style={inputStyle} />
       </div>
       {error && <p role="alert" style={{ color: "#f87171", fontSize: 14, marginBottom: 16, textAlign: "center" }}>{error}</p>}
       <button

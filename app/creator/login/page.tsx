@@ -53,10 +53,11 @@ export default function CreatorLoginPage() {
           padding: 28,
         }}>
           <div style={{ marginBottom: 16 }}>
-            <label style={{ fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.5)", display: "block", marginBottom: 6 }}>
+            <label style={{ fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.5)", display: "block", marginBottom: 6 }} htmlFor="cl-email">
               Email
             </label>
             <input
+              id="cl-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -80,10 +81,11 @@ export default function CreatorLoginPage() {
           </div>
 
           <div style={{ marginBottom: 24 }}>
-            <label style={{ fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.5)", display: "block", marginBottom: 6 }}>
+            <label style={{ fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.5)", display: "block", marginBottom: 6 }} htmlFor="cl-password">
               Password
             </label>
             <input
+              id="cl-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
