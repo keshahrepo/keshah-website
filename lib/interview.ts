@@ -106,7 +106,14 @@ export async function findApplicationByEmail(
     docs.push(...q.docs);
   }
   if (docs.length === 0) return null;
+  // Prefer an active application (not denied/withdrawn) so someone who
+  // re-applied after a rejection gets their video on the current one; then
+  // the most recently updated.
+  const inactive = (d: DocumentSnapshot) => ["denied", "rejected", "withdrawn"].includes(String(d.get("status") ?? ""));
   docs.sort((a, b) => {
+    const ai = inactive(a) ? 1 : 0;
+    const bi = inactive(b) ? 1 : 0;
+    if (ai !== bi) return ai - bi;
     const am = tsToMs(a.get("last_updated_at"));
     const bm = tsToMs(b.get("last_updated_at"));
     return bm - am;
