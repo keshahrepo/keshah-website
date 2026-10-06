@@ -32,7 +32,7 @@ import {
   type MonthSummary,
 } from "./pay";
 import { FOUNDER_VIDEOS, QUIZ, WARMUP_DAYS } from "./onboarding-content";
-import { postKey } from "./scrape";
+import { handleExists, postKey } from "./scrape";
 import { isValidTimezone } from "./time";
 import type {
   Adjustment,
@@ -896,6 +896,15 @@ export async function setOnboardingStep(
       const tt = normalizeHandle(payload.tiktok_handle ?? "");
       const ig = normalizeHandle(payload.instagram_handle ?? "");
       if (!tt || !ig) throw new CreatorDataError("Add both your TikTok and Instagram handles");
+      // Catch typos now rather than as a missed day later. null = couldn't
+      // check (outage, no key): save anyway.
+      const [ttOk, igOk] = await Promise.all([handleExists("tiktok", tt), handleExists("instagram", ig)]);
+      const missing = [ttOk === false ? `@${tt} on TikTok` : "", igOk === false ? `@${ig} on Instagram` : ""].filter(Boolean);
+      if (missing.length) {
+        throw new CreatorDataError(
+          `We couldn't find ${missing.join(" or ")}. Check the spelling, and make sure you've finished creating the account.`,
+        );
+      }
       await creatorRef(id).update({ tiktok_handle: tt, instagram_handle: ig });
       state.accounts_done_at = now;
       break;

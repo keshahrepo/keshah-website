@@ -242,3 +242,31 @@ export async function fetchRecentPosts(
   }
   return { posts: [...seen.values()], pages, calls, credits_remaining: credits, truncated };
 }
+
+/**
+ * Does this TikTok / Instagram account exist? true / false, or null when we
+ * can't tell (no key, network error, API trouble) so callers never block on
+ * an outage. ScrapeCreators answers 404 for unknown accounts and charges
+ * nothing for it; a found account costs 1 credit.
+ */
+export async function handleExists(
+  platform: Platform,
+  handle: string,
+  opts: { apiKey?: string; fetchImpl?: typeof fetch } = {},
+): Promise<boolean | null> {
+  const apiKey = opts.apiKey ?? process.env.SCRAPECREATORS_API_KEY;
+  if (!apiKey || !cleanHandle(handle)) return null;
+  try {
+    const res = await (opts.fetchImpl ?? fetch)(pageUrl(platform, handle, null), {
+      headers: { "x-api-key": apiKey },
+      cache: "no-store",
+    });
+    if (res.status === 404) return false;
+    if (!res.ok) return null;
+    const b = obj(await res.json().catch(() => ({})));
+    if (b.error === "not_found" || b.account_deactivated === true) return false;
+    return true;
+  } catch {
+    return null;
+  }
+}
