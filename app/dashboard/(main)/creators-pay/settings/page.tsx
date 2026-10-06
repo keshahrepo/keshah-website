@@ -75,6 +75,7 @@ export default function CreatorSettingsPage() {
           <Templates s={s} reload={load} />
           <Countersignature s={s} reload={load} />
           <PortalSettings s={s} reload={load} />
+          <GoogleWorkspaceCheck />
         </>
       )}
     </div>
@@ -387,6 +388,58 @@ function PortalSettings({ s, reload }: { s: Settings; reload: () => void }) {
         </Btn>
         {msg && <span style={{ color: "#4ade80", fontSize: 13 }}>{msg}</span>}
       </div>
+      <ErrorText>{err}</ErrorText>
+    </div>
+  );
+}
+
+interface GoogleCheck {
+  ok: boolean;
+  stage: string;
+  message: string;
+  admin_domain?: string;
+  groups_listed?: number;
+  hint?: string;
+}
+
+function GoogleWorkspaceCheck() {
+  const [r, setR] = useState<GoogleCheck | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function test() {
+    setBusy(true);
+    setErr("");
+    setR(null);
+    try {
+      setR(await api<GoogleCheck>("/api/admin/creators/google-check"));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={card}>
+      <h3 style={h3}>Google Workspace (creator inboxes)</h3>
+      <p style={{ ...muted, marginTop: 0 }}>
+        Accept creator makes a name@keshah.com Google Group for each creator. This test only reads: it checks the key, gets a token for the admin
+        account and lists up to 5 groups. Nothing is created or changed.
+      </p>
+      <Btn onClick={test} disabled={busy}>
+        {busy ? "Testing..." : "Test Google Workspace connection"}
+      </Btn>
+      {r && (
+        <div style={{ marginTop: 12, fontSize: 13, lineHeight: 1.6 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <Pill color={r.ok ? "#4ade80" : "#f87171"}>{r.ok ? "OK" : `failed at ${r.stage}`}</Pill>
+            {r.admin_domain && <span style={muted}>admin account on {r.admin_domain}</span>}
+          </div>
+          <div style={{ marginTop: 6, wordBreak: "break-word" }}>{r.message}</div>
+          {r.hint && <div style={{ ...muted, marginTop: 4 }}>{r.hint}</div>}
+        </div>
+      )}
       <ErrorText>{err}</ErrorText>
     </div>
   );

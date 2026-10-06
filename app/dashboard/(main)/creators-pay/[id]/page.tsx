@@ -57,7 +57,13 @@ interface Creator {
   tiktok_handle: string;
   instagram_handle: string;
   pay_ready: boolean;
+  accept: { steps: Partial<Record<AcceptStepKey, { status: "done" | "skipped" | "error"; at: string; detail: string }>>; last_run_at?: string };
+  accepted_at: string | null;
+  invite: { created_at: string; expires_at: string; used_at: string | null } | null;
+  has_password: boolean;
+  suggested_keshah_email: string;
 }
+type AcceptStepKey = "group" | "invite" | "contract";
 interface Line {
   kind: string;
   label: string;
@@ -205,6 +211,7 @@ function CreatorDetail() {
         <MetricCard label="Onboarding" value={`${d.onboarding.done}/${d.onboarding.total}`} />
       </div>
 
+      <AcceptPanel c={c} isNew={sp.get("new") === "1"} reload={load} />
       <PostingLog d={d} />
       <DaysOff d={d} reload={load} />
       <BonusClaims d={d} reload={load} />
@@ -212,6 +219,141 @@ function CreatorDetail() {
       <Invoices d={d} reload={load} />
       <ContractW9 c={c} events={d.contractEvents ?? []} reload={load} />
       <ProfileEditor c={c} reload={load} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- accept
+
+const ACCEPT_LABELS: [AcceptStepKey, string][] = [
+  ["group", "keshah.com inbox"],
+  ["invite", "Portal invite"],
+  ["contract", "Contract"],
+];
+const STEP_COLORS = { done: "#4ade80", skipped: "#fbbf24", error: "#f87171" } as const;
+
+function AcceptPanel({ c, isNew, reload }: { c: Creator; isNew: boolean; reload: () => void }) {
+  const steps = c.accept?.steps ?? {};
+  const allDone = ACCEPT_LABELS.every(([k]) => steps[k]?.status === "done");
+  const groupDone = steps.group?.status === "done";
+  const [address, setAddress] = useState(c.keshah_email || c.suggested_keshah_email);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [link, setLink] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [open, setOpen] = useState(!allDone || isNew);
+
+  async function run(extra: Record<string, unknown> = {}) {
+    setBusy(true);
+    setErr("");
+    setCopied(false);
+    try {
+      const body: Record<string, unknown> = { ...extra };
+      if (!groupDone && address.trim() && address.trim().toLowerCase() !== c.suggested_keshah_email) body.keshah_email = address.trim();
+      const r = await api<{ invite_link?: string }>(`/api/admin/creators/${c.id}/accept`, { method: "POST", body: JSON.stringify(body) });
+      setLink(r.invite_link ?? "");
+      reload();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function markSent() {
+    try {
+      await api(`/api/admin/creators/${c.id}/accept`, { method: "POST", body: JSON.stringify({ action: "mark_invite_sent" }) });
+      setLink("");
+      reload();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+    } catch {
+      setErr("Couldn't copy. Select the link and copy it by hand.");
+    }
+  }
+
+  return (
+    <div style={{ ...card, ...(isNew && !c.accepted_at ? { border: "1px solid rgba(96,165,250,0.5)" } : {}) }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <h3 style={{ ...h3, marginBottom: 0 }}>Accept creator</h3>
+        {c.accepted_at && <span style={muted}>accepted {c.accepted_at.slice(0, 10)}</span>}
+        {allDone && <Pill color="#4ade80">all set</Pill>}
+        {allDone && (
+          <button onClick={() => setOpen(!open)} style={{ background: "none", border: "none", color: "#60a5fa", fontSize: 12, cursor: "pointer", padding: 0, marginLeft: "auto" }}>
+            {open ? "Hide" : "Details"}
+          </button>
+        )}
+      </div>
+      {open && (
+        <div style={{ marginTop: 12 }}>
+          {isNew && !c.accepted_at && (
+            <p style={{ fontSize: 13, marginBottom: 12, color: "rgba(255,255,255,0.8)" }}>
+              Creator added. Check the inbox address, then accept to set up their keshah.com inbox, email their portal invite and send the contract.
+            </p>
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12, marginBottom: 12, alignItems: "end" }}>
+            <Field label="Inbox address" hint={groupDone ? "Group already created" : "Tried first. If it's taken, firstname.lastname@ and so on"}>
+              <input style={input} value={address} onChange={(e) => setAddress(e.target.value)} disabled={groupDone} placeholder="name@keshah.com" />
+            </Field>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <Btn kind="primary" onClick={() => run()} disabled={busy || allDone}>
+                {busy ? "Working..." : c.accepted_at ? "Retry unfinished steps" : "Accept creator"}
+              </Btn>
+              {(steps.invite || c.invite) && (
+                <Btn onClick={() => run({ resend_invite: true })} disabled={busy}>
+                  Resend invite
+                </Btn>
+              )}
+            </div>
+          </div>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <tbody>
+              {ACCEPT_LABELS.map(([k, label]) => {
+                const st = steps[k];
+                return (
+                  <tr key={k}>
+                    <td style={{ ...td, width: 150 }}>{label}</td>
+                    <td style={{ ...td, width: 90 }}>
+                      {st ? <Pill color={STEP_COLORS[st.status]}>{st.status}</Pill> : <span style={muted}>not run</span>}
+                    </td>
+                    <td style={td}>
+                      {st?.detail}
+                      {st?.at && <span style={{ ...muted, marginLeft: 8 }}>{st.at.replace("T", " ").slice(0, 16)} UTC</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {c.invite && (
+            <p style={{ ...muted, marginTop: 8 }}>
+              Set-password link: {c.invite.used_at ? `used ${c.invite.used_at.slice(0, 10)}` : `made ${c.invite.created_at.slice(0, 10)}, expires ${c.invite.expires_at.slice(0, 10)}`}
+              {c.has_password ? " · has a portal password" : " · no password yet"}
+            </p>
+          )}
+          {link && (
+            <div style={{ marginTop: 12, padding: 12, borderRadius: 8, background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.3)" }}>
+              <div style={{ fontSize: 13, marginBottom: 6 }}>
+                Set-password link (shown once{steps.invite?.status === "done" ? ", already emailed" : ". Send it to them yourself"}):
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <code style={{ fontSize: 12, wordBreak: "break-all", flex: "1 1 260px" }}>{link}</code>
+                <Btn onClick={copy}>{copied ? "Copied" : "Copy"}</Btn>
+                {steps.invite?.status !== "done" && <Btn onClick={markSent}>I sent it</Btn>}
+              </div>
+              <div style={{ ...muted, marginTop: 6 }}>Running Accept or Resend invite again makes a new link, and this one stops working.</div>
+            </div>
+          )}
+          <ErrorText>{err}</ErrorText>
+        </div>
+      )}
     </div>
   );
 }

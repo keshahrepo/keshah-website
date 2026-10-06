@@ -306,3 +306,22 @@ export interface OnboardingState {
   completed_at?: IsoInstant;
   ready_at?: IsoInstant;
 }
+
+export type AcceptStepKey = "group" | "invite" | "contract";
+
+export interface AcceptStepRecord {
+  status: "done" | "skipped" | "error";
+  at: IsoInstant;
+  detail: string;
+}
+
+/**
+ * ContentCreators/{id}.accept: what the admin "Accept creator" button did.
+ * Re-running Accept retries only steps that aren't "done".
+ */
+export interface AcceptRecord {
+  steps: Partial<Record<AcceptStepKey, AcceptStepRecord>>;
+  last_run_at?: IsoInstant;
+  /** Short lock so a double click can't run two provisioning passes at once. */
+  running_until?: IsoInstant | null;
+}

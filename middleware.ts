@@ -7,8 +7,8 @@ const secret = new TextEncoder().encode(process.env.JWT_SECRET || "dev-secret-ch
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Protect /creator routes (not /creator/login)
-  if (pathname.startsWith("/creator") && pathname !== "/creator/login") {
+  // Protect /creator routes (not /creator/login or the invite's /creator/set-password)
+  if (pathname.startsWith("/creator") && pathname !== "/creator/login" && pathname !== "/creator/set-password") {
     const token = req.cookies.get(COOKIE_NAME)?.value;
 
     if (!token) {

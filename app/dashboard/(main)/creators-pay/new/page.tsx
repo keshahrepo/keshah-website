@@ -32,7 +32,7 @@ export default function NewCreatorPage() {
         method: "POST",
         body: JSON.stringify({ ...f, starting_completed_months: Number(f.starting_completed_months) }),
       });
-      router.push(`/dashboard/creators-pay/${id}`);
+      router.push(`/dashboard/creators-pay/${id}?new=1`);
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : String(e2));
       setBusy(false);
@@ -41,7 +41,7 @@ export default function NewCreatorPage() {
 
   return (
     <div>
-      <PageHeader title="Add creator" subtitle="Creates the creator's profile. Portal login invites come later." />
+      <PageHeader title="Add creator" subtitle="Creates the creator's profile. Next you'll accept them: keshah.com inbox, portal invite and contract in one click." />
       <SubNav />
       <form onSubmit={submit} style={card}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
@@ -54,7 +54,7 @@ export default function NewCreatorPage() {
           <Field label="Email *" hint="Personal email, used for their portal login">
             <input type="email" style={input} value={f.email} onChange={set("email")} required />
           </Field>
-          <Field label="keshah.com email">
+          <Field label="keshah.com email" hint="Leave blank to use firstname@keshah.com when you accept">
             <input style={input} value={f.keshah_email} onChange={set("keshah_email")} placeholder="name@keshah.com" />
           </Field>
           <Field label="Timezone *" hint="IANA, e.g. America/Chicago">
@@ -84,7 +84,7 @@ export default function NewCreatorPage() {
           <Btn kind="primary" type="submit" disabled={busy}>
             {busy ? "Creating..." : "Create creator"}
           </Btn>
-          <span style={muted}>Status starts as “onboarding”. Contract and W-9 are set on the creator page.</span>
+          <span style={muted}>Status starts as “onboarding”. The next page offers Accept creator.</span>
         </div>
       </form>
     </div>

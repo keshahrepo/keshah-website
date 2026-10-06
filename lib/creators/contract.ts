@@ -262,7 +262,7 @@ function portalUrl(): string {
 }
 
 /** Admin "Send contract": pins the current template + hash and opens signing in the portal. */
-export async function sendContract(id: string): Promise<{ contract: CreatorContract; emailed: boolean }> {
+export async function sendContract(id: string, opts: { email?: boolean } = {}): Promise<{ contract: CreatorContract; emailed: boolean }> {
   const snap = await creatorRef(id).get();
   if (!snap.exists) throw new CreatorDataError("Creator not found", 404);
   const d = snap.data()!;
@@ -283,7 +283,8 @@ export async function sendContract(id: string): Promise<{ contract: CreatorContr
 
   let emailed = false;
   const to = String(d.email ?? "").trim();
-  if (to && emailConfigured()) {
+  // opts.email false: the caller already told them (e.g. the Accept welcome email).
+  if (to && emailConfigured() && opts.email !== false) {
     const first = String(d.name || d.legal_name || "").split(" ")[0] || "there";
     try {
       await sendEmail({

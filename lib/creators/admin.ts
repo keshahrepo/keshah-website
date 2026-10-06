@@ -33,7 +33,10 @@ import {
   VIDEOS_PER_WEEKDAY,
   type MonthSummary,
 } from "./pay";
+import { acceptCreator, acceptOf, type AcceptOptions, type AcceptResult } from "./accept";
+import { candidateAddresses } from "./google-groups";
 import type {
+  AcceptRecord,
   Adjustment,
   BonusClaim,
   CreatorContract,
@@ -187,6 +190,14 @@ export interface AdminCreator {
   is_active: boolean;
   /** Has the minimum pay setup (start_date) for the calculator. */
   pay_ready: boolean;
+  /** "Accept creator" step log. */
+  accept: AcceptRecord;
+  accepted_at: string | null;
+  /** Set-password invite (never the token hash). */
+  invite: { created_at: string; expires_at: string; used_at: string | null } | null;
+  has_password: boolean;
+  /** What the group step would try first when keshah_email is blank. */
+  suggested_keshah_email: string;
 }
 
 export function toAdminCreator(id: string, d: DocumentData): AdminCreator {
@@ -212,6 +223,22 @@ export function toAdminCreator(id: string, d: DocumentData): AdminCreator {
     instagram_handle: String(d.instagram_handle ?? ""),
     is_active: d.is_active !== false,
     pay_ready: isDate(d.start_date),
+    accept: (() => {
+      const a = acceptOf({ accept: plain(d.accept) });
+      delete a.running_until;
+      return a;
+    })(),
+    accepted_at: toIso(d.accepted_at),
+    invite:
+      d.invite && typeof d.invite === "object"
+        ? {
+            created_at: String(d.invite.created_at ?? ""),
+            expires_at: String(d.invite.expires_at ?? ""),
+            used_at: d.invite.used_at ? String(d.invite.used_at) : null,
+          }
+        : null,
+    has_password: !!d.password_hash,
+    suggested_keshah_email: candidateAddresses(String(d.legal_name || d.name || ""))[0] ?? "",
   };
 }
 
@@ -642,12 +669,12 @@ export function sanitizeProfile(
 }
 
 /**
- * Hook called once a creator accepts / is fully set up. Login invite and
- * portal provisioning automation will be wired in here later.
+ * Accept a creator: keshah.com inbox group, portal invite, contract (see
+ * lib/creators/accept.ts). Idempotent; re-running retries unfinished steps.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export async function onCreatorAccepted(id: string): Promise<void> {
-  // TODO: send portal login invite, provision keshah.com email, etc.
+export async function onCreatorAccepted(id: string, opts: Partial<AcceptOptions> = {}): Promise<AcceptResult> {
+  const siteUrl = opts.siteUrl || process.env.NEXT_PUBLIC_SITE_URL || "https://www.keshah.com";
+  return acceptCreator(id, { ...opts, siteUrl });
 }
 
 /** True if the creator already has a paid (locked) invoice for `month`. */
