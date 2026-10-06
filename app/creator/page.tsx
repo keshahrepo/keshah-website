@@ -59,7 +59,7 @@ export default function CreatorPortal() {
       <div className="cp-wrap">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.3px" }}>KESHAH</div>
+            <img src="/images/keshah-wordmark-white.png" alt="KESHAH" width={64} height={20} style={{ display: "block", marginBottom: 6, height: 20, width: "auto" }} />
             <div style={{ fontSize: 13, color: C.faint }}>{data ? data.creator.name : "Creator portal"}</div>
           </div>
           <button

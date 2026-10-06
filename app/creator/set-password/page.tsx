@@ -28,7 +28,7 @@ export default function SetPasswordPage() {
     <div style={{ minHeight: "100vh", background: "#000", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
       <div style={{ width: "100%", maxWidth: 380 }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: "#fff", letterSpacing: "-0.3px", marginBottom: 4 }}>KESHAH</h1>
+          <h1 style={{ margin: "0 0 10px", display: "flex", justifyContent: "center" }}><img src="/images/keshah-wordmark-white.png" alt="KESHAH" width={96} height={30} style={{ display: "block", height: 30, width: "auto" }} /></h1>
           <p style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>Creator Portal</p>
         </div>
         <Suspense fallback={<div style={box} />}>

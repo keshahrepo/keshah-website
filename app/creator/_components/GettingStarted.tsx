@@ -210,11 +210,8 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
       <>
       <Step n={2} title="Learn KESHAH" done={videosDone} current={cur(2)} doneNote="Both videos watched">
         <P>
-          Start with{" "}
-          <a href={cfg.site_url} target="_blank" rel="noreferrer" style={{ color: "#fff" }}>
-            keshah.com
-          </a>
-          , then watch both of these videos.
+          Watch both of these videos. They explain how KESHAH works and the science behind it. There&apos;s a short quiz
+          right after, so watch carefully.
         </P>
         {cfg.founder_videos.map((v) => {
           const done = !!onb.videos_watched?.[v.id];
