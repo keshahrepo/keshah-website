@@ -3,13 +3,19 @@
     {
       "source": "/.well-known/apple-app-site-association",
       "headers": [
-        { "key": "Content-Type", "value": "application/json" }
+        {
+          "key": "Content-Type",
+          "value": "application/json"
+        }
       ]
     },
     {
       "source": "/.well-known/assetlinks.json",
       "headers": [
-        { "key": "Content-Type", "value": "application/json" }
+        {
+          "key": "Content-Type",
+          "value": "application/json"
+        }
       ]
     }
   ],
@@ -41,6 +47,10 @@
     {
       "path": "/api/cron/creator-posts-deep",
       "schedule": "45 3 * * *"
+    },
+    {
+      "path": "/api/cron/stats-recount",
+      "schedule": "30 4 * * 1"
     }
   ]
 }
