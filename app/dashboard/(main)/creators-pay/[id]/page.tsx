@@ -448,7 +448,7 @@ function ProfileEditor({ c, reload }: { c: Creator; reload: () => void }) {
           <input type="number" min={0} style={input} value={f.starting_completed_months} onChange={set("starting_completed_months")} />
         </Field>
         <Field label="Campaign tags" hint="Comma separated, exact attribution campaign values">
-          <input style={input} value={f.campaign_tags} onChange={set("campaign_tags")} placeholder="Isai TikTok, Isai Insta" />
+          <input style={input} value={f.campaign_tags} onChange={set("campaign_tags")} placeholder="Exact AppStack campaign name, e.g. Jen S" />
         </Field>
         <Field label="Tracking link" hint="AppStack campaign link (any https URL). Shown in their portal.">
           <input style={input} value={f.tracking_url} onChange={set("tracking_url")} placeholder="https://" />
