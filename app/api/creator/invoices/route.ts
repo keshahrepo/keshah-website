@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { CreatorDataError, creatorToday, draftOrGetInvoice, getInvoice, listInvoices, submitInvoice } from "@/lib/creators/db";
+import { CreatorDataError, creatorToday, hasStarted, draftOrGetInvoice, getInvoice, listInvoices, submitInvoice } from "@/lib/creators/db";
 import { addMonths, monthOf } from "@/lib/creators/pay";
 import { errorResponse, requireCreator } from "../_auth";
 
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   if (creator instanceof NextResponse) return creator;
   try {
     const lastMonth = addMonths(monthOf(creatorToday(creator)), -1);
-    const startedBy = creator.start_date <= `${lastMonth}-31`;
+    const startedBy = hasStarted(creator) && creator.start_date <= `${lastMonth}-31`;
     const current = startedBy ? await draftOrGetInvoice(creator.id, lastMonth) : null;
     const history = await listInvoices(creator.id);
     return NextResponse.json({ last_month: lastMonth, current, history });

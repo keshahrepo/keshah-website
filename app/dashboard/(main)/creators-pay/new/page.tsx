@@ -12,10 +12,10 @@ export default function NewCreatorPage() {
     email: "",
     keshah_email: "",
     timezone: "America/New_York",
-    start_date: new Date().toISOString().slice(0, 10),
+    start_date: "",
     starting_completed_months: "0",
     campaign_tags: "",
-    creator_link_id: "",
+    tracking_url: "",
     tiktok_handle: "",
     instagram_handle: "",
   });
@@ -60,8 +60,8 @@ export default function NewCreatorPage() {
           <Field label="Timezone *" hint="IANA, e.g. America/Chicago">
             <input style={input} value={f.timezone} onChange={set("timezone")} required />
           </Field>
-          <Field label="Start date *">
-            <input type="date" style={input} value={f.start_date} onChange={set("start_date")} required />
+          <Field label="Start date" hint="Leave blank: pay starts on their first posting day">
+            <input type="date" style={input} value={f.start_date} onChange={set("start_date")} />
           </Field>
           <Field label="Starting completed months" hint="Months credited before start (usually 0)">
             <input type="number" min={0} style={input} value={f.starting_completed_months} onChange={set("starting_completed_months")} />
@@ -69,8 +69,8 @@ export default function NewCreatorPage() {
           <Field label="Campaign tags" hint="Comma separated, exact attribution campaign values">
             <input style={input} value={f.campaign_tags} onChange={set("campaign_tags")} placeholder="Name TikTok, Name Insta" />
           </Field>
-          <Field label="Short link id" hint="Creators doc id, if a link already exists">
-            <input style={input} value={f.creator_link_id} onChange={set("creator_link_id")} />
+          <Field label="Tracking link" hint="AppStack campaign link (https://...). Shown in their portal.">
+            <input style={input} value={f.tracking_url} onChange={set("tracking_url")} placeholder="https://" />
           </Field>
           <Field label="TikTok handle">
             <input style={input} value={f.tiktok_handle} onChange={set("tiktok_handle")} />

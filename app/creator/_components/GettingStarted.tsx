@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { ContractSigner } from "./ContractTab";
 import type { PortalData } from "./types";
 import { Button, C, Card, Eyebrow, Field, H, Msg, P, api, inputStyle } from "./ui";
 
@@ -56,6 +57,7 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
   const [copied, setCopied] = useState(false);
   const [answers, setAnswers] = useState<(number | null)[]>(() => cfg.quiz.map(() => null));
   const [quizMsg, setQuizMsg] = useState<string | null>(null);
+  const [signedNow, setSignedNow] = useState(false);
 
   async function mark(step: string, extra: Record<string, unknown> = {}) {
     setBusy(step + (extra.video_id ?? ""));
@@ -82,7 +84,8 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
   const warm = onb.warmup_days ?? [];
   const warmDone = warm.length >= cfg.warmup_days;
   const tickedToday = warm.includes(data.today.date);
-  const link = data.link?.short_link;
+  const link = data.tracking_url;
+  const contractDone = signedNow || data.contract.status === "signed" || !!onb.contract_signed_at;
 
   if (onb.complete) {
     return (
@@ -104,7 +107,27 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
       <H style={{ fontSize: 22 }}>Welcome, {data.creator.name.split(" ")[0] || "there"}.</H>
       <P>Go through these steps once. When they&apos;re all done, your full portal opens up.</P>
 
-      <Step n={1} title="Learn KESHAH" done={videosDone}>
+      <Step n={1} title="Sign your contract" done={contractDone}>
+        {contractDone ? (
+          <P style={{ marginBottom: 0 }}>Signed. You can download your copy from the Contract tab any time.</P>
+        ) : (
+          <ContractSigner
+            compact
+            onSigned={() => {
+              setSignedNow(true);
+              setOnb((o) => ({ ...o, contract_signed_at: o.contract_signed_at ?? new Date().toISOString() }));
+            }}
+          />
+        )}
+      </Step>
+
+      {!contractDone ? (
+        <Card>
+          <P style={{ marginBottom: 0 }}>Once your contract is signed, the rest of the steps show up here.</P>
+        </Card>
+      ) : (
+      <>
+      <Step n={2} title="Learn KESHAH" done={videosDone}>
         <P>
           Start with{" "}
           <a href={cfg.site_url} target="_blank" rel="noreferrer" style={{ color: "#fff" }}>
@@ -142,7 +165,7 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
         {errFor("videos")}
       </Step>
 
-      <Step n={2} title="Quick check" done={!!onb.quiz_passed_at}>
+      <Step n={3} title="Quick check" done={!!onb.quiz_passed_at}>
         {onb.quiz_passed_at ? (
           <P style={{ marginBottom: 0 }}>All right. Nice work.</P>
         ) : !videosDone ? (
@@ -194,7 +217,7 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
         )}
       </Step>
 
-      <Step n={3} title="Set up your accounts" done={!!onb.accounts_done_at}>
+      <Step n={4} title="Set up your accounts" done={!!onb.accounts_done_at}>
         <P>{cfg.accounts_step_text}</P>
         <Eyebrow>Your keshah.com email</Eyebrow>
         <div style={{ fontSize: 15, marginBottom: 12, wordBreak: "break-all" }}>
@@ -221,7 +244,7 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
         </Button>
       </Step>
 
-      <Step n={4} title="Join Slack" done={!!onb.slack_joined_at}>
+      <Step n={5} title="Join Slack" done={!!onb.slack_joined_at}>
         {cfg.slack_invite_url ? (
           <P>
             <a href={cfg.slack_invite_url} target="_blank" rel="noreferrer" style={{ color: "#fff" }}>
@@ -240,7 +263,7 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
         )}
       </Step>
 
-      <Step n={5} title={`${cfg.warmup_days}-day warm-up`} done={warmDone}>
+      <Step n={6} title={`${cfg.warmup_days}-day warm-up`} done={warmDone}>
         <P>{cfg.warmup_text}</P>
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           {Array.from({ length: cfg.warmup_days }, (_, i) => (
@@ -270,7 +293,7 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
         )}
       </Step>
 
-      <Step n={6} title="Posting guide" done={!!onb.rules_ack_at}>
+      <Step n={7} title="Posting guide" done={!!onb.rules_ack_at}>
         {cfg.posting_guide_url ? (
           <P>
             <a href={cfg.posting_guide_url} target="_blank" rel="noreferrer" style={{ color: "#fff" }}>
@@ -295,7 +318,7 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
         )}
       </Step>
 
-      <Step n={7} title="Your link" done={!!onb.link_seen_at}>
+      <Step n={8} title="Your link" done={!!onb.link_seen_at}>
         {link ? (
           <>
             <P>This is your tracking link. It&apos;s how we see the people you send to KESHAH.</P>
@@ -312,17 +335,12 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
             </div>
           </>
         ) : (
-          <>
-            <P>Your link isn&apos;t set up yet. Your manager will add it, and you can carry on for now.</P>
-            {!onb.link_seen_at && (
-              <Button disabled={busy === "link"} onClick={() => mark("link")}>
-                OK
-              </Button>
-            )}
-          </>
+          <P style={{ marginBottom: 0 }}>Your link is being set up. Your manager will add it here, and you can tick this step once it shows up.</P>
         )}
         {errFor("link")}
       </Step>
+      </>
+      )}
     </div>
   );
 }

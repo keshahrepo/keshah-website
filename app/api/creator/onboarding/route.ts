@@ -15,7 +15,8 @@ export async function POST(req: NextRequest) {
       video_id: body.video_id,
       answers: Array.isArray(body.answers) ? body.answers.map(Number) : undefined,
     });
-    return NextResponse.json({ onboarding: { ...state, complete: isOnboardingComplete(state) }, quiz: quiz ?? null });
+    const complete = isOnboardingComplete(state, { contractSigned: creator.contract.status === "signed" });
+    return NextResponse.json({ onboarding: { ...state, complete }, quiz: quiz ?? null });
   } catch (e) {
     return errorResponse(e, "onboarding");
   }

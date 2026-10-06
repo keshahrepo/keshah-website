@@ -2,7 +2,7 @@
 
 import { fmtDateShort, fmtMonthLong, fmtUsd } from "@/lib/creators/time";
 import type { MonthData } from "./types";
-import { C, Card, Eyebrow, P, Pill, Row, statusColor } from "./ui";
+import { C, Card, Eyebrow, H, P, Pill, Row, statusColor } from "./ui";
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -26,6 +26,19 @@ export default function MonthTab({ m }: { m: MonthData }) {
   const missed = m.days.filter((d) => d.state === "missed");
   const pastOrToday = m.days.filter((d) => d.date <= m.today).reverse();
   const nl = m.nextLevel;
+  if (!m.started) {
+    return (
+      <div>
+        <Card>
+          <Eyebrow>{fmtMonthLong(m.month)}</Eyebrow>
+          <H>Your pay starts on your first posting day.</H>
+          <P style={{ marginBottom: 0 }}>
+            The first day you log videos on the Today tab becomes your start date. Your days, level and earnings show up here from then on.
+          </P>
+        </Card>
+      </div>
+    );
+  }
   return (
     <div>
       <Card>
@@ -55,8 +68,8 @@ export default function MonthTab({ m }: { m: MonthData }) {
         <div style={{ borderTop: C.border, margin: "12px 0" }} />
         {nl.nextBaseCents ? (
           <P style={{ marginBottom: 0 }}>
-            Post every weekday and you move up to {fmtUsd(nl.nextBaseCents)} a month from{" "}
-            <b style={{ color: "#fff" }}>{fmtMonthLong(nl.earliestMonth!)}</b>.
+            You move up to {fmtUsd(nl.nextBaseCents)} a month from <b style={{ color: "#fff" }}>{fmtMonthLong(nl.earliestMonth!)}</b>. Missed
+            days don&apos;t push that back, but each one comes off that month&apos;s pay.
           </P>
         ) : (
           <P style={{ marginBottom: 0 }}>You&apos;re at the top level.</P>

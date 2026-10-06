@@ -51,8 +51,8 @@ export async function POST(req: NextRequest) {
   const res = sanitizeProfile(body);
   if ("error" in res) return NextResponse.json({ error: res.error }, { status: 400 });
   const u = res.updates;
-  if (!u.legal_name || !u.email || !u.start_date || !u.timezone) {
-    return NextResponse.json({ error: "Legal name, email, timezone and start date are required" }, { status: 400 });
+  if (!u.legal_name || !u.email || !u.timezone) {
+    return NextResponse.json({ error: "Legal name, email and timezone are required" }, { status: 400 });
   }
 
   const col = db().collection(CREATORS_COLLECTION);
@@ -65,12 +65,15 @@ export async function POST(req: NextRequest) {
     email: u.email,
     keshah_email: u.keshah_email ?? "",
     timezone: u.timezone,
-    start_date: u.start_date,
+    // Pay starts on the first posting day unless admin sets a date here.
+    start_date: u.start_date ?? null,
+    start_mode: "first_post",
     starting_completed_months: u.starting_completed_months ?? 0,
     campaign_tags: u.campaign_tags ?? [],
     tiktok_handle: u.tiktok_handle ?? "",
     instagram_handle: u.instagram_handle ?? "",
     creator_link_id: u.creator_link_id ?? null,
+    tracking_url: u.tracking_url ?? "",
     status: (u.status as string) || "onboarding",
     contract: { status: "none" },
     w9_on_file: false,

@@ -1,5 +1,6 @@
 import {
   creatorToday,
+  hasStarted,
   getMonthOverview,
   monthDayStates,
   type CreatorHistory,
@@ -12,6 +13,8 @@ export async function monthPayload(creator: CreatorProfile, month: YyyyMm, histo
   const s = o.summary;
   return {
     month,
+    /** false until the first posting day sets start_date. */
+    started: hasStarted(creator),
     today: creatorToday(creator, now),
     expectedWeekdays: s.expectedWeekdays,
     calendarWeekdays: s.calendarWeekdays,

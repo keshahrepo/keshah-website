@@ -90,7 +90,7 @@ test("partial first month: start Thu 2026-10-15 -> 12/22 of $500 = $272.73, not 
   assert.equal(completedMonthsAsOf(p, "2026-12", { postingDays: pd, daysOff: [] }), 1);
 });
 
-test("missed weekday prorates base and pauses (not resets) the ladder", () => {
+test("missed weekday prorates base but does NOT pause the ladder", () => {
   const p = prof("2026-10-01");
   const pd = postAll("2026-10-01", "2026-11-30", ["2026-10-07"]);
   const oct = sum(p, "2026-10", pd);
@@ -99,14 +99,24 @@ test("missed weekday prorates base and pauses (not resets) the ladder", () => {
   assert.equal(oct.baseDueCents, Math.round((50000 * 21) / 22)); // 47727
   assert.equal(oct.baseDueCents, 47727);
   const nov = sum(p, "2026-11", pd);
-  assert.equal(nov.completedMonthsBefore, 0); // Oct did not count
-  assert.equal(nov.levelBaseCents, 50000);
-  assert.equal(sum(p, "2026-12", pd).completedMonthsBefore, 1); // Nov counted
+  assert.equal(nov.completedMonthsBefore, 1); // Oct still counts despite the miss
+  assert.equal(nov.levelBaseCents, 65000);
+  assert.equal(sum(p, "2026-12", pd).completedMonthsBefore, 2);
 
-  // Pause, not reset: creator already at 3 misses a day, then completes the next month.
-  const p3 = prof("2026-10-01", 3);
-  assert.equal(sum(p3, "2026-11", pd).levelBaseCents, 65000); // still 3
-  assert.equal(sum(p3, "2026-12", pd).levelBaseCents, 80000); // 3 + Nov = 4
+  // A month with many misses (and even no posts at all) still counts toward the ladder.
+  const sparse = postAll("2026-10-01", "2026-10-31").filter((_, i) => i % 3 === 0);
+  const octSparse = sum(p, "2026-10", sparse);
+  assert.ok(octSparse.missedDays >= 10);
+  assert.ok(octSparse.baseDueCents < 50000 / 2);
+  assert.equal(sum(p, "2026-11", sparse).levelBaseCents, 65000);
+  assert.equal(completedMonthsAsOf(p, "2027-02", { postingDays: [], daysOff: [] }), 4);
+  assert.equal(sum(p, "2027-02", []).levelBaseCents, 80000);
+});
+
+test("start on the first weekday counts as a full month (Mon 2026-11-02; Nov 1 is a Sunday)", () => {
+  const p = prof("2026-11-02");
+  assert.equal(completedMonthsAsOf(p, "2026-12"), 1);
+  assert.equal(nextLevel(p, { postingDays: [], daysOff: [] }, "2026-11").earliestMonth, "2026-12");
 });
 
 test("approved day off still completes and is paid; requested/declined do not", () => {
@@ -152,11 +162,11 @@ test("Isai: starting_completed_months=1 -> Oct 2026 $650, $800 from Jan 2027", (
   assert.equal(sum(isai, "2027-01", pd).levelBaseCents, 80000);
   assert.equal(sum(isai, "2027-01", pd).completedMonthsBefore, 4);
 
-  // A missed day in November pushes $800 to Feb 2027.
+  // A missed day in November costs that day's pay but does NOT push $800 back.
   const pdMiss = postAll("2026-10-01", "2027-02-28", ["2026-11-10"]);
-  assert.equal(sum(isai, "2027-01", pdMiss).levelBaseCents, 65000);
-  assert.equal(sum(isai, "2027-02", pdMiss).levelBaseCents, 80000);
-  assert.equal(nextLevel(isai, { postingDays: pdMiss, daysOff: [] }, "2026-12").earliestMonth, "2027-02");
+  assert.equal(sum(isai, "2026-11", pdMiss).baseDueCents, Math.round((65000 * 20) / 21));
+  assert.equal(sum(isai, "2027-01", pdMiss).levelBaseCents, 80000);
+  assert.equal(nextLevel(isai, { postingDays: pdMiss, daysOff: [] }, "2026-12").earliestMonth, "2027-01");
 });
 
 test("nextLevel: partial first month is skipped; top level returns nulls", () => {

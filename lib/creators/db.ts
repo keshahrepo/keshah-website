@@ -45,6 +45,7 @@ import type {
   InvoiceStatus,
   OnboardingState,
   OnboardingStep,
+  OnboardingStepKey,
   Platform,
   PostedVideo,
   PostingDay,
@@ -118,12 +119,25 @@ export function mapCreatorStatus(raw: unknown): CreatorStatus {
   return "active";
 }
 
-function toProfile(id: string, d: DocumentData): CreatorProfile {
+/**
+ * Pay starts on the creator's FIRST POSTING DAY: savePostingDay fills
+ * start_date when it's unset. Until then start_date is "" ("not started").
+ * Legacy creators (no onboarding doc and not flagged start_mode
+ * "first_post") keep the old fallback start_date -> trial_start_date ->
+ * created_at.
+ */
+function usesLegacyStart(d: DocumentData, hasOnboarding: boolean): boolean {
+  return !hasOnboarding && d.start_mode !== "first_post";
+}
+
+function toProfile(id: string, d: DocumentData, legacyStart: boolean): CreatorProfile {
   const contract = (d.contract ?? {}) as Partial<CreatorContract>;
   const startDate: string =
     (isYyyyMmDd(d.start_date) && d.start_date) ||
-    (isYyyyMmDd(d.trial_start_date) && d.trial_start_date) ||
-    (toIso(d.created_at)?.slice(0, 10) ?? new Date().toISOString().slice(0, 10));
+    (legacyStart
+      ? (isYyyyMmDd(d.trial_start_date) && d.trial_start_date) ||
+        (toIso(d.created_at)?.slice(0, 10) ?? new Date().toISOString().slice(0, 10))
+      : "");
   return {
     id,
     // legacy
@@ -148,6 +162,11 @@ function toProfile(id: string, d: DocumentData): CreatorProfile {
       ...(contract.signed_at ? { signed_at: toIso(contract.signed_at) } : {}),
       ...(contract.pdf_path ? { pdf_path: contract.pdf_path } : {}),
       ...(contract.template_version ? { template_version: contract.template_version } : {}),
+      ...(contract.template_sha256 ? { template_sha256: contract.template_sha256 } : {}),
+      ...(contract.sent_at ? { sent_at: toIso(contract.sent_at) } : {}),
+      ...(contract.viewed_at ? { viewed_at: toIso(contract.viewed_at) } : {}),
+      ...(contract.signed_sha256 ? { signed_sha256: contract.signed_sha256 } : {}),
+      ...(contract.audit ? { audit: contract.audit } : {}),
     },
     w9_on_file: d.w9_on_file === true,
     payout_method: "amex_ach",
@@ -156,6 +175,7 @@ function toProfile(id: string, d: DocumentData): CreatorProfile {
     tiktok_handle: d.tiktok_handle ?? "",
     instagram_handle: d.instagram_handle ?? "",
     creator_link_id: d.creator_link_id || null,
+    tracking_url: typeof d.tracking_url === "string" ? d.tracking_url : "",
     invoice_seq: Number(d.invoice_seq ?? 0),
   };
 }
@@ -169,14 +189,21 @@ function requireCreatorData(snap: DocumentSnapshot): DocumentData {
 
 export async function getCreator(id: string): Promise<CreatorProfile | null> {
   if (!id) return null;
-  const snap = await creatorRef(id).get();
-  return snap.exists ? toProfile(snap.id, snap.data()!) : null;
+  const [snap, onb] = await Promise.all([creatorRef(id).get(), onboardingRef(id).get()]);
+  return snap.exists ? toProfile(snap.id, snap.data()!, usesLegacyStart(snap.data()!, onb.exists)) : null;
+}
+
+/** True when pay has started (start_date set, or legacy fallback). */
+export function hasStarted(c: Pick<CreatorProfile, "start_date">): boolean {
+  return isYyyyMmDd(c.start_date);
 }
 
 export async function listCreators(opts: { includeInactive?: boolean } = {}): Promise<CreatorProfile[]> {
   const snap = await fs().collection(CREATORS_COLLECTION).get();
+  const onbSnaps = snap.empty ? [] : await fs().getAll(...snap.docs.map((d) => onboardingRef(d.id)));
+  const hasOnb = new Set(onbSnaps.filter((o) => o.exists).map((o) => o.ref.parent.parent!.id));
   return snap.docs
-    .map((d) => toProfile(d.id, d.data()))
+    .map((d) => toProfile(d.id, d.data(), usesLegacyStart(d.data(), hasOnb.has(d.id))))
     .filter((c) => opts.includeInactive || c.is_active)
     .sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -198,6 +225,7 @@ export type CreatorProfilePatch = Partial<
     | "tiktok_handle"
     | "instagram_handle"
     | "creator_link_id"
+    | "tracking_url"
   >
 > & { ended_on?: YyyyMmDd | null };
 
@@ -212,6 +240,11 @@ export async function updateCreatorProfile(id: string, patch: CreatorProfilePatc
   if (patch.tiktok_handle !== undefined) out.tiktok_handle = normalizeHandle(patch.tiktok_handle);
   if (patch.instagram_handle !== undefined) out.instagram_handle = normalizeHandle(patch.instagram_handle);
   if (patch.creator_link_id !== undefined) out.creator_link_id = patch.creator_link_id || null;
+  if (patch.tracking_url !== undefined) {
+    const t = normalizeTrackingUrl(patch.tracking_url);
+    if (t === null) throw new CreatorDataError("Tracking link must be a full https:// link");
+    out.tracking_url = t;
+  }
   if (patch.timezone !== undefined) {
     if (!isValidTimezone(patch.timezone)) throw new CreatorDataError("Unknown timezone");
     out.timezone = patch.timezone;
@@ -244,11 +277,27 @@ export async function updateCreatorProfile(id: string, patch: CreatorProfilePatc
   return c;
 }
 
+/** "" stays "" (cleared); a valid https URL is returned trimmed; anything else -> null (invalid). */
+export function normalizeTrackingUrl(raw: unknown): string | null {
+  const s = String(raw ?? "").trim();
+  if (!s) return "";
+  try {
+    const u = new URL(s);
+    return u.protocol === "https:" && !!u.hostname ? s : null;
+  } catch {
+    return null;
+  }
+}
+
 export function normalizeHandle(h: string): string {
   return String(h ?? "").trim().replace(/^@+/, "").replace(/\s+/g, "");
 }
 
-/** The creator's tracking short link (from the linked Creators doc). */
+/**
+ * The creator's old keshah.com short link (from the linked Creators doc).
+ * NOT shown to creators any more (keshah.com/<slug> 404s since 423dbef); the
+ * portal shows ContentCreators.tracking_url instead.
+ */
 export async function getCreatorLink(
   creator: Pick<CreatorProfile, "creator_link_id">,
 ): Promise<{ id: string; slug: string; short_link: string } | null> {
@@ -359,6 +408,16 @@ export async function getMonthOverview(
 ): Promise<MonthOverview> {
   const h = opts.history ?? (await getHistory(creator.id));
   const today = creatorToday(creator, opts.now);
+  if (!hasStarted(creator)) {
+    // Not started: no weekday is >= this sentinel, so everything is zero.
+    const summary = monthSummary({ ...creator, start_date: NOT_STARTED_SENTINEL }, month, [], [], h.bonusClaims, h.adjustments);
+    return {
+      summary,
+      lines: draftInvoiceLines(summary),
+      nextLevel: { nextBaseCents: null, monthsNeeded: null, earliestMonth: null },
+      trial: trialStatus(h.postingDays),
+    };
+  }
   const summary = monthSummary(creator, month, h.postingDays, h.daysOff, h.bonusClaims, h.adjustments, {
     ...(month >= monthOf(today) ? { today } : {}),
   });
@@ -369,6 +428,8 @@ export async function getMonthOverview(
     trial: trialStatus(h.postingDays),
   };
 }
+
+const NOT_STARTED_SENTINEL = "9999-12-31";
 
 export type DayState = "posted" | "off" | "off_requested" | "missed" | "pending";
 
@@ -382,6 +443,7 @@ export function monthDayStates(
   history: Pick<CreatorHistory, "postingDays" | "daysOff">,
   now: Date = new Date(),
 ): { date: YyyyMmDd; state: DayState; videos: number }[] {
+  if (!hasStarted(creator)) return [];
   const today = creatorToday(creator, now);
   const counts = new Map<string, number>();
   for (const p of history.postingDays) counts.set(p.date, (counts.get(p.date) ?? 0) + completeVideoCount(p));
@@ -477,7 +539,18 @@ export async function savePostingDay(
     on_time: isOnTime(nowIso, date, creator.timezone),
   };
   await ref.set(doc);
+  if (clean.length && !hasStarted(creator)) await setStartDateIfUnset(id, date);
   return { date, videos: clean, logged_at: nowIso };
+}
+
+/** Pay starts on the first posting day: set start_date once, only if still unset. */
+async function setStartDateIfUnset(id: string, date: YyyyMmDd): Promise<void> {
+  const ref = creatorRef(id);
+  await fs().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists || isYyyyMmDd(snap.data()!.start_date)) return;
+    tx.update(ref, { start_date: date, start_date_source: "first_post", start_date_set_at: new Date().toISOString() });
+  });
 }
 
 // ---------------------------------------------------------------- days off
@@ -626,16 +699,65 @@ function onboardingRef(id: string) {
   return creatorRef(id).collection("onboarding").doc("state");
 }
 
-export function isOnboardingComplete(s: OnboardingState): boolean {
-  return (
-    FOUNDER_VIDEOS.every((v) => !!s.videos_watched?.[v.id]) &&
-    !!s.quiz_passed_at &&
-    !!s.accounts_done_at &&
-    !!s.slack_joined_at &&
-    (s.warmup_days?.length ?? 0) >= WARMUP_DAYS &&
-    !!s.rules_ack_at &&
-    !!s.link_seen_at
-  );
+/** Getting started steps in portal order. Shared by the portal and admin progress counts. */
+export const ONBOARDING_STEP_KEYS: OnboardingStepKey[] = ["contract", "videos", "quiz", "accounts", "slack", "warmup", "rules", "link"];
+export const ONBOARDING_STEP_COUNT = ONBOARDING_STEP_KEYS.length;
+
+export interface OnboardingCheckOpts {
+  /** The creator doc says contract.status === "signed" (covers contracts marked signed by admin). */
+  contractSigned?: boolean;
+}
+
+/** Done / not done per step. Works on raw Firestore data too (fields are read defensively). */
+export function onboardingSteps(s: Partial<OnboardingState> | null | undefined, opts: OnboardingCheckOpts = {}): Record<OnboardingStepKey, boolean> {
+  const st = s ?? {};
+  return {
+    contract: !!st.contract_signed_at || !!opts.contractSigned,
+    videos: FOUNDER_VIDEOS.every((v) => !!st.videos_watched?.[v.id]),
+    quiz: !!st.quiz_passed_at,
+    accounts: !!st.accounts_done_at,
+    slack: !!st.slack_joined_at,
+    warmup: (Array.isArray(st.warmup_days) ? st.warmup_days.length : 0) >= WARMUP_DAYS,
+    rules: !!st.rules_ack_at,
+    link: !!st.link_seen_at,
+  };
+}
+
+/** { done, total } over ONBOARDING_STEP_KEYS. A stored completed_at counts as all done. */
+export function onboardingProgress(s: Partial<OnboardingState> | null | undefined, opts: OnboardingCheckOpts = {}): { done: number; total: number } {
+  if (s?.completed_at) return { done: ONBOARDING_STEP_COUNT, total: ONBOARDING_STEP_COUNT };
+  const steps = onboardingSteps(s, opts);
+  return { done: ONBOARDING_STEP_KEYS.filter((k) => steps[k]).length, total: ONBOARDING_STEP_COUNT };
+}
+
+export function isOnboardingComplete(s: Partial<OnboardingState> | null | undefined, opts: OnboardingCheckOpts = {}): boolean {
+  const steps = onboardingSteps(s, opts);
+  return ONBOARDING_STEP_KEYS.every((k) => steps[k]);
+}
+
+/** True once the creator may use the full portal (posting, bonuses, days off). */
+export function isOnboarded(s: Partial<OnboardingState> | null | undefined, opts: OnboardingCheckOpts = {}): boolean {
+  return !!s?.completed_at || isOnboardingComplete(s, opts);
+}
+
+/** Server-side gate for posting / bonus / days-off writes. */
+export async function assertOnboarded(creator: Pick<CreatorProfile, "id" | "contract">): Promise<void> {
+  const s = await getOnboarding(creator.id);
+  if (!isOnboarded(s, { contractSigned: creator.contract.status === "signed" })) {
+    throw new CreatorDataError("Finish the Getting started steps first. Your full portal opens up once they're all done.", 409);
+  }
+}
+
+/** Marks the contract step done (called after e-signing or when admin marks a contract signed). */
+export async function markContractStepDone(id: string, at: string = new Date().toISOString()): Promise<OnboardingState> {
+  const state = await getOnboarding(id);
+  if (!state.contract_signed_at) state.contract_signed_at = at;
+  if (!state.completed_at && isOnboardingComplete(state)) {
+    state.completed_at = at;
+    state.ready_at = at;
+  }
+  await onboardingRef(id).set(state);
+  return state;
 }
 
 export async function getOnboarding(id: string): Promise<OnboardingState> {
@@ -670,7 +792,11 @@ export async function setOnboardingStep(
 ): Promise<OnboardingStepResult> {
   const nowDate = opts.now ?? new Date();
   const now = nowDate.toISOString();
-  const state = await getOnboarding(id);
+  const [state, creator] = await Promise.all([getOnboarding(id), getCreator(id)]);
+  if (!creator) throw new CreatorDataError("Creator not found", 404);
+  const contractSigned = !!state.contract_signed_at || creator.contract.status === "signed";
+  if (!contractSigned) throw new CreatorDataError("Sign your contract first. The other steps open up after that.", 409);
+  if (!state.contract_signed_at) state.contract_signed_at = creator.contract.signed_at || now;
   let quiz: OnboardingStepResult["quiz"];
   switch (step) {
     case "videos": {
@@ -702,8 +828,6 @@ export async function setOnboardingStep(
       state.slack_joined_at = now;
       break;
     case "warmup": {
-      const creator = await getCreator(id);
-      if (!creator) throw new CreatorDataError("Creator not found", 404);
       const today = creatorToday(creator, nowDate);
       const days = state.warmup_days ?? [];
       if (days.includes(today)) throw new CreatorDataError("You've already ticked today. Come back tomorrow for the next one.", 409);
@@ -715,6 +839,7 @@ export async function setOnboardingStep(
       state.rules_ack_at = now;
       break;
     case "link":
+      if (!creator.tracking_url) throw new CreatorDataError("Your link is still being set up. You can tick this once it shows here.", 409);
       state.link_seen_at = now;
       break;
     default:
@@ -761,6 +886,7 @@ export async function draftOrGetInvoice(id: string, month: YyyyMm, opts: { now?:
   if (!isYyyyMm(month)) throw new CreatorDataError("month must be yyyy-mm");
   const creator = await getCreator(id);
   if (!creator) throw new CreatorDataError("Creator not found", 404);
+  if (!hasStarted(creator)) throw new CreatorDataError("Pay hasn't started yet. It starts on the first posting day.", 409);
   const history = await getHistory(id);
   const existing = history.invoices.find((i) => i.month === month);
   if (existing && existing.status !== "draft") return existing;
@@ -859,6 +985,27 @@ export async function markInvoicePaid(
     ...(input.payment_proof_path ? { payment_proof_path: input.payment_proof_path } : {}),
     locked: true,
   });
+}
+
+// ---------------------------------------------------------------- portal settings
+
+const PORTAL_SETTINGS_DOC = "creator_portal";
+
+/** Settings/creator_portal. slack_invite_url falls back to env SLACK_INVITE_URL. */
+export async function getPortalSettings(): Promise<{ slack_invite_url: string | null; slack_invite_url_stored: string }> {
+  const snap = await fs().collection("Settings").doc(PORTAL_SETTINGS_DOC).get();
+  const stored = snap.exists && typeof snap.data()!.slack_invite_url === "string" ? snap.data()!.slack_invite_url.trim() : "";
+  return { slack_invite_url: stored || process.env.SLACK_INVITE_URL || null, slack_invite_url_stored: stored };
+}
+
+export async function savePortalSettings(patch: { slack_invite_url?: string }): Promise<void> {
+  const out: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (patch.slack_invite_url !== undefined) {
+    const v = normalizeTrackingUrl(patch.slack_invite_url);
+    if (v === null) throw new CreatorDataError("Slack invite link must be a full https:// link");
+    out.slack_invite_url = v;
+  }
+  await fs().collection("Settings").doc(PORTAL_SETTINGS_DOC).set(out, { merge: true });
 }
 
 // ---------------------------------------------------------------- storage

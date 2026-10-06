@@ -29,6 +29,7 @@ export async function sendEmail(opts: {
   subject: string;
   text: string;
   html?: string;
+  attachments?: { filename: string; content: Buffer; contentType?: string }[];
 }): Promise<void> {
   if (!emailConfigured()) {
     throw new Error("Email not configured (KESHAH_GMAIL_USER / KESHAH_GMAIL_APP_PASSWORD).");
@@ -39,5 +40,6 @@ export async function sendEmail(opts: {
     subject: opts.subject,
     text: opts.text,
     html: opts.html,
+    ...(opts.attachments?.length ? { attachments: opts.attachments } : {}),
   });
 }

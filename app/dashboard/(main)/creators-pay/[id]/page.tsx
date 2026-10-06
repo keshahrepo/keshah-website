@@ -38,10 +38,22 @@ interface Creator {
   starting_completed_months: number;
   campaign_tags: string[];
   status: string;
+  status_display: string;
   ended_on: string | null;
-  contract: { status: "none" | "sent" | "signed"; signed_at?: string; pdf_path?: string; template_version?: string };
+  contract: {
+    status: "none" | "sent" | "signed";
+    signed_at?: string;
+    pdf_path?: string;
+    template_version?: string;
+    template_sha256?: string;
+    sent_at?: string;
+    viewed_at?: string;
+    signed_sha256?: string;
+    audit?: Record<string, string>;
+  };
   w9_on_file: boolean;
   creator_link_id: string;
+  tracking_url: string;
   tiktok_handle: string;
   instagram_handle: string;
   pay_ready: boolean;
@@ -101,6 +113,7 @@ interface Detail {
   adjustments: { id: string; month: string; amount_cents: number; note: string; created_at?: string }[];
   invoices: Invoice[];
   onboarding: { done: number; total: number; raw: Record<string, unknown> | null };
+  contractEvents: { id: string; type: string; at: string; actor: string; detail?: string; ip?: string; signed_sha256?: string }[];
   attribution: { trials: number; purchases: number; purchasesInWindow: number; recordedProceedsUsd: number };
 }
 
@@ -151,7 +164,7 @@ function CreatorDetail() {
       </p>
       <PageHeader
         title={c.legal_name || c.name || c.id}
-        subtitle={[c.status, c.email, c.timezone].filter(Boolean).join(" · ")}
+        subtitle={[c.status_display, c.email, c.timezone].filter(Boolean).join(" · ")}
         right={
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <Btn onClick={() => setMonth(shiftMonth(month, -1))}>←</Btn>
@@ -167,7 +180,7 @@ function CreatorDetail() {
         <MetricCard
           label="Level"
           value={d.summary ? `${fmtUsd(d.summary.levelBaseCents)}/mo` : "–"}
-          subtitle={d.completedMonths !== null ? `${d.completedMonths} completed months` : "set a start date"}
+          subtitle={d.completedMonths !== null ? `${d.completedMonths} completed months` : "not started: pay starts on the first posting day"}
         />
         <MetricCard
           label="Next level"
@@ -197,7 +210,7 @@ function CreatorDetail() {
       <BonusClaims d={d} reload={load} />
       <Adjustments d={d} reload={load} />
       <Invoices d={d} reload={load} />
-      <ContractW9 c={c} reload={load} />
+      <ContractW9 c={c} events={d.contractEvents ?? []} reload={load} />
       <ProfileEditor c={c} reload={load} />
     </div>
   );
@@ -216,7 +229,7 @@ function ProfileEditor({ c, reload }: { c: Creator; reload: () => void }) {
     ended_on: c.ended_on ?? "",
     starting_completed_months: String(c.starting_completed_months),
     campaign_tags: c.campaign_tags.join(", "),
-    creator_link_id: c.creator_link_id,
+    tracking_url: c.tracking_url,
     tiktok_handle: c.tiktok_handle,
     instagram_handle: c.instagram_handle,
     status: c.status,
@@ -283,7 +296,7 @@ function ProfileEditor({ c, reload }: { c: Creator; reload: () => void }) {
             ))}
           </select>
         </Field>
-        <Field label="Start date">
+        <Field label="Start date" hint="Blank = set automatically on their first posting day">
           <input type="date" style={input} value={f.start_date} onChange={set("start_date")} />
         </Field>
         <Field label="Last working day" hint="Only when leaving">
@@ -295,8 +308,8 @@ function ProfileEditor({ c, reload }: { c: Creator; reload: () => void }) {
         <Field label="Campaign tags" hint="Comma separated, exact attribution campaign values">
           <input style={input} value={f.campaign_tags} onChange={set("campaign_tags")} placeholder="Isai TikTok, Isai Insta" />
         </Field>
-        <Field label="Short link id" hint="Creators doc id">
-          <input style={input} value={f.creator_link_id} onChange={set("creator_link_id")} />
+        <Field label="Tracking link" hint="AppStack campaign link (any https URL). Shown in their portal.">
+          <input style={input} value={f.tracking_url} onChange={set("tracking_url")} placeholder="https://" />
         </Field>
         <Field label="TikTok handle">
           <input style={input} value={f.tiktok_handle} onChange={set("tiktok_handle")} />
@@ -318,23 +331,62 @@ function ProfileEditor({ c, reload }: { c: Creator; reload: () => void }) {
 
 // ---------------------------------------------------------------- contract + W-9
 
-function ContractW9({ c, reload }: { c: Creator; reload: () => void }) {
-  const [status, setStatus] = useState(c.contract.status);
-  const [version, setVersion] = useState(c.contract.template_version ?? "");
-  const [signedAt, setSignedAt] = useState((c.contract.signed_at ?? "").slice(0, 10));
-  const [file, setFile] = useState<File | null>(null);
+const AUDIT_LABELS: [string, string][] = [
+  ["document_id", "Document ID"],
+  ["template_version", "Template version"],
+  ["template_sha256", "Template SHA-256"],
+  ["signer_typed_name", "Typed name"],
+  ["signer_legal_name", "Legal name"],
+  ["signer_address", "Address"],
+  ["signer_email", "Email"],
+  ["signer_user_id", "Account ID"],
+  ["signer_ip", "IP"],
+  ["signer_user_agent", "User agent"],
+  ["signed_at_utc", "Signed (UTC)"],
+  ["signed_at_local", "Signed (local)"],
+  ["consent_text_version", "Consent text"],
+  ["countersigner_name", "Countersigned by"],
+];
+
+function ContractW9({ c, events, reload }: { c: Creator; events: Detail["contractEvents"]; reload: () => void }) {
+  const eSigned = !!c.contract.signed_sha256;
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [msg, setMsg] = useState("");
+  const [confirmSend, setConfirmSend] = useState(false);
+  const [showAudit, setShowAudit] = useState(false);
+  const [showPaper, setShowPaper] = useState(false);
+  const [signedAt, setSignedAt] = useState((c.contract.signed_at ?? "").slice(0, 10));
+  const [file, setFile] = useState<File | null>(null);
 
-  async function save() {
+  async function send() {
+    if (!confirmSend) return setConfirmSend(true);
+    setBusy(true);
+    setErr("");
+    setMsg("");
+    try {
+      const r = await api<{ emailed: boolean }>(`/api/admin/creators/${c.id}/contract`, { method: "POST", body: JSON.stringify({ action: "send" }) });
+      setMsg(r.emailed ? "Sent. They got an email to sign in the portal." : "Sent. It's waiting in their portal (email not sent).");
+      setConfirmSend(false);
+      reload();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+      setConfirmSend(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function savePaper() {
     setBusy(true);
     setErr("");
     try {
-      const contract: Record<string, unknown> = { status, template_version: version };
+      const contract: Record<string, unknown> = { status: "signed", template_version: "paper" };
       if (signedAt) contract.signed_at = `${signedAt}T12:00:00.000Z`;
       if (file) contract.pdf_path = await uploadFile(c.id, "contract", file);
       await api(`/api/admin/creators/${c.id}`, { method: "PATCH", body: JSON.stringify({ contract }) });
       setFile(null);
+      setShowPaper(false);
       reload();
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -352,40 +404,40 @@ function ContractW9({ c, reload }: { c: Creator; reload: () => void }) {
     }
   }
 
+  const st = c.contract.status;
   return (
     <div style={card}>
       <h3 style={h3}>Contract & W-9</h3>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
-        <Field label="Contract status">
-          <select style={input} value={status} onChange={(e) => setStatus(e.target.value as Creator["contract"]["status"])}>
-            <option value="none">none</option>
-            <option value="sent">sent</option>
-            <option value="signed">signed</option>
-          </select>
-        </Field>
-        <Field label="Template version">
-          <input style={input} value={version} onChange={(e) => setVersion(e.target.value)} placeholder="v1" />
-        </Field>
-        <Field label="Signed on">
-          <input type="date" style={input} value={signedAt} onChange={(e) => setSignedAt(e.target.value)} />
-        </Field>
-        <Field label={c.contract.pdf_path ? "Replace signed PDF" : "Upload signed PDF"}>
-          <input
-            type="file"
-            accept="application/pdf"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            style={{ ...input, padding: 6 }}
-          />
-        </Field>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
+        <Pill color={st === "signed" ? "#4ade80" : st === "sent" ? "#fbbf24" : "rgba(255,255,255,0.5)"}>{st === "none" ? "not sent" : st}</Pill>
+        {c.contract.template_version && <span style={muted}>version {c.contract.template_version}</span>}
+        {c.contract.sent_at && <span style={muted}>sent {c.contract.sent_at.slice(0, 10)}</span>}
+        {c.contract.viewed_at && <span style={muted}>opened {c.contract.viewed_at.slice(0, 10)}</span>}
+        {c.contract.signed_at && <span style={muted}>signed {c.contract.signed_at.replace("T", " ").slice(0, 16)} UTC</span>}
+        {eSigned && <Pill color="#60a5fa">e-signed, locked</Pill>}
       </div>
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
-        <Btn kind="primary" onClick={save} disabled={busy}>
-          {busy ? "Saving..." : "Save contract"}
-        </Btn>
+
+      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        {st !== "signed" && (
+          <Btn kind="primary" onClick={send} disabled={busy}>
+            {busy ? "Sending..." : confirmSend ? (st === "sent" ? "Confirm: send again with the current version" : "Confirm: send for e-signature") : st === "sent" ? "Send again" : "Send contract"}
+          </Btn>
+        )}
+        {confirmSend && <Btn onClick={() => setConfirmSend(false)}>Cancel</Btn>}
         {c.contract.pdf_path && (
           <a href={fileUrl(c.contract.pdf_path)} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: "#60a5fa" }}>
-            View contract PDF
+            {eSigned ? "Signed PDF" : "Contract PDF"}
           </a>
+        )}
+        {eSigned && (
+          <button onClick={() => setShowAudit(!showAudit)} style={{ background: "none", border: "none", color: "#60a5fa", fontSize: 13, cursor: "pointer", padding: 0 }}>
+            {showAudit ? "Hide audit" : "Audit trail"}
+          </button>
+        )}
+        {!eSigned && st !== "sent" && (
+          <button onClick={() => setShowPaper(!showPaper)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.5)", fontSize: 12, cursor: "pointer", padding: 0 }}>
+            {showPaper ? "Cancel" : "Record a paper contract instead"}
+          </button>
         )}
         <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13, cursor: "pointer", marginLeft: "auto" }}>
           <input type="checkbox" checked={c.w9_on_file} onChange={(e) => toggleW9(e.target.checked)} />
@@ -393,7 +445,52 @@ function ContractW9({ c, reload }: { c: Creator; reload: () => void }) {
           <span style={muted}>(kept outside this system; no tax IDs stored here)</span>
         </label>
       </div>
+
+      {showPaper && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginTop: 12, alignItems: "end" }}>
+          <Field label="Signed on">
+            <input type="date" style={input} value={signedAt} onChange={(e) => setSignedAt(e.target.value)} />
+          </Field>
+          <Field label="Signed PDF">
+            <input type="file" accept="application/pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} style={{ ...input, padding: 6 }} />
+          </Field>
+          <Btn kind="primary" onClick={savePaper} disabled={busy || !file}>
+            Mark signed (paper)
+          </Btn>
+        </div>
+      )}
+
+      {showAudit && c.contract.audit && (
+        <div style={{ marginTop: 12, fontSize: 12 }}>
+          {AUDIT_LABELS.map(([k, label]) =>
+            c.contract.audit?.[k] ? (
+              <div key={k} style={{ display: "flex", gap: 10, padding: "3px 0" }}>
+                <span style={{ ...muted, minWidth: 130 }}>{label}</span>
+                <span style={{ wordBreak: "break-all" }}>{c.contract.audit[k]}</span>
+              </div>
+            ) : null,
+          )}
+          <div style={{ display: "flex", gap: 10, padding: "3px 0" }}>
+            <span style={{ ...muted, minWidth: 130 }}>Signed PDF SHA-256</span>
+            <span style={{ wordBreak: "break-all", fontFamily: "monospace" }}>{c.contract.signed_sha256}</span>
+          </div>
+        </div>
+      )}
+
+      {events.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ ...muted, marginBottom: 4 }}>Contract log</div>
+          {events.map((e) => (
+            <div key={e.id} style={{ fontSize: 12, padding: "2px 0", color: e.type === "email_failed" ? "#f87171" : "rgba(255,255,255,0.7)" }}>
+              {e.at.replace("T", " ").slice(0, 19)} UTC · {e.type} · {e.actor}
+              {e.detail ? ` · ${e.detail}` : ""}
+              {e.ip ? ` · ${e.ip}` : ""}
+            </div>
+          ))}
+        </div>
+      )}
       <ErrorText>{err}</ErrorText>
+      {msg && <p style={{ color: "#4ade80", fontSize: 13 }}>{msg}</p>}
     </div>
   );
 }

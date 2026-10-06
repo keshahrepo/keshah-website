@@ -8,6 +8,11 @@
  * where creditedWeekdays = posted weekdays + approved days off inside the
  * creator's active window (start_date .. ended_on). This single formula covers
  * the partial first month, missed days and the leaving month.
+ *
+ * Ladder: the level is set by months ELAPSED since start_date (plus
+ * starting_completed_months), not by attendance. Missed days cost money via
+ * the proration above but never delay a raise. A partial first month doesn't
+ * count; a start on the month's first weekday counts once that month ends.
  */
 import type {
   Adjustment,
@@ -185,8 +190,9 @@ interface MonthAttendance {
   approvedOffDays: number;
   missedDays: number;
   pendingDays: number;
-  /** Active window covers every weekday of the calendar month. */
+  /** Active window covers every weekday of the calendar month (counts toward the ladder once over). */
   fullMonth: boolean;
+  /** Full month with nothing missed or pending. Informational only; does NOT gate the ladder. */
   completed: boolean;
 }
 
@@ -223,22 +229,25 @@ function attendance(
 
 /**
  * Completed months credited BEFORE `month`:
- * starting_completed_months + completed calendar months from the start month
- * up to (not including) `month`. This is what sets `month`'s base level.
+ * starting_completed_months + full calendar months elapsed since start_date,
+ * up to (not including) `month`, regardless of attendance (missed days are
+ * prorated out of base pay instead). A partial first month doesn't count; a
+ * month after ended_on doesn't count. This is what sets `month`'s base level.
+ * `history` is accepted for call-site compatibility and ignored.
  */
-export function completedMonthsAsOf(profile: PayProfile, month: YyyyMm, history: PayHistory): number {
-  const posted = postedWeekdaySet(history.postingDays);
-  const off = approvedOffSet(history.daysOff);
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function completedMonthsAsOf(profile: PayProfile, month: YyyyMm, history?: PayHistory): number {
+  const none = new Set<YyyyMmDd>();
   let count = profile.starting_completed_months ?? 0;
   for (let m = monthOf(profile.start_date); m < month; m = addMonths(m, 1)) {
-    if (attendance(profile, m, posted, off).completed) count++;
+    if (attendance(profile, m, none, none).fullMonth) count++;
   }
   return count;
 }
 
 /**
- * Next base level from the perspective of `asOfMonth` (assumes `asOfMonth`
- * and every following month are completed). `earliestMonth` is the first
+ * Next base level from the perspective of `asOfMonth` (months simply need to
+ * elapse; attendance doesn't matter). `earliestMonth` is the first
  * month paid at `nextBaseCents`. Null fields when already at the top.
  */
 export function nextLevel(
@@ -250,10 +259,11 @@ export function nextLevel(
   const next = BASE_LADDER.find(([t]) => t > have);
   if (!next) return { nextBaseCents: null, monthsNeeded: null, earliestMonth: null };
   const monthsNeeded = next[0] - have;
-  // A partial first month can never complete, so counting starts the month after.
+  // A partial first month never counts, so counting starts the month after.
   const startMonth = monthOf(profile.start_date);
   let firstCountable = asOfMonth > startMonth ? asOfMonth : startMonth;
-  if (firstCountable === startMonth && !profile.start_date.endsWith("-01")) {
+  const none = new Set<YyyyMmDd>();
+  if (firstCountable === startMonth && !attendance(profile, startMonth, none, none).fullMonth) {
     firstCountable = addMonths(startMonth, 1);
   }
   return { nextBaseCents: next[1], monthsNeeded, earliestMonth: addMonths(firstCountable, monthsNeeded) };

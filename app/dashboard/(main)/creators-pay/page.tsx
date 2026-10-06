@@ -27,6 +27,7 @@ interface Row {
     name: string;
     legal_name: string;
     status: string;
+    status_display: string;
     campaign_tags: string[];
     contract: { status: string };
     w9_on_file: boolean;
@@ -39,6 +40,7 @@ interface Row {
   postedDays: number;
   expectedDays: number;
   missedDays: number;
+  missedDaysPrev: number;
   pendingDays: number;
   claims100k: number;
   claims1m: number;
@@ -62,6 +64,28 @@ interface ListResponse {
   estimate: { plan_price_usd: number; store_cut: number; proceeds_per_purchase_usd: number; green_at: number; amber_at: number };
 }
 
+/** Missed-days badge: amber at 2+, red at 4+ in a month. */
+function MissBadge({ n, label }: { n: number; label: string }) {
+  const color = n >= 4 ? "#f87171" : n >= 2 ? "#fbbf24" : "rgba(255,255,255,0.4)";
+  return (
+    <span
+      title={`${n} missed weekday${n === 1 ? "" : "s"} ${label}`}
+      style={{
+        display: "inline-block",
+        fontSize: 11,
+        padding: "1px 7px",
+        borderRadius: 10,
+        marginRight: 4,
+        color,
+        background: n >= 2 ? (n >= 4 ? "rgba(248,113,113,0.15)" : "rgba(251,191,36,0.15)") : "transparent",
+        border: n >= 2 ? "none" : "1px solid rgba(255,255,255,0.1)",
+      }}
+    >
+      {label} {n}
+    </span>
+  );
+}
+
 const check = (on: boolean) => (
   <span style={{ color: on ? "#4ade80" : "rgba(255,255,255,0.25)" }}>{on ? "☑" : "☐"}</span>
 );
@@ -80,7 +104,7 @@ export default function CreatorsPayPage() {
       .catch((e) => setErr(String(e.message ?? e)));
   }, [month]);
 
-  const rows = (data?.rows ?? []).filter((r) => showEnded || (r.creator.is_active && r.creator.status !== "ended"));
+  const rows = (data?.rows ?? []).filter((r) => showEnded || (r.creator.is_active && r.creator.status_display !== "ended"));
   const totalOwed = rows.reduce((s, r) => s + r.totalOwedCents, 0);
 
   return (
@@ -119,6 +143,7 @@ export default function CreatorsPayPage() {
                   <th style={th}>Creator</th>
                   <th style={th}>Level</th>
                   <th style={th}>Days posted</th>
+                  <th style={th} title="Missed weekdays: amber at 2+, red at 4+">Missed</th>
                   <th style={th}>100K / 1M</th>
                   <th style={th}>Bonuses</th>
                   <th style={th}>Owed</th>
@@ -138,14 +163,14 @@ export default function CreatorsPayPage() {
                         {r.creator.legal_name || r.creator.name || r.creator.id}
                       </Link>
                       <div style={{ marginTop: 4, display: "flex", gap: 4, flexWrap: "wrap" }}>
-                        <Pill>{r.creator.status || "no status"}</Pill>
+                        <Pill>{r.creator.status_display}</Pill>
                         {r.pendingDaysOff > 0 && <Pill color="#fbbf24">{r.pendingDaysOff} day-off req</Pill>}
                         {r.pendingClaims > 0 && <Pill color="#fbbf24">{r.pendingClaims} claim{r.pendingClaims > 1 ? "s" : ""} to review</Pill>}
                       </div>
                     </td>
                     <td style={td}>
                       {r.levelBaseCents === null ? (
-                        <span style={muted}>no start date</span>
+                        <span style={muted}>Not started</span>
                       ) : (
                         <>
                           <div>{fmtUsd(r.levelBaseCents)}/mo</div>
@@ -166,6 +191,16 @@ export default function CreatorsPayPage() {
                         {r.missedDays > 0 && <span style={{ color: "#f87171" }}>{r.missedDays} missed </span>}
                         {r.pendingDays > 0 && <span>{r.pendingDays} to go</span>}
                       </div>
+                    </td>
+                    <td style={{ ...td, whiteSpace: "nowrap" }}>
+                      {r.levelBaseCents === null ? (
+                        <span style={muted}>–</span>
+                      ) : (
+                        <>
+                          <MissBadge n={r.missedDays} label="this mo" />
+                          <MissBadge n={r.missedDaysPrev} label="last mo" />
+                        </>
+                      )}
                     </td>
                     <td style={td}>
                       {r.claims100k} / {r.claims1m}
@@ -221,7 +256,7 @@ export default function CreatorsPayPage() {
                 ))}
                 {!rows.length && (
                   <tr>
-                    <td style={{ ...td, ...muted }} colSpan={12}>
+                    <td style={{ ...td, ...muted }} colSpan={13}>
                       No creators yet. Use “+ Add creator”.
                     </td>
                   </tr>

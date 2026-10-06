@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { COOKIE_NAME, getPayloadFromToken } from "@/lib/auth";
-import { CreatorDataError, getCreator } from "@/lib/creators/db";
+import { CreatorDataError, assertOnboarded, getCreator } from "@/lib/creators/db";
 import type { CreatorProfile } from "@/lib/creators/types";
 
 /**
@@ -20,6 +20,23 @@ export async function requireCreator(req: NextRequest): Promise<CreatorProfile |
   return creator;
 }
 
+/** Rejects (friendly 403) until Getting started is finished. Returns null when allowed. */
+export async function requireOnboarded(creator: CreatorProfile): Promise<NextResponse | null> {
+  try {
+    await assertOnboarded(creator);
+    return null;
+  } catch (e) {
+    return errorResponse(e, "onboarding gate");
+  }
+}
+
+/** Client IP (first x-forwarded-for hop on Vercel) and user agent, for audit records. */
+export function requestMeta(req: NextRequest): { ip: string; user_agent: string } {
+  const xff = req.headers.get("x-forwarded-for") ?? "";
+  const ip = xff.split(",")[0].trim() || req.headers.get("x-real-ip") || "unknown";
+  return { ip, user_agent: req.headers.get("user-agent") ?? "unknown" };
+}
+
 export function errorResponse(e: unknown, where: string): NextResponse {
   if (e instanceof CreatorDataError) return NextResponse.json({ error: e.message }, { status: e.status });
   console.error(`creator ${where} error:`, e);
@@ -37,5 +54,6 @@ export function publicCreator(c: CreatorProfile) {
     instagram_handle: c.instagram_handle,
     timezone: c.timezone,
     start_date: c.start_date,
+    tracking_url: c.tracking_url,
   };
 }

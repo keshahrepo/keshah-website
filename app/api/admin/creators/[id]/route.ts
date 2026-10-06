@@ -15,6 +15,8 @@ import {
   todayIn,
 } from "@/lib/creators/admin";
 import { addMonths, completedMonthsAsOf, draftInvoiceLines, nextLevel } from "@/lib/creators/pay";
+import { listContractEvents } from "@/lib/creators/contract";
+import { markContractStepDone } from "@/lib/creators/db";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +33,10 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   const today = todayIn(creator.timezone);
   const qMonth = req.nextUrl.searchParams.get("month");
   const month = isMonth(qMonth) ? qMonth : today.slice(0, 7);
-  const h = await loadHistory(id);
+  const [h, contractEvents] = await Promise.all([
+    loadHistory(id, { contractSigned: creator.contract.status === "signed" }),
+    listContractEvents(id).catch(() => []),
+  ]);
   const summary = summaryFor(creator, h, month);
   const hist = { postingDays: h.postingDays, daysOff: h.daysOff };
   const prev = addMonths(month, -1);
@@ -52,6 +57,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
     adjustments: [...h.adjustments].sort((a, b) => b.month.localeCompare(a.month)),
     invoices: h.invoices,
     onboarding: h.onboarding,
+    contractEvents,
     attribution,
   });
 }
@@ -79,10 +85,21 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
       return NextResponse.json({ error: "Another creator already uses that email" }, { status: 409 });
     }
   }
+  // A portal e-signed contract is final: no manual edits over it.
+  const existingContract = (snap.data()?.contract ?? {}) as { signed_sha256?: string };
+  if (existingContract.signed_sha256 && Object.keys(updates).some((k) => k.startsWith("contract."))) {
+    return NextResponse.json({ error: "This contract was e-signed and is locked." }, { status: 409 });
+  }
   // Marking a contract signed without a date stamps it now.
   if (updates["contract.status"] === "signed" && body.contract && !(body.contract as Record<string, unknown>).signed_at) {
     if (!snap.data()?.contract?.signed_at) updates["contract.signed_at"] = new Date().toISOString();
   }
   await ref.update(updates);
+  if (updates["contract.status"] === "signed") {
+    // Paper contract recorded by admin: tick the portal's "Sign your contract" step too.
+    await markContractStepDone(id, String(updates["contract.signed_at"] ?? snap.data()?.contract?.signed_at ?? new Date().toISOString())).catch((e) =>
+      console.error("contract step update failed:", e),
+    );
+  }
   return NextResponse.json({ ok: true });
 }

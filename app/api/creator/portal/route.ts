@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { creatorToday, getCreatorLink, getHistory, getOnboarding, isOnboardingComplete } from "@/lib/creators/db";
+import { creatorToday, getHistory, getOnboarding, getPortalSettings, isOnboardingComplete, markContractStepDone } from "@/lib/creators/db";
 import {
   ACCOUNTS_GUIDE_URL,
   ACCOUNTS_STEP_TEXT,
@@ -25,18 +25,20 @@ export async function GET(req: NextRequest) {
   try {
     const now = new Date();
     const today = creatorToday(creator, now);
-    const [onboarding, link, history] = await Promise.all([
-      getOnboarding(creator.id),
-      getCreatorLink(creator),
-      getHistory(creator.id),
-    ]);
+    const [onb, history, settings] = await Promise.all([getOnboarding(creator.id), getHistory(creator.id), getPortalSettings()]);
+    // Self-heal: a contract marked signed by admin (or a sign whose step write failed) ticks the contract step.
+    const onboarding =
+      creator.contract.status === "signed" && !onb.contract_signed_at
+        ? await markContractStepDone(creator.id, creator.contract.signed_at || now.toISOString())
+        : onb;
     const todayLog = history.postingDays.find((p) => p.date === today) ?? null;
     return NextResponse.json({
       creator: publicCreator(creator),
-      onboarding: { ...onboarding, complete: isOnboardingComplete(onboarding) },
-      link,
+      onboarding: { ...onboarding, complete: isOnboardingComplete(onboarding, { contractSigned: creator.contract.status === "signed" }) },
+      contract: { status: creator.contract.status, signed_at: creator.contract.signed_at ?? null },
+      tracking_url: creator.tracking_url || null,
       config: {
-        slack_invite_url: process.env.SLACK_INVITE_URL || null,
+        slack_invite_url: settings.slack_invite_url,
         site_url: KESHAH_SITE_URL,
         founder_videos: FOUNDER_VIDEOS,
         quiz: publicQuiz(),

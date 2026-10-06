@@ -12,16 +12,17 @@
  *   ContentCreators/{id}/invoices/{number}           Invoice (locked once paid)
  *   ContentCreators/{id}/onboarding/{doc}            onboarding progress
  *
- * These are deliberately minimal, self-contained Firestore reads so the admin
- * side does not depend on the portal's lib/creators/db.ts. If/when db.ts
- * lands, the loaders here can be swapped for it.
+ * The loaders here are admin-specific (raw status kept for editing, raw
+ * posting docs for the calendar), but onboarding progress, status display
+ * mapping and URL validation come from lib/creators/db.ts so portal and admin
+ * always agree.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { getStorage } from "firebase-admin/storage";
 import type { DocumentData, Firestore } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { getPayloadFromToken, COOKIE_NAME } from "@/lib/auth";
-import { FOUNDER_VIDEOS } from "./onboarding-content";
+import { mapCreatorStatus, normalizeTrackingUrl, onboardingProgress as sharedOnboardingProgress } from "./db";
 import {
   addMonths,
   baseForCompletedMonths,
@@ -35,6 +36,7 @@ import {
 import type {
   Adjustment,
   BonusClaim,
+  CreatorContract,
   DayOff,
   Invoice,
   PayProfile,
@@ -57,7 +59,6 @@ export const ROI_GREEN = 1.5;
 export const ROI_AMBER = 0.75;
 
 export const PAYMENT_METHOD_LABEL = "Amex ACH";
-const ONBOARDING_STEPS = 5;
 export const CREATOR_STATUSES = ["onboarding", "trial", "active", "leaving", "ended"];
 
 // ------------------------------------------------------------------ auth
@@ -172,11 +173,15 @@ export interface AdminCreator {
   start_date: string;
   starting_completed_months: number;
   campaign_tags: string[];
+  /** Raw ContentCreators.status (kept for the editor). */
   status: string;
+  /** mapCreatorStatus(status): what to display / filter on. */
+  status_display: string;
   ended_on: string | null;
-  contract: { status: "none" | "sent" | "signed"; signed_at?: string; pdf_path?: string; template_version?: string };
+  contract: CreatorContract;
   w9_on_file: boolean;
   creator_link_id: string;
+  tracking_url: string;
   tiktok_handle: string;
   instagram_handle: string;
   is_active: boolean;
@@ -185,7 +190,7 @@ export interface AdminCreator {
 }
 
 export function toAdminCreator(id: string, d: DocumentData): AdminCreator {
-  const contract = (d.contract ?? {}) as AdminCreator["contract"];
+  const contract = (plain(d.contract ?? {}) ?? {}) as Partial<CreatorContract>;
   return {
     id,
     name: String(d.name ?? d.legal_name ?? ""),
@@ -197,15 +202,12 @@ export function toAdminCreator(id: string, d: DocumentData): AdminCreator {
     starting_completed_months: Number(d.starting_completed_months ?? 0) || 0,
     campaign_tags: Array.isArray(d.campaign_tags) ? d.campaign_tags.map(String) : [],
     status: String(d.status ?? ""),
+    status_display: mapCreatorStatus(d.status),
     ended_on: isDate(d.ended_on) ? d.ended_on : null,
-    contract: {
-      status: contract.status ?? "none",
-      ...(contract.signed_at ? { signed_at: toIso(contract.signed_at) ?? undefined } : {}),
-      ...(contract.pdf_path ? { pdf_path: contract.pdf_path } : {}),
-      ...(contract.template_version ? { template_version: contract.template_version } : {}),
-    },
+    contract: { ...contract, status: contract.status ?? "none" } as CreatorContract,
     w9_on_file: !!d.w9_on_file,
     creator_link_id: String(d.creator_link_id ?? ""),
+    tracking_url: String(d.tracking_url ?? ""),
     tiktok_handle: String(d.tiktok_handle ?? ""),
     instagram_handle: String(d.instagram_handle ?? ""),
     is_active: d.is_active !== false,
@@ -267,22 +269,13 @@ function completeVideos(videos: unknown): Record<string, unknown>[] {
   return out;
 }
 
-/** Progress over the portal's 5 onboarding steps (ContentCreators/{id}/onboarding/state). */
-function onboardingProgress(state: DocumentData | null): CreatorHistory["onboarding"] {
-  if (!state) return { done: 0, total: ONBOARDING_STEPS, raw: null };
-  const watched = state.videos_watched && typeof state.videos_watched === "object" ? Object.keys(state.videos_watched).length : 0;
-  const steps = [
-    !!state.accounts_done_at,
-    !!state.slack_joined_at,
-    watched >= Math.max(1, FOUNDER_VIDEOS.length),
-    !!state.rules_ack_at,
-    !!state.link_seen_at,
-  ];
-  const done = state.completed_at ? ONBOARDING_STEPS : steps.filter(Boolean).length;
-  return { done, total: ONBOARDING_STEPS, raw: plain(state) as Record<string, unknown> };
+/** Progress over the portal's Getting started steps (shared step list in db.ts). */
+function onboardingProgress(state: DocumentData | null, contractSigned: boolean): CreatorHistory["onboarding"] {
+  const { done, total } = sharedOnboardingProgress(state, { contractSigned });
+  return { done, total, raw: state ? (plain(state) as Record<string, unknown>) : null };
 }
 
-export async function loadHistory(creatorId: string): Promise<CreatorHistory> {
+export async function loadHistory(creatorId: string, opts: { contractSigned?: boolean } = {}): Promise<CreatorHistory> {
   const ref = db().collection(CREATORS_COLLECTION).doc(creatorId);
   const [posting, off, claims, adj, inv, onb] = await Promise.all([
     ref.collection("posting_days").get(),
@@ -369,7 +362,7 @@ export async function loadHistory(creatorId: string): Promise<CreatorHistory> {
     bonusClaims,
     adjustments,
     invoices,
-    onboarding: onboardingProgress(onb.exists ? onb.data()! : null),
+    onboarding: onboardingProgress(onb.exists ? onb.data()! : null, !!opts.contractSigned),
   };
 }
 
@@ -485,6 +478,8 @@ export interface CreatorRow {
   postedDays: number;
   expectedDays: number;
   missedDays: number;
+  /** Missed weekdays in the month before `month` (badge: amber >= 2, red >= 4). */
+  missedDaysPrev: number;
   pendingDays: number;
   claims100k: number;
   claims1m: number;
@@ -502,7 +497,7 @@ export interface CreatorRow {
 }
 
 export async function buildRow(c: AdminCreator, month: YyyyMm): Promise<CreatorRow> {
-  const h = await loadHistory(c.id);
+  const h = await loadHistory(c.id, { contractSigned: c.contract.status === "signed" });
   const s = summaryFor(c, h, month);
   const prevMonth = addMonths(month, -1);
   const sPrev = summaryFor(c, h, prevMonth);
@@ -536,6 +531,7 @@ export async function buildRow(c: AdminCreator, month: YyyyMm): Promise<CreatorR
     postedDays: s?.postedDays ?? 0,
     expectedDays: s?.expectedWeekdays ?? 0,
     missedDays: s?.missedDays ?? 0,
+    missedDaysPrev: sPrev?.missedDays ?? 0,
     pendingDays: s?.pendingDays ?? 0,
     claims100k: approved.filter((b) => inMonth(b.crossed_100k_on)).length,
     claims1m: approved.filter((b) => inMonth(b.crossed_1m_on)).length,
@@ -583,6 +579,11 @@ export function sanitizeProfile(
   str("tiktok_handle");
   str("instagram_handle");
   if (body.creator_link_id !== undefined) u.creator_link_id = String(body.creator_link_id ?? "").trim() || null;
+  if (body.tracking_url !== undefined) {
+    const t = normalizeTrackingUrl(body.tracking_url);
+    if (t === null) return { error: "Tracking link must be a full https:// link" };
+    u.tracking_url = t;
+  }
   if (body.status !== undefined) {
     const st = String(body.status ?? "");
     if (!CREATOR_STATUSES.includes(st)) return { error: "Bad status" };
@@ -624,7 +625,9 @@ export function sanitizeProfile(
   if (body.contract !== undefined && body.contract && typeof body.contract === "object") {
     const c = body.contract as Record<string, unknown>;
     if (c.status !== undefined) {
-      if (!["none", "sent", "signed"].includes(String(c.status))) return { error: "Bad contract status" };
+      // "sent" only via Send contract (it pins the template + hash); manual edits are for paper contracts.
+      if (String(c.status) === "sent") return { error: "Use Send contract to send it for e-signature" };
+      if (!["none", "signed"].includes(String(c.status))) return { error: "Bad contract status" };
       u["contract.status"] = c.status;
     }
     if (c.template_version !== undefined) u["contract.template_version"] = String(c.template_version ?? "").trim();

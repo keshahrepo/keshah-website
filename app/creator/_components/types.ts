@@ -2,6 +2,8 @@ import type { InvoiceLine, OnboardingState, PostingDay } from "@/lib/creators/ty
 
 export interface MonthData {
   month: string;
+  /** false until the first posting day (pay starts then). */
+  started: boolean;
   today: string;
   expectedWeekdays: number;
   calendarWeekdays: number;
@@ -31,9 +33,11 @@ export interface PortalData {
     instagram_handle: string;
     timezone: string;
     start_date: string;
+    tracking_url: string;
   };
   onboarding: OnboardingState & { complete: boolean };
-  link: { id: string; slug: string; short_link: string } | null;
+  contract: { status: "none" | "sent" | "signed"; signed_at: string | null };
+  tracking_url: string | null;
   config: {
     slack_invite_url: string | null;
     site_url: string;

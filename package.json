@@ -28,6 +28,7 @@
     "marked": "^18.0.3",
     "next": "^16.1.6",
     "nodemailer": "^8.0.11",
+    "pdf-lib": "^1.17.1",
     "postcss": "^8.5.8",
     "qrcode.react": "^4.2.0",
     "razorpay": "^2.9.6",

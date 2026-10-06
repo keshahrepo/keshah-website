@@ -13,6 +13,8 @@
  *   ContentCreators/{creatorId}/adjustments/{id}     Adjustment   auto id
  *   ContentCreators/{creatorId}/invoices/{number}    Invoice      doc id = invoice number, e.g. "IT-001"
  *   ContentCreators/{creatorId}/onboarding/state     OnboardingState
+ *   ContentCreators/{creatorId}/contract_events/{id} ContractEvent  append-only audit log
+ *   Settings/creator_contracts                       ContractSettings (founder countersignature)
  *
  *   Creators/{linkId}                                CreatorsDoc: short link + click tracking.
  *                                                    Linked from ContentCreators.creator_link_id.
@@ -48,11 +50,88 @@ export interface CreatorsDoc {
 
 export type CreatorStatus = "onboarding" | "trial" | "active" | "leaving" | "ended";
 
+/** Everything recorded when a creator e-signs (also printed on the audit certificate page). */
+export interface ContractAudit {
+  /** Random id printed on every page of the signed PDF. */
+  document_id: string;
+  template_version: string;
+  template_sha256: string;
+  signer_typed_name: string;
+  signer_legal_name: string;
+  signer_address: string;
+  signer_email: string;
+  /** ContentCreators doc id from the session token. */
+  signer_user_id: string;
+  signer_ip: string;
+  signer_user_agent: string;
+  signed_at_utc: IsoInstant;
+  /** Human-readable time in the creator's timezone, e.g. "October 6, 2026 at 3:04:05 PM CDT". */
+  signed_at_local: string;
+  signer_timezone: string;
+  consent_text_version: string;
+  consent_text_sha256: string;
+  sent_at?: IsoInstant;
+  first_viewed_at?: IsoInstant;
+  countersigner_name: string;
+  countersigner_title: string;
+  entity_name: string;
+  countersignature_sha256: string;
+}
+
 export interface CreatorContract {
   status: "none" | "sent" | "signed";
   signed_at?: IsoInstant;
   pdf_path?: string;
   template_version?: string;
+  /** Set on "Send contract": hash of the template the creator will sign. */
+  template_sha256?: string;
+  sent_at?: IsoInstant;
+  /** First time the creator opened the contract PDF in the portal. */
+  viewed_at?: IsoInstant;
+  /** SHA-256 of the final signed PDF (present only for portal e-signatures). */
+  signed_sha256?: string;
+  audit?: ContractAudit;
+}
+
+/** Settings/creator_contracts */
+export interface ContractSettings {
+  founder_name: string;
+  founder_title: string;
+  entity_name: string;
+  /** Storage path of the founder's signature PNG (contracts/founder_signature.png). */
+  signature_path?: string;
+  signature_sha256?: string;
+  signature_updated_at?: IsoInstant;
+  updated_at?: IsoInstant;
+  /** CreatorContractTemplates doc id that "Send contract" uses. */
+  current_template_version?: string;
+}
+
+/** CreatorContractTemplates/{version}: an uploaded contract PDF. Immutable. */
+export interface ContractTemplate {
+  version: string;
+  title: string;
+  sha256: string;
+  /** contracts/templates/<version>.pdf */
+  storage_path: string;
+  pages: number;
+  bytes: number;
+  uploaded_at: IsoInstant;
+}
+
+/** ContentCreators/{id}/contract_events/{auto}: written once, never updated. */
+export interface ContractEvent {
+  type: "sent" | "viewed" | "signed" | "emailed" | "email_failed";
+  at: IsoInstant;
+  actor: "admin" | "creator" | "system";
+  template_version?: string;
+  template_sha256?: string;
+  signed_sha256?: string;
+  pdf_path?: string;
+  ip?: string;
+  user_agent?: string;
+  detail?: string;
+  audit?: ContractAudit;
 }
 
 export type PayoutMethod = "amex_ach";
@@ -83,8 +162,10 @@ export interface CreatorPortalFields {
   keshah_email: string;
   tiktok_handle: string;
   instagram_handle: string;
-  /** Creators/{id} doc holding their tracking short link. */
+  /** Creators/{id} doc holding their old short link (kept, no longer shown to creators). */
   creator_link_id: string | null;
+  /** Attribution link the creator shares (e.g. an AppStack campaign link). Set by admin; any https URL. */
+  tracking_url: string;
   /** Last invoice sequence number issued (0 = none yet). */
   invoice_seq: number;
 }
@@ -199,8 +280,13 @@ export interface Invoice {
 
 export type OnboardingStep = "videos" | "quiz" | "accounts" | "slack" | "warmup" | "rules" | "link";
 
+/** Every Getting started step, in portal order. "contract" is completed by e-signing, not setOnboardingStep. */
+export type OnboardingStepKey = "contract" | OnboardingStep;
+
 /** ContentCreators/{id}/onboarding/state */
 export interface OnboardingState {
+  /** Step 0 "Sign your contract": set when the e-signature completes (or admin marks the contract signed). */
+  contract_signed_at?: IsoInstant;
   /** Step 1 "Learn KESHAH": FOUNDER_VIDEOS id -> watched-at instant. */
   videos_watched: Record<string, IsoInstant>;
   /** Step 2: QUIZ passed (all answers correct). */

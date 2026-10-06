@@ -156,6 +156,7 @@ export function SubNav() {
     { href: "/dashboard/creators-pay", label: "Creators" },
     { href: "/dashboard/creators-pay/payouts", label: "Payout run" },
     { href: "/dashboard/creators-pay/records", label: "Records" },
+    { href: "/dashboard/creators-pay/settings", label: "Contract signing & settings" },
     { href: "/dashboard/creators-pay/new", label: "+ Add creator" },
   ];
   return (

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { addBonusClaim, getHistory } from "@/lib/creators/db";
-import { errorResponse, requireCreator } from "../_auth";
+import { errorResponse, requireCreator, requireOnboarded } from "../_auth";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +34,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const creator = await requireCreator(req);
   if (creator instanceof NextResponse) return creator;
+  const gated = await requireOnboarded(creator);
+  if (gated) return gated;
   try {
     const b = await req.json();
     const claim = await addBonusClaim(creator.id, {

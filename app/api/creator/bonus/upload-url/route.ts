@@ -2,11 +2,13 @@
 // /api/careers/upload-url). Objects land under creators/<id>/bonus/.
 import { NextRequest, NextResponse } from "next/server";
 import { bonusScreenshotUploadUrl } from "@/lib/creators/db";
-import { errorResponse, requireCreator } from "../../_auth";
+import { errorResponse, requireCreator, requireOnboarded } from "../../_auth";
 
 export async function POST(req: NextRequest) {
   const creator = await requireCreator(req);
   if (creator instanceof NextResponse) return creator;
+  const gated = await requireOnboarded(creator);
+  if (gated) return gated;
   try {
     const b = await req.json();
     return NextResponse.json(
