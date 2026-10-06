@@ -193,28 +193,30 @@ const claim = (o: Partial<BonusClaim>): BonusClaim => ({
 });
 const total = (lines: { amount_cents: number }[]) => lines.reduce((s, l) => s + l.amount_cents, 0);
 
-test("bonus: 100K only -> $15 in the crossing month", () => {
-  const c = [claim({ crossed_100k_on: "2026-10-20" })];
-  assert.equal(total(bonusLinesForMonth(c, "2026-10")), 1500);
-  assert.equal(total(bonusLinesForMonth(c, "2026-11")), 0);
+test("bonus: paid on the invoice for the month after posting, not before", () => {
+  const c = [claim({ crossed_100k_on: "2026-10-20" })]; // posted 2026-10-05
+  assert.equal(total(bonusLinesForMonth(c, "2026-10")), 0);
+  assert.equal(total(bonusLinesForMonth(c, "2026-11")), 1500);
+  assert.equal(total(bonusLinesForMonth(c, "2026-12")), 0);
 });
 
-test("bonus: 1M same month as 100K -> $100 once", () => {
+test("bonus: 1M -> one $100 line", () => {
   const c = [claim({ crossed_100k_on: "2026-10-08", crossed_1m_on: "2026-10-20" })];
-  const lines = bonusLinesForMonth(c, "2026-10");
+  const lines = bonusLinesForMonth(c, "2026-11");
   assert.equal(lines.length, 1);
   assert.equal(lines[0].kind, "bonus_1m");
   assert.equal(total(lines), 10000);
   // 1M with no 100K date recorded -> also $100
-  assert.equal(total(bonusLinesForMonth([claim({ crossed_1m_on: "2026-10-20" })], "2026-10")), 10000);
+  assert.equal(total(bonusLinesForMonth([claim({ crossed_1m_on: "2026-10-20" })], "2026-11")), 10000);
 });
 
-test("bonus: 100K one month then 1M next month -> $15 then +$85", () => {
+test("bonus: 100K in posting month, 1M the next month -> one $100 line, no split", () => {
   const c = [claim({ posted_on: "2026-10-25", crossed_100k_on: "2026-10-28", crossed_1m_on: "2026-11-10" })];
-  assert.equal(total(bonusLinesForMonth(c, "2026-10")), 1500);
+  assert.equal(total(bonusLinesForMonth(c, "2026-10")), 0);
   const nov = bonusLinesForMonth(c, "2026-11");
-  assert.equal(nov[0].kind, "bonus_1m_topup");
-  assert.equal(total(nov), 8500);
+  assert.equal(nov.length, 1);
+  assert.equal(nov[0].kind, "bonus_1m");
+  assert.equal(total(nov), 10000);
 });
 
 test("bonus: per platform (1M on TikTok and Instagram = $200)", () => {
@@ -222,27 +224,26 @@ test("bonus: per platform (1M on TikTok and Instagram = $200)", () => {
     claim({ crossed_1m_on: "2026-10-20" }),
     claim({ platform: "instagram", video_url: "https://www.instagram.com/reel/abc", crossed_1m_on: "2026-10-22" }),
   ];
-  assert.equal(total(bonusLinesForMonth(c, "2026-10")), 20000);
+  assert.equal(total(bonusLinesForMonth(c, "2026-11")), 20000);
 });
 
 test("bonus: crossing after 30 days = nothing; day 30 counts", () => {
   assert.equal(total(bonusLinesForMonth([claim({ posted_on: "2026-10-01", crossed_100k_on: "2026-11-01" })], "2026-11")), 0); // 31 days
-  assert.equal(total(bonusLinesForMonth([claim({ posted_on: "2026-10-01", crossed_100k_on: "2026-10-31" })], "2026-10")), 1500); // 30 days
+  assert.equal(total(bonusLinesForMonth([claim({ posted_on: "2026-10-01", crossed_100k_on: "2026-10-31" })], "2026-11")), 1500); // 30 days
   // 100K in time, 1M late -> only the $15
   const c = [claim({ posted_on: "2026-10-01", crossed_100k_on: "2026-10-10", crossed_1m_on: "2026-11-15" })];
-  assert.equal(total(bonusLinesForMonth(c, "2026-10")), 1500);
-  assert.equal(total(bonusLinesForMonth(c, "2026-11")), 0);
+  assert.equal(total(bonusLinesForMonth(c, "2026-11")), 1500);
 });
 
 test("bonus: rejected / unapproved claims excluded; duplicate approved claims not double-paid", () => {
-  assert.equal(total(bonusLinesForMonth([claim({ status: "rejected", crossed_1m_on: "2026-10-20" })], "2026-10")), 0);
-  assert.equal(total(bonusLinesForMonth([claim({ status: "claimed", crossed_1m_on: "2026-10-20" })], "2026-10")), 0);
-  assert.equal(total(bonusLinesForMonth([claim({ crossed_100k_on: "2026-10-20" }), claim({ crossed_100k_on: "2026-10-21" })], "2026-10")), 1500);
+  assert.equal(total(bonusLinesForMonth([claim({ status: "rejected", crossed_1m_on: "2026-10-20" })], "2026-11")), 0);
+  assert.equal(total(bonusLinesForMonth([claim({ status: "claimed", crossed_1m_on: "2026-10-20" })], "2026-11")), 0);
+  assert.equal(total(bonusLinesForMonth([claim({ crossed_100k_on: "2026-10-20" }), claim({ crossed_100k_on: "2026-10-21" })], "2026-11")), 1500);
 });
 
 test("adjustments +/- are added as lines for their month only", () => {
   const p = prof("2026-10-01");
-  const s = sum(p, "2026-10", postAll("2026-10-01", "2026-10-31"), [], [claim({ crossed_100k_on: "2026-10-20" })], [
+  const s = sum(p, "2026-10", postAll("2026-10-01", "2026-10-31"), [], [claim({ posted_on: "2026-09-25", crossed_100k_on: "2026-10-01" })], [
     { month: "2026-10", amount_cents: 2500, note: "Extra video" },
     { month: "2026-10", amount_cents: -1000, note: "Overpayment correction" },
     { month: "2026-11", amount_cents: 99999, note: "Other month" },

@@ -590,8 +590,9 @@ export async function buildRow(c: AdminCreator, month: YyyyMm): Promise<CreatorR
     missedDays: s?.missedDays ?? 0,
     missedDaysPrev: sPrev?.missedDays ?? 0,
     pendingDays: s?.pendingDays ?? 0,
-    claims100k: approved.filter((b) => inMonth(b.crossed_100k_on)).length,
-    claims1m: approved.filter((b) => inMonth(b.crossed_1m_on)).length,
+    // Counted on the invoice month they're paid in: videos posted the month before.
+    claims100k: approved.filter((b) => addMonths(b.posted_on.slice(0, 7), 1) === month && !!(b.crossed_100k_on || b.crossed_1m_on)).length,
+    claims1m: approved.filter((b) => addMonths(b.posted_on.slice(0, 7), 1) === month && !!b.crossed_1m_on).length,
     pendingClaims: h.bonusClaims.filter((b) => b.status === "claimed").length,
     pendingDaysOff: h.daysOff.filter((d) => d.status === "requested").length,
     bonusCents: s ? s.bonusLines.reduce((a, l) => a + l.amount_cents, 0) : 0,

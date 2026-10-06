@@ -294,20 +294,20 @@ export function bonusLinesForMonth(claims: BonusClaim[], month: YyyyMm): Invoice
     return d >= 0 && d <= BONUS_WINDOW_DAYS;
   };
   const platformName = (p: Platform) => (p === "tiktok" ? "TikTok" : "Instagram");
+  // Bonuses are paid one month after posting: videos first posted in month M
+  // are settled on the invoice for M+1, once every one of their 30-day
+  // windows has closed. One line per video and platform, at its final level.
   const lines: InvoiceLine[] = [];
   for (const g of groups.values()) {
+    if (addMonths(monthOf(g.posted), 1) !== month) continue;
     // Hitting 1M implies having hit 100K no later than that.
     const c100 = minDate(g.c100, g.c1m);
     const q100 = within(g.posted, c100);
     const q1m = within(g.posted, g.c1m);
     const what = `${platformName(g.platform)} video posted ${g.posted} (${g.url})`;
-    if (q1m && monthOf(g.c1m!) === month) {
-      if (q100 && monthOf(c100!) < month) {
-        lines.push({ kind: "bonus_1m_topup", label: `1M views bonus top-up: ${what}`, amount_cents: BONUS_1M_TOTAL_CENTS - BONUS_100K_CENTS });
-      } else {
-        lines.push({ kind: "bonus_1m", label: `1M views bonus: ${what}`, amount_cents: BONUS_1M_TOTAL_CENTS });
-      }
-    } else if (q100 && monthOf(c100!) === month && !(q1m && monthOf(g.c1m!) === month)) {
+    if (q1m) {
+      lines.push({ kind: "bonus_1m", label: `1M views bonus: ${what}`, amount_cents: BONUS_1M_TOTAL_CENTS });
+    } else if (q100) {
       lines.push({ kind: "bonus_100k", label: `100K views bonus: ${what}`, amount_cents: BONUS_100K_CENTS });
     }
   }

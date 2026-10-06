@@ -249,8 +249,8 @@ test("bonus: 100K inside 30 days creates one approved auto claim; re-run is a no
   assert.equal(up.patch.crossed_1m_on, "2026-10-19"); // 03:00Z = Oct 19 in Chicago
   const upgraded = [{ ...claims[0], ...up.patch }];
   assert.equal(bonusAction(rec({ views: 1_500_000, crossed_1m_at: "2026-10-20T03:00:00Z" }), upgraded, bctx).op, "none");
-  // 100K Oct 3 + 1M Oct 19 in the same month -> one $100 line
-  assert.deepEqual(bonusLinesForMonth(upgraded, "2026-10").map((l) => [l.kind, l.amount_cents]), [["bonus_1m", 10000]]);
+  // posted Oct 1, 100K Oct 3 + 1M Oct 19 -> one $100 line on the November invoice
+  assert.deepEqual(bonusLinesForMonth(upgraded, "2026-11").map((l) => [l.kind, l.amount_cents]), [["bonus_1m", 10000]]);
 });
 
 test("bonus: 30-day window is day 30 inclusive, judged by first-observed local date", () => {
@@ -283,7 +283,7 @@ test("bonus: manual claim for the same video -> auto claim reuses its url and pa
   assert.equal(a.op, "create");
   if (a.op !== "create") return;
   assert.equal(a.claim.video_url, manual.video_url);
-  const lines = bonusLinesForMonth([manual, { ...a.claim, id: a.id }], "2026-10");
+  const lines = bonusLinesForMonth([manual, { ...a.claim, id: a.id }], "2026-11");
   assert.equal(lines.length, 1);
   assert.equal(lines[0].amount_cents, 1500);
   assert.equal(bonusAction(rec(), [{ ...manual, status: "rejected" }], bctx).op, "none");

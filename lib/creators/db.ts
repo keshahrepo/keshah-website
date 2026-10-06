@@ -384,14 +384,16 @@ export async function getHistory(id: string): Promise<CreatorHistory> {
   };
 }
 
-/** One month's records. Bonus claims are included if posted or crossed in the month. */
+/** One month's records. Bonus claims are included if posted or crossed in the month, or posted the month before (paid this month). */
 export async function getMonthData(id: string, month: YyyyMm): Promise<CreatorHistory> {
   const h = await getHistory(id);
+  const prev = addMonths(month, -1);
   const inMonth = (d?: string) => !!d && d.startsWith(month);
+  const inPrev = (d?: string) => !!d && d.startsWith(prev);
   return {
     postingDays: h.postingDays.filter((p) => inMonth(p.date)),
     daysOff: h.daysOff.filter((d) => inMonth(d.date)),
-    bonusClaims: h.bonusClaims.filter((c) => inMonth(c.posted_on) || inMonth(c.crossed_100k_on) || inMonth(c.crossed_1m_on)),
+    bonusClaims: h.bonusClaims.filter((c) => inMonth(c.posted_on) || inPrev(c.posted_on) || inMonth(c.crossed_100k_on) || inMonth(c.crossed_1m_on)),
     adjustments: h.adjustments.filter((a) => a.month === month),
     invoices: h.invoices.filter((i) => i.month === month),
   };
