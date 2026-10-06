@@ -106,5 +106,5 @@ ${p("Aadi")}
 <p style="margin:24px 0 0;font-size:12px;color:#888">If the button doesn't work, paste this into your browser:<br>${esc(input.link)}</p>
 </div>`;
 
-  return { subject: "You're in. Welcome to KESHAH", text, html };
+  return { subject: `${first === "there" ? "Your" : `${first}, your`} KESHAH creator portal`, text, html };
 }

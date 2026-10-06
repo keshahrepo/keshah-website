@@ -133,7 +133,9 @@ export async function acceptCreator(id: string, opts: AcceptOptions): Promise<Ac
               keshahEmail: groupDone ? String(d.keshah_email || "") : undefined,
               contractReady: ready,
             });
-            await sendEmail({ to: personal, ...mail });
+            // Plain text only: reads like a personal Gmail message, which
+            // keeps it in Primary instead of Promotions.
+            await sendEmail({ to: personal, subject: mail.subject, text: mail.text });
             inviteEmailedNow = true;
             await record("invite", "done", `Emailed ${personal}. Link expires ${invite.expires_at.slice(0, 10)}.`);
           } catch (e) {
