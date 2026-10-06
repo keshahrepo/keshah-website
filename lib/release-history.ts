@@ -39,11 +39,11 @@ export interface Release {
 // probably doesn't shift any user-visible cohort — don't add an entry.
 export const RELEASES: Release[] = [
   {
-    // Submitted for review 2026-10-06. Set `date` (+ `time`, UTC) the
-    // day it goes live in both stores, and relabel to "5.19 launch".
+    // Live in the stores 2026-10-06 (founder confirmed).
     slug: "5_19_next",
-    label: "5.19 (in review)",
-    date: null,
+    label: "5.19 launch",
+    date: "2026-10-06",
+    time: "15:21",
     description:
       "Proof page + \"Will this actually work for me?\" card (days 1-15), " +
       "daily member spotlight on the all-done screen, all-done rework " +
