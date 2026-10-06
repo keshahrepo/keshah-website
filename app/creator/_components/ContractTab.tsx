@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { adoptedSignatureText } from "@/lib/creators/signature";
-import { Button, C, Card, Eyebrow, Field, H, Msg, P, api, inputStyle } from "./ui";
+import { Button, C, Card, buttonStyle, Eyebrow, Field, H, Msg, P, api, inputStyle } from "./ui";
 
 interface ContractInfo {
   status: "none" | "sent" | "signed";
@@ -21,19 +21,7 @@ interface ContractInfo {
   signature_font: { family: string; css_url: string };
 }
 
-const linkStyle = {
-  minHeight: 48,
-  boxSizing: "border-box",
-  alignItems: "center",
-  padding: "12px 18px",
-  borderRadius: 12,
-  border: C.border,
-  color: "#fff",
-  fontSize: 14,
-  fontWeight: 600,
-  textDecoration: "none",
-  display: "inline-flex",
-} as const;
+const linkStyle = buttonStyle("ghost");
 
 /** Read + sign. Used as the first Getting started step and in the Contract tab. */
 export function ContractSigner({ onSigned, compact }: { onSigned?: () => void; compact?: boolean }) {

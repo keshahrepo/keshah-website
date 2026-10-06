@@ -107,6 +107,7 @@ export const WARMUP_DAYS = 3;
 export const WARMUP_HEADLINE = "Warm up your accounts for 3 days. Don't post yet.";
 export const WARMUP_TEXT =
   "For the next 3 days, don't post anything. Each day, spend 5 to 10 minutes on TikTok and 5 to 10 minutes on Instagram using your new accounts. Scroll, like and comment on hair loss and hair care videos, like a normal person would. This tells the apps what your account is about, so your videos get shown to the right people later. Come back each day and tick it off.";
+export const FIRST_POSTING_DAY_TEXT = "Your first posting day is the weekday after your warm-up ends.";
 export const WARMUP_DONE_TEXT = "Warm-up done. You can start posting on your first posting day.";
 
 export const POSTING_RULES: string[] = [

@@ -220,21 +220,24 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
   const tickedToday = warm.includes(data.today.date);
   const link = data.tracking_url;
   const contractDone = signedNow || data.contract.status === "signed" || !!onb.contract_signed_at;
+  // Same order as ONBOARDING_STEP_KEYS. Warm-up is last and runs over 3 days.
   const doneByStep = [
     contractDone,
+    !!onb.slack_joined_at,
     videosDone,
     !!onb.quiz_passed_at,
     !!onb.accounts_done_at,
-    !!onb.slack_joined_at,
-    warmDone,
-    !!onb.rules_ack_at,
     !!onb.link_seen_at,
+    !!onb.rules_ack_at,
+    warmDone,
   ];
+  const WARM = doneByStep.length - 1;
+  const warmLocked = !onb.accounts_done_at || !onb.link_seen_at;
   const doneCount = doneByStep.filter(Boolean).length;
   const allDone = onb.complete;
   // The first unfinished step opens by default. Warm-up waits a day between
-  // ticks, so once today's tick is in, the next step after it opens instead.
-  const currentIdx = doneByStep.findIndex((d, i) => !d && !(i === 5 && tickedToday));
+  // ticks, so once today's tick is in it stays closed until tomorrow.
+  const currentIdx = doneByStep.findIndex((d, i) => !d && !(i === WARM && tickedToday));
   const cur = (n: number) => currentIdx === n - 1;
 
   return (
@@ -261,8 +264,8 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
           <Eyebrow>Getting started</Eyebrow>
           <Title>Welcome, {firstName}.</Title>
           <P>
-            Go through these steps once. Don&apos;t post any videos until every step here is done. When they&apos;re all
-            ticked off, your full portal opens up.
+            Do steps 1 to 7 in one sitting. Then step 8, the warm-up, runs over your first {cfg.warmup_days} days. Don&apos;t
+            post any videos until every step here is done. Once they&apos;re all ticked off, your full portal opens up.
           </P>
         </>
       )}
@@ -280,7 +283,13 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
           <div>
             <Eyebrow style={{ marginBottom: 3 }}>Your setup</Eyebrow>
             <div style={{ fontSize: 13, fontWeight: 500, color: "rgba(255,255,255,0.7)" }}>
-              {allDone ? "Every step is done" : doneCount === 0 ? "Let's get you set up" : `${doneByStep.length - doneCount} to go`}
+              {allDone
+                ? "Every step is done"
+                : doneCount === WARM && !warmDone
+                  ? `Just your ${cfg.warmup_days}-day warm-up left`
+                  : doneCount === 0
+                    ? "Let's get you set up"
+                    : `${doneByStep.length - doneCount} to go`}
             </div>
           </div>
           <div style={{ fontSize: 13, fontWeight: 600 }}>
@@ -311,7 +320,35 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
         </Card>
       ) : (
       <>
-      <Step n={2} title="Learn KESHAH" done={videosDone} current={cur(2)} doneNote="Both videos watched">
+      <Step n={2} title="Join Slack" done={!!onb.slack_joined_at} current={cur(2)} doneNote="Joined">
+        {cfg.slack_invite_url ? (
+          <>
+            <P>This is where the team talks every day. Tap the button, join the workspace, then come back here.</P>
+            {!onb.slack_joined_at && (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <a href={cfg.slack_invite_url} target="_blank" rel="noreferrer" className="cp-btn" style={buttonStyle("primary")}>
+                  Join the KESHAH Slack ↗
+                </a>
+                <Button variant="ghost" disabled={busy === "slack"} onClick={() => mark("slack")}>
+                  I&apos;ve joined
+                </Button>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <P>Your manager will send you the Slack invite link.</P>
+            {!onb.slack_joined_at && (
+              <Button variant="ghost" disabled={busy === "slack"} onClick={() => mark("slack")}>
+                I&apos;ve joined
+              </Button>
+            )}
+          </>
+        )}
+        {errFor("slack")}
+      </Step>
+
+      <Step n={3} title="Learn KESHAH" done={videosDone} current={cur(3)} doneNote="Both videos watched">
         <P>
           Watch both of these videos. They explain how KESHAH works and the science behind it. There&apos;s a short quiz
           right after, so watch carefully.
@@ -351,7 +388,7 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
         {errFor("videos")}
       </Step>
 
-      <Step n={3} title="Quick check" done={!!onb.quiz_passed_at} current={cur(3)} doneNote="Passed">
+      <Step n={4} title="Quick check" done={!!onb.quiz_passed_at} current={cur(4)} doneNote="Passed">
         {onb.quiz_passed_at ? (
           <P style={{ marginBottom: 0 }}>All right. Nice work.</P>
         ) : !videosDone ? (
@@ -407,7 +444,7 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
         )}
       </Step>
 
-      <Step n={4} title="Set up your accounts" done={!!onb.accounts_done_at} current={cur(4)} doneNote={`@${tt} on TikTok, @${ig} on Instagram`}>
+      <Step n={5} title="Set up your accounts" done={!!onb.accounts_done_at} current={cur(5)} doneNote={`@${tt} on TikTok, @${ig} on Instagram`}>
         <P>{cfg.accounts_step_text}</P>
         {data.creator.keshah_email ? (
           <CopyBlock label="Your keshah.com email" value={data.creator.keshah_email} />
@@ -439,87 +476,7 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
         </Button>
       </Step>
 
-      <Step n={5} title="Join Slack" done={!!onb.slack_joined_at} current={cur(5)} doneNote="Joined">
-        {cfg.slack_invite_url ? (
-          <>
-            <P>This is where the team talks every day. Tap the button, join the workspace, then come back here.</P>
-            {!onb.slack_joined_at && (
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <a href={cfg.slack_invite_url} target="_blank" rel="noreferrer" className="cp-btn" style={buttonStyle("primary")}>
-                  Join the KESHAH Slack ↗
-                </a>
-                <Button variant="ghost" disabled={busy === "slack"} onClick={() => mark("slack")}>
-                  I&apos;ve joined
-                </Button>
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <P>Your manager will send you the Slack invite link.</P>
-            {!onb.slack_joined_at && (
-              <Button variant="ghost" disabled={busy === "slack"} onClick={() => mark("slack")}>
-                I&apos;ve joined
-              </Button>
-            )}
-          </>
-        )}
-        {errFor("slack")}
-      </Step>
-
-      <Step
-        n={6}
-        title={`${cfg.warmup_days}-day warm-up`}
-        done={warmDone}
-        current={cur(6)}
-        doneNote="Warm-up done"
-        note={
-          tickedToday
-            ? `Day ${warm.length} done. Day ${warm.length + 1} unlocks tomorrow.`
-            : warm.length
-              ? `${warm.length} of ${cfg.warmup_days} days done`
-              : "Don't post yet"
-        }
-      >
-        <H style={{ fontSize: 16, lineHeight: 1.4 }}>{cfg.warmup_headline}</H>
-        <P>{cfg.warmup_text}</P>
-        <div style={{ margin: "12px 0" }}>
-          {Array.from({ length: cfg.warmup_days }, (_, i) => {
-            const done = !!warm[i];
-            const isNext = i === warm.length;
-            const sub = done ? "Done" : isNext ? (tickedToday ? "Unlocks tomorrow" : "Today") : `After Day ${i}`;
-            return <WarmupDay key={i} n={i + 1} done={done} today={isNext && !tickedToday} sub={sub} />;
-          })}
-        </div>
-        {warmDone ? (
-          <P style={{ color: C.green, fontWeight: 500, marginBottom: 0 }}>{cfg.warmup_done_text}</P>
-        ) : (
-          <Button disabled={tickedToday || busy === "warmup"} onClick={() => mark("warmup")}>
-            {tickedToday ? "Done for today. Come back tomorrow." : `I warmed up today (Day ${warm.length + 1})`}
-          </Button>
-        )}
-        {errFor("warmup")}
-      </Step>
-
-      <Step n={7} title="Posting guide" done={!!onb.rules_ack_at} current={cur(7)} doneNote="Read">
-        <P>Read this now so you&apos;re ready. You start posting only once every step here is done.</P>
-        <ul style={{ margin: "0 0 14px", paddingLeft: 20, listStyleType: "disc" }}>
-          {cfg.posting_rules.map((r, i) => (
-            <li key={i} style={{ fontSize: 14, lineHeight: 1.6, color: C.dim }}>
-              {r}
-            </li>
-          ))}
-        </ul>
-        <StepGuide collapsible guide={POSTING_GUIDE} />
-        {errFor("rules")}
-        {!onb.rules_ack_at && (
-          <Button disabled={busy === "rules"} onClick={() => mark("rules")}>
-            I&apos;ve read it
-          </Button>
-        )}
-      </Step>
-
-      <Step n={8} title="Add your bio and link" done={!!onb.link_seen_at} current={cur(8)} doneNote="Bio and link added">
+      <Step n={6} title="Add your bio and link" done={!!onb.link_seen_at} current={cur(6)} doneNote="Bio and link added">
         <P style={{ marginBottom: 0 }}>Add this bio and your link to both your TikTok and Instagram profiles yourself.</P>
         <CopyBlock label="Your bio" value={BIO_TEXT} />
         {link && <CopyBlock label="Your link" value={link} />}
@@ -543,6 +500,66 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
         )}
         {errFor("link")}
       </Step>
+
+      <Step n={7} title="Posting guide" done={!!onb.rules_ack_at} current={cur(7)} doneNote="Read">
+        <P>Read this now so you&apos;re ready. You start posting only after your warm-up is done.</P>
+        <ul style={{ margin: "0 0 14px", paddingLeft: 20, listStyleType: "disc" }}>
+          {cfg.posting_rules.map((r, i) => (
+            <li key={i} style={{ fontSize: 14, lineHeight: 1.6, color: C.dim }}>
+              {r}
+            </li>
+          ))}
+        </ul>
+        <StepGuide collapsible guide={POSTING_GUIDE} />
+        {errFor("rules")}
+        {!onb.rules_ack_at && (
+          <Button disabled={busy === "rules"} onClick={() => mark("rules")}>
+            I&apos;ve read it
+          </Button>
+        )}
+      </Step>
+
+      <Step
+        n={8}
+        title={`Your first ${cfg.warmup_days} days`}
+        done={warmDone}
+        current={cur(8)}
+        doneNote="Warm-up done"
+        note={
+          tickedToday
+            ? `Day ${warm.length} done. Day ${warm.length + 1} unlocks tomorrow.`
+            : warm.length
+              ? `${warm.length} of ${cfg.warmup_days} days done`
+              : warmLocked
+                ? "Starts after steps 5 and 6"
+                : "Warm-up. Don't post yet"
+        }
+      >
+        <H style={{ fontSize: 16, lineHeight: 1.4 }}>{cfg.warmup_headline}</H>
+        <P>{cfg.warmup_text}</P>
+        <P style={{ color: "#fff" }}>{cfg.first_posting_day_text}</P>
+        <div style={{ margin: "12px 0" }}>
+          {Array.from({ length: cfg.warmup_days }, (_, i) => {
+            const done = !!warm[i];
+            const isNext = i === warm.length;
+            const sub = done ? "Done" : isNext && !warmLocked ? (tickedToday ? "Unlocks tomorrow" : "Today") : i === 0 ? "After step 6" : `After Day ${i}`;
+            return <WarmupDay key={i} n={i + 1} done={done} today={isNext && !tickedToday && !warmLocked} sub={sub} />;
+          })}
+        </div>
+        {warmDone ? (
+          <P style={{ color: C.green, fontWeight: 500, marginBottom: 0 }}>{cfg.warmup_done_text}</P>
+        ) : warmLocked ? (
+          <P style={{ marginBottom: 0 }}>
+            The warm-up uses your new accounts, so it starts once you&apos;ve set them up and added your bio and link (steps 5 and 6).
+          </P>
+        ) : (
+          <Button disabled={tickedToday || busy === "warmup"} onClick={() => mark("warmup")}>
+            {tickedToday ? "Done for today. Come back tomorrow." : `I warmed up today (Day ${warm.length + 1})`}
+          </Button>
+        )}
+        {errFor("warmup")}
+      </Step>
+      {/* A non-blocking "Set up your payments" card can sit here during the warm-up days. */}
       </>
       )}
     </div>

@@ -53,6 +53,7 @@ export interface PortalData {
     warmup_headline: string;
     warmup_text: string;
     warmup_done_text: string;
+    first_posting_day_text: string;
     posting_guide_url: string | null;
     posting_rules: string[];
     videos_per_weekday: number;

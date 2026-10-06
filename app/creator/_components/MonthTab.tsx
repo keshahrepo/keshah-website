@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { fmtDateShort, fmtMoney, fmtMonthLong } from "@/lib/creators/time";
 import type { MonthData } from "./types";
-import { C, Card, Eyebrow, H, P, Pill, Row, api, statusColor } from "./ui";
+import { C, Card, CheckCircle, Eyebrow, H, P, Pill, ProgressBar, Row, api, statusColor } from "./ui";
 
 /** "12.4K" style view counts for the day list. */
 function shortViews(n: number): string {
@@ -71,6 +71,7 @@ export default function MonthTab({ m }: { m: MonthData }) {
           <Stat label="Missed" value={String(m.missedDays)} />
           <Stat label="Still to go" value={String(m.pendingDays)} sub="weekdays left" />
         </div>
+        <ProgressBar value={m.expectedWeekdays ? m.postedDays / m.expectedWeekdays : 0} style={{ marginTop: 16 }} />
       </Card>
 
       <Card>
@@ -140,7 +141,10 @@ export default function MonthTab({ m }: { m: MonthData }) {
         {pastOrToday.length === 0 && <P style={{ marginBottom: 0 }}>Nothing yet this month.</P>}
         {pastOrToday.map((d) => (
           <Row key={d.date} style={{ padding: "10px 0", borderTop: C.border }}>
-            <div style={{ fontSize: 14 }}>{fmtDateShort(d.date)}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14 }}>
+              {(d.state === "posted" || d.state === "off") && <CheckCircle size={16} />}
+              {fmtDateShort(d.date)}
+            </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               {!!dayViews.get(d.date) && <span style={{ fontSize: 12, color: C.faint }}>{shortViews(dayViews.get(d.date)!)} views</span>}
               <span style={{ fontSize: 12, color: C.faint }}>{d.videos}/5</span>

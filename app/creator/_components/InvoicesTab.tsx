@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Invoice } from "@/lib/creators/types";
 import { fmtMonthLong, fmtUsd } from "@/lib/creators/time";
-import { Button, C, Card, Eyebrow, H, Msg, P, Pill, Row, api, statusColor } from "./ui";
+import { Button, C, Card, buttonStyle, Eyebrow, H, Msg, P, Pill, Row, api, statusColor } from "./ui";
 
 const statusLabel: Record<string, string> = { draft: "Draft", submitted: "Submitted", approved: "Approved", paid: "Paid" };
 
@@ -77,19 +77,8 @@ export default function InvoicesTab() {
             ) : (
               <a
                 href={`/creator/invoices/${encodeURIComponent(cur.number)}`}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  minHeight: 48,
-                  marginTop: 14,
-                  borderRadius: 14,
-                  border: C.border,
-                  color: "#fff",
-                  fontSize: 14,
-                  fontWeight: 600,
-                  textDecoration: "none",
-                }}
+                className="cp-btn"
+                style={{ ...buttonStyle("ghost"), display: "flex", width: "100%", marginTop: 14 }}
               >
                 View or print the invoice
               </a>

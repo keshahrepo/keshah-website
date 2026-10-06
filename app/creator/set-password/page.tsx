@@ -8,7 +8,7 @@ const inputStyle: React.CSSProperties = {
   padding: "12px 16px",
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.1)",
-  borderRadius: 10,
+  borderRadius: 14,
   color: "#fff",
   fontSize: 16,
   minHeight: 48,
@@ -17,8 +17,8 @@ const inputStyle: React.CSSProperties = {
 };
 const labelStyle: React.CSSProperties = { fontSize: 13, fontWeight: 500, color: "rgba(255,255,255,0.6)", display: "block", marginBottom: 6 };
 const box: React.CSSProperties = {
-  background: "rgba(255,255,255,0.04)",
-  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(255,255,255,0.06)",
+  border: "1px solid rgba(255,255,255,0.1)",
   borderRadius: 16,
   padding: 28,
 };
@@ -88,7 +88,7 @@ function SetPasswordForm() {
         <p style={{ color: "#fff", fontSize: 14, lineHeight: 1.5, marginBottom: 16 }}>{check.error}</p>
         <a
           href="/creator/login"
-          style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 48, borderRadius: 10, border: "1px solid rgba(255,255,255,0.15)", fontSize: 14, fontWeight: 600, color: "#fff", textDecoration: "none" }}
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 50, borderRadius: 999, border: "1px solid rgba(255,255,255,0.2)", fontSize: 15, fontWeight: 500, color: "#fff", textDecoration: "none" }}
         >
           Go to the login page
         </a>
@@ -118,13 +118,13 @@ function SetPasswordForm() {
         disabled={loading}
         style={{
           width: "100%",
-          minHeight: 48,
+          minHeight: 50,
           padding: "12px 0",
           background: "#fff",
           color: "#000",
-          fontSize: 14,
-          fontWeight: 600,
-          borderRadius: 10,
+          fontSize: 15,
+          fontWeight: 500,
+          borderRadius: 999,
           border: "none",
           cursor: loading ? "default" : "pointer",
           opacity: loading ? 0.6 : 1,

@@ -775,7 +775,8 @@ function onboardingRef(id: string) {
 }
 
 /** Getting started steps in portal order. Shared by the portal and admin progress counts. */
-export const ONBOARDING_STEP_KEYS: OnboardingStepKey[] = ["contract", "videos", "quiz", "accounts", "slack", "warmup", "rules", "link"];
+// Portal order. Warm-up is last: it runs over the 3 days after everything else is done.
+export const ONBOARDING_STEP_KEYS: OnboardingStepKey[] = ["contract", "slack", "videos", "quiz", "accounts", "link", "rules", "warmup"];
 export const ONBOARDING_STEP_COUNT = ONBOARDING_STEP_KEYS.length;
 
 export interface OnboardingCheckOpts {
@@ -913,6 +914,10 @@ export async function setOnboardingStep(
       state.slack_joined_at = now;
       break;
     case "warmup": {
+      // Warm-up uses the new accounts, so they (and the bio and link) must exist first.
+      if (!state.accounts_done_at || !state.link_seen_at) {
+        throw new CreatorDataError("Set up your accounts and add your bio and link first. The warm-up starts after that.", 409);
+      }
       const today = creatorToday(creator, nowDate);
       const days = state.warmup_days ?? [];
       if (days.includes(today)) throw new CreatorDataError("You've already ticked today. Come back tomorrow for the next one.", 409);
