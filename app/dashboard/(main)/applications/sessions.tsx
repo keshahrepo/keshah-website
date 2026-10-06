@@ -110,7 +110,7 @@ function QrBox({ url }: { url: string }) {
         <QRCodeSVG value={url} size={180} level="M" />
       </div>
       <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", maxWidth: 260 }}>
-        Screenshot this onto the last slide. Scanning it opens <br />
+        The interview deck already shows this QR on the video test slide, so there&apos;s nothing to update. Scanning it opens <br />
         <span style={{ color: "#fff" }}>{url}</span>
       </div>
     </div>
