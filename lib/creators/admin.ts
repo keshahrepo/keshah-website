@@ -186,6 +186,8 @@ export interface AdminCreator {
   w9_on_file: boolean;
   /** Invite-only format creator (2 own concepts a day). */
   format_creator: boolean;
+  /** Contract version this creator gets (e.g. "v1-isai"); empty = the current standard version. */
+  contract_template_version: string;
   creator_link_id: string;
   tracking_url: string;
   tiktok_handle: string;
@@ -227,6 +229,7 @@ export function toAdminCreator(id: string, d: DocumentData): AdminCreator {
     contract: { ...contract, status: contract.status ?? "none" } as CreatorContract,
     w9_on_file: !!d.w9_on_file,
     format_creator: d.format_creator === true,
+    contract_template_version: String(d.contract_template_version ?? ""),
     creator_link_id: String(d.creator_link_id ?? ""),
     tracking_url: String(d.tracking_url ?? ""),
     tiktok_handle: String(d.tiktok_handle ?? ""),
@@ -681,6 +684,11 @@ export function sanitizeProfile(
   }
   if (body.w9_on_file !== undefined) u.w9_on_file = !!body.w9_on_file;
   if (body.format_creator !== undefined) u.format_creator = body.format_creator === true;
+  if (body.contract_template_version !== undefined) {
+    const v = String(body.contract_template_version ?? "").trim();
+    if (v && !/^[A-Za-z0-9._-]{1,40}$/.test(v)) return { error: "Contract version: letters, numbers, dots and dashes only" };
+    u.contract_template_version = v;
+  }
   if (body.timezone) {
     try {
       new Intl.DateTimeFormat("en-US", { timeZone: String(body.timezone) });

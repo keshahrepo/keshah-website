@@ -30,10 +30,11 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const denied = await requireAdmin(req);
   if (denied) return denied;
   const { id } = await params;
-  const body = (await req.json().catch(() => ({}))) as { action?: string };
+  const body = (await req.json().catch(() => ({}))) as { action?: string; version?: string };
   if (body.action !== "send") return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   try {
-    return NextResponse.json(await sendContract(id));
+    const version = typeof body.version === "string" && body.version.trim() ? body.version.trim() : undefined;
+    return NextResponse.json(await sendContract(id, { version }));
   } catch (e) {
     return fail(e);
   }

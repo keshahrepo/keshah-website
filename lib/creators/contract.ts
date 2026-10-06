@@ -340,7 +340,10 @@ function portalUrl(): string {
 }
 
 /** Admin "Send contract": pins the current template + hash and opens signing in the portal. */
-export async function sendContract(id: string, opts: { email?: boolean } = {}): Promise<{ contract: CreatorContract; emailed: boolean }> {
+export async function sendContract(
+  id: string,
+  opts: { email?: boolean; version?: string } = {},
+): Promise<{ contract: CreatorContract; emailed: boolean }> {
   const snap = await creatorRef(id).get();
   if (!snap.exists) throw new CreatorDataError("Creator not found", 404);
   const d = snap.data()!;
@@ -348,15 +351,25 @@ export async function sendContract(id: string, opts: { email?: boolean } = {}): 
     throw new CreatorDataError("This creator already signed. A signed contract can't be replaced from here.", 409);
   }
   const settings = await getContractSettings();
-  const current = settings.current_template_version ? await getTemplate(settings.current_template_version) : null;
-  if (!current) throw new CreatorDataError("Upload the final contract PDF under Contract signing first. The v0 draft can't be sent.", 400);
+  // Version: an explicit pick, else the creator's saved version (e.g. Isai's
+  // v1-isai with their addendum), else the current standard version.
+  const wanted = (opts.version || String(d.contract_template_version ?? "") || settings.current_template_version || "").trim();
+  const current = wanted ? await getTemplate(wanted) : null;
+  if (!current) {
+    throw new CreatorDataError(
+      wanted && wanted !== settings.current_template_version
+        ? `Contract version ${wanted} isn't uploaded. Upload it under Contract signing, or pick another version.`
+        : "Upload the final contract PDF under Contract signing first. The v0 draft can't be sent.",
+      400,
+    );
+  }
   if (!contractSettingsReady(settings)) {
     throw new CreatorDataError("Adopt your signature under Contract signing first.", 400);
   }
   const { template: t } = await templateBytes(current.version); // integrity check
   const now = new Date().toISOString();
   const contract: CreatorContract = { status: "sent", template_version: t.version, template_sha256: t.sha256, sent_at: now };
-  await creatorRef(id).update({ contract });
+  await creatorRef(id).update({ contract, ...(opts.version ? { contract_template_version: t.version } : {}) });
   await logEvent(id, { type: "sent", at: now, actor: "admin", template_version: t.version, template_sha256: t.sha256 });
 
   let emailed = false;

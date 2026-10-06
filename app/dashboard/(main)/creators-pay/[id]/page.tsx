@@ -55,6 +55,7 @@ interface Creator {
   };
   w9_on_file: boolean;
   format_creator: boolean;
+  contract_template_version?: string;
   creator_link_id: string;
   tracking_url: string;
   tiktok_handle: string;
@@ -245,7 +246,7 @@ function CreatorDetail() {
         />
         <MetricCard
           label="Next level"
-          value={d.nextLevel?.nextBaseCents ? `${fmtMoney(d.nextLevel.nextBaseCents)}/mo` : d.summary ? "Top" : "–"}
+          value={d.completedMonths === null ? "–" : d.nextLevel?.nextBaseCents ? `${fmtMoney(d.nextLevel.nextBaseCents)}/mo` : "Top level"}
           subtitle={d.nextLevel?.earliestMonth ? `earliest ${d.nextLevel.earliestMonth}` : undefined}
         />
         <MetricCard
@@ -572,6 +573,31 @@ function ContractW9({ c, events, reload }: { c: Creator; events: Detail["contrac
   const [showPaper, setShowPaper] = useState(false);
   const [signedAt, setSignedAt] = useState((c.contract.signed_at ?? "").slice(0, 10));
   const [file, setFile] = useState<File | null>(null);
+  const [versions, setVersions] = useState<{ version: string; title?: string }[]>([]);
+  const [currentVersion, setCurrentVersion] = useState("");
+  const [pickedVersion, setPickedVersion] = useState(c.contract_template_version ?? "");
+
+  useEffect(() => {
+    api<{ templates?: { version: string; title?: string }[]; contract?: { current_template_version?: string } }>(
+      "/api/admin/creators/settings",
+    )
+      .then((r) => {
+        setVersions(r.templates ?? []);
+        setCurrentVersion(r.contract?.current_template_version ?? "");
+      })
+      .catch(() => {});
+  }, []);
+
+  async function pickVersion(v: string) {
+    setPickedVersion(v);
+    setErr("");
+    try {
+      await api(`/api/admin/creators/${c.id}`, { method: "PATCH", body: JSON.stringify({ contract_template_version: v }) });
+      reload();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    }
+  }
 
   async function send() {
     if (!confirmSend) return setConfirmSend(true);
@@ -579,7 +605,7 @@ function ContractW9({ c, events, reload }: { c: Creator; events: Detail["contrac
     setErr("");
     setMsg("");
     try {
-      const r = await api<{ emailed: boolean }>(`/api/admin/creators/${c.id}/contract`, { method: "POST", body: JSON.stringify({ action: "send" }) });
+      const r = await api<{ emailed: boolean }>(`/api/admin/creators/${c.id}/contract`, { method: "POST", body: JSON.stringify({ action: "send", ...(pickedVersion ? { version: pickedVersion } : {}) }) });
       setMsg(r.emailed ? "Sent. They got an email to sign in the portal." : "Sent. It's waiting in their portal (email not sent).");
       setConfirmSend(false);
       reload();
@@ -631,10 +657,31 @@ function ContractW9({ c, events, reload }: { c: Creator; events: Detail["contrac
         {eSigned && <Pill color="#60a5fa">e-signed, locked</Pill>}
       </div>
 
+      {st !== "signed" && (
+        <label style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 10, fontSize: 13 }}>
+          <span style={muted}>Contract version</span>
+          <select
+            value={pickedVersion}
+            onChange={(e) => pickVersion(e.target.value)}
+            style={{ background: "#111", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8, padding: "6px 10px", fontSize: 13 }}
+          >
+            <option value="">Standard{currentVersion ? ` (current: ${currentVersion})` : ""}</option>
+            {versions
+              .filter((v) => v.version !== currentVersion)
+              .map((v) => (
+                <option key={v.version} value={v.version}>
+                  {v.version}
+                  {v.title ? `: ${v.title}` : ""}
+                </option>
+              ))}
+          </select>
+          <span style={muted}>Used by Send contract and by Accept.</span>
+        </label>
+      )}
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         {st !== "signed" && (
           <Btn kind="primary" onClick={send} disabled={busy}>
-            {busy ? "Sending..." : confirmSend ? (st === "sent" ? "Confirm: send again with the current version" : "Confirm: send for e-signature") : st === "sent" ? "Send again" : "Send contract"}
+            {busy ? "Sending..." : confirmSend ? (st === "sent" ? `Confirm: send again (${pickedVersion || currentVersion || "current"})` : `Confirm: send ${pickedVersion || currentVersion || "current"} for e-signature`) : st === "sent" ? "Send again" : "Send contract"}
           </Btn>
         )}
         {confirmSend && <Btn onClick={() => setConfirmSend(false)}>Cancel</Btn>}
