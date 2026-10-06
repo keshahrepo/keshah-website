@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import {
   CREATORS_COLLECTION,
-  ESTIMATED_PLAN_PRICE_USD,
-  ESTIMATED_PROCEEDS_PER_PURCHASE_USD,
-  ESTIMATED_STORE_CUT,
+  FALLBACK_PROCEEDS_PER_PURCHASE_USD,
   ROI_AMBER,
   ROI_GREEN,
   buildRow,
@@ -33,9 +31,7 @@ export async function GET(req: NextRequest) {
     rows,
     legacyCount: creators.length - payCreators.length,
     estimate: {
-      plan_price_usd: ESTIMATED_PLAN_PRICE_USD,
-      store_cut: ESTIMATED_STORE_CUT,
-      proceeds_per_purchase_usd: ESTIMATED_PROCEEDS_PER_PURCHASE_USD,
+      fallback_proceeds_per_purchase_usd: FALLBACK_PROCEEDS_PER_PURCHASE_USD,
       green_at: ROI_GREEN,
       amber_at: ROI_AMBER,
     },

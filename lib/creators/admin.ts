@@ -44,20 +44,19 @@ import type {
   Invoice,
   PayProfile,
   PostingDay,
+  PostSyncState,
   YyyyMm,
   YyyyMmDd,
 } from "./types";
 
 export const CREATORS_COLLECTION = "ContentCreators";
 
-// ------------------------------------------------------------------ ESTIMATES
-// ESTIMATE ONLY. Used to turn attributed purchases into an approximate
-// proceeds figure for the green/amber/red ROI flag. These are NOT real
-// revenue numbers. Adjust here if pricing changes.
-export const ESTIMATED_PLAN_PRICE_USD = 39.99; // ESTIMATE: average first paid charge per purchase
-export const ESTIMATED_STORE_CUT = 0.3; // ESTIMATE: App Store / Play commission (+ tax) share
-export const ESTIMATED_PROCEEDS_PER_PURCHASE_USD =
-  ESTIMATED_PLAN_PRICE_USD * (1 - ESTIMATED_STORE_CUT);
+// ------------------------------------------------------------------ proceeds
+// Proceeds come from Users.proceeds_usd_total (real store proceeds, after
+// Apple/Google's cut, written by the RevenueCat sync). A converted user with
+// no recorded proceeds yet is filled in at the creator's own average, or this
+// fallback when the creator has none recorded at all.
+export const FALLBACK_PROCEEDS_PER_PURCHASE_USD = 70;
 export const ROI_GREEN = 1.5;
 export const ROI_AMBER = 0.75;
 
@@ -200,6 +199,8 @@ export interface AdminCreator {
   has_password: boolean;
   /** What the group step would try first when keshah_email is blank. */
   suggested_keshah_email: string;
+  /** Automatic post sync health (lib/creators/post-sync.ts), null before the first run. */
+  post_sync: PostSyncState | null;
 }
 
 export function toAdminCreator(id: string, d: DocumentData): AdminCreator {
@@ -242,6 +243,7 @@ export function toAdminCreator(id: string, d: DocumentData): AdminCreator {
         : null,
     has_password: !!d.password_hash,
     suggested_keshah_email: candidateAddresses(String(d.legal_name || d.name || ""))[0] ?? "",
+    post_sync: d.post_sync && typeof d.post_sync === "object" ? (plain(d.post_sync) as PostSyncState) : null,
   };
 }
 
@@ -455,8 +457,12 @@ export interface Attribution {
   purchases: number;
   /** Purchases whose conversion falls inside the ROI window. */
   purchasesInWindow: number;
-  /** Real proceeds recorded by the RC webhook (partial: only since 2026-09-30). */
+  /** Real proceeds recorded for all attributed users (lifetime). */
   recordedProceedsUsd: number;
+  /** Converted users with a recorded proceeds total. */
+  purchasesWithProceeds: number;
+  /** Proceeds from users who converted inside the ROI window (missing ones filled at the average). */
+  proceedsInWindowUsd: number;
 }
 
 /**
@@ -466,7 +472,7 @@ export interface Attribution {
  */
 export async function attributionFor(tags: string[], windowStartMs: number): Promise<Attribution> {
   const clean = [...new Set(tags.map((t) => t.trim()).filter(Boolean))].slice(0, 30);
-  const empty = { trials: 0, purchases: 0, purchasesInWindow: 0, recordedProceedsUsd: 0 };
+  const empty = { trials: 0, purchases: 0, purchasesInWindow: 0, recordedProceedsUsd: 0, purchasesWithProceeds: 0, proceedsInWindowUsd: 0 };
   if (!clean.length) return empty;
   const snap = await db()
     .collection("Users")
@@ -474,19 +480,29 @@ export async function attributionFor(tags: string[], windowStartMs: number): Pro
     .select("started_trial", "converted_trial", "converted_at", "proceeds_usd_total")
     .get();
   const out = { ...empty };
+  let windowRecorded = 0;
+  let windowMissing = 0;
   for (const doc of snap.docs) {
     const d = doc.data();
     if (d.started_trial) out.trials++;
+    const proceeds = typeof d.proceeds_usd_total === "number" ? d.proceeds_usd_total : null;
+    if (proceeds !== null) out.recordedProceedsUsd += proceeds;
     if (d.converted_trial) {
       out.purchases++;
+      if (proceeds !== null) out.purchasesWithProceeds++;
       const at =
         toMs((d.converted_trial as { at?: unknown })?.at) ??
         toMs(d.converted_at) ??
         (toMs((d.started_trial as { at?: unknown })?.at) ?? 0) + 7 * 86400000;
-      if (at >= windowStartMs) out.purchasesInWindow++;
+      if (at >= windowStartMs) {
+        out.purchasesInWindow++;
+        if (proceeds !== null) windowRecorded += proceeds;
+        else windowMissing++;
+      }
     }
-    if (typeof d.proceeds_usd_total === "number") out.recordedProceedsUsd += d.proceeds_usd_total;
   }
+  const avg = out.purchasesWithProceeds > 0 ? out.recordedProceedsUsd / out.purchasesWithProceeds : FALLBACK_PROCEEDS_PER_PURCHASE_USD;
+  out.proceedsInWindowUsd = windowRecorded + windowMissing * avg;
   return out;
 }
 
@@ -547,7 +563,7 @@ export async function buildRow(c: AdminCreator, month: YyyyMm): Promise<CreatorR
 
   const approved = h.bonusClaims.filter((b) => b.status === "approved");
   const inMonth = (d?: string) => !!d && d.slice(0, 7) === month;
-  const estProceedsWindowUsd = attribution.purchasesInWindow * ESTIMATED_PROCEEDS_PER_PURCHASE_USD;
+  const estProceedsWindowUsd = attribution.proceedsInWindowUsd;
   const payWindowCents = (s?.totalCents ?? 0) + (sPrev?.totalCents ?? 0);
   const roiRatio = payWindowCents > 0 ? estProceedsWindowUsd / (payWindowCents / 100) : null;
   const inv = h.invoices[0];

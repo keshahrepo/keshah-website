@@ -14,7 +14,7 @@ import {
   api,
   card,
   currentMonth,
-  fmtUsd,
+  fmtMoney,
   muted,
   shiftMonth,
   td,
@@ -33,6 +33,7 @@ interface Row {
     w9_on_file: boolean;
     pay_ready: boolean;
     is_active: boolean;
+    post_sync: { last_ok_at?: string; last_error?: string | null; last_error_at?: string | null; consecutive_failures: number } | null;
   };
   completedMonths: number | null;
   levelBaseCents: number | null;
@@ -48,7 +49,7 @@ interface Row {
   pendingDaysOff: number;
   bonusCents: number;
   totalOwedCents: number;
-  attribution: { trials: number; purchases: number; purchasesInWindow: number; recordedProceedsUsd: number };
+  attribution: { trials: number; purchases: number; purchasesInWindow: number; recordedProceedsUsd: number; purchasesWithProceeds: number; proceedsInWindowUsd: number };
   estProceedsWindowUsd: number;
   payWindowCents: number;
   roiRatio: number | null;
@@ -61,7 +62,7 @@ interface ListResponse {
   month: string;
   rows: Row[];
   legacyCount: number;
-  estimate: { plan_price_usd: number; store_cut: number; proceeds_per_purchase_usd: number; green_at: number; amber_at: number };
+  estimate: { fallback_proceeds_per_purchase_usd: number; green_at: number; amber_at: number };
 }
 
 /** Missed-days badge: amber at 2+, red at 4+ in a month. */
@@ -82,6 +83,19 @@ function MissBadge({ n, label }: { n: number; label: string }) {
       }}
     >
       {label} {n}
+    </span>
+  );
+}
+
+/** Post sync health: green when the last run worked, red after a failure. */
+function SyncTag({ s }: { s: NonNullable<Row["creator"]["post_sync"]> }) {
+  const failing = (s.consecutive_failures ?? 0) > 0;
+  const title = failing
+    ? `${s.consecutive_failures} failed sync${s.consecutive_failures === 1 ? "" : "s"} in a row. ${s.last_error ?? ""}`
+    : `Last synced ${s.last_ok_at?.replace("T", " ").slice(0, 16) ?? "?"} UTC`;
+  return (
+    <span title={title} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <Pill color={failing ? "#f87171" : "#4ade80"}>{failing ? `sync failing ${s.consecutive_failures}` : "sync ok"}</Pill>
     </span>
   );
 }
@@ -127,7 +141,7 @@ export default function CreatorsPayPage() {
         <>
           <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
             <span style={muted}>
-              {rows.length} creators · owed this month so far <strong style={{ color: "#fff" }}>{fmtUsd(totalOwed)}</strong>
+              {rows.length} creators · owed this month so far <strong style={{ color: "#fff" }}>{fmtMoney(totalOwed)}</strong>
             </span>
             <label style={{ ...muted, display: "flex", gap: 6, alignItems: "center", cursor: "pointer" }}>
               <input type="checkbox" checked={showEnded} onChange={(e) => setShowEnded(e.target.checked)} /> show ended / inactive
@@ -151,7 +165,7 @@ export default function CreatorsPayPage() {
                   <th style={th}>100K / 1M</th>
                   <th style={th}>Bonuses</th>
                   <th style={th}>Trials / Paid</th>
-                  <th style={th} title="ESTIMATE: purchases × estimated proceeds per purchase">Est. proceeds*</th>
+                  <th style={th} title="Real store proceeds after Apple/Google's cut, from users who paid in the last 2 months">Proceeds*</th>
                   <th style={th} title="ESTIMATE: est. proceeds ÷ total pay, last 2 months">ROI*</th>
                 </tr>
               </thead>
@@ -171,6 +185,7 @@ export default function CreatorsPayPage() {
                         )}
                         {r.pendingDaysOff > 0 && <Pill color="#fbbf24">{r.pendingDaysOff} day-off req</Pill>}
                         {r.pendingClaims > 0 && <Pill color="#fbbf24">{r.pendingClaims} claim{r.pendingClaims > 1 ? "s" : ""} to review</Pill>}
+                        {r.creator.post_sync && <SyncTag s={r.creator.post_sync} />}
                       </div>
                     </td>
                     <td style={{ ...td, whiteSpace: "nowrap" }}>
@@ -178,11 +193,11 @@ export default function CreatorsPayPage() {
                         <span style={muted}>Not started</span>
                       ) : (
                         <>
-                          <div>{fmtUsd(r.levelBaseCents)}/mo</div>
+                          <div>{fmtMoney(r.levelBaseCents)}/mo</div>
                           <div style={muted}>{r.completedMonths} completed mo</div>
                           {r.nextLevel?.nextBaseCents && (
                             <div style={muted}>
-                              → {fmtUsd(r.nextLevel.nextBaseCents)} in {r.nextLevel.earliestMonth}
+                              → {fmtMoney(r.nextLevel.nextBaseCents)} in {r.nextLevel.earliestMonth}
                             </div>
                           )}
                         </>
@@ -207,7 +222,7 @@ export default function CreatorsPayPage() {
                         </>
                       )}
                     </td>
-                    <td style={{ ...td, fontWeight: 600 }}>{fmtUsd(r.totalOwedCents)}</td>
+                    <td style={{ ...td, fontWeight: 600 }}>{fmtMoney(r.totalOwedCents)}</td>
                     <td style={td}>
                       {r.onboarding.done}/{r.onboarding.total}
                     </td>
@@ -236,7 +251,7 @@ export default function CreatorsPayPage() {
                     <td style={td}>
                       {r.claims100k} / {r.claims1m}
                     </td>
-                    <td style={td}>{fmtUsd(r.bonusCents)}</td>
+                    <td style={td}>{fmtMoney(r.bonusCents)}</td>
                     <td style={td}>
                       {r.creator.campaign_tags.length ? (
                         <>
@@ -247,15 +262,16 @@ export default function CreatorsPayPage() {
                       )}
                     </td>
                     <td style={td}>
-                      <div>${r.estProceedsWindowUsd.toFixed(0)}</div>
+                      <div>${Math.round(r.estProceedsWindowUsd).toLocaleString("en-US")}</div>
                       <div style={muted}>{r.attribution.purchasesInWindow} paid, 2 mo</div>
+                      <div style={muted}>${Math.round(r.attribution.recordedProceedsUsd).toLocaleString("en-US")} all time</div>
                     </td>
                     <td style={td}>
                       <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
                         <Dot color={r.roiFlag} />
                         {r.roiRatio === null ? "–" : `${r.roiRatio.toFixed(2)}×`}
                       </span>
-                      <div style={muted}>pay {fmtUsd(r.payWindowCents)}</div>
+                      <div style={muted}>pay {fmtMoney(r.payWindowCents)}</div>
                     </td>
                   </tr>
                 ))}
@@ -270,9 +286,9 @@ export default function CreatorsPayPage() {
             </table>
           </div>
           <p style={{ ...muted, lineHeight: 1.6 }}>
-            * ESTIMATES, not real revenue. Est. proceeds = purchases × ${data.estimate.proceeds_per_purchase_usd.toFixed(2)} (assumed $
-            {data.estimate.plan_price_usd} plan price minus an assumed {Math.round(data.estimate.store_cut * 100)}% store cut). ROI
-            flag = est. proceeds ÷ total pay over last month + this month: green ≥ {data.estimate.green_at}×, amber ≥{" "}
+            * Proceeds are real store revenue after Apple and Google&apos;s cut, from users who started paying last month or this
+            month (plus all time below). A paid user with nothing recorded yet counts at that creator&apos;s average. ROI
+            flag = proceeds ÷ total pay over last month + this month: green ≥ {data.estimate.green_at}×, amber ≥{" "}
             {data.estimate.amber_at}×, otherwise red. Trials / paid = all-time users whose attribution campaign exactly matches one of
             the creator’s campaign tags. 100K / 1M = approved claims crossing in {month}.
           </p>
