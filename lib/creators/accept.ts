@@ -13,7 +13,7 @@ import { FieldValue, type DocumentData } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { emailConfigured, sendEmail } from "@/lib/email";
 import { CREATORS_COLLECTION, CreatorDataError, mapCreatorStatus } from "./db";
-import { contractSettingsReady, getContractSettings, getTemplate, sendContract } from "./contract";
+import { contractSetupProblem, getContractSettings, getTemplate, sendContract } from "./contract";
 import { groupsClientFromEnv, groupsConfigured, provisionCreatorGroup } from "./google-groups";
 import { newInvite, setPasswordUrl, welcomeEmail } from "./invite";
 import type { AcceptRecord, AcceptStepKey, AcceptStepRecord } from "./types";
@@ -49,11 +49,13 @@ export interface AcceptResult {
   invite_link?: string;
 }
 
-async function contractReady(d: DocumentData): Promise<boolean> {
+/** null = the contract can be sent (or already was); otherwise why not. */
+async function contractNotReadyReason(d: DocumentData): Promise<string | null> {
   const st = (d.contract ?? {}).status;
-  if (st === "sent" || st === "signed") return true;
+  if (st === "sent" || st === "signed") return null;
   const s = await getContractSettings();
-  return contractSettingsReady(s) && !!s.current_template_version && !!(await getTemplate(s.current_template_version));
+  const hasTemplate = !!s.current_template_version && !!(await getTemplate(s.current_template_version));
+  return contractSetupProblem(s, hasTemplate);
 }
 
 export async function acceptCreator(id: string, opts: AcceptOptions): Promise<AcceptResult> {
@@ -107,7 +109,8 @@ export async function acceptCreator(id: string, opts: AcceptOptions): Promise<Ac
       }
     }
 
-    const ready = await contractReady(d).catch(() => false);
+    const notReady = await contractNotReadyReason(d).catch(() => "Couldn't check the contract settings. Send it from the creator page.");
+    const ready = !notReady;
 
     // ---- 2. Portal invite
     if (shouldRun("invite")) {
@@ -148,7 +151,7 @@ export async function acceptCreator(id: string, opts: AcceptOptions): Promise<Ac
       } else if (c.status === "sent") {
         await record("contract", "done", `Already sent${c.sent_at ? ` ${String(c.sent_at).slice(0, 10)}` : ""}`);
       } else if (!ready) {
-        await record("contract", "skipped", "Upload the final contract and your signature first");
+        await record("contract", "skipped", notReady!);
       } else {
         try {
           const res = await sendContract(id, { email: !inviteEmailedNow });

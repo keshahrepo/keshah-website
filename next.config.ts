@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // The contract sign route reads the signature font from disk
+  // (lib/creators/contract.ts); make sure it ships in that function's bundle.
+  outputFileTracingIncludes: {
+    "/api/creator/contract/sign": ["./lib/creators/fonts/**/*"],
+  },
   async redirects() {
     // All old funnel variants collapsed onto /start (the single
     // mobile-parity funnel). Any legacy URL from past ads / SMS / email

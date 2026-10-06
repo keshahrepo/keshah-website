@@ -20,10 +20,16 @@ interface Settings {
     signature_path?: string;
     signature_sha256?: string;
     signature_updated_at?: string;
+    use_drawn_signature?: boolean;
+    founder_signature_adopted_at?: string;
+    founder_signature_adopted_text?: string;
     current_template_version?: string;
   };
   ready: boolean;
   signature_url: string | null;
+  /** What goes on contracts signed now: generated (typed) signature, drawn PNG, or nothing yet. */
+  signature_mode: "typed" | "drawn" | null;
+  signature_font: { family: string; css_url: string };
   templates: Template[];
   placeholder: { version: string; title: string; public_url: string };
   consent_text_version: string;
@@ -64,8 +70,12 @@ export default function CreatorSettingsPage() {
                   ? `Contract version ${s.contract.current_template_version} is current`
                   : "Upload the final contract PDF (the v0 draft can't be sent)"}
               </li>
-              <li style={{ color: s.contract.signature_path ? "#4ade80" : "#fbbf24" }}>
-                {s.contract.signature_path ? "Your signature is on file" : "Add your signature"}
+              <li style={{ color: s.signature_mode ? "#4ade80" : "#fbbf24" }}>
+                {s.signature_mode === "drawn"
+                  ? "Your drawn signature is on file"
+                  : s.signature_mode === "typed"
+                    ? "You adopted your signature"
+                    : "Adopt your signature (below)"}
               </li>
             </ul>
             <p style={{ ...muted, marginTop: 10, marginBottom: 0 }}>
@@ -209,11 +219,18 @@ function Countersignature({ s, reload }: { s: Settings; reload: () => void }) {
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showDraw, setShowDraw] = useState(s.signature_mode === "drawn");
   const canvas = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const [drawn, setDrawn] = useState(false);
 
+  const savedName = s.contract.founder_name.trim();
+  const adoptedText = s.contract.founder_signature_adopted_text;
+  const adoptedCurrent = !!s.contract.founder_signature_adopted_at && adoptedText === savedName;
+  const nameDirty = f.founder_name.trim().replace(/\s+/g, " ") !== savedName;
+
   useEffect(() => {
+    if (!showDraw) return;
     const c = canvas.current;
     if (!c) return;
     const ratio = window.devicePixelRatio || 1;
@@ -225,7 +242,7 @@ function Countersignature({ s, reload }: { s: Settings; reload: () => void }) {
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.strokeStyle = "#0b1a4a";
-  }, []);
+  }, [showDraw]);
 
   const pos = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -248,18 +265,18 @@ function Countersignature({ s, reload }: { s: Settings; reload: () => void }) {
     setDrawn(true);
   }
   function clear() {
-    const c = canvas.current!;
-    c.getContext("2d")!.clearRect(0, 0, c.width, c.height);
+    const c = canvas.current;
+    if (c) c.getContext("2d")!.clearRect(0, 0, c.width, c.height);
     setDrawn(false);
   }
 
-  async function saveSignature(dataUrl: string) {
+  async function post(body: Record<string, unknown>, ok: string) {
     setBusy(true);
     setErr("");
     setMsg("");
     try {
-      await api("/api/admin/creators/settings/signature", { method: "POST", body: JSON.stringify({ data_url: dataUrl }) });
-      setMsg("Signature saved");
+      await api("/api/admin/creators/settings/signature", { method: "POST", body: JSON.stringify(body) });
+      setMsg(ok);
       clear();
       reload();
     } catch (e) {
@@ -284,11 +301,16 @@ function Countersignature({ s, reload }: { s: Settings; reload: () => void }) {
     }
   }
 
+  const sigBox = { background: "#fff", color: "#0d1a59", borderRadius: 8, padding: "8px 16px 4px", maxWidth: 460 } as const;
+
   return (
     <div style={card}>
+      {/* Same handwriting font the signed PDF uses. */}
+      <link rel="stylesheet" href={s.signature_font.css_url} />
       <h3 style={h3}>Your countersignature</h3>
       <p style={{ ...muted, marginTop: -6, marginBottom: 12 }}>
-        Added automatically to the signature page when a creator signs. Changing it only affects contracts signed after the change.
+        Added automatically to the signature page when a creator signs. By default it&apos;s your name in {s.signature_font.family}, the same
+        way creators sign. Changing it only affects contracts signed after the change.
       </p>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
         <Field label="Your name">
@@ -307,50 +329,122 @@ function Countersignature({ s, reload }: { s: Settings; reload: () => void }) {
         </Btn>
       </div>
 
-      <div style={{ display: "flex", gap: 24, flexWrap: "wrap", marginTop: 18, alignItems: "flex-start" }}>
-        <div style={{ flex: "1 1 320px" }}>
-          <div style={{ ...muted, marginBottom: 6 }}>Draw your signature</div>
-          <canvas
-            ref={canvas}
-            onPointerDown={down}
-            onPointerMove={move}
-            onPointerUp={() => (drawing.current = false)}
-            onPointerLeave={() => (drawing.current = false)}
-            style={{ width: "100%", maxWidth: 460, height: 150, background: "#fff", borderRadius: 8, touchAction: "none", cursor: "crosshair", display: "block" }}
-          />
-          <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <Btn kind="primary" disabled={!drawn || busy} onClick={() => saveSignature(canvas.current!.toDataURL("image/png"))}>
-              Save drawn signature
-            </Btn>
-            <Btn onClick={clear} disabled={busy}>
-              Clear
-            </Btn>
-            <label style={{ ...muted, cursor: "pointer" }}>
-              or upload a PNG{" "}
-              <input
-                type="file"
-                accept="image/png"
-                style={{ fontSize: 12 }}
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (file) saveSignature(await readAsDataUrl(file));
-                }}
-              />
-            </label>
+      <div style={{ marginTop: 18 }}>
+        <div style={{ ...muted, marginBottom: 6 }}>Your signature</div>
+        <div style={sigBox}>
+          <div
+            style={{
+              fontFamily: `'${s.signature_font.family}', cursive`,
+              fontSize: 42,
+              lineHeight: 1.3,
+              wordSpacing: "0.15em",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              borderBottom: "1px solid #0d1a5966",
+            }}
+          >
+            {(nameDirty ? f.founder_name : savedName).trim() || " "}
           </div>
         </div>
-        <div style={{ flex: "0 1 260px" }}>
-          <div style={{ ...muted, marginBottom: 6 }}>On file</div>
-          {s.signature_url ? (
-            <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={s.signature_url} alt="Your signature" style={{ maxWidth: 240, maxHeight: 90, background: "#fff", borderRadius: 8, padding: 6 }} />
-              <div style={{ ...muted, fontSize: 11, marginTop: 4 }}>updated {s.contract.signature_updated_at?.slice(0, 10)}</div>
-            </>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
+          {nameDirty ? (
+            <span style={{ color: "#fbbf24", fontSize: 13 }}>Save details first, then adopt the signature for the new name.</span>
+          ) : adoptedCurrent ? (
+            <span style={{ color: "#4ade80", fontSize: 13 }}>
+              Adopted {s.contract.founder_signature_adopted_at!.slice(0, 10)}
+              {s.signature_mode === "drawn" ? " (your drawn signature is being used instead)" : ""}
+            </span>
           ) : (
-            <span style={{ color: "#fbbf24", fontSize: 13 }}>No signature yet</span>
+            <>
+              <Btn kind="primary" disabled={busy || !savedName} onClick={() => post({ action: "adopt" }, "Signature adopted")}>
+                Adopt this signature
+              </Btn>
+              <span style={muted}>
+                {s.contract.founder_signature_adopted_at
+                  ? `You adopted "${adoptedText}" before. Your name changed, so adopt it again.`
+                  : "Pressing this records that you adopted this as your electronic signature on creator contracts."}
+              </span>
+            </>
+          )}
+          {adoptedCurrent && s.signature_mode === "drawn" && (
+            <Btn disabled={busy} onClick={() => post({ action: "use_generated" }, "Using your generated signature")}>
+              Use this signature instead
+            </Btn>
           )}
         </div>
+      </div>
+
+      <div style={{ marginTop: 18 }}>
+        {!showDraw ? (
+          <button
+            type="button"
+            onClick={() => setShowDraw(true)}
+            style={{ background: "none", border: "none", padding: 0, color: "#60a5fa", fontSize: 13, cursor: "pointer" }}
+          >
+            Use a drawn signature instead
+          </button>
+        ) : (
+          <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start" }}>
+            <div style={{ flex: "1 1 320px" }}>
+              <div style={{ ...muted, marginBottom: 6 }}>Draw your signature (optional, replaces the generated one)</div>
+              <canvas
+                ref={canvas}
+                onPointerDown={down}
+                onPointerMove={move}
+                onPointerUp={() => (drawing.current = false)}
+                onPointerLeave={() => (drawing.current = false)}
+                style={{ width: "100%", maxWidth: 460, height: 150, background: "#fff", borderRadius: 8, touchAction: "none", cursor: "crosshair", display: "block" }}
+              />
+              <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <Btn kind="primary" disabled={!drawn || busy} onClick={() => post({ data_url: canvas.current!.toDataURL("image/png") }, "Drawn signature saved and in use")}>
+                  Save and use drawn signature
+                </Btn>
+                <Btn onClick={clear} disabled={busy}>
+                  Clear
+                </Btn>
+                <label style={{ ...muted, cursor: "pointer" }}>
+                  or upload a PNG{" "}
+                  <input
+                    type="file"
+                    accept="image/png"
+                    style={{ fontSize: 12 }}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file) post({ data_url: await readAsDataUrl(file) }, "Signature saved and in use");
+                    }}
+                  />
+                </label>
+                {s.signature_mode !== "drawn" && (
+                  <Btn onClick={() => setShowDraw(false)} disabled={busy}>
+                    Cancel
+                  </Btn>
+                )}
+              </div>
+            </div>
+            <div style={{ flex: "0 1 260px" }}>
+              <div style={{ ...muted, marginBottom: 6 }}>Drawn signature on file</div>
+              {s.signature_url ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={s.signature_url} alt="Your drawn signature" style={{ maxWidth: 240, maxHeight: 90, background: "#fff", borderRadius: 8, padding: 6 }} />
+                  <div style={{ ...muted, fontSize: 11, marginTop: 4 }}>
+                    updated {s.contract.signature_updated_at?.slice(0, 10)} · {s.signature_mode === "drawn" ? "in use" : "not in use"}
+                  </div>
+                  {s.signature_mode !== "drawn" && (
+                    <div style={{ marginTop: 6 }}>
+                      <Btn disabled={busy} onClick={() => post({ action: "use_drawn" }, "Using your drawn signature")}>
+                        Use drawn signature
+                      </Btn>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <span style={{ ...muted, fontSize: 13 }}>None</span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
       <ErrorText>{err}</ErrorText>
       {msg && <p style={{ color: "#4ade80", fontSize: 13 }}>{msg}</p>}

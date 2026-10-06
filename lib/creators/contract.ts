@@ -5,7 +5,8 @@
  *   - Consent to electronic records: the creator ticks CONSENT_CHECKBOX_LABEL
  *     after seeing CONSENT_DISCLOSURE; the version + hash of that text are
  *     stored with the signature.
- *   - Intent: typing their full legal name and pressing "Sign contract".
+ *   - Intent: adopting a signature by typing their full legal name (rendered
+ *     in the SIGNATURE_FONT script, DocuSign style) and pressing "Adopt and sign".
  *   - Attribution: signer id comes from the session token; email, IP, user
  *     agent and timestamps (UTC + creator timezone) are recorded.
  *   - Tamper-evident retention: the template's SHA-256 is fixed at send time
@@ -20,11 +21,18 @@
  *   Settings/creator_contracts                   ContractSettings (+ current_template_version)
  *   CreatorContractTemplates/{version}           ContractTemplate (create() only; versions are immutable)
  * Storage
- *   contracts/founder_signature.png              founder's countersignature
+ *   contracts/founder_signature.png              optional drawn/uploaded countersignature
+ *                                                (default: founder name typed in SIGNATURE_FONT)
+ * Repo
+ *   lib/creators/fonts/GreatVibes-Regular.ttf    SIGNATURE_FONT (SIL OFL 1.1, see OFL.txt; traced
+ *                                                into the sign route via next.config outputFileTracingIncludes)
  *   contracts/templates/<version>.pdf            uploaded template PDFs (write-once)
  *   creators/<id>/contract/signed-v1-<stamp>.pdf signed contract (write-once)
  */
 import { createHash, randomUUID } from "crypto";
+import { readFileSync } from "fs";
+import path from "path";
+import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
 import { getStorage } from "firebase-admin/storage";
 import type { DocumentData } from "firebase-admin/firestore";
@@ -148,16 +156,34 @@ export async function setCurrentTemplate(version: string): Promise<ContractSetti
 
 // ---------------------------------------------------------------- consent
 
-export const CONSENT_TEXT_VERSION = "esign-consent-v1";
+export const CONSENT_TEXT_VERSION = "esign-consent-v2";
 export const CONSENT_CHECKBOX_LABEL = "I agree to use electronic records and signatures.";
 export const CONSENT_DISCLOSURE =
   "By ticking this box, you agree that KESHAH can give you this agreement and any records about it electronically, " +
-  "and that typing your name and pressing Sign contract is your signature, just like signing on paper. " +
+  "and that typing your name to adopt a signature and pressing Adopt and sign is your signature, just like signing on paper. " +
   "You can ask for a paper copy at any time, free of charge, by emailing contact@keshah.com. " +
   "If you'd rather not sign electronically, don't tick the box and email us instead, and we'll sort out a paper copy. " +
   "To open and keep these records you need a device that can open PDF files and an email address. " +
   "A copy of the signed agreement is emailed to you, and you can download it from the Contract tab whenever you need it.";
 export const CONSENT_TEXT_SHA256 = sha256Hex(`${CONSENT_CHECKBOX_LABEL}\n\n${CONSENT_DISCLOSURE}`);
+
+// ---------------------------------------------------------------- adopted (typed) signatures
+//
+// DocuSign-style "adopt a signature": the signer's typed full name is drawn
+// in a handwriting font. Both the creator and the founder sign this way; the
+// founder can override with a drawn/uploaded PNG.
+
+/** Google Fonts family (SIL OFL 1.1). The portal + admin preview load the same family. */
+export const SIGNATURE_FONT = "Great Vibes";
+export const SIGNATURE_STYLE = `${SIGNATURE_FONT} typed`;
+export const SIGNATURE_FONT_CSS_URL = "https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap";
+const SIGNATURE_FONT_FILE = path.join(process.cwd(), "lib", "creators", "fonts", "GreatVibes-Regular.ttf");
+let signatureFontBytes: Buffer | null = null;
+
+function loadSignatureFont(): Buffer {
+  if (!signatureFontBytes) signatureFontBytes = readFileSync(SIGNATURE_FONT_FILE);
+  return signatureFontBytes;
+}
 
 // ---------------------------------------------------------------- firestore / storage
 
@@ -208,13 +234,60 @@ export async function getContractSettings(): Promise<ContractSettings> {
     ...(d.signature_path ? { signature_path: String(d.signature_path) } : {}),
     ...(d.signature_sha256 ? { signature_sha256: String(d.signature_sha256) } : {}),
     ...(d.signature_updated_at ? { signature_updated_at: String(d.signature_updated_at) } : {}),
+    ...(d.use_drawn_signature === true ? { use_drawn_signature: true } : {}),
+    ...(d.founder_signature_adopted_at ? { founder_signature_adopted_at: String(d.founder_signature_adopted_at) } : {}),
+    ...(d.founder_signature_adopted_text ? { founder_signature_adopted_text: String(d.founder_signature_adopted_text) } : {}),
     ...(d.updated_at ? { updated_at: String(d.updated_at) } : {}),
     ...(d.current_template_version ? { current_template_version: String(d.current_template_version) } : {}),
   };
 }
 
+/** The countersignature that will go on contracts signed now, or null if the founder hasn't set one up. */
+export function founderSignatureMode(s: ContractSettings): "drawn" | "typed" | null {
+  if (s.use_drawn_signature && s.signature_path) return "drawn";
+  if (s.founder_signature_adopted_at && s.founder_signature_adopted_text && s.founder_signature_adopted_text === s.founder_name.trim()) return "typed";
+  return null;
+}
+
 export function contractSettingsReady(s: ContractSettings): boolean {
-  return !!(s.founder_name.trim() && s.founder_title.trim() && s.entity_name.trim() && s.signature_path);
+  return !!(s.founder_name.trim() && s.founder_title.trim() && s.entity_name.trim() && founderSignatureMode(s));
+}
+
+/** Why "Send contract" can't run yet (null = ready). Template first, then signature. */
+export function contractSetupProblem(s: ContractSettings, hasTemplate: boolean): string | null {
+  const sig = contractSettingsReady(s);
+  if (!hasTemplate && !sig) return "Upload the final contract and adopt your signature in Settings first";
+  if (!hasTemplate) return "Upload the final contract first";
+  if (!sig) return "Adopt your signature in Settings first";
+  return null;
+}
+
+/**
+ * Founder's one-time "Adopt this signature": records that he adopted his
+ * name, typed in SIGNATURE_FONT, as his countersignature. Switches off the
+ * drawn override. Re-adopt after changing the name.
+ */
+export async function adoptFounderSignature(): Promise<ContractSettings> {
+  const s = await getContractSettings();
+  const text = s.founder_name.trim();
+  if (!text) throw new CreatorDataError("Add your name first");
+  const now = new Date().toISOString();
+  await fdb()
+    .collection(SETTINGS_COLLECTION)
+    .doc(SETTINGS_DOC)
+    .set({ founder_signature_adopted_at: now, founder_signature_adopted_text: text, use_drawn_signature: false, updated_at: now }, { merge: true });
+  return getContractSettings();
+}
+
+/** Switch between the generated signature and the drawn/uploaded PNG override. */
+export async function setUseDrawnSignature(useDrawn: boolean): Promise<ContractSettings> {
+  const s = await getContractSettings();
+  if (useDrawn && !s.signature_path) throw new CreatorDataError("Draw or upload a signature first");
+  await fdb()
+    .collection(SETTINGS_COLLECTION)
+    .doc(SETTINGS_DOC)
+    .set({ use_drawn_signature: useDrawn, updated_at: new Date().toISOString() }, { merge: true });
+  return getContractSettings();
 }
 
 export async function saveContractSettings(patch: Partial<Pick<ContractSettings, "founder_name" | "founder_title" | "entity_name">>): Promise<ContractSettings> {
@@ -232,7 +305,7 @@ export async function saveContractSettings(patch: Partial<Pick<ContractSettings,
 
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
-/** Store the founder's signature PNG (drawn on a canvas or uploaded). */
+/** Store the founder's signature PNG (drawn on a canvas or uploaded) and use it instead of the generated one. */
 export async function saveFounderSignature(png: Buffer): Promise<ContractSettings> {
   if (png.length < 100 || !png.subarray(0, 8).equals(PNG_MAGIC)) throw new CreatorDataError("Signature must be a PNG image");
   if (png.length > 2 * 1024 * 1024) throw new CreatorDataError("Signature image is over 2MB");
@@ -247,7 +320,10 @@ export async function saveFounderSignature(png: Buffer): Promise<ContractSetting
   await fdb()
     .collection(SETTINGS_COLLECTION)
     .doc(SETTINGS_DOC)
-    .set({ signature_path: FOUNDER_SIGNATURE_PATH, signature_sha256: sha256Hex(png), signature_updated_at: now, updated_at: now }, { merge: true });
+    .set(
+      { signature_path: FOUNDER_SIGNATURE_PATH, signature_sha256: sha256Hex(png), signature_updated_at: now, use_drawn_signature: true, updated_at: now },
+      { merge: true },
+    );
   return getContractSettings();
 }
 
@@ -270,11 +346,11 @@ export async function sendContract(id: string, opts: { email?: boolean } = {}): 
     throw new CreatorDataError("This creator already signed. A signed contract can't be replaced from here.", 409);
   }
   const settings = await getContractSettings();
-  if (!contractSettingsReady(settings)) {
-    throw new CreatorDataError("Add your signature and details under Contract signing first.", 400);
-  }
   const current = settings.current_template_version ? await getTemplate(settings.current_template_version) : null;
   if (!current) throw new CreatorDataError("Upload the final contract PDF under Contract signing first. The v0 draft can't be sent.", 400);
+  if (!contractSettingsReady(settings)) {
+    throw new CreatorDataError("Adopt your signature under Contract signing first.", 400);
+  }
   const { template: t } = await templateBytes(current.version); // integrity check
   const now = new Date().toISOString();
   const contract: CreatorContract = { status: "sent", template_version: t.version, template_sha256: t.sha256, sent_at: now };
@@ -383,11 +459,16 @@ export async function signContract(
   if (!contractSettingsReady(settings)) {
     throw new CreatorDataError("Your contract can't be signed right now. Message your manager on Slack.", 503);
   }
-  let founderSig: Buffer;
-  try {
-    [founderSig] = await bucket().file(settings.signature_path!).download();
-  } catch {
-    throw new CreatorDataError("Your contract can't be signed right now. Message your manager on Slack.", 503);
+  let founder: FounderSignature;
+  if (founderSignatureMode(settings) === "drawn") {
+    try {
+      const [png] = await bucket().file(settings.signature_path!).download();
+      founder = { kind: "drawn", png };
+    } catch {
+      throw new CreatorDataError("Your contract can't be signed right now. Message your manager on Slack.", 503);
+    }
+  } else {
+    founder = { kind: "typed", text: settings.founder_signature_adopted_text!, adopted_at: settings.founder_signature_adopted_at! };
   }
 
   const now = meta.now ?? new Date();
@@ -415,10 +496,14 @@ export async function signContract(
     countersigner_name: settings.founder_name,
     countersigner_title: settings.founder_title,
     entity_name: settings.entity_name,
-    countersignature_sha256: sha256Hex(founderSig),
+    signature_style: SIGNATURE_STYLE,
+    signature_adopted_text: typed,
+    ...(founder.kind === "drawn"
+      ? { countersignature_style: "drawn image", countersignature_sha256: sha256Hex(founder.png) }
+      : { countersignature_style: SIGNATURE_STYLE, countersignature_adopted_text: founder.text, countersignature_adopted_at: founder.adopted_at }),
   };
 
-  const pdf = await buildSignedPdf(template, tpl.title, audit, founderSig, localDateLong(now, tz));
+  const pdf = await buildSignedPdf(template, tpl.title, audit, founder, localDateLong(now, tz));
   const signedSha = sha256Hex(pdf);
   const stamp = signedAt.replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
   const pdfPath = `creators/${id}/contract/signed-${contract.template_version}-${stamp}.pdf`;
@@ -570,8 +655,55 @@ function wrap(font: PDFFont, text: string, size: number, maxWidth: number): stri
 interface Fonts {
   regular: PDFFont;
   bold: PDFFont;
+  /** SIGNATURE_FONT, embedded (subset) from the repo TTF. */
   script: PDFFont;
+  /** For any character SIGNATURE_FONT lacks. */
+  scriptFallback: PDFFont;
+  scriptGlyphs: Set<number>;
   mono: PDFFont;
+}
+
+/** The founder's countersignature for one signing. */
+export type FounderSignature = { kind: "typed"; text: string; adopted_at: string } | { kind: "drawn"; png: Buffer };
+
+/** Split text into runs: SIGNATURE_FONT where it has the glyph, the fallback font otherwise. */
+function scriptRuns(f: Fonts, text: string): { font: PDFFont; text: string }[] {
+  const runs: { font: PDFFont; text: string }[] = [];
+  for (const ch of String(text ?? "").replace(/[\r\n\t]+/g, " ")) {
+    const font = f.scriptGlyphs.has(ch.codePointAt(0)!) ? f.script : f.scriptFallback;
+    const piece = font === f.script ? ch : safe(font, ch);
+    const last = runs[runs.length - 1];
+    if (last && last.font === font) last.text += piece;
+    else runs.push({ font, text: piece });
+  }
+  return runs;
+}
+
+const SIG_INK = rgb(0.05, 0.1, 0.35);
+
+/** Draws an adopted signature (typed name in SIGNATURE_FONT), shrunk to fit maxWidth. */
+function drawAdoptedSignature(page: PDFPage, f: Fonts, text: string, x: number, baseline: number, maxWidth: number) {
+  const runs = scriptRuns(f, text);
+  const fbSize = (size: number) => size * 0.62; // fallback serif looks huge next to the script's small x-height
+  const WORD_GAP = 0.15; // the script's own space is very narrow; widen it (em) so names stay readable
+  const runWidth = (r: { font: PDFFont; text: string }, size: number) => {
+    const sz = r.font === f.script ? size : fbSize(size);
+    const spaces = r.font === f.script ? (r.text.match(/ /g) ?? []).length : 0;
+    return r.font.widthOfTextAtSize(r.text, sz) + spaces * WORD_GAP * size;
+  };
+  const width = (size: number) => runs.reduce((w, r) => w + runWidth(r, size), 0);
+  let size = 34;
+  while (size > 12 && width(size) > maxWidth) size -= 1;
+  let cx = x;
+  for (const r of runs) {
+    const sz = r.font === f.script ? size : fbSize(size);
+    const parts = r.font === f.script ? r.text.split(" ") : [r.text];
+    parts.forEach((part, i) => {
+      if (i > 0) cx += r.font.widthOfTextAtSize(" ", sz) + WORD_GAP * size;
+      if (part) page.drawText(part, { x: cx, y: baseline, size: sz, font: r.font, color: SIG_INK });
+      cx += r.font.widthOfTextAtSize(part, sz);
+    });
+  }
 }
 
 function footer(page: PDFPage, f: Fonts, a: ContractAudit, label: string) {
@@ -623,15 +755,19 @@ class Writer {
   }
 }
 
-async function buildSignedPdf(template: Buffer, title: string, a: ContractAudit, founderSig: Buffer, effectiveDate: string): Promise<Uint8Array> {
+async function buildSignedPdf(template: Buffer, title: string, a: ContractAudit, founder: FounderSignature, effectiveDate: string): Promise<Uint8Array> {
   const doc = await PDFDocument.load(template);
+  doc.registerFontkit(fontkit);
+  const script = await doc.embedFont(loadSignatureFont(), { subset: true });
   const f: Fonts = {
     regular: await doc.embedFont(StandardFonts.Helvetica),
     bold: await doc.embedFont(StandardFonts.HelveticaBold),
-    script: await doc.embedFont(StandardFonts.TimesRomanBoldItalic),
+    script,
+    scriptFallback: await doc.embedFont(StandardFonts.TimesRomanItalic),
+    scriptGlyphs: new Set(script.getCharacterSet()),
     mono: await doc.embedFont(StandardFonts.Courier),
   };
-  const sig: PDFImage = await doc.embedPng(founderSig);
+  const sig: PDFImage | null = founder.kind === "drawn" ? await doc.embedPng(founder.png) : null;
   const original = doc.getPages();
   original.forEach((p) => {
     const { width } = p.getSize();
@@ -669,17 +805,16 @@ async function buildSignedPdf(template: Buffer, title: string, a: ContractAudit,
   label(leftX, top - 10, safe(f.bold, a.entity_name.toUpperCase()));
   label(rightX, top - 10, "CREATOR");
 
-  // founder signature image (fit 190 x 56)
-  const scale = Math.min(190 / sig.width, 56 / sig.height, 1);
-  const sw = sig.width * scale;
-  const sh = sig.height * scale;
   const lineY = top - 90;
-  p.drawImage(sig, { x: leftX, y: lineY + 4, width: sw, height: sh });
-  // creator typed signature
-  let sigSize = 26;
-  const typed = safe(f.script, a.signer_typed_name);
-  while (sigSize > 12 && f.script.widthOfTextAtSize(typed, sigSize) > colW) sigSize -= 1;
-  p.drawText(typed, { x: rightX, y: lineY + 8, size: sigSize, font: f.script, color: rgb(0.05, 0.1, 0.35) });
+  if (sig) {
+    // drawn founder signature image (fit 190 x 56)
+    const scale = Math.min(190 / sig.width, 56 / sig.height, 1);
+    p.drawImage(sig, { x: leftX, y: lineY + 4, width: sig.width * scale, height: sig.height * scale });
+  } else if (founder.kind === "typed") {
+    drawAdoptedSignature(p, f, founder.text, leftX + 4, lineY + 12, colW - 8);
+  }
+  // creator's adopted signature
+  drawAdoptedSignature(p, f, a.signature_adopted_text ?? a.signer_typed_name, rightX + 4, lineY + 12, colW - 8);
   for (const x of [leftX, rightX]) {
     p.drawLine({ start: { x, y: lineY }, end: { x: x + colW, y: lineY }, thickness: 0.7, color: BLACK });
   }
@@ -695,13 +830,13 @@ async function buildSignedPdf(template: Buffer, title: string, a: ContractAudit,
     return y;
   };
   const yl = rows(leftX, [
-    ["Signature", "electronic (adopted signature image)"],
+    ["Signature", founder.kind === "drawn" ? "electronic (adopted signature image)" : "electronic (adopted by typing full name)"],
     ["Name", a.countersigner_name],
     ["Title", a.countersigner_title],
     ["Date", signedDate],
   ]);
   const yr = rows(rightX, [
-    ["Signature", "electronic (typed name)"],
+    ["Signature", "electronic (adopted by typing full name)"],
     ["Name", a.signer_legal_name],
     ["Address", a.signer_address],
     ["Email", a.signer_email],
@@ -710,7 +845,7 @@ async function buildSignedPdf(template: Buffer, title: string, a: ContractAudit,
   w.y = Math.min(yl, yr) - 18;
   w.text(
     `KESHAH's signature was applied automatically when the Creator signed, on ${a.signed_at_local}. ` +
-      "The Creator signed by typing their name after agreeing to use electronic records and signatures. " +
+      "The Creator adopted a signature by typing their full legal name, after agreeing to use electronic records and signatures. " +
       "Full details are on the audit certificate that follows.",
     { size: 8.5, color: GREY },
   );
@@ -731,6 +866,7 @@ async function buildSignedPdf(template: Buffer, title: string, a: ContractAudit,
     ["Signed (UTC)", a.signed_at_utc],
     ["Signed (signer's time)", `${a.signed_at_local} (${a.signer_timezone})`],
     ["Signer typed name", a.signer_typed_name],
+    ["Signature", `Signature adopted by typing full name ("${a.signature_adopted_text ?? a.signer_typed_name}", style: ${a.signature_style ?? SIGNATURE_STYLE}); electronic signature under ESIGN/UETA.`],
     ["Signer legal name", a.signer_legal_name],
     ["Signer address", a.signer_address],
     ["Signer email", a.signer_email],
@@ -740,10 +876,19 @@ async function buildSignedPdf(template: Buffer, title: string, a: ContractAudit,
     ["Authentication", "Signed in to the KESHAH creator portal with the signer's email and password."],
     ["Consent to e-records", `Ticked "${CONSENT_CHECKBOX_LABEL}" (consent text ${a.consent_text_version}).`],
     ["Consent text SHA-256", a.consent_text_sha256, true],
-    ["Intent to sign", 'Typed full legal name and pressed "Sign contract".'],
+    ["Intent to sign", 'Typed full legal name to adopt a signature and pressed "Adopt and sign".'],
     ["Countersigned by", `${a.countersigner_name}, ${a.countersigner_title}, for ${a.entity_name}`],
-    ["Countersignature SHA-256", a.countersignature_sha256, true],
   ];
+  if (a.countersignature_style === "drawn image" || (!a.countersignature_style && a.countersignature_sha256)) {
+    items.push(["Countersignature", "Drawn signature image adopted by the countersigner."]);
+    if (a.countersignature_sha256) items.push(["Countersignature SHA-256", a.countersignature_sha256, true]);
+  } else {
+    items.push([
+      "Countersignature",
+      `Signature adopted by typing full name ("${a.countersignature_adopted_text ?? a.countersigner_name}", style: ${a.countersignature_style ?? SIGNATURE_STYLE})` +
+        `${a.countersignature_adopted_at ? `, adopted ${a.countersignature_adopted_at} (UTC)` : ""}; applied automatically when the Creator signed.`,
+    ]);
+  }
   const keyW = 150;
   for (const [k, v, mono] of items) {
     const font = mono ? f.mono : f.regular;

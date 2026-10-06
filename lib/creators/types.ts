@@ -75,7 +75,17 @@ export interface ContractAudit {
   countersigner_name: string;
   countersigner_title: string;
   entity_name: string;
-  countersignature_sha256: string;
+  /** SHA-256 of the founder's signature image. Only for a drawn/uploaded countersignature. */
+  countersignature_sha256?: string;
+  /** How the creator signed, e.g. "Great Vibes typed" (absent on contracts signed before adopt-a-signature). */
+  signature_style?: string;
+  /** The exact text the creator adopted as their signature. */
+  signature_adopted_text?: string;
+  /** "Great Vibes typed" or "drawn image". */
+  countersignature_style?: string;
+  /** Founder's adopted signature text + when he adopted it (typed countersignature only). */
+  countersignature_adopted_text?: string;
+  countersignature_adopted_at?: IsoInstant;
 }
 
 export interface CreatorContract {
@@ -102,6 +112,11 @@ export interface ContractSettings {
   signature_path?: string;
   signature_sha256?: string;
   signature_updated_at?: IsoInstant;
+  /** True: countersign with the drawn/uploaded PNG. Otherwise the generated (typed) signature is used. */
+  use_drawn_signature?: boolean;
+  /** One-time "Adopt this signature" record for the generated countersignature. */
+  founder_signature_adopted_at?: IsoInstant;
+  founder_signature_adopted_text?: string;
   updated_at?: IsoInstant;
   /** CreatorContractTemplates doc id that "Send contract" uses. */
   current_template_version?: string;

@@ -15,6 +15,7 @@ interface ContractInfo {
   email: string;
   timezone: string;
   consent: { version: string; label: string; disclosure: string };
+  signature_font: { family: string; css_url: string };
 }
 
 const linkStyle = {
@@ -124,27 +125,44 @@ export function ContractSigner({ onSigned, compact }: { onSigned?: () => void; c
       <P style={{ fontSize: 13 }}>
         Date: <span style={{ color: "#fff" }}>{today}</span>
       </P>
+      {/* Same handwriting font the signed PDF uses. */}
+      <link rel="stylesheet" href={c.signature_font.css_url} />
       {name.trim() && (
-        <div
-          style={{
-            fontFamily: "'Times New Roman', Times, serif",
-            fontStyle: "italic",
-            fontWeight: 700,
-            fontSize: 26,
-            borderBottom: "1px solid rgba(255,255,255,0.4)",
-            padding: "4px 2px",
-            marginBottom: 12,
-          }}
-        >
-          {name.trim()}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 12, color: C.faint, marginBottom: 4 }}>This is your signature</div>
+          <div
+            style={{
+              background: "#fff",
+              color: "#0d1a59",
+              borderRadius: 10,
+              padding: "10px 16px 6px",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                fontFamily: `'${c.signature_font.family}', cursive`,
+                fontSize: 40,
+                lineHeight: 1.3,
+                wordSpacing: "0.15em",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                borderBottom: "1px solid #0d1a5966",
+              }}
+            >
+              {name.trim().replace(/\s+/g, " ")}
+            </div>
+          </div>
         </div>
       )}
       <Msg error={signErr} />
       <Button disabled={!consent || !nameOk || address.trim().length < 6 || busy} onClick={sign} style={{ width: "100%" }}>
-        {busy ? "Signing..." : "Sign contract"}
+        {busy ? "Signing..." : "Adopt and sign"}
       </Button>
       <P style={{ fontSize: 12, color: C.faint, marginTop: 10, marginBottom: 0 }}>
-        By pressing Sign contract you&apos;re signing this agreement electronically. We&apos;ll email a signed copy to {c.email}.
+        By pressing Adopt and sign you agree that the signature above is your electronic signature on this agreement, just like signing on
+        paper. We&apos;ll email a signed copy to {c.email}.
       </P>
     </>
   );

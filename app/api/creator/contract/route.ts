@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { CONSENT_CHECKBOX_LABEL, CONSENT_DISCLOSURE, CONSENT_TEXT_VERSION, getSigningInfo } from "@/lib/creators/contract";
+import {
+  CONSENT_CHECKBOX_LABEL,
+  CONSENT_DISCLOSURE,
+  CONSENT_TEXT_VERSION,
+  SIGNATURE_FONT,
+  SIGNATURE_FONT_CSS_URL,
+  getSigningInfo,
+} from "@/lib/creators/contract";
 import { signedReadUrl } from "@/lib/creators/db";
 import { errorResponse, requireCreator } from "../_auth";
 
@@ -24,6 +31,7 @@ export async function GET(req: NextRequest) {
       email: creator.email,
       timezone: creator.timezone,
       consent: { version: CONSENT_TEXT_VERSION, label: CONSENT_CHECKBOX_LABEL, disclosure: CONSENT_DISCLOSURE },
+      signature_font: { family: SIGNATURE_FONT, css_url: SIGNATURE_FONT_CSS_URL },
     });
   } catch (e) {
     return errorResponse(e, "contract");
