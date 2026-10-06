@@ -56,6 +56,9 @@ type Application = {
   social_handle: string | null;
   calendly_event_start_time: string | null;
   calendly_join_url: string | null;
+  has_video?: boolean;
+  interview_session?: string | null;
+  interview_video_submitted_at?: string | null;
   calendly_reschedule_url: string | null;
   calendly_cancel_url: string | null;
   status: TabKey;
@@ -399,6 +402,35 @@ function ApplicationRow({
           }}
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {row.has_video && (
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    // Open synchronously so popup blockers allow it, then point it at the signed URL.
+                    const w = window.open("about:blank", "_blank");
+                    try {
+                      const res = await fetch(`/api/careers/${row.id}/video-url`, { cache: "no-store" });
+                      const body = (await res.json()) as { url?: string; error?: string };
+                      if (!res.ok || !body.url) throw new Error(body.error || `HTTP ${res.status}`);
+                      if (w) w.location.href = body.url;
+                      else window.location.href = body.url;
+                    } catch (e) {
+                      w?.close();
+                      alert(e instanceof Error ? e.message : String(e));
+                    }
+                  }}
+                  style={{ background: "#fff", color: "#000", border: "none", borderRadius: 999, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                >
+                  Watch video
+                </button>
+                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.55)" }}>
+                  {row.interview_video_submitted_at
+                    ? `Interview video${row.interview_session ? ` (${row.interview_session})` : ""}, submitted ${new Date(row.interview_video_submitted_at).toLocaleString()}`
+                    : "Application video"}
+                </span>
+              </div>
+            )}
             {/* Booking panel — only visible for booked / past-booked rows. */}
             {(row.calendly_event_start_time || row.calendly_join_url) && (
               <div
