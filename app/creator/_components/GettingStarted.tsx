@@ -1,143 +1,76 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { HomeHeader, Screen, TaskRow, TaskThumb, usePushed, useJustDone } from "./AppShell";
+import type { MIName } from "./icons";
 import { ContractSigner } from "./ContractTab";
 import PaymentsSetup from "./PaymentsSetup";
 import StepGuide, { CopyBlock } from "./StepGuide";
 import { ACCOUNT_SETUP_GUIDE, BIO_TEXT, POSTING_GUIDE } from "@/lib/creators/guide-content";
 import type { PortalData } from "./types";
-import { Button, C, Card, CheckCircle, Eyebrow, Field, H, Msg, P, ProgressBar, Title, api, buttonStyle, inputStyle, prefersReducedMotion } from "./ui";
+import { AllDone, Button, C, CheckCircle, Field, Group, H, Msg, P, SectionLabel, api, buttonStyle, inputStyle, prefersReducedMotion } from "./ui";
 
 type Onb = PortalData["onboarding"];
 
 /**
- * One task row, styled like the KESHAH app's dashboard task list: grey box
- * while it still needs doing, faded translucent card with a green check once
- * it's done. The check pops in when a step is finished during this visit.
+ * One onboarding step as a task row on the app's Home (TaskListWidget, see
+ * AppShell). Tapping it pushes the step onto its own screen, the way the app
+ * opens a session from the task list. When the step is finished on that
+ * screen it slides back to the list and the green check pops in.
  */
 function Step({
   n,
+  icon,
   title,
   done,
   current,
+  locked,
   doneNote,
   note,
   children,
 }: {
   n: number;
+  icon: MIName;
   title: string;
   done: boolean;
-  /** The first step that isn't done: opened by default and highlighted. */
+  /** The first step that isn't done: it pulses, like the app's next task. */
   current?: boolean;
-  /** One line shown under a finished step's title. */
-  doneNote?: string;
-  /** One line shown under an unfinished step's title while it's closed. */
+  /** Can't be opened yet (the grey overlay with the lock). */
+  locked?: boolean;
+  /** Shown next to the green check once the step is done. */
+  doneNote: string;
+  /** The row's white second line while it still needs doing. */
   note?: string;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState<boolean | null>(null);
+  const screen = usePushed<true>();
+  const justDone = useJustDone(done);
   const wasDone = useRef(done);
-  const [justDone, setJustDone] = useState(false);
   useEffect(() => {
-    if (done && !wasDone.current) {
-      setJustDone(true);
-      setOpen(null); // fold it away; the next step opens on its own
-    }
+    if (done && !wasDone.current && screen.isOpen) screen.close();
     wasDone.current = done;
-  }, [done]);
-
-  const expanded = open ?? !!current;
-  // When a step opens after the first render (tapped, or the next step opening
-  // after one is finished), bring its header gently into view instead of
-  // leaving the content wherever the layout change pushed it.
-  const boxRef = useRef<HTMLDivElement>(null);
-  const wasExpanded = useRef(expanded);
-  useEffect(() => {
-    if (expanded && !wasExpanded.current && boxRef.current) {
-      const el = boxRef.current;
-      requestAnimationFrame(() => {
-        const top = el.getBoundingClientRect().top;
-        if (top < 12 || top > window.innerHeight * 0.55) {
-          window.scrollBy({ top: top - 16, behavior: prefersReducedMotion() ? "auto" : "smooth" });
-        }
-      });
-    }
-    wasExpanded.current = expanded;
-  }, [expanded]);
-  const sub = done ? doneNote : !expanded ? note : undefined;
+  }, [done, screen]);
   return (
-    <div
-      ref={boxRef}
-      className={current && !expanded ? "cp-pulse" : undefined}
-      style={{
-        background: done ? C.card : C.box,
-        border: done ? C.border : current ? "1px solid rgba(255,255,255,0.3)" : "1px solid transparent",
-        borderRadius: done ? 16 : 12,
-        marginBottom: 12,
-        transition: "background 0.3s ease, border-radius 0.3s ease",
-      }}
-    >
-      <button
-        type="button"
-        className="cp-focus"
-        onClick={() => setOpen(!expanded)}
-        aria-expanded={expanded}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 14,
-          width: "100%",
-          minHeight: 72,
-          padding: "14px 18px",
-          background: "none",
-          border: "none",
-          borderRadius: "inherit",
-          color: "#fff",
-          fontFamily: C.font,
-          textAlign: "left",
-          cursor: "pointer",
-        }}
-      >
-        <span style={{ width: 32, height: 32, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          {done ? (
-            <CheckCircle size={30} pop={justDone} />
-          ) : (
-            <span
-              style={{
-                width: 30,
-                height: 30,
-                borderRadius: 15,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 13,
-                fontWeight: 600,
-                background: current ? "#fff" : "rgba(255,255,255,0.1)",
-                color: current ? "#000" : "rgba(255,255,255,0.75)",
-              }}
-            >
-              {n}
-            </span>
-          )}
-        </span>
-        <span style={{ flex: 1, minWidth: 0 }}>
-          <span style={{ display: "block", fontSize: 15, fontWeight: 600, color: done ? "rgba(255,255,255,0.5)" : "#fff" }}>{title}</span>
-          {sub && (
-            <span
-              className={done && justDone ? "cp-pop" : undefined}
-              style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 500, color: done ? C.faint : C.dim, marginTop: 3 }}
-            >
-              {done && <CheckCircle size={13} />}
-              {sub}
-            </span>
-          )}
-        </span>
-        <span aria-hidden style={{ color: C.faint, fontSize: 22, lineHeight: 1, transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>
-          ›
-        </span>
-      </button>
-      {expanded && <div style={{ padding: "2px 18px 20px" }}>{children}</div>}
-    </div>
+    <>
+      <TaskRow
+        thumb={<TaskThumb icon={icon} />}
+        title={title}
+        target={`Step ${n}`}
+        meta={note}
+        doneText={doneNote}
+        done={done}
+        justDone={justDone}
+        locked={locked}
+        pulse={current}
+        enterIndex={n - 1}
+        onClick={() => screen.open(true)}
+      />
+      {screen.value && (
+        <Screen title={title} onBack={screen.close} closing={screen.closing}>
+          {children}
+        </Screen>
+      )}
+    </>
   );
 }
 
@@ -148,7 +81,7 @@ function Callout({ children }: { children: ReactNode }) {
       style={{
         margin: "12px 0",
         padding: "12px 14px",
-        borderRadius: 14,
+        borderRadius: 10,
         background: "rgba(255,255,255,0.08)",
         borderLeft: "3px solid #fff",
         fontSize: 14,
@@ -161,42 +94,38 @@ function Callout({ children }: { children: ReactNode }) {
   );
 }
 
-/** One warm-up day in the same task-row style as the steps. */
-function WarmupDay({ n, done, sub, today }: { n: number; done: boolean; sub: string; today?: boolean }) {
+/** One warm-up day, as a row in a profile-style group. */
+function WarmupDay({ n, done, sub, today, isLast }: { n: number; done: boolean; sub: string; today?: boolean; isLast?: boolean }) {
   return (
     <div
       style={{
         display: "flex",
         alignItems: "center",
         gap: 12,
-        padding: "12px 14px",
-        borderRadius: done ? 14 : 10,
-        background: done ? "rgba(255,255,255,0.06)" : today ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.03)",
-        border: today && !done ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(255,255,255,0.08)",
-        marginBottom: 8,
+        padding: "16px 20px",
+        borderBottom: isLast ? "none" : `1px solid ${C.divider}`,
       }}
     >
       {done ? (
-        <CheckCircle size={24} />
+        <CheckCircle size={20} />
       ) : (
         <span
           style={{
-            width: 24,
-            height: 24,
-            borderRadius: 12,
+            width: 20,
+            height: 20,
+            borderRadius: 10,
             flexShrink: 0,
             border: today ? "2px solid #fff" : "2px solid rgba(255,255,255,0.2)",
-            boxSizing: "border-box",
           }}
         />
       )}
-      <span style={{ fontSize: 14, fontWeight: 600, color: done ? "rgba(255,255,255,0.5)" : today ? "#fff" : C.faint }}>Day {n}</span>
-      <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 500, color: done ? C.green : today ? "#fff" : C.faint }}>{sub}</span>
+      <span style={{ fontSize: 14, color: done ? "rgba(255,255,255,0.5)" : today ? "#fff" : C.faint }}>Day {n}</span>
+      <span style={{ marginLeft: "auto", fontSize: 13, color: done ? C.green : today ? "#fff" : "rgba(255,255,255,0.5)" }}>{sub}</span>
     </div>
   );
 }
 
-export default function GettingStarted({ data, onDone }: { data: PortalData; onDone: () => void }) {
+export default function GettingStarted({ data, onDone, onProfile }: { data: PortalData; onDone: () => void; onProfile: () => void }) {
   const cfg = data.config;
   const [onb, setOnb] = useState<Onb>(data.onboarding);
   const [tt, setTt] = useState(data.creator.tiktok_handle);
@@ -259,71 +188,51 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
   const currentIdx = doneByStep.findIndex((d, i) => !d && !(i === WARM && tickedToday));
   const cur = (n: number) => currentIdx === n - 1;
 
+  const statusLine = allDone
+    ? "Every step is done"
+    : doneCount === WARM && !warmDone
+      ? `Just your ${cfg.warmup_days}-day warm-up left`
+      : doneCount === 0
+        ? "Let's get you set up"
+        : `${doneByStep.length - doneCount} to go`;
+
   return (
     <div>
+      <HomeHeader chip="SETUPMODE" chatHref={cfg.slack_invite_url} onProfile={onProfile} />
+      <div style={{ height: 20 }} />
       {allDone ? (
-        <div className="cp-rise" style={{ marginBottom: 18 }}>
+        <div className="cp-head-enter" style={{ marginBottom: 24 }}>
           {!finishedNow.startedComplete && (
             <div style={{ marginBottom: 14 }}>
               <CheckCircle size={56} pop />
             </div>
           )}
-          <Title style={{ fontSize: 36, letterSpacing: -1.5, color: C.green, marginBottom: 10 }}>All done.</Title>
-          <Card>
+          <AllDone style={{ marginBottom: 24 }} />
+          {/* _buildDayCompleteCard */}
+          <div style={{ background: C.card, border: C.border, borderRadius: 16, padding: 24, marginBottom: 16 }}>
             <H style={{ fontSize: 18 }}>You&apos;re ready, {firstName}.</H>
             <P>{cfg.warmup_done_text}</P>
             <P>Log your first {cfg.videos_per_weekday} videos on the Today tab. Your pay starts on that day.</P>
             <Button onClick={onDone} style={{ width: "100%", marginTop: 4 }}>
               Open my portal
             </Button>
-          </Card>
+          </div>
           {/* Last step, shown after the 8-step gate: never blocks posting. Also lives on the Invoices tab. */}
           <PaymentsSetup />
         </div>
       ) : (
-        <>
-          <Eyebrow>Getting started</Eyebrow>
-          <Title>Welcome, {firstName}.</Title>
-          <P>
-            Do steps 1 to 7 in one sitting. Then step 8, the warm-up, runs over your first {cfg.warmup_days} days. Don&apos;t
-            post any videos until every step here is done. Once they&apos;re all ticked off, your full portal opens up.
-          </P>
-        </>
+        <div className="cp-head-enter" style={{ fontSize: 13, color: C.faint, marginBottom: 24 }}>
+          Do steps 1 to 7 in one sitting. Then step 8, the warm-up, runs over your first {cfg.warmup_days} days. Don&apos;t post any
+          videos until every step here is done. Once they&apos;re all ticked off, your full portal opens up.
+        </div>
       )}
 
-      <div
-        style={{
-          margin: "16px 0 18px",
-          padding: "14px 16px",
-          borderRadius: 14,
-          background: C.card,
-          border: C.border,
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
-          <div>
-            <Eyebrow style={{ marginBottom: 3 }}>Your setup</Eyebrow>
-            <div style={{ fontSize: 13, fontWeight: 500, color: "rgba(255,255,255,0.7)" }}>
-              {allDone
-                ? "Every step is done"
-                : doneCount === WARM && !warmDone
-                  ? `Just your ${cfg.warmup_days}-day warm-up left`
-                  : doneCount === 0
-                    ? "Let's get you set up"
-                    : `${doneByStep.length - doneCount} to go`}
-            </div>
-          </div>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>
-            {doneCount}
-            <span style={{ color: C.faint }}> / {doneByStep.length}</span>
-          </div>
-        </div>
-        <ProgressBar value={doneCount / doneByStep.length} color={allDone ? C.green : "#fff"} />
-      </div>
+      <SectionLabel right={`${doneCount} / ${doneByStep.length}`}>Your setup</SectionLabel>
+      <div style={{ fontSize: 13, color: allDone ? C.green : "rgba(255,255,255,0.7)", marginTop: -12, marginBottom: 20 }}>{statusLine}</div>
 
-      <Step n={1} title="Sign your contract" done={contractDone} current={cur(1)} doneNote="Signed">
+      <Step n={1} icon="description" title="Sign your contract" done={contractDone} current={cur(1)} doneNote="Signed" note="Read it, then sign">
         {contractDone ? (
-          <P style={{ marginBottom: 0 }}>Signed. You can download your copy from the Contract tab any time.</P>
+          <P style={{ marginBottom: 0 }}>Signed. You can download your copy from Profile, under Contract, any time.</P>
         ) : (
           <ContractSigner
             compact
@@ -335,13 +244,12 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
         )}
       </Step>
 
-      {!contractDone ? (
-        <Card>
-          <P style={{ marginBottom: 0 }}>Once your contract is signed, the rest of the steps show up here.</P>
-        </Card>
-      ) : (
-      <>
-      <Step n={2} title="Join Slack" done={!!onb.slack_joined_at} current={cur(2)} doneNote="Joined">
+      {!contractDone && (
+        <div style={{ fontSize: 13, color: C.faint, marginTop: -4, marginBottom: 20 }}>
+          Sign your contract first. The rest of the steps unlock after that.
+        </div>
+      )}
+      <Step n={2} icon="forum" title="Join Slack" done={!!onb.slack_joined_at} current={cur(2)} locked={!contractDone} doneNote="Joined" note="Where the team talks">
         {cfg.slack_invite_url ? (
           <>
             <P>This is where the team talks every day. Tap the button, join the workspace, then come back here.</P>
@@ -369,7 +277,7 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
         {errFor("slack")}
       </Step>
 
-      <Step n={3} title="Learn KESHAH" done={videosDone} current={cur(3)} doneNote="Both videos watched">
+      <Step n={3} icon="playCircle" title="Learn KESHAH" done={videosDone} current={cur(3)} locked={!contractDone} doneNote="Both videos watched" note={`${cfg.founder_videos.length} short videos`}>
         <P>
           Watch both of these videos. They explain how KESHAH works and the science behind it. There&apos;s a short quiz
           right after, so watch carefully.
@@ -409,7 +317,7 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
         {errFor("videos")}
       </Step>
 
-      <Step n={4} title="Quick check" done={!!onb.quiz_passed_at} current={cur(4)} doneNote="Passed">
+      <Step n={4} icon="quiz" title="Quick check" done={!!onb.quiz_passed_at} current={cur(4)} locked={!contractDone} doneNote="Passed" note={`${cfg.quiz.length} quick questions`}>
         {onb.quiz_passed_at ? (
           <P style={{ marginBottom: 0 }}>All right. Nice work.</P>
         ) : !videosDone ? (
@@ -465,7 +373,7 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
         )}
       </Step>
 
-      <Step n={5} title="Set up your accounts" done={!!onb.accounts_done_at} current={cur(5)} doneNote={`@${tt} on TikTok, @${ig} on Instagram`}>
+      <Step n={5} icon="personAdd" title="Set up your accounts" done={!!onb.accounts_done_at} current={cur(5)} locked={!contractDone} doneNote={`@${tt} on TikTok, @${ig} on Instagram`} note="TikTok and Instagram">
         <P>{cfg.accounts_step_text}</P>
         {data.creator.keshah_email ? (
           <CopyBlock label="Your keshah.com email" value={data.creator.keshah_email} />
@@ -497,7 +405,7 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
         </Button>
       </Step>
 
-      <Step n={6} title="Add your bio and link" done={!!onb.link_seen_at} current={cur(6)} doneNote="Bio and link added">
+      <Step n={6} icon="link" title="Add your bio and link" done={!!onb.link_seen_at} current={cur(6)} locked={!contractDone} doneNote="Bio and link added" note="On both profiles">
         <P style={{ marginBottom: 0 }}>Add this bio and your link to both your TikTok and Instagram profiles yourself.</P>
         <CopyBlock label="Your bio" value={BIO_TEXT} />
         {link && <CopyBlock label="Your link" value={link} />}
@@ -522,7 +430,7 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
         {errFor("link")}
       </Step>
 
-      <Step n={7} title="Posting guide" done={!!onb.rules_ack_at} current={cur(7)} doneNote="Read">
+      <Step n={7} icon="menuBook" title="Posting guide" done={!!onb.rules_ack_at} current={cur(7)} locked={!contractDone} doneNote="Read" note="Read it before you post">
         <P>Read this now so you&apos;re ready. You start posting only after your warm-up is done.</P>
         <ul style={{ margin: "0 0 14px", paddingLeft: 20, listStyleType: "disc" }}>
           {cfg.posting_rules.map((r, i) => (
@@ -542,6 +450,8 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
 
       <Step
         n={8}
+        icon="fire"
+        locked={!contractDone}
         title={`Your first ${cfg.warmup_days} days`}
         done={warmDone}
         current={cur(8)}
@@ -559,14 +469,14 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
         <H style={{ fontSize: 16, lineHeight: 1.4 }}>{cfg.warmup_headline}</H>
         <P>{cfg.warmup_text}</P>
         <P style={{ color: "#fff" }}>{cfg.first_posting_day_text}</P>
-        <div style={{ margin: "12px 0" }}>
+        <Group style={{ margin: "12px 0 20px" }}>
           {Array.from({ length: cfg.warmup_days }, (_, i) => {
             const done = !!warm[i];
             const isNext = i === warm.length;
             const sub = done ? "Done" : isNext && !warmLocked ? (tickedToday ? "Unlocks tomorrow" : "Today") : i === 0 ? "After step 6" : `After Day ${i}`;
-            return <WarmupDay key={i} n={i + 1} done={done} today={isNext && !tickedToday && !warmLocked} sub={sub} />;
+            return <WarmupDay key={i} n={i + 1} done={done} today={isNext && !tickedToday && !warmLocked} sub={sub} isLast={i === cfg.warmup_days - 1} />;
           })}
-        </div>
+        </Group>
         {warmDone ? (
           <P style={{ color: C.green, fontWeight: 500, marginBottom: 0 }}>{cfg.warmup_done_text}</P>
         ) : warmLocked ? (
@@ -580,9 +490,9 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
         )}
         {errFor("warmup")}
       </Step>
-      {/* A non-blocking "Set up your payments" card can sit here during the warm-up days. */}
-      </>
-      )}
+
+      {/* PAYMENTS SLOT: a non-blocking "Set up your payments" card goes here, under the
+          warm-up row, during the warm-up days. Keep it full width with 20 below like a task row. */}
     </div>
   );
 }

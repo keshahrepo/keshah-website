@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PostedVideo } from "@/lib/creators/types";
 import { postKey } from "@/lib/creators/scrape";
 import { fmtDateShort, localDateIn } from "@/lib/creators/time";
-import type { PortalData } from "./types";
+import type { MonthData, PortalData } from "./types";
 import StepGuide from "./StepGuide";
+import { ContractSigner } from "./ContractTab";
+import PaymentsSetup, { type PaymentView } from "./PaymentsSetup";
 import { POSTING_GUIDE } from "@/lib/creators/guide-content";
 import { CONCEPT_LABEL, CONCEPT_ROW_INDEXES, INSPIRED_BY_LABEL, TEST_TIPS, TEST_TIPS_TITLE } from "@/lib/creators/test-tips";
-import { Button, C, Card, CheckCircle, Eyebrow, H, Msg, P, ProgressBar, Row, api, inputStyle } from "./ui";
+import { HomeHeader, Screen, StreakChip, TaskRow, TaskThumb, usePushed, useJustDone } from "./AppShell";
+import { AllDone, Button, C, Card, Eyebrow, Field, Group, H, Icon, Msg, P, ProfileRow, SectionLabel, api, inputStyle } from "./ui";
 
 function countdown(ms: number): string {
   if (ms <= 0) return "Deadline passed";
@@ -18,6 +21,18 @@ function countdown(ms: number): string {
 }
 
 const isFull = (v: PostedVideo) => !!v.tiktok_url.trim() && !!v.instagram_url.trim();
+
+/** Posting days in a row up to today (approved days off count), like the app's day streak. */
+export function postingStreak(m: MonthData): number {
+  let n = 0;
+  for (const d of [...m.days].reverse()) {
+    if (d.date > m.today) continue;
+    if (d.state === "posted" || d.state === "off") n++;
+    else if (d.date === m.today && d.state !== "missed") continue; // today isn't over yet
+    else break;
+  }
+  return n;
+}
 
 /** GET /api/creator/posts (today only). */
 interface FoundPosts {
@@ -52,46 +67,43 @@ interface Assignment {
   onscreen_text?: string;
 }
 
+/** Collapsible tips row in the profile group style. */
 function TestTipsCard() {
   const [open, setOpen] = useState(false);
   return (
-    <Card style={{ padding: 0 }}>
+    <Group style={{ marginTop: 24 }}>
       <button
         type="button"
         onClick={() => setOpen(!open)}
         aria-expanded={open}
+        className="cp-ink cp-focus"
         style={{
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
           width: "100%",
-          minHeight: 56,
-          padding: "0 18px",
+          padding: "16px 20px",
           background: "none",
           border: "none",
           color: "#fff",
           fontFamily: C.font,
-          fontSize: 15,
-          fontWeight: 600,
+          fontSize: 14,
           textAlign: "left",
           cursor: "pointer",
         }}
       >
-        <span>{TEST_TIPS_TITLE}</span>
-        <span aria-hidden style={{ color: C.faint, fontSize: 22, lineHeight: 1, transform: open ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>
-          ›
-        </span>
+        <span style={{ flex: 1 }}>{TEST_TIPS_TITLE}</span>
+        <Icon name="chevronRight" size={20} color={C.faint} style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform 0.2s" }} />
       </button>
       {open && (
-        <div style={{ padding: "0 18px 18px" }}>
+        <div style={{ padding: "0 20px 20px" }}>
           {TEST_TIPS.map((sec) => {
             const List = sec.style === "steps" ? "ol" : "ul";
             return (
               <div key={sec.title} style={{ marginTop: 14 }}>
-                <H style={{ fontSize: 15, marginBottom: 8 }}>{sec.title}</H>
+                <H style={{ fontSize: 14, marginBottom: 8 }}>{sec.title}</H>
                 <List style={{ margin: 0, paddingLeft: 22, listStyleType: sec.style === "steps" ? "decimal" : "disc" }}>
                   {sec.items.map((item, j) => (
-                    <li key={j} style={{ fontSize: 14, lineHeight: 1.55, color: C.dim, marginBottom: 6 }}>
+                    <li key={j} style={{ fontSize: 13, lineHeight: 1.5, color: C.dim, marginBottom: 6 }}>
                       {item}
                     </li>
                   ))}
@@ -101,11 +113,34 @@ function TestTipsCard() {
           })}
         </div>
       )}
-    </Card>
+    </Group>
   );
 }
 
-export default function TodayTab({ data, onSaved }: { data: PortalData; onSaved: () => void }) {
+/** One video as a task row. */
+function VideoRow({ i, row, label, auto, pulse, onOpen }: { i: number; row: PostedVideo; label: string; auto: boolean; pulse: boolean; onOpen: () => void }) {
+  const done = isFull(row);
+  const justDone = useJustDone(done);
+  const tt = !!row.tiktok_url.trim();
+  const ig = !!row.instagram_url.trim();
+  const target = tt && ig ? "TikTok and Instagram" : tt ? "TikTok in, Instagram missing" : ig ? "Instagram in, TikTok missing" : "TikTok and Instagram links";
+  return (
+    <TaskRow
+      thumb={<TaskThumb icon="videocam" />}
+      title={label}
+      target={target}
+      meta={auto ? "Found automatically" : done ? "Both links in" : "Tap to add your links"}
+      doneText="Both links in"
+      done={done}
+      justDone={justDone}
+      pulse={pulse}
+      enterIndex={i}
+      onClick={onOpen}
+    />
+  );
+}
+
+export default function TodayTab({ data, onSaved, onProfile }: { data: PortalData; onSaved: () => void; onProfile: () => void }) {
   const target = data.config.videos_per_weekday;
   const initial = (): PostedVideo[] => {
     const rows = (data.today.log?.videos ?? []).map((v) => ({ ...v }));
@@ -120,6 +155,20 @@ export default function TodayTab({ data, onSaved }: { data: PortalData; onSaved:
   const [left, setLeft] = useState(data.today.ms_until_deadline);
   const [hooks, setHooks] = useState<Assignment[] | null>(null);
   const [found, setFound] = useState<FoundPosts | null>(null);
+  const detail = usePushed<number>();
+  // Creators who skipped Getting started can still be sent a contract, and may not have payment details yet.
+  const contractScreen = usePushed<true>();
+  const paymentsScreen = usePushed<true>();
+  const [signedNow, setSignedNow] = useState(false);
+  const [pay, setPay] = useState<PaymentView | null>(null);
+  useEffect(() => {
+    api<PaymentView>("/api/creator/payment").then(setPay, () => setPay(null));
+  }, []);
+  const contractDue = data.contract.status === "sent" && !signedNow;
+  const paymentsDue = !!pay?.enabled && !pay.complete;
+  // Saved state per row, so the list only shows a row as done once it's saved.
+  const savedRef = useRef<PostedVideo[]>(initial());
+  const [saved, setSaved] = useState<PostedVideo[]>(savedRef.current);
 
   useEffect(() => {
     const t = setInterval(() => setLeft(deadline - Date.now()), 30000);
@@ -147,9 +196,13 @@ export default function TodayTab({ data, onSaved }: { data: PortalData; onSaved:
   const isAuto = (url: string, platform: "tiktok" | "instagram") => !!url.trim() && autoKeys.has(postKey(url, platform));
   const viewsOf = (url: string, platform: "tiktok" | "instagram") => (url.trim() ? views.get(postKey(url, platform)) : undefined);
   const line = found ? foundLine(found, data.creator.timezone, target) : null;
+  const foundPosted = !!found?.days.find((x) => x.date === found.today)?.posted;
 
-  const done = rows.filter(isFull).length;
+  const done = saved.filter(isFull).length;
+  const allDone = done >= target;
   const expired = left <= 0;
+  const streak = postingStreak(data.month);
+  const firstOpen = saved.findIndex((r) => !isFull(r));
 
   function set(i: number, k: keyof PostedVideo, v: string) {
     setRows((r) => r.map((row, j) => (j === i ? { ...row, [k]: v } : row)));
@@ -167,139 +220,100 @@ export default function TodayTab({ data, onSaved }: { data: PortalData; onSaved:
           ? `Saved. All ${target} videos are in for today.`
           : `Saved. ${r.complete_videos} of ${target} videos have both links.`,
       );
+      const was = detail.value !== null && isFull(saved[detail.value]);
+      const now = detail.value !== null && isFull(rows[detail.value]);
+      savedRef.current = rows.map((x) => ({ ...x }));
+      setSaved(savedRef.current);
       onSaved();
+      // Like finishing a session in the app: back to the list, where the check pops in.
+      if (now && !was) detail.close();
     } catch (e) {
       setErr((e as Error).message);
     }
     setSaving(false);
   }
 
+  const rowLabel = (i: number) =>
+    data.creator.format_creator && CONCEPT_ROW_INDEXES.includes(i) ? `Video ${i + 1} · ${CONCEPT_LABEL}` : `Video ${i + 1}`;
+
+  // Deadline + sync status, in the app's all-done card (_buildDayCompleteCard).
+  const statusCard = (
+    <div className="cp-enter" style={{ ["--i" as string]: 0, background: C.card, border: C.border, borderRadius: 16, padding: 24, marginBottom: 20 }}>
+      <div style={{ fontSize: 13, color: expired ? C.red : C.faint }}>
+        {data.today.is_weekday ? `${countdown(left)}. Due 11:59 pm your time.` : "It's the weekend, so there's nothing due today."}
+      </div>
+      {line && <div style={{ fontSize: 13, color: foundPosted ? C.green : "rgba(255,255,255,0.7)", marginTop: 12 }}>{line}</div>}
+      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 12 }}>
+        Videos show up here on their own within a few hours. If one is missing near the deadline, paste its link.
+      </div>
+    </div>
+  );
+
+  const i = detail.value;
+  const dRow = i !== null ? rows[i] : null;
+  const isTest = i !== null && data.creator.format_creator && CONCEPT_ROW_INDEXES.includes(i);
+  const ttViews = dRow ? viewsOf(dRow.tiktok_url, "tiktok") : undefined;
+  const igViews = dRow ? viewsOf(dRow.instagram_url, "instagram") : undefined;
+  const dAuto = dRow ? isAuto(dRow.tiktok_url, "tiktok") || isAuto(dRow.instagram_url, "instagram") : false;
+
   return (
     <div>
-      <Card>
-        <Eyebrow>Today · {fmtDateShort(data.today.date)}</Eyebrow>
-        <Row>
-          <div>
-            <div style={{ fontSize: 34, fontWeight: 700, lineHeight: 1 }}>
-              {done}
-              <span style={{ fontSize: 18, color: C.faint }}>/{target}</span>
-            </div>
-            <div style={{ fontSize: 13, color: C.dim, marginTop: 6 }}>videos logged on both apps</div>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 15, fontWeight: 600, color: expired ? C.red : left < 3 * 3600000 ? C.amber : "#fff" }}>
-              {countdown(left)}
-            </div>
-            <div style={{ fontSize: 12, color: C.faint, marginTop: 4 }}>Due 11:59 pm your time</div>
-          </div>
-        </Row>
-        <ProgressBar value={done / target} color={done >= target ? C.green : "#fff"} style={{ marginTop: 16 }} />
-        {!data.today.is_weekday && (
-          <P style={{ marginTop: 12, marginBottom: 0 }}>It&apos;s the weekend, so there&apos;s nothing due today.</P>
-        )}
-        {line && (
-          <P style={{ marginTop: 12, marginBottom: 0, fontSize: 13, color: found?.days.find((x) => x.date === found.today)?.posted ? C.green : C.dim }}>
-            {line}
-          </P>
-        )}
-        <P style={{ marginTop: line ? 6 : 12, marginBottom: 0, fontSize: 12, color: C.faint }}>
-          Videos show up here on their own within a few hours. If one is missing near the deadline, paste its link.
-        </P>
-      </Card>
+      <HomeHeader chip="CREATORMODE" chatHref={data.config.slack_invite_url} onProfile={onProfile} />
 
-      {rows.map((row, i) => {
-        // Format creators (invite only) make their own concepts on rows 4 and 5.
-        const isTest = data.creator.format_creator && CONCEPT_ROW_INDEXES.includes(i);
-        const lastConcept = isTest && i === CONCEPT_ROW_INDEXES[CONCEPT_ROW_INDEXES.length - 1];
-        const auto = isAuto(row.tiktok_url, "tiktok") || isAuto(row.instagram_url, "instagram");
-        const ttViews = viewsOf(row.tiktok_url, "tiktok");
-        const igViews = viewsOf(row.instagram_url, "instagram");
-        return (
-          <div key={i}>
-            <Card
-              style={{
-                padding: 16,
-                ...(isFull(row) ? {} : { background: C.box, border: "1px solid transparent", borderRadius: 12 }),
-                ...(isTest ? { border: "1px solid rgba(255,255,255,0.25)" } : {}),
-              }}
-            >
-              <Row style={{ marginBottom: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <Eyebrow style={{ marginBottom: 0 }}>{isTest ? `Video ${i + 1} · ${CONCEPT_LABEL}` : `Video ${i + 1}`}</Eyebrow>
-                  {auto && <span style={{ fontSize: 11, color: C.faint }}>Found automatically</span>}
-                </div>
-                {isFull(row) && (
-                  <span style={{ display: "flex", alignItems: "center", gap: 5, color: C.faint, fontSize: 12, fontWeight: 500 }}>
-                    <CheckCircle size={14} />
-                    Both links
-                  </span>
-                )}
-              </Row>
-              <input
-                style={{ ...inputStyle, marginBottom: 8 }}
-                value={row.tiktok_url}
-                onChange={(e) => set(i, "tiktok_url", e.target.value)}
-                placeholder="TikTok link"
-                inputMode="url"
-                autoCapitalize="none"
-                autoCorrect="off"
-                aria-label={`Video ${i + 1} TikTok link`}
-                disabled={expired}
-              />
-              <input
-                style={inputStyle}
-                value={row.instagram_url}
-                onChange={(e) => set(i, "instagram_url", e.target.value)}
-                placeholder="Instagram link"
-                inputMode="url"
-                autoCapitalize="none"
-                autoCorrect="off"
-                aria-label={`Video ${i + 1} Instagram link`}
-                disabled={expired}
-              />
-              {(ttViews !== undefined || igViews !== undefined) && (
-                <div style={{ fontSize: 12, color: C.faint, marginTop: 8 }}>
-                  {[
-                    ttViews !== undefined ? `TikTok ${ttViews.toLocaleString("en-US")} views` : "",
-                    igViews !== undefined ? `Instagram ${igViews.toLocaleString("en-US")} views` : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </div>
-              )}
-              {isTest && (
-                <label style={{ display: "block", marginTop: 12 }}>
-                  <span style={{ display: "block", fontSize: 13, color: C.dim, marginBottom: 6 }}>
-                    {INSPIRED_BY_LABEL} <span style={{ color: C.faint }}>· optional</span>
-                  </span>
-                  <input
-                    style={inputStyle}
-                    value={row.inspired_by_url ?? ""}
-                    onChange={(e) => set(i, "inspired_by_url", e.target.value)}
-                    placeholder="https://"
-                    inputMode="url"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    disabled={expired}
-                  />
-                </label>
-              )}
-            </Card>
-            {lastConcept && <TestTipsCard />}
-          </div>
-        );
-      })}
+      {contractDue && (
+        <div className="cp-head-enter" style={{ background: C.card, border: C.border, borderRadius: 16, padding: 24, marginTop: 20 }}>
+          <H style={{ fontSize: 18 }}>Your contract is ready to sign</H>
+          <P>Read it and sign it right here. It only takes a few minutes.</P>
+          <Button onClick={() => contractScreen.open(true)} style={{ width: "100%", marginTop: 4 }}>
+            Read and sign
+          </Button>
+        </div>
+      )}
+      {paymentsDue && (
+        <Group style={{ marginTop: contractDue ? 16 : 20 }}>
+          <ProfileRow label="Set up your payments" subtitle="Add your bank details and tax form so we can pay you." onClick={() => paymentsScreen.open(true)} isLast />
+        </Group>
+      )}
 
-      <Msg error={err} ok={ok} />
-      <Button onClick={save} disabled={saving || expired} style={{ width: "100%", marginBottom: 8 }}>
-        {saving ? "Saving..." : "Save today's videos"}
-      </Button>
-      <P style={{ fontSize: 12, color: C.faint, textAlign: "center" }}>
-        You can save as you go and come back to add more before the deadline.
-      </P>
+      <div style={{ height: 20 }} />
+      {allDone ? (
+        <div style={{ display: "flex", alignItems: "center", paddingBottom: 4 }}>
+          <AllDone />
+          {streak > 0 && (
+            <div style={{ marginLeft: 14, paddingTop: 3 }}>
+              <StreakChip days={streak} />
+            </div>
+          )}
+        </div>
+      ) : (
+        streak > 0 && <StreakChip days={streak} />
+      )}
+
+      <div style={{ height: 24 }} />
+      {allDone ? statusCard : <SectionLabel right={`${done} / ${target}`}>Today&apos;s videos</SectionLabel>}
+
+      {saved.map((row, idx) => (
+        <VideoRow
+          key={idx}
+          i={idx + (allDone ? 1 : 0)}
+          row={row}
+          label={rowLabel(idx)}
+          auto={isAuto(row.tiktok_url, "tiktok") || isAuto(row.instagram_url, "instagram")}
+          pulse={idx === firstOpen && data.today.is_weekday && !expired}
+          onOpen={() => {
+            setRows(savedRef.current.map((x) => ({ ...x })));
+            setErr(null);
+            setOk(null);
+            detail.open(idx);
+          }}
+        />
+      ))}
+
+      {!allDone && statusCard}
+      <Msg ok={detail.value === null ? ok : null} />
 
       {hooks && hooks.length > 0 && (
-        <Card style={{ marginTop: 10 }}>
+        <Card style={{ marginTop: 4 }}>
           <Eyebrow>Today&apos;s hooks</Eyebrow>
           {hooks.map((h) => (
             <div key={h.id} style={{ padding: "8px 0", borderTop: C.border }}>
@@ -310,10 +324,94 @@ export default function TodayTab({ data, onSaved }: { data: PortalData; onSaved:
         </Card>
       )}
 
-      <div style={{ marginTop: 24 }}>
+      <div style={{ marginTop: 12 }}>
         <Eyebrow>How to post</Eyebrow>
         <StepGuide collapsible guide={POSTING_GUIDE} />
       </div>
+
+      {contractScreen.value && (
+        <Screen title="Contract" onBack={contractScreen.close} closing={contractScreen.closing}>
+          <ContractSigner
+            onSigned={() => {
+              setSignedNow(true);
+              contractScreen.close();
+              onSaved();
+            }}
+          />
+        </Screen>
+      )}
+      {paymentsScreen.value && (
+        <Screen title="Payments" onBack={paymentsScreen.close} closing={paymentsScreen.closing}>
+          <PaymentsSetup onChange={setPay} />
+        </Screen>
+      )}
+
+      {i !== null && dRow && (
+        <Screen title={rowLabel(i)} onBack={detail.close} closing={detail.closing}>
+          {dAuto && <P style={{ fontSize: 13, color: C.faint }}>We found this video automatically. You can still change the links.</P>}
+          <Field label="TikTok link">
+            <input
+              className="cp-input"
+              style={inputStyle}
+              value={dRow.tiktok_url}
+              onChange={(e) => set(i, "tiktok_url", e.target.value)}
+              placeholder="Paste the TikTok link"
+              inputMode="url"
+              autoCapitalize="none"
+              autoCorrect="off"
+              aria-label={`Video ${i + 1} TikTok link`}
+              disabled={expired}
+            />
+          </Field>
+          <Field label="Instagram link">
+            <input
+              className="cp-input"
+              style={inputStyle}
+              value={dRow.instagram_url}
+              onChange={(e) => set(i, "instagram_url", e.target.value)}
+              placeholder="Paste the Instagram link"
+              inputMode="url"
+              autoCapitalize="none"
+              autoCorrect="off"
+              aria-label={`Video ${i + 1} Instagram link`}
+              disabled={expired}
+            />
+          </Field>
+          {(ttViews !== undefined || igViews !== undefined) && (
+            <div style={{ fontSize: 13, color: C.faint, marginTop: -8, marginBottom: 20 }}>
+              {[
+                ttViews !== undefined ? `TikTok ${ttViews.toLocaleString("en-US")} views` : "",
+                igViews !== undefined ? `Instagram ${igViews.toLocaleString("en-US")} views` : "",
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </div>
+          )}
+          {isTest && (
+            <Field label={`${INSPIRED_BY_LABEL} (optional)`}>
+              <input
+                className="cp-input"
+                style={inputStyle}
+                value={dRow.inspired_by_url ?? ""}
+                onChange={(e) => set(i, "inspired_by_url", e.target.value)}
+                placeholder="https://"
+                inputMode="url"
+                autoCapitalize="none"
+                autoCorrect="off"
+                disabled={expired}
+              />
+            </Field>
+          )}
+          <Msg error={err} ok={ok} />
+          <Button onClick={save} disabled={saving || expired} style={{ width: "100%", marginTop: 4 }}>
+            {saving ? "Saving..." : "Save today's videos"}
+          </Button>
+          <P style={{ fontSize: 12, color: C.faint, textAlign: "center", marginTop: 12 }}>
+            You can save as you go and come back to add more before the deadline.
+          </P>
+          {isTest && <TestTipsCard />}
+        </Screen>
+      )}
     </div>
   );
 }

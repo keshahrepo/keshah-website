@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { adoptedSignatureText } from "@/lib/creators/signature";
-import { Button, C, Card, buttonStyle, Eyebrow, Field, H, Msg, P, api, inputStyle, Skel } from "./ui";
+import { Button, C, buttonStyle, Field, Msg, P, api, inputStyle, Skel } from "./ui";
 
 interface ContractInfo {
   status: "none" | "sent" | "signed";
@@ -162,12 +162,7 @@ export function ContractSigner({ onSigned, compact }: { onSigned?: () => void; c
   );
 }
 
+/** Profile > Contract screen body (the screen supplies the "Contract" title). */
 export default function ContractTab() {
-  return (
-    <Card>
-      <Eyebrow>Contract</Eyebrow>
-      <H>Your contract</H>
-      <ContractSigner />
-    </Card>
-  );
+  return <ContractSigner />;
 }

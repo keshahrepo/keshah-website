@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import type { Guide, GuideStep } from "@/lib/creators/guide-content";
-import { C, Eyebrow } from "./ui";
+import { C, Eyebrow, Icon } from "./ui";
 
 const ACCENT = "#FF3B5C";
 
@@ -33,17 +33,16 @@ export function CopyBlock({ label, value }: { label: string; value: string }) {
     <div
       style={{
         marginTop: 12,
-        padding: "10px 12px",
+        padding: "14px 16px 14px 20px",
         borderRadius: 14,
-        background: "rgba(255,255,255,0.06)",
-        border: "1px solid rgba(255,255,255,0.1)",
+        background: C.group,
         display: "flex",
         alignItems: "center",
-        gap: 10,
+        gap: 12,
       }}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 11, color: C.faint, marginBottom: 2 }}>{label}</div>
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: 2 }}>{label}</div>
         <div style={{ fontSize: 14, color: C.text, wordBreak: "break-all" }}>{value}</div>
       </div>
       <button
@@ -58,15 +57,15 @@ export function CopyBlock({ label, value }: { label: string; value: string }) {
         aria-label={`Copy ${label.toLowerCase()}`}
         style={{
           flexShrink: 0,
-          minHeight: 40,
+          minHeight: 36,
           padding: "0 16px",
-          borderRadius: 999,
+          borderRadius: 40,
           border: "none",
           background: copied ? C.green : "#fff",
           color: copied ? "#fff" : "#000",
           fontFamily: C.font,
           fontSize: 13,
-          fontWeight: 600,
+          fontWeight: 400,
           cursor: "pointer",
         }}
       >
@@ -92,10 +91,10 @@ function StepCard({
   return (
     <div
       style={{
-        background: C.card,
-        border: step.important ? `1px solid ${ACCENT}` : C.border,
-        borderRadius: 16,
-        padding: 14,
+        background: C.group,
+        border: step.important ? `1px solid ${ACCENT}` : "1px solid transparent",
+        borderRadius: 14,
+        padding: 20,
         marginBottom: 12,
       }}
     >
@@ -113,8 +112,8 @@ function StepCard({
             maxWidth: 280,
             height: "auto",
             margin: "0 auto 14px",
-            borderRadius: 16,
-            border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 10,
+            border: "1px solid rgba(255,255,255,0.08)",
           }}
         />
       )}
@@ -137,7 +136,7 @@ function StepCard({
         >
           {n}
         </div>
-        <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5, color: C.text }}>{step.text}</p>
+        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: C.text }}>{step.text}</p>
       </div>
 
       {step.important && (
@@ -173,36 +172,34 @@ function StepCard({
   );
 }
 
+/** A tap-to-open row in the app's profile row style (#141414, 16/20 padding, chevron_right_rounded). */
 function Disclosure({ label, children }: { label: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
-    <div style={{ marginBottom: 10 }}>
+    <div style={{ marginBottom: 12 }}>
       <button
         type="button"
         onClick={() => setOpen(!open)}
         aria-expanded={open}
+        className="cp-ink cp-focus"
         style={{
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
           width: "100%",
-          minHeight: 48,
-          padding: "0 14px",
+          padding: "16px 20px",
           borderRadius: 14,
-          border: C.border,
-          background: open ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.04)",
+          border: "none",
+          background: C.group,
           color: "#fff",
           fontFamily: C.font,
           fontSize: 14,
-          fontWeight: 600,
+          fontWeight: 400,
           cursor: "pointer",
           textAlign: "left",
         }}
       >
-        <span>{label}</span>
-        <span aria-hidden style={{ color: C.faint, fontSize: 22, lineHeight: 1, transform: open ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>
-          ›
-        </span>
+        <span style={{ flex: 1 }}>{label}</span>
+        <Icon name="chevronRight" size={20} color={C.faint} style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform 0.2s" }} />
       </button>
       {open && <div style={{ marginTop: 12 }}>{children}</div>}
     </div>

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { fmtDateShort } from "@/lib/creators/time";
-import { Button, C, Card, Eyebrow, Field, Msg, P, Pill, Row, api, inputStyle, statusColor, Skel } from "./ui";
+import { Button, Eyebrow, Field, Group, Msg, P, Pill, ProfileRow, api, inputStyle, statusColor, Skel } from "./ui";
 
 interface DayOff {
   date: string;
@@ -42,38 +42,43 @@ export default function DaysOffTab({ today }: { today: string }) {
     setBusy(false);
   }
 
+  // Rendered inside the Profile > Days off screen, which supplies the title.
   return (
     <div>
-      <Card>
-        <Eyebrow>Ask for a day off</Eyebrow>
-        <P>An approved day off still counts as a full posting day for your pay and your level.</P>
-        <form onSubmit={submit}>
-          <Field label="Weekday">
-            <input style={inputStyle} type="date" min={today} value={date} onChange={(e) => setDate(e.target.value)} required />
-          </Field>
-          <Field label="Reason (optional)">
-            <input style={inputStyle} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
-          </Field>
-          <Msg error={err} ok={ok} />
-          <Button type="submit" disabled={busy} style={{ width: "100%" }}>
-            {busy ? "Sending..." : "Send request"}
-          </Button>
-        </form>
-      </Card>
-      <Card>
-        <Eyebrow>Your requests</Eyebrow>
-        {list === null && <><Skel h={14} style={{ marginBottom: 12 }} /><Skel h={14} w="60%" /></>}
-        {list?.length === 0 && <P style={{ marginBottom: 0 }}>No requests yet.</P>}
-        {list?.map((d) => (
-          <Row key={d.date} style={{ padding: "9px 0", borderTop: C.border }}>
-            <div>
-              <div style={{ fontSize: 14 }}>{fmtDateShort(d.date)}</div>
-              {d.reason && <div style={{ fontSize: 12, color: C.faint }}>{d.reason}</div>}
-            </div>
-            <Pill color={statusColor[d.status]}>{label[d.status]}</Pill>
-          </Row>
+      <P style={{ marginBottom: 24 }}>An approved day off still counts as a full posting day for your pay and your level.</P>
+      <form onSubmit={submit}>
+        <Field label="Weekday">
+          <input style={inputStyle} type="date" min={today} value={date} onChange={(e) => setDate(e.target.value)} required />
+        </Field>
+        <Field label="Reason (optional)">
+          <input style={inputStyle} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
+        </Field>
+        <Msg error={err} ok={ok} />
+        <Button type="submit" disabled={busy} style={{ width: "100%" }}>
+          {busy ? "Sending..." : "Send request"}
+        </Button>
+      </form>
+
+      <Eyebrow style={{ marginTop: 32 }}>Your requests</Eyebrow>
+      <Group>
+        {list === null && (
+          <div style={{ padding: "16px 20px" }}>
+            <Skel h={14} style={{ marginBottom: 12 }} />
+            <Skel h={14} w="60%" />
+          </div>
+        )}
+        {list?.length === 0 && <ProfileRow label="No requests yet." chevron={false} isLast />}
+        {list?.map((d, i) => (
+          <ProfileRow
+            key={d.date}
+            label={fmtDateShort(d.date)}
+            subtitle={d.reason || undefined}
+            trailing={<Pill color={statusColor[d.status]}>{label[d.status]}</Pill>}
+            chevron={false}
+            isLast={i === list.length - 1}
+          />
         ))}
-      </Card>
+      </Group>
     </div>
   );
 }

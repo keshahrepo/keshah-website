@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { fmtDateShort } from "@/lib/creators/time";
-import { Button, C, Card, Eyebrow, Field, Msg, P, Pill, Row, api, inputStyle, statusColor, Skel } from "./ui";
+import { Button, C, Card, Eyebrow, Field, Group, Msg, P, Pill, ProfileRow, Title, api, inputStyle, statusColor, Skel } from "./ui";
 
 interface Claim {
   id: string;
@@ -72,9 +72,9 @@ export default function BonusTab({ today }: { today: string }) {
   }
 
   return (
-    <div>
+    <div style={{ paddingTop: 24 }}>
+      <Title>Bonuses</Title>
       <Card>
-        <Eyebrow>Views bonuses</Eyebrow>
         <P>
           You get $15 when a video passes 100K views and $100 in total when it passes 1M, within 30 days of posting. Each platform counts
           separately.
@@ -86,70 +86,68 @@ export default function BonusTab({ today }: { today: string }) {
         </P>
       </Card>
 
-      <Card>
-        <Eyebrow>Your bonuses</Eyebrow>
-        {claims === null && <><Skel h={14} style={{ marginBottom: 12 }} /><Skel h={14} w="60%" /></>}
-        {claims?.length === 0 && <P style={{ marginBottom: 0 }}>No bonuses yet.</P>}
-        {claims?.map((c) => (
-          <div key={c.id} style={{ padding: "10px 0", borderTop: C.border }}>
-            <Row>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>
-                {c.platform === "tiktok" ? "TikTok" : "Instagram"} · {c.views_claimed.toLocaleString()} views
-              </div>
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                {c.source === "auto" && <Pill color={C.dim}>Automatic</Pill>}
-                <Pill color={statusColor[c.status]}>{statusLabel[c.status]}</Pill>
-              </div>
-            </Row>
-            <div style={{ fontSize: 12, color: C.faint, marginTop: 4, wordBreak: "break-all" }}>
-              Posted {fmtDateShort(c.posted_on)} · {c.video_url}
-            </div>
-            {c.admin_note && c.source !== "auto" && <div style={{ fontSize: 13, color: C.dim, marginTop: 4 }}>{c.admin_note}</div>}
+      <Eyebrow style={{ marginTop: 32 }}>Your bonuses</Eyebrow>
+      <Group>
+        {claims === null && (
+          <div style={{ padding: "16px 20px" }}>
+            <Skel h={14} style={{ marginBottom: 12 }} />
+            <Skel h={14} w="60%" />
           </div>
+        )}
+        {claims?.length === 0 && <ProfileRow label="No bonuses yet." chevron={false} isLast />}
+        {claims?.map((c, i) => (
+          <ProfileRow
+            key={c.id}
+            label={`${c.platform === "tiktok" ? "TikTok" : "Instagram"} · ${c.views_claimed.toLocaleString()} views`}
+            subtitle={
+              <>
+                <span style={{ wordBreak: "break-all" }}>
+                  Posted {fmtDateShort(c.posted_on)} · {c.video_url}
+                </span>
+                {c.admin_note && c.source !== "auto" && <span style={{ display: "block", color: C.dim, marginTop: 2 }}>{c.admin_note}</span>}
+              </>
+            }
+            trailing={
+              <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                <Pill color={statusColor[c.status]}>{statusLabel[c.status]}</Pill>
+                {c.source === "auto" && <span style={{ fontSize: 11, color: C.faint }}>Automatic</span>}
+              </span>
+            }
+            chevron={false}
+            isLast={i === claims.length - 1}
+          />
         ))}
-      </Card>
+      </Group>
 
-      <Card>
-        <Eyebrow>Missing a bonus?</Eyebrow>
-        <P>If a video passed 100K or 1M views and it isn&apos;t in your list above after a day, claim it here. A screenshot of the views helps us check it faster.</P>
-        <form onSubmit={submit}>
-          <Field label="Platform">
-            <div style={{ display: "flex", gap: 8 }}>
-              {(["tiktok", "instagram"] as const).map((p) => (
-                <Button
-                  key={p}
-                  variant={platform === p ? "primary" : "ghost"}
-                  onClick={() => setPlatform(p)}
-                  style={{ flex: 1, padding: "10px 0" }}
-                >
-                  {p === "tiktok" ? "TikTok" : "Instagram"}
-                </Button>
-              ))}
-            </div>
-          </Field>
-          <Field label="Video link">
-            <input style={inputStyle} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://" inputMode="url" autoCapitalize="none" required />
-          </Field>
-          <Field label="Date you posted it">
-            <input style={inputStyle} type="date" value={postedOn} max={today} onChange={(e) => setPostedOn(e.target.value)} required />
-          </Field>
-          <Field label="Views right now">
-            <input style={inputStyle} value={views} onChange={(e) => setViews(e.target.value)} placeholder="e.g. 120000" inputMode="numeric" required />
-          </Field>
-          <Field label="Screenshot of the views (optional)">
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              style={{ ...inputStyle, padding: 10 }}
-            />
-          </Field>
-          <Msg error={err} ok={ok} />
-          <Button type="submit" disabled={busy} style={{ width: "100%" }}>
-            {busy ? "Sending..." : "Send claim"}
-          </Button>
-        </form>
-      </Card>
+      <Eyebrow style={{ marginTop: 32 }}>Missing a bonus?</Eyebrow>
+      <P>If a video passed 100K or 1M views and it isn&apos;t in your list above after a day, claim it here. A screenshot of the views helps us check it faster.</P>
+      <form onSubmit={submit} style={{ marginTop: 20 }}>
+        <Field label="Platform">
+          <div style={{ display: "flex", gap: 8 }}>
+            {(["tiktok", "instagram"] as const).map((p) => (
+              <Button key={p} variant={platform === p ? "primary" : "ghost"} onClick={() => setPlatform(p)} style={{ flex: 1 }}>
+                {p === "tiktok" ? "TikTok" : "Instagram"}
+              </Button>
+            ))}
+          </div>
+        </Field>
+        <Field label="Video link">
+          <input style={inputStyle} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://" inputMode="url" autoCapitalize="none" required />
+        </Field>
+        <Field label="Date you posted it">
+          <input style={inputStyle} type="date" value={postedOn} max={today} onChange={(e) => setPostedOn(e.target.value)} required />
+        </Field>
+        <Field label="Views right now">
+          <input style={inputStyle} value={views} onChange={(e) => setViews(e.target.value)} placeholder="e.g. 120000" inputMode="numeric" required />
+        </Field>
+        <Field label="Screenshot of the views (optional)">
+          <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} style={{ ...inputStyle, height: "auto", padding: "12px 20px", fontSize: 14 }} />
+        </Field>
+        <Msg error={err} ok={ok} />
+        <Button type="submit" disabled={busy} style={{ width: "100%" }}>
+          {busy ? "Sending..." : "Send claim"}
+        </Button>
+      </form>
     </div>
   );
 }
