@@ -671,19 +671,58 @@ function StatusRow({ done, title, sub, action }: { done: boolean; title: string;
 
 const smallBtn: CSSProperties = { minHeight: 38, padding: "8px 14px", fontSize: 13 };
 
+/** Reminder line for the top of a tab until both parts are done. Tapping it jumps to the payments card. */
+export function PaymentsBanner() {
+  return (
+    <button
+      type="button"
+      className="cp-btn"
+      onClick={() => document.getElementById("payments")?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" })}
+      style={{
+        display: "flex",
+        width: "100%",
+        boxSizing: "border-box",
+        gap: 10,
+        alignItems: "center",
+        padding: "12px 16px",
+        marginBottom: 14,
+        borderRadius: 14,
+        background: "rgba(251,191,36,0.1)",
+        border: "1px solid rgba(251,191,36,0.35)",
+        color: "#fff",
+        fontFamily: C.font,
+        fontSize: 14,
+        lineHeight: 1.45,
+        textAlign: "left",
+        cursor: "pointer",
+      }}
+    >
+      <span aria-hidden style={{ width: 8, height: 8, borderRadius: 4, background: C.amber, flexShrink: 0 }} />
+      <span style={{ flex: 1 }}>Add your payment details so we can pay you.</span>
+      <span aria-hidden style={{ color: C.dim }}>↓</span>
+    </button>
+  );
+}
+
 /**
  * "Set up your payments": tax form (W-9 or W-8BEN) + bank details. Loads its
- * own data. `banner` shows the reminder line above the card until both are done.
+ * own data and reports it through onChange (on load and after every save).
  * Never blocks posting.
  */
-export default function PaymentsSetup({ banner = false, onChange }: { banner?: boolean; onChange?: (v: PaymentView) => void }) {
+export default function PaymentsSetup({ onChange }: { onChange?: (v: PaymentView) => void }) {
   const [v, setV] = useState<PaymentView | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [open, setOpen] = useState<"tax" | "bank" | null>(null);
   const [ok, setOk] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    api<PaymentView>("/api/creator/payment").then(setV, (e) => setErr(e.message));
+    api<PaymentView>("/api/creator/payment").then(
+      (r) => {
+        setV(r);
+        onChange?.(r);
+      },
+      (e) => setErr(e.message),
+    );
   }, []);
   useEffect(load, [load]);
 
@@ -703,27 +742,7 @@ export default function PaymentsSetup({ banner = false, onChange }: { banner?: b
   const taxDone = tf.status === "submitted";
 
   return (
-    <>
-      {banner && !v.complete && v.enabled && (
-        <div
-          role="status"
-          style={{
-            display: "flex",
-            gap: 10,
-            alignItems: "center",
-            padding: "12px 16px",
-            marginBottom: 14,
-            borderRadius: 14,
-            background: "rgba(251,191,36,0.1)",
-            border: "1px solid rgba(251,191,36,0.35)",
-            fontSize: 14,
-            lineHeight: 1.45,
-          }}
-        >
-          <span aria-hidden style={{ width: 8, height: 8, borderRadius: 4, background: C.amber, flexShrink: 0 }} />
-          Add your payment details so we can pay you.
-        </div>
-      )}
+    <div id="payments" style={{ scrollMarginTop: 16 }}>
       <Card>
         <Row style={{ marginBottom: 6 }}>
           <Eyebrow style={{ marginBottom: 0 }}>Payments</Eyebrow>
@@ -777,6 +796,6 @@ export default function PaymentsSetup({ banner = false, onChange }: { banner?: b
           </>
         )}
       </Card>
-    </>
+    </div>
   );
 }

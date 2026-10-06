@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Invoice } from "@/lib/creators/types";
 import { fmtMonthLong, fmtUsd } from "@/lib/creators/time";
+import PaymentsSetup, { PaymentsBanner, type PaymentView } from "./PaymentsSetup";
 import { Button, C, Card, buttonStyle, Eyebrow, H, Msg, P, Pill, Row, api, statusColor, Skel, SkelCard } from "./ui";
 
 const statusLabel: Record<string, string> = { draft: "Draft", submitted: "Submitted", approved: "Approved", paid: "Paid" };
@@ -28,6 +29,7 @@ export default function InvoicesTab() {
   const [data, setData] = useState<{ last_month: string; current: Invoice | null; history: Invoice[] } | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [pay, setPay] = useState<PaymentView | null>(null);
 
   const load = useCallback(() => {
     api<{ last_month: string; current: Invoice | null; history: Invoice[] }>("/api/creator/invoices").then(setData, (e) =>
@@ -53,6 +55,7 @@ export default function InvoicesTab() {
 
   return (
     <div>
+      {pay?.enabled && !pay.complete && <PaymentsBanner />}
       <Card>
         <Eyebrow>{fmtMonthLong(data.last_month)} invoice</Eyebrow>
         {!cur ? (
@@ -110,6 +113,8 @@ export default function InvoicesTab() {
           </a>
         ))}
       </Card>
+
+      <PaymentsSetup onChange={setPay} />
     </div>
   );
 }

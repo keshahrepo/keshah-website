@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ContractSigner } from "./ContractTab";
+import PaymentsSetup from "./PaymentsSetup";
 import StepGuide, { CopyBlock } from "./StepGuide";
 import { ACCOUNT_SETUP_GUIDE, BIO_TEXT, POSTING_GUIDE } from "@/lib/creators/guide-content";
 import type { PortalData } from "./types";
@@ -276,6 +277,8 @@ export default function GettingStarted({ data, onDone }: { data: PortalData; onD
               Open my portal
             </Button>
           </Card>
+          {/* Last step, shown after the 8-step gate: never blocks posting. Also lives on the Invoices tab. */}
+          <PaymentsSetup />
         </div>
       ) : (
         <>
