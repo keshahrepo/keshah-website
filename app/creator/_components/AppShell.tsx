@@ -166,11 +166,13 @@ export function ModeChip({ children }: { children: ReactNode }) {
 }
 
 /** Home header: 8 from the top, a 44-tall row with the chip left and the circle buttons right. */
-export function HomeHeader({ chip, chatHref, onProfile }: { chip: ReactNode; chatHref?: string | null; onProfile: () => void }) {
+export function HomeHeader({ chip, chatHref, onProfile }: { chip?: ReactNode; chatHref?: string | null; onProfile: () => void }) {
   return (
     <div className="cp-head-enter" style={{ paddingTop: 8 }}>
       <div style={{ height: 44, display: "flex", alignItems: "center" }}>
-        <ModeChip>{chip}</ModeChip>
+        {/* KESHAH logo in place of the app's mode chip (founder request). */}
+        <img src="/images/keshah-wordmark-white.png" alt="KESHAH" width={61} height={19} style={{ display: "block", height: 19, width: "auto" }} />
+        {chip ? <span style={{ marginLeft: 10 }}><ModeChip>{chip}</ModeChip></span> : null}
         <div style={{ flex: 1 }} />
         {chatHref && <CircleButton icon="chat" size={18} label="Open Slack" href={chatHref} />}
         <CircleButton icon="person" size={20} label="Profile" onClick={onProfile} />

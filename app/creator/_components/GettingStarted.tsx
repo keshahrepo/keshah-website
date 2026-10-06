@@ -198,7 +198,7 @@ export default function GettingStarted({ data, onDone, onProfile }: { data: Port
 
   return (
     <div>
-      <HomeHeader chip="SETUPMODE" chatHref={cfg.slack_invite_url} onProfile={onProfile} />
+      <HomeHeader chatHref={cfg.slack_invite_url} onProfile={onProfile} />
       <div style={{ height: 20 }} />
       {allDone ? (
         <div className="cp-head-enter" style={{ marginBottom: 24 }}>

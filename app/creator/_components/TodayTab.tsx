@@ -258,7 +258,7 @@ export default function TodayTab({ data, onSaved, onProfile }: { data: PortalDat
 
   return (
     <div>
-      <HomeHeader chip="CREATORMODE" chatHref={data.config.slack_invite_url} onProfile={onProfile} />
+      <HomeHeader chatHref={data.config.slack_invite_url} onProfile={onProfile} />
 
       {contractDue && (
         <div className="cp-head-enter" style={{ background: C.card, border: C.border, borderRadius: 16, padding: 24, marginTop: 20 }}>
