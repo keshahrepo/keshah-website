@@ -183,6 +183,17 @@ async function main() {
   );
   console.log("");
 
+  // Weekdays from their Oct 1 start until they could log in the portal, all paid
+  // as approved days. Oct 1, 2: no posts while setup was being finished.
+  // Oct 5: they posted, but had no portal access yet to log the links.
+  const CREDITED: Record<string, string> = {
+    "2026-10-01": "Credited: portal setup still in progress",
+    "2026-10-02": "Credited: portal setup still in progress",
+    "2026-10-05": "Posted, before portal access to log links",
+  };
+  console.log("  days_off approved (credited):");
+  for (const [date, reason] of Object.entries(CREDITED)) console.log(`    ${date}: ${reason}`);
+
   if (!APPLY) {
     console.log("Dry run only. Nothing was written. Re-run with --apply (and --id if needed) to write.");
     return;
@@ -190,6 +201,9 @@ async function main() {
   const batch = db.batch();
   batch.update(ref, creatorUpdate);
   batch.set(ref.collection("onboarding").doc("state"), onbUpdate, { merge: true });
+  for (const [date, reason] of Object.entries(CREDITED)) {
+    batch.set(ref.collection("days_off").doc(date), { date, status: "approved", reason, requested_at: now, decided_at: now });
+  }
   await batch.commit();
   console.log("Applied.");
 }
