@@ -909,7 +909,11 @@ export async function draftOrGetInvoice(id: string, month: YyyyMm, opts: { now?:
     const race = await tx.get(invoicesCol(id).where("month", "==", month).limit(1));
     if (!race.empty) return toInvoice(race.docs[0].id, race.docs[0].data());
     const seq = Number(cData.invoice_seq ?? 0) + 1;
-    const prefix = creatorPrefix(cData.legal_name || cData.name || "") || "KC";
+    // Initials alone collide (two "J S" creators), so the prefix also carries
+    // part of the creator's doc id. Fixed on first invoice and reused after.
+    const prefix =
+      (typeof cData.invoice_prefix === "string" && cData.invoice_prefix) ||
+      `${creatorPrefix(cData.legal_name || cData.name || "") || "KC"}${id.slice(0, 4).toUpperCase()}`;
     const number = invoiceNumber(prefix, seq);
     const inv: Invoice = {
       number,
@@ -923,7 +927,7 @@ export async function draftOrGetInvoice(id: string, month: YyyyMm, opts: { now?:
       updated_at: nowIso,
     };
     tx.set(invoicesCol(id).doc(number), inv);
-    tx.update(creatorRef(id), { invoice_seq: seq });
+    tx.update(creatorRef(id), { invoice_seq: seq, invoice_prefix: prefix });
     return inv;
   });
 }
