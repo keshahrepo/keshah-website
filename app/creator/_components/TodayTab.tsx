@@ -6,7 +6,7 @@ import { fmtDateShort } from "@/lib/creators/time";
 import type { PortalData } from "./types";
 import StepGuide from "./StepGuide";
 import { POSTING_GUIDE } from "@/lib/creators/guide-content";
-import { INSPIRED_BY_LABEL, TEST_TIPS, TEST_TIPS_TITLE, TEST_VIDEO_INDEX, TEST_VIDEO_LABEL } from "@/lib/creators/test-tips";
+import { CONCEPT_LABEL, CONCEPT_ROW_INDEXES, INSPIRED_BY_LABEL, TEST_TIPS, TEST_TIPS_TITLE } from "@/lib/creators/test-tips";
 import { Button, C, Card, Eyebrow, H, Msg, P, Row, api, inputStyle } from "./ui";
 
 function countdown(ms: number): string {
@@ -155,12 +155,14 @@ export default function TodayTab({ data, onSaved }: { data: PortalData; onSaved:
       </Card>
 
       {rows.map((row, i) => {
-        const isTest = i === TEST_VIDEO_INDEX;
+        // Format creators (invite only) make their own concepts on rows 4 and 5.
+        const isTest = data.creator.format_creator && CONCEPT_ROW_INDEXES.includes(i);
+        const lastConcept = isTest && i === CONCEPT_ROW_INDEXES[CONCEPT_ROW_INDEXES.length - 1];
         return (
           <div key={i}>
             <Card style={{ padding: 16, ...(isTest ? { border: "1px solid rgba(255,255,255,0.25)" } : {}) }}>
               <Row style={{ marginBottom: 10 }}>
-                <Eyebrow style={{ marginBottom: 0 }}>{isTest ? `Video ${i + 1} · ${TEST_VIDEO_LABEL}` : `Video ${i + 1}`}</Eyebrow>
+                <Eyebrow style={{ marginBottom: 0 }}>{isTest ? `Video ${i + 1} · ${CONCEPT_LABEL}` : `Video ${i + 1}`}</Eyebrow>
                 {isFull(row) && <span style={{ color: C.green, fontSize: 12, fontWeight: 600 }}>✓ Both links</span>}
               </Row>
               <input
@@ -203,7 +205,7 @@ export default function TodayTab({ data, onSaved }: { data: PortalData; onSaved:
                 </label>
               )}
             </Card>
-            {isTest && <TestTipsCard />}
+            {lastConcept && <TestTipsCard />}
           </div>
         );
       })}

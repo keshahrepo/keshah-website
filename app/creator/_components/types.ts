@@ -34,6 +34,7 @@ export interface PortalData {
     timezone: string;
     start_date: string;
     tracking_url: string;
+    format_creator: boolean;
   };
   onboarding: OnboardingState & { complete: boolean };
   contract: { status: "none" | "sent" | "signed"; signed_at: string | null };

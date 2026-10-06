@@ -183,6 +183,8 @@ export interface AdminCreator {
   ended_on: string | null;
   contract: CreatorContract;
   w9_on_file: boolean;
+  /** Invite-only format creator (2 own concepts a day). */
+  format_creator: boolean;
   creator_link_id: string;
   tracking_url: string;
   tiktok_handle: string;
@@ -217,6 +219,7 @@ export function toAdminCreator(id: string, d: DocumentData): AdminCreator {
     ended_on: isDate(d.ended_on) ? d.ended_on : null,
     contract: { ...contract, status: contract.status ?? "none" } as CreatorContract,
     w9_on_file: !!d.w9_on_file,
+    format_creator: d.format_creator === true,
     creator_link_id: String(d.creator_link_id ?? ""),
     tracking_url: String(d.tracking_url ?? ""),
     tiktok_handle: String(d.tiktok_handle ?? ""),
@@ -642,6 +645,7 @@ export function sanitizeProfile(
     u.campaign_tags = [...new Set(raw.map((t) => String(t).trim()).filter(Boolean))].slice(0, 30);
   }
   if (body.w9_on_file !== undefined) u.w9_on_file = !!body.w9_on_file;
+  if (body.format_creator !== undefined) u.format_creator = body.format_creator === true;
   if (body.timezone) {
     try {
       new Intl.DateTimeFormat("en-US", { timeZone: String(body.timezone) });

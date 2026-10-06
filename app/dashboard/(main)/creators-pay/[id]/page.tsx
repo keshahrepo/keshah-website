@@ -53,6 +53,7 @@ interface Creator {
     audit?: Record<string, string>;
   };
   w9_on_file: boolean;
+  format_creator: boolean;
   creator_link_id: string;
   tracking_url: string;
   tiktok_handle: string;
@@ -408,9 +409,24 @@ function ProfileEditor({ c, reload }: { c: Creator; reload: () => void }) {
     }
   }
 
+  async function toggleFormat(v: boolean) {
+    setErr("");
+    try {
+      await api(`/api/admin/creators/${c.id}`, { method: "PATCH", body: JSON.stringify({ format_creator: v }) });
+      reload();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   return (
     <div style={card}>
       <h3 style={h3}>Profile</h3>
+      <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, cursor: "pointer", marginBottom: 14, flexWrap: "wrap" }}>
+        <input type="checkbox" checked={c.format_creator} onChange={(e) => toggleFormat(e.target.checked)} />
+        Format creator (invite only, +$500/mo)
+        <span style={muted}>Rows 4 and 5 on their Today tab become their own new concepts. Pay isn&apos;t changed here; add the $500 as an adjustment.</span>
+      </label>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
         <Field label="Legal name">
           <input style={input} value={f.legal_name} onChange={set("legal_name")} />

@@ -55,5 +55,6 @@ export function publicCreator(c: CreatorProfile) {
     timezone: c.timezone,
     start_date: c.start_date,
     tracking_url: c.tracking_url,
+    format_creator: c.format_creator,
   };
 }

@@ -177,6 +177,7 @@ function toProfile(id: string, d: DocumentData, legacyStart: boolean): CreatorPr
     creator_link_id: d.creator_link_id || null,
     tracking_url: typeof d.tracking_url === "string" ? d.tracking_url : "",
     invoice_seq: Number(d.invoice_seq ?? 0),
+    format_creator: d.format_creator === true,
   };
 }
 
@@ -486,7 +487,7 @@ function checkUrl(raw: string, platform: Platform, label = ""): string {
   return s;
 }
 
-/** Optional "Inspired by" link on the test video: any full http(s) link, or "". */
+/** Optional "Inspired by" link on a format creator's concept video: any full http(s) link, or "". */
 export function checkInspiredByUrl(raw: string, label = ""): string {
   const s = raw.trim();
   if (!s) return "";

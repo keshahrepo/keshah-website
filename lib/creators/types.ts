@@ -183,6 +183,12 @@ export interface CreatorPortalFields {
   tracking_url: string;
   /** Last invoice sequence number issued (0 = none yet). */
   invoice_seq: number;
+  /**
+   * Invite-only "format creator": 2 of their 5 daily videos are their own new
+   * concepts (Today rows 4 and 5); everyone else posts 5 given videos.
+   * Display only; pay is unchanged (their extra is an adjustment / contract matter).
+   */
+  format_creator: boolean;
 }
 
 /** Existing ContentCreators fields the pay system reads (never rewrites). */
@@ -217,7 +223,7 @@ export interface PostedVideo {
   tiktok_url: string;
   instagram_url: string;
   /**
-   * Optional: the video that inspired the creator's daily test video (row 5).
+   * Optional: the video that inspired a format creator's own concept (rows 4 and 5).
    * Informational only; never part of the pay rule.
    */
   inspired_by_url?: string;

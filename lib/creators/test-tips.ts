@@ -1,6 +1,8 @@
 /**
- * "How to find your test" card on the portal's Today tab (video 5 is the
- * creator's own daily test video; the other 4 are proven videos we give).
+ * Format creators (invite only, ContentCreators.format_creator) make 2 of
+ * their own new concepts a day: Today rows 4 and 5 are labelled "Your concept"
+ * with an optional "Inspired by (link)" field and the tips card below.
+ * Everyone else posts 5 given videos and sees none of this.
  * Founder-approved copy: keep the wording exactly as is.
  */
 
@@ -11,10 +13,11 @@ export interface TestTipsSection {
   items: string[];
 }
 
-export const TEST_VIDEO_INDEX = 4; // zero-based: the 5th video row
-export const TEST_VIDEO_LABEL = "Your test";
+/** Zero-based Today rows that are a format creator's own concepts (videos 4 and 5). */
+export const CONCEPT_ROW_INDEXES: readonly number[] = [3, 4];
+export const CONCEPT_LABEL = "Your concept";
 export const INSPIRED_BY_LABEL = "Inspired by (link)";
-export const TEST_TIPS_TITLE = "How to find your test";
+export const TEST_TIPS_TITLE = "How to find a new concept";
 
 export const TEST_TIPS: TestTipsSection[] = [
   {
