@@ -146,6 +146,10 @@ async function main() {
     starting_completed_months: PLAN.starting_completed_months,
     status: PLAN.status,
     campaign_tags: tags,
+    // Isai already has a full Workspace account, so Accept must not try to
+    // create a group at that address: mark the group step done up front.
+    keshah_email: "isai@keshah.com",
+    "accept.steps.group": { status: "done", at: new Date().toISOString(), detail: "Existing Workspace account isai@keshah.com" },
   };
   if (d.start_mode !== undefined) creatorUpdate.start_mode = FieldValue.delete();
   if (d.status !== PLAN.status) creatorUpdate.status_changed_at = FieldValue.serverTimestamp();
