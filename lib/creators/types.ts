@@ -3,14 +3,19 @@
  *
  * Firestore layout
  * ----------------
- *   Creators/{creatorId}                      CreatorProfile (existing link-tracking doc
- *                                             + the pay fields below, all additive)
- *   Creators/{creatorId}/clicks/{id}          (existing, unchanged)
- *   Creators/{creatorId}/posting_days/{date}  PostingDay   doc id = creator-local yyyy-mm-dd
- *   Creators/{creatorId}/days_off/{date}      DayOff       doc id = creator-local yyyy-mm-dd
- *   Creators/{creatorId}/bonus_claims/{id}    BonusClaim   auto id
- *   Creators/{creatorId}/adjustments/{id}     Adjustment   auto id
- *   Creators/{creatorId}/invoices/{number}    Invoice      doc id = invoice number, e.g. "IT-001"
+ *   ContentCreators/{creatorId}                      CreatorDoc: the existing portal-login doc
+ *                                                    (name, email, password_hash, status,
+ *                                                    videos_per_day, streak, ...) + the pay /
+ *                                                    profile fields below, all additive.
+ *   ContentCreators/{creatorId}/posting_days/{date}  PostingDay   doc id = creator-local yyyy-mm-dd
+ *   ContentCreators/{creatorId}/days_off/{date}      DayOff       doc id = creator-local yyyy-mm-dd
+ *   ContentCreators/{creatorId}/bonus_claims/{id}    BonusClaim   auto id
+ *   ContentCreators/{creatorId}/adjustments/{id}     Adjustment   auto id
+ *   ContentCreators/{creatorId}/invoices/{number}    Invoice      doc id = invoice number, e.g. "IT-001"
+ *   ContentCreators/{creatorId}/onboarding/state     OnboardingState
+ *
+ *   Creators/{linkId}                                CreatorsDoc: short link + click tracking.
+ *                                                    Linked from ContentCreators.creator_link_id.
  *
  * Conventions
  *   - All money is integer cents (USD).
@@ -18,9 +23,7 @@
  *   - Months are "yyyy-mm" strings.
  *   - Instants (logged_at, submitted_at, ...) are ISO-8601 strings (UTC).
  *
- * Note: the creator portal login (/creator, /api/creator/me) currently reads the
- * separate `ContentCreators` collection, not `Creators`. These types extend
- * `Creators` only; nothing here changes either collection's existing fields.
+ * Data access lives in lib/creators/db.ts (server only).
  */
 
 export type YyyyMmDd = string;
@@ -28,7 +31,7 @@ export type YyyyMm = string;
 export type IsoInstant = string;
 export type Cents = number;
 
-/** Fields already written by app/api/creators/route.ts (POST). */
+/** Creators/{linkId}: fields written by app/api/creators/route.ts (POST). */
 export interface CreatorsDoc {
   name: string;
   slug: string;
@@ -54,9 +57,10 @@ export interface CreatorContract {
 
 export type PayoutMethod = "amex_ach";
 
-/** Pay-system fields added onto a Creators doc. */
+/** Pay-system fields added onto a ContentCreators doc. */
 export interface CreatorPayFields {
   legal_name: string;
+  /** Login / contact email (the existing ContentCreators.email). */
   email: string;
   /** IANA zone, e.g. "America/Chicago". */
   timezone: string;
@@ -73,7 +77,34 @@ export interface CreatorPayFields {
   payout_method: PayoutMethod;
 }
 
-export type CreatorProfile = CreatorsDoc & CreatorPayFields;
+/** Portal / onboarding fields added onto a ContentCreators doc. */
+export interface CreatorPortalFields {
+  /** The @keshah.com address KESHAH set up for them (accounts are owned by KESHAH). */
+  keshah_email: string;
+  tiktok_handle: string;
+  instagram_handle: string;
+  /** Creators/{id} doc holding their tracking short link. */
+  creator_link_id: string | null;
+  /** Last invoice sequence number issued (0 = none yet). */
+  invoice_seq: number;
+}
+
+/** Existing ContentCreators fields the pay system reads (never rewrites). */
+export interface ContentCreatorLegacyFields {
+  name: string;
+  is_active: boolean;
+  manager_id: string | null;
+  videos_per_day: number;
+  streak: number;
+  trial_start_date?: YyyyMmDd;
+  /** Raw ContentCreators.status before mapping (e.g. "trial", "cut"). */
+  legacy_status: string | null;
+}
+
+/** Normalised creator, as returned by db.getCreator / db.listCreators. */
+export type CreatorProfile = { id: string } & ContentCreatorLegacyFields &
+  CreatorPayFields &
+  CreatorPortalFields;
 
 /** The subset of a profile the pay calculator needs. */
 export type PayProfile = Pick<CreatorPayFields, "start_date" | "starting_completed_months"> &
@@ -81,21 +112,30 @@ export type PayProfile = Pick<CreatorPayFields, "start_date" | "starting_complet
 
 export type Platform = "tiktok" | "instagram";
 
+/**
+ * One unique video, posted on BOTH platforms. A weekday counts as posted only
+ * with >= VIDEOS_PER_WEEKDAY videos whose tiktok_url AND instagram_url are
+ * both non-empty.
+ */
 export interface PostedVideo {
-  platform: Platform;
-  url: string;
+  tiktok_url: string;
+  instagram_url: string;
 }
 
 export interface PostingDay {
   /** Creator-local date. */
   date: YyyyMmDd;
   videos: PostedVideo[];
+  /** Last save. */
   logged_at: IsoInstant;
 }
 
 export interface DayOff {
   date: YyyyMmDd;
   status: "requested" | "approved" | "declined";
+  reason?: string;
+  requested_at?: IsoInstant;
+  decided_at?: IsoInstant;
 }
 
 export interface BonusClaim {
@@ -108,6 +148,8 @@ export interface BonusClaim {
   screenshot_path?: string;
   status: "claimed" | "approved" | "rejected";
   admin_note?: string;
+  claimed_at?: IsoInstant;
+  reviewed_at?: IsoInstant;
 }
 
 export interface Adjustment {
@@ -115,6 +157,7 @@ export interface Adjustment {
   /** Positive or negative. */
   amount_cents: Cents;
   note: string;
+  created_at?: IsoInstant;
 }
 
 export type InvoiceLineKind =
@@ -144,5 +187,36 @@ export interface Invoice {
   paid_at?: IsoInstant;
   payment_reference?: string;
   payment_proof_path?: string;
+  /** True once paid: no further edits. */
   locked: boolean;
+  /** Snapshotted on submit for the printable invoice. */
+  creator_legal_name?: string;
+  period_start?: YyyyMmDd;
+  period_end?: YyyyMmDd;
+  created_at?: IsoInstant;
+  updated_at?: IsoInstant;
+}
+
+export type OnboardingStep = "videos" | "quiz" | "accounts" | "slack" | "warmup" | "rules" | "link";
+
+/** ContentCreators/{id}/onboarding/state */
+export interface OnboardingState {
+  /** Step 1 "Learn KESHAH": FOUNDER_VIDEOS id -> watched-at instant. */
+  videos_watched: Record<string, IsoInstant>;
+  /** Step 2: QUIZ passed (all answers correct). */
+  quiz_passed_at?: IsoInstant;
+  quiz_attempts?: number;
+  /** Step 3: handles saved. */
+  accounts_done_at?: IsoInstant;
+  /** Step 4. */
+  slack_joined_at?: IsoInstant;
+  /** Step 5: distinct creator-local dates ticked (done at WARMUP_DAYS). */
+  warmup_days?: YyyyMmDd[];
+  /** Step 6: posting guide read. */
+  rules_ack_at?: IsoInstant;
+  /** Step 7. */
+  link_seen_at?: IsoInstant;
+  /** All steps done (ready_at is set at the same moment). */
+  completed_at?: IsoInstant;
+  ready_at?: IsoInstant;
 }

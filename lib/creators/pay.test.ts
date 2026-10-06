@@ -3,6 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   baseForCompletedMonths,
+  completeVideoCount,
   bonusLinesForMonth,
   completedMonthsAsOf,
   creatorPrefix,
@@ -18,7 +19,10 @@ import {
 import type { BonusClaim, DayOff, PayProfile, PostingDay } from "./types";
 
 const vids = (n: number) =>
-  Array.from({ length: n }, (_, i) => ({ platform: "tiktok" as const, url: `https://t.co/${i}` }));
+  Array.from({ length: n }, (_, i) => ({
+    tiktok_url: `https://www.tiktok.com/@x/video/${i}`,
+    instagram_url: `https://www.instagram.com/reel/${i}`,
+  }));
 const day = (date: string, n = 5): PostingDay => ({ date, videos: vids(n), logged_at: `${date}T20:00:00Z` });
 const postAll = (from: string, to: string, skip: string[] = []) =>
   weekdaysBetween(from, to).filter((d) => !skip.includes(d)).map((d) => day(d));
@@ -54,6 +58,23 @@ test("fewer than 5 videos does not count as posted; duplicate docs merge", () =>
   assert.equal(sum(prof("2026-10-01"), "2026-10", pd).missedDays, 1);
   pd.push(day("2026-10-07", 1));
   assert.equal(sum(prof("2026-10-01"), "2026-10", pd).completed, true);
+});
+
+test("a video counts only when posted on BOTH TikTok and Instagram", () => {
+  const p = prof("2026-10-01");
+  const pd = postAll("2026-10-01", "2026-10-31", ["2026-10-07"]);
+  const half = vids(5);
+  half[2] = { ...half[2], instagram_url: "" };
+  half[4] = { ...half[4], tiktok_url: "   " };
+  const d7: PostingDay = { date: "2026-10-07", videos: half, logged_at: "2026-10-07T20:00:00Z" };
+  assert.equal(completeVideoCount(d7), 3);
+  assert.equal(sum(p, "2026-10", [...pd, d7]).missedDays, 1);
+  // 6 rows with one incomplete still makes 5 complete -> posted
+  const six: PostingDay = { date: "2026-10-07", videos: [...vids(5), { tiktok_url: "https://www.tiktok.com/@x/video/9", instagram_url: "" }], logged_at: "2026-10-07T20:00:00Z" };
+  assert.equal(sum(p, "2026-10", [...pd, six]).completed, true);
+  // weekend posts never count
+  const sat: PostingDay = { date: "2026-10-10", videos: vids(5), logged_at: "2026-10-10T20:00:00Z" };
+  assert.equal(sum(p, "2026-10", [...pd, sat]).postedDays, 21);
 });
 
 test("partial first month: start Thu 2026-10-15 -> 12/22 of $500 = $272.73, not completed", () => {

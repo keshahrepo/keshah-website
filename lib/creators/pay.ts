@@ -22,6 +22,7 @@ import type {
   YyyyMmDd,
 } from "./types";
 
+/** Unique videos per weekday, each posted on BOTH TikTok and Instagram. */
 export const VIDEOS_PER_WEEKDAY = 5;
 export const TRIAL_POSTED_DAYS = 10;
 export const BONUS_WINDOW_DAYS = 30;
@@ -108,7 +109,7 @@ function fmtUsd(cents: Cents): string {
 }
 
 /** Local calendar date of an instant in an IANA zone. */
-function localDate(iso: string, timezone: string): YyyyMmDd {
+export function localDate(iso: string, timezone: string): YyyyMmDd {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: timezone,
     year: "numeric",
@@ -127,11 +128,24 @@ export function isOnTime(loggedAtIso: string, date: YyyyMmDd, timezone: string):
 
 // ---------------------------------------------------------------- posting
 
-/** Weekday dates with >= VIDEOS_PER_WEEKDAY videos logged (duplicate docs merged). */
+/** A video counts only when it was logged on BOTH TikTok and Instagram. */
+export function isCompleteVideo(v: { tiktok_url?: string; instagram_url?: string } | null | undefined): boolean {
+  return !!v && !!v.tiktok_url?.trim() && !!v.instagram_url?.trim();
+}
+
+/** Number of videos in a day's log posted on both platforms. */
+export function completeVideoCount(day: Pick<PostingDay, "videos">): number {
+  return (day.videos ?? []).filter(isCompleteVideo).length;
+}
+
+/**
+ * Weekday dates with >= VIDEOS_PER_WEEKDAY videos posted on BOTH platforms
+ * (duplicate docs for the same date merged).
+ */
 function postedWeekdaySet(postingDays: PostingDay[]): Set<YyyyMmDd> {
   const counts = new Map<YyyyMmDd, number>();
   for (const p of postingDays) {
-    counts.set(p.date, (counts.get(p.date) ?? 0) + (p.videos?.length ?? 0));
+    counts.set(p.date, (counts.get(p.date) ?? 0) + completeVideoCount(p));
   }
   const out = new Set<YyyyMmDd>();
   for (const [d, n] of counts) if (n >= VIDEOS_PER_WEEKDAY && isWeekday(d)) out.add(d);
