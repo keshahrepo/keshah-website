@@ -408,3 +408,81 @@ export function creatorPrefix(legalName: string): string {
 export function invoiceNumber(prefix: string, seq: number): string {
   return `${prefix}-${String(seq).padStart(3, "0")}`;
 }
+
+// ---------------------------------------------------------------- day complete
+
+/** What one posted weekday adds to base pay at `levelBaseCents` in `month`. */
+export function dayPayCents(levelBaseCents: Cents, month: YyyyMm): Cents {
+  const n = weekdaysInMonth(month);
+  return n ? Math.round(levelBaseCents / n) : 0;
+}
+
+/** True if `date` counts as a posted weekday (5 videos on both platforms). */
+export function isPostedDay(postingDays: PostingDay[], date: YyyyMmDd): boolean {
+  return postedWeekdaySet(postingDays).has(date);
+}
+
+/**
+ * Posted weekdays in a row ending on `date`. Weekends are skipped, approved
+ * days off are skipped without breaking the run, and the run stops at
+ * start_date. 0 when `date` itself isn't posted.
+ */
+export function postingStreak(
+  profile: Pick<PayProfile, "start_date">,
+  postingDays: PostingDay[],
+  daysOff: DayOff[],
+  date: YyyyMmDd,
+): number {
+  const posted = postedWeekdaySet(postingDays);
+  const off = approvedOffSet(daysOff);
+  let n = 0;
+  for (let t = parseDate(date); ; t -= DAY_MS) {
+    const d = fmtDate(t);
+    if (d < profile.start_date) break;
+    if (!isWeekday(d)) continue;
+    if (posted.has(d)) n++;
+    else if (off.has(d)) continue;
+    else break;
+  }
+  return n;
+}
+
+export interface DayComplete {
+  date: YyyyMmDd;
+  dayPayCents: Cents;
+  /** Base earned so far this month (monthSummary.baseDueCents). */
+  monthEarnedCents: Cents;
+  /** The full month's base at the current level. */
+  monthBaseCents: Cents;
+  streak: number;
+  nextLevel: { nextBaseCents: Cents; earliestMonth: YyyyMm } | null;
+}
+
+/**
+ * The numbers for the end-of-day screen, or null unless `date` went from not
+ * counted (`before`) to counted (`after`) and is a paid weekday in the
+ * creator's active window that wasn't already credited as a day off.
+ * `before`/`after` are the creator's full posting history around one save.
+ */
+export function dayComplete(
+  profile: PayProfile,
+  date: YyyyMmDd,
+  before: PostingDay[],
+  after: PostingDay[],
+  daysOff: DayOff[],
+): DayComplete | null {
+  if (!isWeekday(date) || date < profile.start_date || (profile.ended_on && date > profile.ended_on)) return null;
+  if (isPostedDay(before, date) || !isPostedDay(after, date)) return null;
+  if (approvedOffSet(daysOff).has(date)) return null;
+  const month = monthOf(date);
+  const s = monthSummary(profile, month, after, daysOff, [], [], { today: date });
+  const nl = nextLevel(profile, { postingDays: after, daysOff }, month);
+  return {
+    date,
+    dayPayCents: dayPayCents(s.levelBaseCents, month),
+    monthEarnedCents: s.baseDueCents,
+    monthBaseCents: s.levelBaseCents,
+    streak: postingStreak(profile, after, daysOff, date),
+    nextLevel: nl.nextBaseCents !== null && nl.earliestMonth ? { nextBaseCents: nl.nextBaseCents, earliestMonth: nl.earliestMonth } : null,
+  };
+}

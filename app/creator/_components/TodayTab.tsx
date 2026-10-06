@@ -9,6 +9,8 @@ import type { MonthData, PortalData } from "./types";
 import StepGuide from "./StepGuide";
 import { ContractSigner } from "./ContractTab";
 import PaymentsSetup, { type PaymentView } from "./PaymentsSetup";
+import DayComplete, { dayCompleteSeen, markDayCompleteSeen } from "./DayComplete";
+import type { DayComplete as DayCompleteData } from "@/lib/creators/pay";
 import { POSTING_GUIDE } from "@/lib/creators/guide-content";
 import { CONCEPT_LABEL, CONCEPT_ROW_INDEXES, INSPIRED_BY_LABEL, TEST_TIPS, TEST_TIPS_TITLE } from "@/lib/creators/test-tips";
 import { HomeHeader, Screen, StreakChip, TaskRow, TaskThumb, usePushed, useJustDone } from "./AppShell";
@@ -207,6 +209,8 @@ export default function TodayTab({ data, onSaved, onProfile }: { data: PortalDat
   const [swapping, setSwapping] = useState(false);
   const [swapErr, setSwapErr] = useState<string | null>(null);
   const [found, setFound] = useState<FoundPosts | null>(null);
+  // End-of-day screen: only right after the creator's own save makes the day count (server decides), once per day.
+  const [celebrate, setCelebrate] = useState<DayCompleteData | null>(null);
   const detail = usePushed<number>();
   // Creators who skipped Getting started can still be sent a contract, and may not have payment details yet.
   const contractScreen = usePushed<true>();
@@ -290,7 +294,12 @@ export default function TodayTab({ data, onSaved, onProfile }: { data: PortalDat
     setErr(null);
     setOk(null);
     try {
-      const r = await api<{ complete_videos: number }>("/api/creator/posting", { date: data.today.date, videos: rows });
+      const r = await api<{ complete_videos: number; day_complete?: DayCompleteData | null }>("/api/creator/posting", { date: data.today.date, videos: rows });
+      const dc = r.day_complete;
+      if (dc && !dayCompleteSeen(data.creator.email, dc.date)) {
+        markDayCompleteSeen(data.creator.email, dc.date);
+        setCelebrate(dc);
+      }
       setOk(
         r.complete_videos >= target
           ? `Saved. All ${target} videos are in for today.`
@@ -411,6 +420,8 @@ export default function TodayTab({ data, onSaved, onProfile }: { data: PortalDat
         <Eyebrow>How to post</Eyebrow>
         <StepGuide collapsible guide={POSTING_GUIDE} />
       </div>
+
+      {celebrate && <DayComplete data={celebrate} onDone={() => setCelebrate(null)} />}
 
       {contractScreen.value && (
         <Screen title="Contract" onBack={contractScreen.close} closing={contractScreen.closing}>

@@ -7,6 +7,9 @@ import {
   bonusLinesForMonth,
   completedMonthsAsOf,
   creatorPrefix,
+  dayComplete,
+  dayPayCents,
+  postingStreak,
   draftInvoiceLines,
   invoiceNumber,
   isOnTime,
@@ -299,4 +302,83 @@ test("creatorPrefix and invoiceNumber", () => {
   assert.equal(invoiceNumber("IT", 1), "IT-001");
   assert.equal(invoiceNumber("IT", 42), "IT-042");
   assert.equal(invoiceNumber("IT", 1234), "IT-1234");
+});
+
+// ---------------------------------------------------------------- day complete
+
+test("dayPayCents: level base split over the month's calendar weekdays", () => {
+  assert.equal(dayPayCents(50000, "2026-10"), 2273); // 22 weekdays
+  assert.equal(dayPayCents(65000, "2026-11"), 3095); // 21 weekdays
+  assert.equal(dayPayCents(80000, "2027-02"), 4000); // 20 weekdays, whole dollars
+});
+
+test("postingStreak: weekends skipped, approved days off don't break it", () => {
+  const p = prof("2026-09-01");
+  // Mon 5 Oct .. Fri 9 Oct, with Wed 7 Oct an approved day off; Fri 2 Oct also posted.
+  const pd = [day("2026-10-02"), day("2026-10-05"), day("2026-10-06"), day("2026-10-08"), day("2026-10-09")];
+  assert.equal(postingStreak(p, pd, [off("2026-10-07")], "2026-10-09"), 5);
+  // Without the approved day off the missed Wednesday breaks it.
+  assert.equal(postingStreak(p, pd, [], "2026-10-09"), 2);
+  // A requested (not approved) day off still breaks it.
+  assert.equal(postingStreak(p, pd, [off("2026-10-07", "requested")], "2026-10-09"), 2);
+  // Monday after a posted Friday: the weekend doesn't break it.
+  assert.equal(postingStreak(p, [day("2026-10-09"), day("2026-10-12")], [], "2026-10-12"), 2);
+  // Not posted today: 0. Fewer than 5 videos doesn't count.
+  assert.equal(postingStreak(p, [day("2026-10-09"), day("2026-10-12", 4)], [], "2026-10-12"), 0);
+});
+
+test("postingStreak stops at start_date", () => {
+  const pd = [day("2026-10-01"), day("2026-10-02"), day("2026-10-05")];
+  assert.equal(postingStreak(prof("2026-10-02"), pd, [], "2026-10-05"), 2);
+  assert.equal(postingStreak(prof("2026-10-05"), pd, [off("2026-10-02")], "2026-10-05"), 1);
+});
+
+test("dayComplete: numbers only when this save made the day count", () => {
+  const p = prof("2026-10-01");
+  const earlier = postAll("2026-10-01", "2026-10-05"); // Thu, Fri, Mon
+  const before = [...earlier, day("2026-10-06", 4)];
+  const after = [...earlier, day("2026-10-06", 5)];
+  const dc = dayComplete(p, "2026-10-06", before, after, []);
+  assert.ok(dc);
+  assert.equal(dc.dayPayCents, 2273);
+  assert.equal(dc.monthBaseCents, 50000);
+  // 4 posted of 22 weekdays.
+  assert.equal(dc.monthEarnedCents, Math.round((50000 * 4) / 22));
+  assert.equal(dc.streak, 4);
+  assert.deepEqual(dc.nextLevel, { nextBaseCents: 65000, earliestMonth: "2026-11" });
+  // Already counted before this save (e.g. the post sync found everything): nothing.
+  assert.equal(dayComplete(p, "2026-10-06", after, after, []), null);
+  // Still short after the save: nothing.
+  assert.equal(dayComplete(p, "2026-10-06", before, before, []), null);
+  // A video on only one platform doesn't count.
+  const oneMissing = [...earlier, { ...day("2026-10-06", 5), videos: [...vids(4), { tiktok_url: "https://www.tiktok.com/@x/video/9", instagram_url: "" }] }];
+  assert.equal(dayComplete(p, "2026-10-06", before, oneMissing, []), null);
+  // Weekend, before start, after ended_on, or an already credited day off: nothing.
+  assert.equal(dayComplete(p, "2026-10-10", [], [day("2026-10-10")], []), null);
+  assert.equal(dayComplete(prof("2026-10-07"), "2026-10-06", before, after, []), null);
+  assert.equal(dayComplete(prof("2026-10-01", 0, "2026-10-05"), "2026-10-06", before, after, []), null);
+  assert.equal(dayComplete(p, "2026-10-06", before, after, [off("2026-10-06")]), null);
+});
+
+test("dayComplete: earned matches monthSummary and level follows the ladder", () => {
+  const p = prof("2026-06-01"); // 4 full months before October
+  const hist = postAll("2026-06-01", "2026-10-05", ["2026-10-01"]);
+  const after = [...hist, day("2026-10-06")];
+  const dc = dayComplete(p, "2026-10-06", hist, after, [off("2026-10-01")]);
+  assert.ok(dc);
+  const s = monthSummary(p, "2026-10", after, [off("2026-10-01")], [], [], { today: "2026-10-06" });
+  assert.equal(dc.monthEarnedCents, s.baseDueCents);
+  assert.equal(dc.monthBaseCents, 80000);
+  assert.equal(dc.dayPayCents, dayPayCents(80000, "2026-10"));
+  assert.deepEqual(dc.nextLevel, { nextBaseCents: 95000, earliestMonth: "2027-02" });
+  // Every weekday since 1 June posted except Oct 1, an approved day off: skipped, not counted, not a break.
+  assert.equal(dc.streak, weekdaysBetween("2026-06-01", "2026-10-06").length - 1);
+});
+
+test("dayComplete: no raise line at the top of the ladder", () => {
+  const p = prof("2026-10-01", 12);
+  const dc = dayComplete(p, "2026-10-01", [], [day("2026-10-01")], []);
+  assert.ok(dc);
+  assert.equal(dc.nextLevel, null);
+  assert.equal(dc.streak, 1);
 });
