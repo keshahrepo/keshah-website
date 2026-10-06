@@ -922,6 +922,28 @@ export async function draftOrGetInvoice(id: string, month: YyyyMm, opts: { now?:
   }
 
   const db = fs();
+  // Two requests can draft the same month at once (the Invoices tab loading
+  // twice, two devices). The transaction makes only one of them create the
+  // invoice; if ours loses the race and Firestore gives up on it, return the
+  // invoice the other request created instead of failing the page.
+  try {
+    return await createDraftInvoice(db, id, month, lines, total_cents, period, nowIso);
+  } catch (e) {
+    const winner = (await invoicesCol(id).where("month", "==", month).limit(1).get()).docs[0];
+    if (winner) return toInvoice(winner.id, winner.data());
+    throw e;
+  }
+}
+
+async function createDraftInvoice(
+  db: Firestore,
+  id: string,
+  month: YyyyMm,
+  lines: InvoiceLine[],
+  total_cents: number,
+  period: { period_start: YyyyMmDd; period_end: YyyyMmDd },
+  nowIso: string,
+): Promise<Invoice> {
   return db.runTransaction(async (tx) => {
     const cSnap = await tx.get(creatorRef(id));
     const cData = requireCreatorData(cSnap);

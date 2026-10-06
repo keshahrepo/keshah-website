@@ -8,6 +8,7 @@ import {
   plain,
   requireAdmin,
 } from "@/lib/creators/admin";
+import { CreatorDataError, draftOrGetInvoice } from "@/lib/creators/db";
 import type { Invoice } from "@/lib/creators/types";
 
 export const dynamic = "force-dynamic";
@@ -45,6 +46,24 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   const ref = db().collection(CREATORS_COLLECTION).doc(id).collection("invoices").doc(number);
 
   try {
+    // Approving a draft the creator never submitted: recalculate it first so
+    // the approved amount reflects the current posting log, claims and
+    // adjustments (a draft's lines are only refreshed when it's viewed), and
+    // snapshot the payee name the way a creator submit does.
+    let payeeName = "";
+    if (body.action === "approve") {
+      const cur = await ref.get();
+      if (cur.exists && cur.data()!.status === "draft") {
+        try {
+          await draftOrGetInvoice(id, cur.data()!.month);
+        } catch (e) {
+          if (e instanceof CreatorDataError) throw new HttpError(e.status, e.message);
+          throw e;
+        }
+      }
+      const c = await getCreator(id);
+      payeeName = c?.legal_name || c?.name || "";
+    }
     await db().runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) throw new HttpError(404, "Invoice not found");
@@ -54,7 +73,12 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
 
       if (body.action === "approve") {
         if (inv.status !== "submitted" && inv.status !== "draft") throw new HttpError(409, `Cannot approve a ${inv.status} invoice`);
-        tx.update(ref, { status: "approved", approved_at: now, updated_at: now });
+        tx.update(ref, {
+          status: "approved",
+          approved_at: now,
+          updated_at: now,
+          ...(!inv.creator_legal_name && payeeName ? { creator_legal_name: payeeName } : {}),
+        });
       } else if (body.action === "unapprove") {
         if (inv.status !== "approved") throw new HttpError(409, "Only approved invoices can be un-approved");
         tx.update(ref, { status: "submitted", approved_at: null, updated_at: now });
