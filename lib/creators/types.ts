@@ -358,6 +358,15 @@ export interface Invoice {
   period_end?: YyyyMmDd;
   created_at?: IsoInstant;
   updated_at?: IsoInstant;
+  /** Self-billing: submitted by the daily cron, not the creator (lib/creators/invoice-auto.ts). */
+  auto_submitted?: boolean;
+  /** Creator may flag the invoice ("Something's off?") until this instant (submitted_at + 3 days). */
+  dispute_until?: IsoInstant | null;
+  /** Set when the creator flags it; status stays "submitted". */
+  disputed_at?: IsoInstant | null;
+  dispute_note?: string | null;
+  /** Admin "Mark resolved". */
+  dispute_resolved_at?: IsoInstant | null;
 }
 
 export type OnboardingStep = "videos" | "quiz" | "accounts" | "slack" | "warmup" | "rules" | "link";

@@ -8,7 +8,7 @@ import {
   plain,
   requireAdmin,
 } from "@/lib/creators/admin";
-import { CreatorDataError, draftOrGetInvoice } from "@/lib/creators/db";
+import { CreatorDataError, draftOrGetInvoice, returnInvoiceToDraft } from "@/lib/creators/db";
 import type { Invoice } from "@/lib/creators/types";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +32,9 @@ export async function GET(req: NextRequest, { params }: Ctx) {
 //   { action: "approve" }
 //   { action: "unapprove" }      (back to submitted, only before payment)
 //   { action: "mark_paid", paid_on: "yyyy-mm-dd", reference, proof_path }
+//   { action: "resolve_dispute" } (clears the creator's "Something's off?" flag: dispute_resolved_at)
+//   { action: "return_to_draft" } (correction: recalculates; the cron re-submits it and restarts the 3-day window)
+// Approving during the creator's dispute window is allowed (the UI warns).
 // Once paid the invoice is locked and every further change is refused.
 export async function PATCH(req: NextRequest, { params }: Ctx) {
   const denied = await requireAdmin(req);
@@ -46,6 +49,15 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   const ref = db().collection(CREATORS_COLLECTION).doc(id).collection("invoices").doc(number);
 
   try {
+    if (body.action === "return_to_draft") {
+      try {
+        await returnInvoiceToDraft(id, number);
+      } catch (e) {
+        if (e instanceof CreatorDataError) throw new HttpError(e.status, e.message);
+        throw e;
+      }
+      return NextResponse.json({ ok: true });
+    }
     // Approving a draft the creator never submitted: recalculate it first so
     // the approved amount reflects the current posting log, claims and
     // adjustments (a draft's lines are only refreshed when it's viewed), and
@@ -79,6 +91,9 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
           updated_at: now,
           ...(!inv.creator_legal_name && payeeName ? { creator_legal_name: payeeName } : {}),
         });
+      } else if (body.action === "resolve_dispute") {
+        if (!inv.disputed_at || inv.dispute_resolved_at) throw new HttpError(409, "No open dispute on this invoice");
+        tx.update(ref, { dispute_resolved_at: now, updated_at: now });
       } else if (body.action === "unapprove") {
         if (inv.status !== "approved") throw new HttpError(409, "Only approved invoices can be un-approved");
         tx.update(ref, { status: "submitted", approved_at: null, updated_at: now });

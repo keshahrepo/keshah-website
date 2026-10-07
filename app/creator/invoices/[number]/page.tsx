@@ -130,7 +130,7 @@ export default function InvoicePrintPage() {
 
         {inv.status === "draft" && (
           <p className="no-print" style={{ marginTop: 24, fontSize: 13, color: "#a16207" }}>
-            This is a draft. Submit it from the Invoices tab in your portal.
+            This is a draft. We will send it in for you once the month is over.
           </p>
         )}
       </div>

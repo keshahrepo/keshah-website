@@ -9,12 +9,14 @@ import {
   ErrorText,
   Field,
   INVOICE_COLORS,
+  InvoiceFlags,
   Loading,
   MarkPaidForm,
   PageHeader,
   Pill,
   SubNav,
   api,
+  approveWarning,
   card,
   fileUrl,
   fmtUsd,
@@ -87,6 +89,11 @@ interface Invoice {
   payment_reference?: string;
   payment_proof_path?: string;
   locked: boolean;
+  auto_submitted?: boolean;
+  dispute_until?: string | null;
+  disputed_at?: string | null;
+  dispute_note?: string | null;
+  dispute_resolved_at?: string | null;
 }
 interface Claim {
   id: string;
@@ -1275,6 +1282,12 @@ function Invoices({ d, reload }: { d: Detail; reload: () => void }) {
   const [err, setErr] = useState("");
   async function act(number: string, action: string) {
     setErr("");
+    const inv = d.invoices.find((i) => i.number === number);
+    if (action === "approve" && inv) {
+      const warn = approveWarning(inv);
+      if (warn && !window.confirm(warn)) return;
+    }
+    if (action === "return_to_draft" && !window.confirm("Send back to draft? It recalculates, and tomorrow's run re-submits it and restarts the creator's 3-day review window.")) return;
     try {
       await api(`/api/admin/creators/${d.creator.id}/invoices/${encodeURIComponent(number)}`, {
         method: "PATCH",
@@ -1290,8 +1303,8 @@ function Invoices({ d, reload }: { d: Detail; reload: () => void }) {
       <h3 style={h3}>Invoices</h3>
       {d.summary && (
         <p style={{ ...muted, marginTop: -6, marginBottom: 10 }}>
-          Calculated for {d.month} so far: {fmtMoney(d.summary.totalCents)} ({d.draftLines.length} line{d.draftLines.length === 1 ? "" : "s"}). The creator
-          submits invoices from their portal.
+          Calculated for {d.month} so far: {fmtMoney(d.summary.totalCents)} ({d.draftLines.length} line{d.draftLines.length === 1 ? "" : "s"}). Invoices
+          are self-billed: submitted automatically after the month ends, with a 3-day window for the creator to flag anything.
         </p>
       )}
       {!d.invoices.length && <p style={muted}>No invoices yet.</p>}
@@ -1308,6 +1321,7 @@ function Invoices({ d, reload }: { d: Detail; reload: () => void }) {
             <span style={{ fontSize: 13 }}>{fmtUsd(inv.total_cents)}</span>
             <span style={{ color: INVOICE_COLORS[inv.status] ?? "#fff", fontSize: 12 }}>{inv.status}</span>
             {inv.locked && <Pill>locked</Pill>}
+            <InvoiceFlags inv={inv} />
             {inv.paid_at && <span style={muted}>paid {inv.paid_at.slice(0, 10)} · ref {inv.payment_reference}</span>}
             <span style={{ marginLeft: "auto", display: "flex", gap: 6, flexWrap: "wrap" }}>
               <a
@@ -1326,6 +1340,12 @@ function Invoices({ d, reload }: { d: Detail; reload: () => void }) {
               {!inv.locked && (inv.status === "submitted" || inv.status === "draft") && (
                 <Btn onClick={() => act(inv.number, "approve")}>Approve</Btn>
               )}
+              {!inv.locked && inv.disputed_at && !inv.dispute_resolved_at && (
+                <Btn onClick={() => act(inv.number, "resolve_dispute")}>Mark resolved</Btn>
+              )}
+              {!inv.locked && (inv.status === "submitted" || inv.status === "approved") && (
+                <Btn onClick={() => act(inv.number, "return_to_draft")}>Back to draft</Btn>
+              )}
               {!inv.locked && inv.status === "approved" && (
                 <>
                   <Btn onClick={() => act(inv.number, "unapprove")}>Un-approve</Btn>
@@ -1336,6 +1356,12 @@ function Invoices({ d, reload }: { d: Detail; reload: () => void }) {
               )}
             </span>
           </div>
+          {inv.disputed_at && (
+            <div style={{ marginTop: 6, fontSize: 12, color: inv.dispute_resolved_at ? "rgba(255,255,255,0.5)" : "#f87171" }}>
+              Creator note ({inv.disputed_at.slice(0, 10)}{inv.dispute_resolved_at ? `, resolved ${inv.dispute_resolved_at.slice(0, 10)}` : ""}):{" "}
+              {inv.dispute_note}
+            </div>
+          )}
           {open === inv.number && (
             <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 8 }}>
               <tbody>

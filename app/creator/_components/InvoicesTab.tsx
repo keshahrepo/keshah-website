@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { Invoice } from "@/lib/creators/types";
-import { fmtMonthLong, fmtUsd } from "@/lib/creators/time";
+import type { InvoiceView as Invoice } from "@/lib/creators/invoice-auto";
+import { fmtDateShort, fmtMonthLong, fmtUsd } from "@/lib/creators/time";
 import PaymentsSetup, { PaymentsBanner, type PaymentView } from "./PaymentsSetup";
-import { Button, C, Card, buttonStyle, Eyebrow, H, Msg, P, Pill, Row, api, statusColor, Skel, SkelCard } from "./ui";
+import { Button, C, Card, buttonStyle, Eyebrow, H, Msg, P, Pill, Row, api, inputStyle, statusColor, SkelCard } from "./ui";
 
 const statusLabel: Record<string, string> = { draft: "Draft", submitted: "Submitted", approved: "Approved", paid: "Paid" };
 
@@ -38,16 +38,23 @@ export default function InvoicesTab() {
   }, []);
   useEffect(load, [load]);
 
-  async function submit(number: string) {
+  const [flagOpen, setFlagOpen] = useState(false);
+  const [note, setNote] = useState("");
+
+  // Invoices are self-billed (submitted for the creator by a daily job), so the
+  // only creator action is flagging one during its 3-day review window.
+  async function flag(number: string) {
     setBusy(true);
     setErr(null);
     try {
-      await api("/api/creator/invoices", { action: "submit", number });
-      window.location.href = `/creator/invoices/${encodeURIComponent(number)}`;
+      await api("/api/creator/invoices/dispute", { number, note });
+      setFlagOpen(false);
+      setNote("");
+      load();
     } catch (e) {
       setErr((e as Error).message);
-      setBusy(false);
     }
+    setBusy(false);
   }
 
   if (!data) return err ? <Card><P style={{ marginBottom: 0 }}>{err}</P></Card> : <><SkelCard lines={3} height={260} /><SkelCard lines={2} height={180} /></>;
@@ -67,17 +74,56 @@ export default function InvoicesTab() {
               <Pill color={statusColor[cur.status]}>{statusLabel[cur.status]}</Pill>
             </Row>
             <Lines inv={cur} />
-            <Msg error={err} />
             {cur.status === "draft" ? (
-              <>
-                <P style={{ fontSize: 12, color: C.faint, marginTop: 12 }}>
-                  Check the lines. If something looks wrong, message your manager on Slack before you submit.
-                </P>
-                <Button onClick={() => submit(cur.number)} disabled={busy} style={{ width: "100%" }}>
-                  {busy ? "Submitting..." : "Confirm and submit"}
-                </Button>
-              </>
+              <P style={{ fontSize: 12, color: C.faint, marginTop: 12, marginBottom: 0 }}>
+                We'll send this invoice in for you in the next day. You'll get an email when it's in.
+              </P>
             ) : (
+              <>
+                {cur.status === "submitted" && cur.paid_by_date && (
+                  <P style={{ fontSize: 13, color: C.dim, marginTop: 12, marginBottom: 0 }}>
+                    It'll be paid by bank transfer by {fmtDateShort(cur.paid_by_date)}.
+                  </P>
+                )}
+                {cur.disputed_at && !cur.dispute_resolved_at && (
+                  <P style={{ fontSize: 13, color: C.dim, marginTop: 8, marginBottom: 0 }}>
+                    You flagged this invoice. We'll look at it and get back to you.
+                  </P>
+                )}
+                {cur.can_dispute && !flagOpen && (
+                  <P style={{ fontSize: 12, color: C.faint, marginTop: 8, marginBottom: 0 }}>
+                    If anything looks wrong, tap below by {cur.dispute_by_date ? fmtDateShort(cur.dispute_by_date) : "the deadline"}.
+                  </P>
+                )}
+                {cur.can_dispute && flagOpen && (
+                  <div style={{ marginTop: 12 }}>
+                    <textarea
+                      value={note}
+                      onChange={(e) => setNote(e.target.value)}
+                      placeholder="What looks wrong?"
+                      rows={3}
+                      maxLength={2000}
+                      style={{ ...inputStyle, height: "auto", padding: "12px 16px", resize: "vertical", fontFamily: "inherit" }}
+                    />
+                    <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                      <Button variant="ghost" onClick={() => setFlagOpen(false)} disabled={busy} style={{ flex: 1 }}>
+                        Cancel
+                      </Button>
+                      <Button onClick={() => flag(cur.number)} disabled={busy || !note.trim()} style={{ flex: 1 }}>
+                        {busy ? "Sending..." : "Send"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                <Msg error={err} />
+                {cur.can_dispute && !flagOpen && (
+                  <Button variant="ghost" onClick={() => setFlagOpen(true)} style={{ width: "100%", marginTop: 12 }}>
+                    Something&apos;s off?
+                  </Button>
+                )}
+              </>
+            )}
+            {cur.status !== "draft" && (
               <a
                 href={`/creator/invoices/${encodeURIComponent(cur.number)}`}
                 className="cp-btn"

@@ -34,6 +34,7 @@ import {
 import { FOUNDER_VIDEOS, QUIZ, WARMUP_DAYS } from "./onboarding-content";
 import { handleExists, postKey } from "./scrape";
 import { isValidTimezone } from "./time";
+import { autoSubmitFields, disputeUpdate, InvoiceRuleError } from "./invoice-auto";
 import type {
   Adjustment,
   BonusClaim,
@@ -1120,6 +1121,58 @@ export async function submitInvoice(id: string, number: string, opts: { now?: Da
   });
 }
 
+/**
+ * Self-billing cron: submit a draft on the creator's behalf, opening the
+ * dispute window (lib/creators/invoice-auto.ts). Recalculates first. Returns
+ * null (and writes nothing) if it's no longer a draft, so reruns never resubmit.
+ */
+export async function autoSubmitInvoice(id: string, number: string, opts: { now?: Date } = {}): Promise<Invoice | null> {
+  const now = opts.now ?? new Date();
+  const inv = await getInvoice(id, number);
+  if (!inv || inv.status !== "draft") return null;
+  const fresh = await draftOrGetInvoice(id, inv.month, { now });
+  const creator = await getCreator(id);
+  const ref = invoicesCol(id).doc(number);
+  return fs().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return null;
+    const cur = toInvoice(snap.id, snap.data()!);
+    if (cur.locked || cur.status !== "draft") return null;
+    const upd = {
+      status: "submitted" as const,
+      ...autoSubmitFields(now),
+      disputed_at: null,
+      dispute_note: null,
+      dispute_resolved_at: null,
+      creator_legal_name: creator?.legal_name || creator?.name || "",
+      lines: fresh.lines,
+      total_cents: fresh.total_cents,
+      updated_at: now.toISOString(),
+    };
+    tx.update(ref, upd);
+    return { ...cur, ...upd };
+  });
+}
+
+/** Creator "Something's off?": flags a submitted invoice while its dispute window is open. */
+export async function disputeInvoice(id: string, number: string, note: unknown, opts: { now?: Date } = {}): Promise<Invoice> {
+  const ref = invoicesCol(id).doc(number);
+  return fs().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new CreatorDataError("Invoice not found", 404);
+    const inv = toInvoice(snap.id, snap.data()!);
+    let upd;
+    try {
+      upd = disputeUpdate(inv, note, opts.now);
+    } catch (e) {
+      if (e instanceof InvoiceRuleError) throw new CreatorDataError(e.message, e.status);
+      throw e;
+    }
+    tx.update(ref, upd);
+    return { ...inv, ...upd };
+  });
+}
+
 /** Admin: approve a submitted invoice. */
 export async function approveInvoice(id: string, number: string): Promise<Invoice> {
   return transitionInvoice(id, number, ["submitted"], "approved", { approved_at: new Date().toISOString() });
@@ -1127,7 +1180,13 @@ export async function approveInvoice(id: string, number: string): Promise<Invoic
 
 /** Admin: send a submitted/approved invoice back to draft so it recalculates (e.g. after a fix). */
 export async function returnInvoiceToDraft(id: string, number: string): Promise<Invoice> {
-  return transitionInvoice(id, number, ["submitted", "approved"], "draft", { submitted_at: null, approved_at: null });
+  // Clears the self-billing window too: the next auto-submit restarts it.
+  return transitionInvoice(id, number, ["submitted", "approved"], "draft", {
+    submitted_at: null,
+    approved_at: null,
+    auto_submitted: false,
+    dispute_until: null,
+  });
 }
 
 /** Admin: mark paid. Locks the invoice permanently. */

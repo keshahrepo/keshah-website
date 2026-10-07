@@ -338,3 +338,38 @@ export function MarkPaidForm({
     </div>
   );
 }
+
+// ---------------------------------------------------------------- self-billed invoice flags
+
+export interface InvoiceFlagFields {
+  status: string;
+  auto_submitted?: boolean;
+  dispute_until?: string | null;
+  disputed_at?: string | null;
+  dispute_resolved_at?: string | null;
+}
+
+export function approveWarning(inv: InvoiceFlagFields & { dispute_note?: string | null }): string | null {
+  if (inv.disputed_at && !inv.dispute_resolved_at) return `The creator flagged this invoice: "${inv.dispute_note ?? ""}". Approve anyway?`;
+  if (inv.status === "submitted" && inv.dispute_until && Date.now() < Date.parse(inv.dispute_until)) {
+    return `The creator can still flag this invoice until ${new Date(inv.dispute_until).toLocaleString()}. Approve now anyway?`;
+  }
+  return null;
+}
+
+export function InvoiceFlags({ inv }: { inv: InvoiceFlagFields }) {
+  const inWindow = inv.status === "submitted" && !!inv.dispute_until && Date.now() < Date.parse(inv.dispute_until);
+  return (
+    <>
+      {inv.auto_submitted && <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>Auto-submitted</span>}
+      {inWindow && (
+        <span style={{ fontSize: 11, color: "#fbbf24" }}>
+          In review until {new Date(inv.dispute_until!).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+        </span>
+      )}
+      {inv.disputed_at && !inv.dispute_resolved_at && (
+        <span style={{ fontSize: 11, fontWeight: 600, color: "#fff", background: "#dc2626", borderRadius: 4, padding: "1px 6px" }}>Disputed</span>
+      )}
+    </>
+  );
+}

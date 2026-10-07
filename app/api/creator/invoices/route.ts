@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CreatorDataError, creatorToday, hasStarted, draftOrGetInvoice, getInvoice, listInvoices, submitInvoice } from "@/lib/creators/db";
+import { invoiceView } from "@/lib/creators/invoice-auto";
 import { addMonths, monthOf } from "@/lib/creators/pay";
 import { errorResponse, requireCreator } from "../_auth";
 
@@ -14,13 +15,17 @@ export async function GET(req: NextRequest) {
     const startedBy = hasStarted(creator) && creator.start_date <= `${lastMonth}-31`;
     const current = startedBy ? await draftOrGetInvoice(creator.id, lastMonth) : null;
     const history = await listInvoices(creator.id);
-    return NextResponse.json({ last_month: lastMonth, current, history });
+    // Each invoice carries auto_submitted, dispute_until, disputed_at, can_dispute,
+    // paid_by / paid_by_date and dispute_by_date (see invoiceView).
+    const view = (i: typeof current) => (i ? invoiceView(i, creator.timezone) : null);
+    return NextResponse.json({ last_month: lastMonth, current: view(current), history: history.map((i) => view(i)!) });
   } catch (e) {
     return errorResponse(e, "invoices");
   }
 }
 
-// POST { action: "submit", number }
+// POST { action: "submit", number } — legacy manual submit. Invoices are now
+// self-billed by /api/cron/creator-invoices; kept for older app builds.
 export async function POST(req: NextRequest) {
   const creator = await requireCreator(req);
   if (creator instanceof NextResponse) return creator;

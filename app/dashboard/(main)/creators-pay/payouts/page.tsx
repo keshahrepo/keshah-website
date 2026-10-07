@@ -5,11 +5,13 @@ import { useCallback, useEffect, useState } from "react";
 import {
   Btn,
   ErrorText,
+  InvoiceFlags,
   Loading,
   MarkPaidForm,
   PageHeader,
   SubNav,
   api,
+  approveWarning,
   card,
   fmtUsd,
   h3,
@@ -23,7 +25,19 @@ interface Row {
   creatorId: string;
   legalName: string;
   email: string;
-  invoice: { number: string; month: string; total_cents: number; status: string; submitted_at?: string; approved_at?: string };
+  invoice: {
+    number: string;
+    month: string;
+    total_cents: number;
+    status: string;
+    submitted_at?: string;
+    approved_at?: string;
+    auto_submitted?: boolean;
+    dispute_until?: string | null;
+    disputed_at?: string | null;
+    dispute_note?: string | null;
+    dispute_resolved_at?: string | null;
+  };
 }
 interface Resp {
   month: string | null;
@@ -54,6 +68,8 @@ export default function PayoutsPage() {
 
   async function approve(r: Row) {
     setErr("");
+    const warn = approveWarning(r.invoice);
+    if (warn && !window.confirm(warn)) return;
     try {
       await api(`/api/admin/creators/${r.creatorId}/invoices/${encodeURIComponent(r.invoice.number)}`, {
         method: "PATCH",
@@ -176,6 +192,9 @@ export default function PayoutsPage() {
           {data.awaitingApproval.length > 0 && (
             <div style={card}>
               <h3 style={h3}>Submitted, awaiting your approval</h3>
+              <p style={{ ...muted, marginTop: -6, marginBottom: 10 }}>
+                Self-billed: the creator has 3 days after submission to flag anything. You can approve sooner.
+              </p>
               {data.awaitingApproval.map((r) => (
                 <div
                   key={`${r.creatorId}/${r.invoice.number}`}
@@ -188,6 +207,7 @@ export default function PayoutsPage() {
                     {r.invoice.number} · {r.invoice.month}
                   </span>
                   <span style={{ fontSize: 13 }}>{fmtUsd(r.invoice.total_cents)}</span>
+                  <InvoiceFlags inv={r.invoice} />
                   <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
                     <a
                       href={`/api/admin/creators/${r.creatorId}/invoices/${encodeURIComponent(r.invoice.number)}`}
@@ -199,6 +219,9 @@ export default function PayoutsPage() {
                     </a>
                     <Btn onClick={() => approve(r)}>Approve</Btn>
                   </span>
+                  {r.invoice.disputed_at && !r.invoice.dispute_resolved_at && (
+                    <span style={{ fontSize: 12, color: "#f87171", flexBasis: "100%" }}>Creator note: {r.invoice.dispute_note}</span>
+                  )}
                 </div>
               ))}
             </div>
