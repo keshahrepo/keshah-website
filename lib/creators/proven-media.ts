@@ -86,7 +86,43 @@ export function parseCoverUrls(platform: Platform, raw: unknown): string[] {
     const c = obj(obj(obj(it).image_versions2)).candidates;
     if (Array.isArray(c)) for (const x of c) if (isHttp(obj(x).url)) out.push(obj(x).url as string);
   }
+  if (!out.length) out.push(...findImageFields(d));
   return rankImageUrls(out);
+}
+
+const IMAGE_KEYS = new Set(["display_url", "thumbnail_src", "thumbnail_url", "cover_url", "image_url"]);
+
+/** Fallback for response shapes we don't know: any image-ish field, anywhere (skips profile pics). */
+function findImageFields(root: unknown): string[] {
+  const out: string[] = [];
+  const walk = (v: unknown, depth: number) => {
+    if (depth > 8 || out.length >= 6 || v == null || typeof v !== "object") return;
+    if (Array.isArray(v)) {
+      for (const x of v.slice(0, 3)) walk(x, depth + 1);
+      return;
+    }
+    for (const [k, x] of Object.entries(v as Json)) {
+      if (k === "owner" || k.includes("profile_pic") || k.includes("comment")) continue;
+      if (IMAGE_KEYS.has(k) && isHttp(x)) out.push(x as string);
+      else if (k === "candidates" && Array.isArray(x)) {
+        for (const c of x) if (isHttp(obj(c).url)) out.push(obj(c).url as string);
+      } else walk(x, depth + 1);
+    }
+  };
+  walk(root, 0);
+  return out;
+}
+
+/** Top-level shape of a response, for error messages when no cover was found. */
+export function describeShape(raw: unknown): string {
+  const d = obj(raw);
+  return Object.keys(d)
+    .slice(0, 8)
+    .map((k) => {
+      const v = d[k];
+      return v && typeof v === "object" && !Array.isArray(v) ? `${k}{${Object.keys(v as Json).slice(0, 6).join(",")}}` : k;
+    })
+    .join(" ");
 }
 
 /** Fresh cover URLs for one video (1 credit). Throws ScrapeError on API trouble. */
@@ -94,8 +130,8 @@ export async function fetchCoverUrls(
   platform: Platform,
   url: string,
   opts: { apiKey: string; fetchImpl?: typeof fetch },
-): Promise<{ urls: string[]; credits_remaining: number | null }> {
-  const q = new URLSearchParams({ url, trim: "true" });
+): Promise<{ urls: string[]; shape: string; credits_remaining: number | null }> {
+  const q = new URLSearchParams(platform === "tiktok" ? { url, trim: "true" } : { url });
   const path = platform === "tiktok" ? `/v2/tiktok/video?${q}` : `/v1/instagram/post?${q}`;
   const res = await (opts.fetchImpl ?? fetch)(`${apiBase()}${path}`, { headers: { "x-api-key": opts.apiKey }, cache: "no-store" });
   const text = await res.text();
@@ -109,6 +145,7 @@ export async function fetchCoverUrls(
   if (body.success === false) throw new ScrapeError(`API error: ${String(body.message ?? body.error ?? "success=false").slice(0, 200)}`);
   return {
     urls: parseCoverUrls(platform, body),
+    shape: describeShape(body),
     credits_remaining: typeof body.credits_remaining === "number" ? body.credits_remaining : null,
   };
 }
@@ -214,7 +251,7 @@ export async function mirrorCover(
       credits = 1;
       const r = await fetchCoverUrls(v.platform, v.source_url, { apiKey: deps.apiKey, fetchImpl });
       creditsRemaining = r.credits_remaining;
-      if (!r.urls.length) return { ok: false, credits_used: credits, credits_remaining: creditsRemaining, error: "no cover in response" };
+      if (!r.urls.length) return { ok: false, credits_used: credits, credits_remaining: creditsRemaining, error: `no cover in response (${r.shape})` };
       img = await downloadImage(r.urls, fetchImpl);
       source = "api";
       if (!img) return { ok: false, credits_used: credits, credits_remaining: creditsRemaining, error: "cover download failed" };
