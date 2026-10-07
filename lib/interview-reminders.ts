@@ -149,8 +149,8 @@ export function reminderEmail(kind: ReminderKind, i: ReminderInput): { subject: 
     subject = "Your KESHAH group interview starts in an hour";
     opener = `Quick reminder, your KESHAH group interview starts in about an hour, at ${i.when}.`;
   } else {
-    subject = "Your KESHAH group interview is starting now";
-    opener = "Your KESHAH group interview is starting right now. Come join us!";
+    subject = "We're waiting for you: KESHAH group interview";
+    opener = "This is McKenzie from KESHAH. We're waiting for you to start the group interview.";
   }
 
   const blocks = [`Hi ${first},`, opener, join, WHAT_TO_BRING, ...(resched ? [resched] : [])];
@@ -160,8 +160,8 @@ export function reminderEmail(kind: ReminderKind, i: ReminderInput): { subject: 
 
 export function startingNowText(first: string, joinUrl?: string | null): string {
   return (
-    `Hi ${first || "there"}, it's McKenzie from KESHAH. Your group interview is starting now.` +
-    (joinUrl ? ` Join here: ${joinUrl}` : " The link to join is in your Calendly email.")
+    `Hi ${first || "there"}, this is McKenzie from KESHAH. We're waiting for you to start the group interview.` +
+    (joinUrl ? ` Here's the link: ${joinUrl}` : " The link to join is in your Calendly email.")
   );
 }
 
@@ -230,17 +230,17 @@ export function noShowEmail(i: { first: string; link: string; recordingUrl?: str
 } {
   const blocks = [
     `Hi ${i.first || "there"},`,
-    "Sorry we missed you at the KESHAH group interview today. No worries, you can still do the video test on your own time.",
+    "We didn't see you at the KESHAH group interview today. You can still do the video test on your own time.",
     ...(i.recordingUrl ? [`Here's a recording of the presentation, so you don't miss anything:\n${i.recordingUrl}`] : []),
     `When you're ready, open this link on your phone and film the short video:\n${i.link}`,
     "It takes about 10 minutes.",
   ];
-  return { subject: "Sorry we missed you today", text: `${blocks.join("\n\n")}\n\nThanks,\n${CREATOR_SIGNOFF}` };
+  return { subject: "Your KESHAH video test", text: `${blocks.join("\n\n")}\n\nThanks,\n${CREATOR_SIGNOFF}` };
 }
 
 export function noShowText(first: string, link: string): string {
   return (
-    `Hi ${first || "there"}, it's McKenzie from KESHAH. Sorry we missed you at the group interview today. ` +
+    `Hi ${first || "there"}, this is McKenzie from KESHAH. We didn't see you at the group interview today. ` +
     `You can still do the video test on your phone, it takes about 10 minutes: ${link}`
   );
 }
