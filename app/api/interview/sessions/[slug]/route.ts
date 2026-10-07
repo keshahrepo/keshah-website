@@ -49,6 +49,12 @@ export async function GET(
           followup_1_sent_at: isoOrNull(x.interview_followup_1_sent_at),
           followup_2_sent_at: isoOrNull(x.interview_followup_2_sent_at),
           link_closed_at: isoOrNull(x.interview_link_closed_at),
+          reminder_24h_sent_at: isoOrNull(x.interview_reminder_24h_sent_at),
+          reminder_1h_sent_at: isoOrNull(x.interview_reminder_1h_sent_at),
+          reminder_now_sent_at: isoOrNull(x.interview_reminder_now_sent_at),
+          reminder_now_text_sent_at: isoOrNull(x.interview_reminder_now_text_sent_at),
+          noshow_email_sent_at: isoOrNull(x.interview_noshow_email_sent_at),
+          noshow_text_sent_at: isoOrNull(x.interview_noshow_text_sent_at),
         };
       })
       // Newest submissions first, then people who opened the page, then the rest.

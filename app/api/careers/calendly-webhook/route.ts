@@ -48,6 +48,8 @@ type CalendlyWebhookPayload = {
     };
     cancel_url?: string;
     reschedule_url?: string;
+    /** Invitee's IANA timezone, e.g. "America/Chicago". */
+    timezone?: string;
   };
 };
 
@@ -103,6 +105,7 @@ export async function POST(req: Request) {
   const joinUrl = p.scheduled_event?.location?.join_url ?? null;
   const rescheduleUrl = p.reschedule_url ?? null;
   const cancelUrl = p.cancel_url ?? null;
+  const inviteeTimezone = p.timezone ?? null;
 
   const { db } = getFirebaseAdmin();
   let docId: string | null = null;
@@ -152,6 +155,7 @@ export async function POST(req: Request) {
       calendly_join_url: joinUrl,
       calendly_reschedule_url: rescheduleUrl,
       calendly_cancel_url: cancelUrl,
+      calendly_invitee_timezone: inviteeTimezone,
       last_updated_at: FieldValue.serverTimestamp(),
     },
     { merge: true },

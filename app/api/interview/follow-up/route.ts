@@ -1,8 +1,16 @@
 // Cron (every 30 min, see vercel.json): follow up with group-interview
 // applicants who haven't sent their test video yet.
 //
-// For each OPEN session that started at least 60 minutes ago, for each
+// For each OPEN session that started at least 30 minutes ago, for each
 // applicant in it (tagged or booked into its slot) without a video:
+//
+// No-shows (booked into the slot, never opened this session's page) get ONE
+// "sorry we missed you" email ≥ 30 min after the start, with the always-open
+// /interview/video link and the presentation recording (if set in
+// Settings/creator_portal.interview_recording_url), plus a text once HiBlue
+// is wired up. They don't get the session-link emails below.
+//
+// Attendees (opened the page) without a video:
 //   - ≥ 60 min after starts_at:                 first email
 //   - ≥ follow_up_hours - 4h (~20h) after start: reminder email
 //   - ≥ follow_up_hours (24h) after start:       link closed for them
@@ -23,13 +31,30 @@ import {
   sessionClosesAtMs,
   sessionFromDoc,
   type InterviewSession,
+  SITE_URL,
+  claimOnce,
+  getInterviewRecordingUrl,
+  releaseClaim,
 } from "@/lib/interview";
+import {
+  ATTENDEE_FIRST_DELAY_MS,
+  CREATOR_FROM_NAME,
+  NOSHOW_DELAY_MS,
+  NOSHOW_EMAIL_FIELD,
+  NOSHOW_TEXT_FIELD,
+  classifyAttendance,
+  noShowEmail,
+  noShowEmailDue,
+  noShowText,
+  videoLinkFor,
+} from "@/lib/interview-reminders";
+import { normalizePhone, sendInterviewText, textWasSent } from "@/lib/sms";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 const HOUR = 60 * 60 * 1000;
-const FIRST_EMAIL_DELAY_MS = 60 * 60 * 1000;
+const FIRST_EMAIL_DELAY_MS = ATTENDEE_FIRST_DELAY_MS;
 const REMINDER_BEFORE_CLOSE_MS = 4 * HOUR;
 
 function linkFor(s: InterviewSession, email: string): string {
@@ -82,14 +107,16 @@ export async function GET(req: Request) {
       .where("is_open", "==", true)
       .get();
 
+    let recordingUrl: string | null | undefined;
+
     for (const d of snap.docs) {
       const s = sessionFromDoc(d);
       if (!s || !s.starts_at_ms) continue;
-      if (now < s.starts_at_ms + FIRST_EMAIL_DELAY_MS) continue;
+      if (now < s.starts_at_ms + NOSHOW_DELAY_MS) continue;
 
       const closesAt = sessionClosesAtMs(s);
       const reminderAt = closesAt - REMINDER_BEFORE_CLOSE_MS;
-      const counts = { first: 0, reminder: 0, closed: 0, skipped: 0 };
+      const counts = { first: 0, reminder: 0, closed: 0, skipped: 0, no_show: 0, no_show_text: 0 };
 
       const applicants = await getSessionApplicants(db, s);
       for (const a of applicants) {
@@ -104,7 +131,8 @@ export async function GET(req: Request) {
         const base: Record<string, unknown> = { interview_session: s.slug };
 
         if (now >= closesAt) {
-          if (!x.interview_link_closed_at) {
+          // No-shows were sent the always-open video link, which never closes.
+          if (!x.interview_link_closed_at && classifyAttendance(x, s) !== "no_show") {
             counts.closed++;
             if (!dry) {
               await a.ref.set(
@@ -120,6 +148,51 @@ export async function GET(req: Request) {
           counts.skipped++;
           continue;
         }
+
+        if (classifyAttendance(x, s) === "no_show") {
+          if (!noShowEmailDue(x, { starts_at_ms: s.starts_at_ms, closes_at_ms: closesAt }, now)) continue;
+          counts.no_show++;
+          const phone = normalizePhone(x.phone);
+          if (dry) {
+            if (phone) counts.no_show_text++;
+            continue;
+          }
+          if (!canEmail) {
+            errors.push(`email not configured; skipped no-show email to ${email}`);
+            continue;
+          }
+          if (recordingUrl === undefined) recordingUrl = await getInterviewRecordingUrl(db);
+          const link = videoLinkFor(SITE_URL, email);
+          const won = await claimOnce(db, a.ref, (cur) =>
+            cur[NOSHOW_EMAIL_FIELD] || cur.interview_followup_1_sent_at || cur.interview_followup_2_sent_at
+              ? null
+              : { [NOSHOW_EMAIL_FIELD]: Timestamp.now() },
+          );
+          if (!won) continue;
+          try {
+            await sendEmail({
+              to: email,
+              fromName: CREATOR_FROM_NAME,
+              ...noShowEmail({ first, link, recordingUrl }),
+            });
+          } catch (e) {
+            await releaseClaim(a.ref, NOSHOW_EMAIL_FIELD).catch(() => {});
+            errors.push(`${s.slug} no-show ${email}: ${e instanceof Error ? e.message : String(e)}`);
+            continue;
+          }
+          if (phone && !x[NOSHOW_TEXT_FIELD]) {
+            const r = await sendInterviewText({ to: phone, text: noShowText(first, link), ref: a.id });
+            if (textWasSent(r)) {
+              counts.no_show_text++;
+              await a.ref.set({ [NOSHOW_TEXT_FIELD]: Timestamp.now() }, { merge: true });
+            } else if ("error" in r) {
+              errors.push(`${s.slug} no-show text ${phone}: ${r.error}`);
+            }
+          }
+          continue;
+        }
+
+        if (now < s.starts_at_ms + FIRST_EMAIL_DELAY_MS) continue;
 
         let kind: "first" | "reminder" | null = null;
         if (now >= reminderAt && !x.interview_followup_2_sent_at) kind = "reminder";

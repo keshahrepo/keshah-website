@@ -22,6 +22,12 @@ export type SessionRow = {
   followup_1_sent_at: string | null;
   followup_2_sent_at: string | null;
   link_closed_at: string | null;
+  reminder_24h_sent_at?: string | null;
+  reminder_1h_sent_at?: string | null;
+  reminder_now_sent_at?: string | null;
+  reminder_now_text_sent_at?: string | null;
+  noshow_email_sent_at?: string | null;
+  noshow_text_sent_at?: string | null;
 };
 
 type SessionMeta = {
@@ -80,6 +86,98 @@ function fmt(iso: string | null, withDay = false) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function Badge({ text, title }: { text: string; title?: string }) {
+  return (
+    <span
+      title={title}
+      style={{
+        fontSize: 10.5,
+        padding: "2px 7px",
+        borderRadius: 999,
+        border: "1px solid rgba(255,255,255,0.14)",
+        color: "rgba(255,255,255,0.6)",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
+function rowBadges(r: SessionRow): { text: string; title: string }[] {
+  const out: { text: string; title: string }[] = [];
+  if (r.reminder_24h_sent_at) out.push({ text: "24h reminder", title: `24h reminder sent ${fmt(r.reminder_24h_sent_at)}` });
+  if (r.reminder_1h_sent_at) out.push({ text: "1h reminder", title: `1h reminder sent ${fmt(r.reminder_1h_sent_at)}` });
+  if (r.reminder_now_sent_at)
+    out.push({
+      text: r.reminder_now_text_sent_at ? "Starting-now email + text" : "Starting-now email",
+      title: `Starting-now reminder sent ${fmt(r.reminder_now_sent_at)}`,
+    });
+  if (r.noshow_email_sent_at)
+    out.push({
+      text: r.noshow_text_sent_at ? "No-show email + text" : "No-show email sent",
+      title: `"Sorry we missed you" sent ${fmt(r.noshow_email_sent_at)}`,
+    });
+  return out;
+}
+
+function RecordingLinkField() {
+  const [value, setValue] = useState("");
+  const [saved, setSaved] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/interview/settings", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((b: { interview_recording_url?: string }) => {
+        setValue(b.interview_recording_url ?? "");
+        setSaved(b.interview_recording_url ?? "");
+      })
+      .catch(() => {});
+  }, []);
+
+  async function save() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/interview/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ interview_recording_url: value.trim() }),
+      });
+      const b = (await res.json()) as { interview_recording_url?: string; error?: string };
+      if (!res.ok) throw new Error(b.error || `HTTP ${res.status}`);
+      setSaved(b.interview_recording_url ?? "");
+      setValue(b.interview_recording_url ?? "");
+      setMsg("Saved");
+      setTimeout(() => setMsg(null), 1500);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+      <label style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, minWidth: 220 }}>
+        <span style={label}>Presentation recording link</span>
+        <input
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="https://… (sent to no-shows, leave empty to skip)"
+          style={input}
+        />
+      </label>
+      <button type="button" onClick={save} disabled={busy || value.trim() === saved} style={{ ...pill(true), padding: "9px 14px" }}>
+        {busy ? "Saving…" : "Save"}
+      </button>
+      {msg && <span style={{ fontSize: 12, color: msg === "Saved" ? "#4ade80" : "#F26B4C" }}>{msg}</span>}
+    </div>
+  );
 }
 
 function CopyButton({ text, labelText = "Copy link" }: { text: string; labelText?: string }) {
@@ -221,6 +319,7 @@ export function SessionsPanel({ onOpenSession }: { onOpenSession: (slug: string)
         </button>
         <CopyButton text="https://www.keshah.com/interview/video" labelText="Copy video link" />
       </div>
+      <RecordingLinkField />
 
       {/* Create */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginTop: 16 }}>
@@ -446,6 +545,13 @@ export function SessionLiveView({
               {!r.submitted_at && (r.followup_1_sent_at || r.followup_2_sent_at) && (
                 <div style={{ color: "rgba(255,255,255,0.4)" }}>
                   {r.followup_2_sent_at ? "Reminder sent" : "Follow-up sent"}
+                </div>
+              )}
+              {rowBadges(r).length > 0 && (
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
+                  {rowBadges(r).map((b) => (
+                    <Badge key={b.text} text={b.text} title={b.title} />
+                  ))}
                 </div>
               )}
             </div>

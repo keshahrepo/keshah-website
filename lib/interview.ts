@@ -10,7 +10,8 @@
 //     session's starts_at (booked into that group call but haven't
 //     opened the page yet).
 
-import type { Firestore, DocumentSnapshot } from "firebase-admin/firestore";
+import type { Firestore, DocumentSnapshot, DocumentReference } from "firebase-admin/firestore";
+import { FieldValue } from "firebase-admin/firestore";
 
 export const SESSIONS = "interview_sessions";
 export const APPLICATIONS = "careers_applications";
@@ -171,4 +172,38 @@ export async function getSessionApplicants(
 export function isoOrNull(v: unknown): string | null {
   const ms = tsToMs(v);
   return ms ? new Date(ms).toISOString() : null;
+}
+
+// Create-once marker for emails / texts that must go out at most once, safe
+// with overlapping cron runs. Inside a transaction, `decide` sees the fresh
+// doc and returns the patch that claims the send (e.g. { x_sent_at: now }),
+// or null when it's already claimed. Returns whether this caller won.
+export async function claimOnce(
+  db: Firestore,
+  ref: DocumentReference,
+  decide: (data: Record<string, unknown>) => Record<string, unknown> | null,
+): Promise<boolean> {
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const patch = decide((snap.data() ?? {}) as Record<string, unknown>);
+    if (!patch) return false;
+    tx.set(ref, patch, { merge: true });
+    return true;
+  });
+}
+
+// Undo a claim when the send itself failed, so the next run retries.
+export async function releaseClaim(ref: DocumentReference, field: string): Promise<void> {
+  await ref.update({ [field]: FieldValue.delete() });
+}
+
+// Settings/creator_portal.interview_recording_url: a recording of the group
+// interview presentation, linked in the no-show email. Empty = omit.
+export const PORTAL_SETTINGS = { collection: "Settings", doc: "creator_portal" } as const;
+export const RECORDING_URL_FIELD = "interview_recording_url";
+
+export async function getInterviewRecordingUrl(db: Firestore): Promise<string | null> {
+  const snap = await db.collection(PORTAL_SETTINGS.collection).doc(PORTAL_SETTINGS.doc).get();
+  const v = snap.exists ? snap.get(RECORDING_URL_FIELD) : null;
+  return typeof v === "string" && v.trim() ? v.trim() : null;
 }
