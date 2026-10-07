@@ -427,7 +427,7 @@ export async function getMonthOverview(
       summary,
       lines: draftInvoiceLines(summary),
       nextLevel: { nextBaseCents: null, monthsNeeded: null, earliestMonth: null },
-      trial: trialStatus(h.postingDays),
+      trial: creatorTrial(creator, h.postingDays),
     };
   }
   const summary = monthSummary(creator, month, h.postingDays, h.daysOff, h.bonusClaims, h.adjustments, {
@@ -437,8 +437,18 @@ export async function getMonthOverview(
     summary,
     lines: draftInvoiceLines(summary),
     nextLevel: nextLevel(creator, { postingDays: h.postingDays, daysOff: h.daysOff }, month),
-    trial: trialStatus(h.postingDays),
+    trial: creatorTrial(creator, h.postingDays),
   };
+}
+
+/**
+ * The first-two-weeks trial, except for creators who are past it already: made active
+ * by an admin, or credited with earlier months (Isai's September).
+ */
+export function creatorTrial(creator: Pick<CreatorProfile, "status" | "starting_completed_months">, postingDays: PostingDay[]) {
+  const t = trialStatus(postingDays);
+  if (creator.status === "active" || (creator.starting_completed_months ?? 0) > 0) return { ...t, isInTrial: false };
+  return t;
 }
 
 const NOT_STARTED_SENTINEL = "9999-12-31";
