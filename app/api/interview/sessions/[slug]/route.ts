@@ -55,6 +55,12 @@ export async function GET(
           reminder_now_text_sent_at: isoOrNull(x.interview_reminder_now_text_sent_at),
           noshow_email_sent_at: isoOrNull(x.interview_noshow_email_sent_at),
           noshow_text_sent_at: isoOrNull(x.interview_noshow_text_sent_at),
+          reminder_1h_text_sent_at: isoOrNull(x.interview_reminder_1h_text_sent_at),
+          // Only a check-in for the booking they have now.
+          checked_in_at:
+            x.interview_checked_in_for && x.interview_checked_in_for === x.calendly_event_start_time
+              ? isoOrNull(x.interview_checked_in_at)
+              : null,
         };
       })
       // Newest submissions first, then people who opened the page, then the rest.

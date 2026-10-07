@@ -1,8 +1,15 @@
 // Cron (every minute, see vercel.json): pre-interview reminders for
 // applicants with a Calendly booking coming up.
 //
+//   59 to 61 min before                 text only: "reply with your full name to check in" (no link)
 //   at the start time (0 to +2 min)    text only: "we're waiting for you" + join link
 //   (Calendly already emails the 24h / 1h reminders, so we don't.)
+// A reply to the 1h text checks the applicant in and gets the join link
+// back (handled by the inbox sync, lib/applicant-inbox-firestore.ts).
+//
+// After that it syncs applicant text replies into the dashboard inbox
+// (lib/applicant-inbox-firestore.ts). A sync failure is reported under
+// `inbox` and never breaks the reminders.
 //
 // Each goes out at most once per booking. The send is claimed first inside
 // a transaction (interview_reminder_<kind>_sent_at), so overlapping runs
@@ -25,17 +32,20 @@ import {
   REMINDER_KINDS,
   REMINDER_LOOKAHEAD_MS,
   REMINDER_LOOKBACK_MS,
+  REMINDER_1H_TEXT_FIELD,
   REMINDER_NOW_TEXT_FIELD,
   REMINDER_START_FIELD,
   firstNameOf,
-  formatInterviewTime,
+  formatShortTime,
+  got1hText,
   isReminderEligible,
+  oneHourText,
   pickReminder,
-  reminderEmail,
   sentReminders,
   startingNowText,
 } from "@/lib/interview-reminders";
 import { normalizePhone, sendInterviewText, textWasSent } from "@/lib/sms";
+import { runApplicantInboxSync } from "@/lib/applicant-inbox-firestore";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -67,20 +77,14 @@ export async function GET(req: Request) {
       const startIso = String(x.calendly_event_start_time);
       const startMs = Date.parse(startIso);
       const kind = pickReminder(startMs, now, sentReminders(x, startIso));
-      // Calendly already sends the 24h / 1h reminder emails. We only send the
-      // "we're waiting for you" text at the start time.
-      if (kind !== "now") continue;
+      // Calendly already sends the 24h / 1h reminder emails. We send two
+      // texts: the 1h check-in text and the "we're waiting for you" text at
+      // the start time.
+      if (kind !== "now" && kind !== "1h") continue;
 
       const email = String(x.email).trim();
       const first = firstNameOf(x);
       const joinUrl = (x.calendly_join_url as string) || null;
-      const msg = reminderEmail(kind, {
-        first,
-        when: formatInterviewTime(startMs, x.calendly_invitee_timezone),
-        joinUrl,
-        rescheduleUrl: (x.calendly_reschedule_url as string) || null,
-      });
-      void msg;
       const phone = normalizePhone(x.phone);
       const row: Record<string, unknown> = { id: d.id, email, kind, start: startIso, text_to: phone };
       report.push(row);
@@ -98,6 +102,7 @@ export async function GET(req: Request) {
         if (cur[REMINDER_START_FIELD] !== undefined && cur[REMINDER_START_FIELD] !== startIso) {
           for (const k of REMINDER_KINDS) if (k !== kind) patch[REMINDER_FIELDS[k]] = FieldValue.delete();
           patch[REMINDER_NOW_TEXT_FIELD] = FieldValue.delete();
+          patch[REMINDER_1H_TEXT_FIELD] = FieldValue.delete();
         }
         return patch;
       });
@@ -105,20 +110,36 @@ export async function GET(req: Request) {
         row.result = "already claimed";
         continue;
       }
-      const r = await sendInterviewText({ to: phone, text: startingNowText(first, joinUrl), ref: d.id });
+      const text =
+        kind === "1h"
+          ? oneHourText(first, formatShortTime(startMs, x.calendly_invitee_timezone))
+          : startingNowText(first, joinUrl, got1hText(x, startIso));
+      const r = await sendInterviewText({ to: phone, text, ref: d.id, kind: kind === "1h" ? "interview_1h" : "interview_start" });
       row.text = r;
       if (textWasSent(r)) {
         row.result = "sent";
-        await d.ref.set({ [REMINDER_NOW_TEXT_FIELD]: Timestamp.now() }, { merge: true });
+        await d.ref.set({ [kind === "1h" ? REMINDER_1H_TEXT_FIELD : REMINDER_NOW_TEXT_FIELD]: Timestamp.now() }, { merge: true });
       } else {
         // Not sent: free the claim so the next run (still inside the window) retries.
         await releaseClaim(d.ref, field).catch(() => {});
         row.result = "failed";
-        if ("error" in r) errors.push(`now text ${phone}: ${r.error}`);
+        if ("error" in r) errors.push(`${kind} text ${phone}: ${r.error}`);
       }
     }
 
-    return NextResponse.json({ ok: errors.length === 0, dry, email_configured: canEmail, checked: snap.size, report, errors });
+    // Applicant text inbox: pull new replies in and email contact@. Runs
+    // after the reminders and can never fail them.
+    let inbox: Record<string, unknown> | null = null;
+    if (!dry) {
+      try {
+        const r = await runApplicantInboxSync(db);
+        inbox = { scanned: r.scanned, matched: r.matched, created: r.created, notified: r.notified, errors: r.errors };
+      } catch (e) {
+        inbox = { error: e instanceof Error ? e.message : String(e) };
+      }
+    }
+
+    return NextResponse.json({ ok: errors.length === 0, dry, email_configured: canEmail, checked: snap.size, report, errors, inbox });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ error: msg, report, errors }, { status: 500 });

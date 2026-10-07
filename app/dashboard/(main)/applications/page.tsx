@@ -15,6 +15,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SessionLiveView, SessionsPanel } from "./sessions";
+import { InboxPanel, Thread, UnreadBadge, useInbox } from "./inbox";
 
 // Public URL of the contract PDF applicants get linked to. Drop the
 // file at /public/careers/paid-creator-intern-contract.pdf and this
@@ -80,8 +81,14 @@ export default function ApplicationsPage() {
 
 function ApplicationsInner() {
   const router = useRouter();
-  const sessionSlug = useSearchParams().get("session");
+  const params = useSearchParams();
+  const sessionSlug = params.get("session");
   const [tab, setTab] = useState<TabKey>("booked");
+  const [showInbox, setShowInbox] = useState(params.get("inbox") === "1");
+  const inbox = useInbox();
+  const threadIds = useMemo(() => new Set(inbox.conversations.map((c) => c.application_id)), [inbox.conversations]);
+  const reloadInbox = inbox.reload;
+  const refreshInbox = useCallback(() => reloadInbox(false), [reloadInbox]);
   const [rows, setRows] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -214,8 +221,32 @@ function ApplicationsInner() {
       />
 
       <nav style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
+        <button
+          type="button"
+          onClick={() => {
+            setShowInbox(true);
+            setExpandedId(null);
+          }}
+          style={{
+            padding: "8px 14px",
+            borderRadius: 999,
+            border: `1px solid ${showInbox ? "#fff" : "rgba(255,255,255,0.16)"}`,
+            background: showInbox ? "#fff" : "transparent",
+            color: showInbox ? "#000" : "rgba(255,255,255,0.85)",
+            cursor: "pointer",
+            fontSize: 13,
+            fontFamily: "inherit",
+            fontWeight: 500,
+            letterSpacing: 0.1,
+            display: "inline-flex",
+            alignItems: "center",
+          }}
+        >
+          Inbox
+          <UnreadBadge count={inbox.unread} />
+        </button>
         {(Object.keys(TAB_LABELS) as TabKey[]).map((k) => {
-          const active = tab === k;
+          const active = !showInbox && tab === k;
           const count = grouped[k].length;
           return (
             <button
@@ -223,6 +254,7 @@ function ApplicationsInner() {
               type="button"
               onClick={() => {
                 setTab(k);
+                setShowInbox(false);
                 setExpandedId(null);
               }}
               style={{
@@ -253,7 +285,10 @@ function ApplicationsInner() {
         })}
         <button
           type="button"
-          onClick={load}
+          onClick={() => {
+            load();
+            inbox.reload(true);
+          }}
           style={{
             marginLeft: "auto",
             padding: "8px 12px",
@@ -270,6 +305,15 @@ function ApplicationsInner() {
         </button>
       </nav>
 
+      {showInbox ? (
+        <InboxPanel
+          conversations={inbox.conversations}
+          loading={inbox.loading}
+          error={inbox.error}
+          onChanged={refreshInbox}
+        />
+      ) : (
+      <>
       {loading && (
         <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>Loading…</div>
       )}
@@ -305,9 +349,13 @@ function ApplicationsInner() {
             }}
             onDeny={() => updateStatus(row.id, "denied")}
             onReopen={() => updateStatus(row.id, "booked")}
+            hasThread={threadIds.has(row.id)}
+            onThreadRead={refreshInbox}
           />
         ))}
       </div>
+      </>
+      )}
       </>
       )}
     </main>
@@ -321,6 +369,8 @@ function ApplicationRow({
   onAccept,
   onDeny,
   onReopen,
+  hasThread,
+  onThreadRead,
 }: {
   row: Application;
   expanded: boolean;
@@ -328,6 +378,8 @@ function ApplicationRow({
   onAccept: () => void;
   onDeny: () => void;
   onReopen: () => void;
+  hasThread: boolean;
+  onThreadRead: () => void;
 }) {
   const relTime = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : "—");
   const bookingLabel = row.calendly_event_start_time
@@ -500,6 +552,15 @@ function ApplicationRow({
               <Detail label="Submitted" value={relTime(row.submitted_at)} />
               <Detail label="Booked at" value={relTime(row.booked_at)} />
             </div>
+
+            {hasThread && (
+              <div style={{ padding: "12px 14px", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10 }}>
+                <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: "rgba(255,255,255,0.55)", fontWeight: 600, marginBottom: 8 }}>
+                  Messages
+                </div>
+                <Thread applicationId={row.id} onRead={onThreadRead} compact />
+              </div>
+            )}
 
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
               {row.status !== "accepted" && (

@@ -4,7 +4,7 @@
 // Reminders (app/api/interview/reminders, every 5 min) go to applicants with
 // a Calendly booking in the future:
 //   24h   when 23h to 25h remain
-//   1h    when 50 to 70 min remain
+//   1h    text only, 59 to 61 min before ("reply with your full name to check in")
 //   now   from 2 min before the start to 6 min after
 // Each is sent at most once per booking. The sent markers are tied to the
 // booked start time (interview_reminders_start) so a reschedule gets a fresh
@@ -32,13 +32,20 @@ export const REMINDER_FIELDS: Record<ReminderKind, string> = {
 };
 export const REMINDER_START_FIELD = "interview_reminders_start";
 export const REMINDER_NOW_TEXT_FIELD = "interview_reminder_now_text_sent_at";
+export const REMINDER_1H_TEXT_FIELD = "interview_reminder_1h_text_sent_at";
+export const CHECKED_IN_FIELD = "interview_checked_in_at";
+/** The booked start the check-in was for (a reschedule needs a new one). */
+export const CHECKED_IN_FOR_FIELD = "interview_checked_in_for";
+export const CHECKIN_REPLY_TEXT_FIELD = "interview_checkin_reply";
+export const CHECKIN_TEXT_SENT_FIELD = "interview_checkin_text_sent_at";
 export const NOSHOW_EMAIL_FIELD = "interview_noshow_email_sent_at";
 export const NOSHOW_TEXT_FIELD = "interview_noshow_text_sent_at";
 
 /** [minRemaining, maxRemaining] in ms, inclusive. Negative = after start. */
 export const REMINDER_WINDOWS: Record<ReminderKind, [number, number]> = {
   "24h": [23 * HOUR, 25 * HOUR],
-  "1h": [50 * MIN, 70 * MIN],
+  // Text only, sent once in the minute or so around 60 min before.
+  "1h": [59 * MIN, 61 * MIN],
   // Cron runs every minute: the text goes out in the first minute after the
   // start time (a second minute only as a retry if the first send failed).
   now: [-2 * MIN, 0],
@@ -119,6 +126,22 @@ export function formatInterviewTime(startMs: number, timeZone?: unknown): string
   return `${fmtIn(startMs, "America/New_York", true)} (${fmtIn(startMs, "UTC", false)})`;
 }
 
+/**
+ * "5:00 PM CT" in the invitee's timezone when we know it, else "6:00 PM ET".
+ * Uses the generic zone name (CT, ET, PT); falls back to the short one
+ * (GMT+1) where there's no short generic name.
+ */
+export function formatShortTime(startMs: number, timeZone?: unknown): string {
+  const tz = validTimeZone(timeZone) ? timeZone : "America/New_York";
+  const d = new Date(startMs);
+  const time = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" }).format(d);
+  const zoneName = (style: "shortGeneric" | "short") =>
+    new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: style }).formatToParts(d).find((p) => p.type === "timeZoneName")?.value ?? "";
+  let zone = zoneName("shortGeneric");
+  if (!zone || /\s/.test(zone) || zone.length > 5) zone = zoneName("short");
+  return `${time} ${zone}`.replace(/\s+/g, " ").trim();
+}
+
 // ---------------------------------------------------------------- copy
 
 export const WHAT_TO_BRING =
@@ -160,11 +183,95 @@ export function reminderEmail(kind: ReminderKind, i: ReminderInput): { subject: 
   return { subject, text: `${blocks.join("\n\n")}\n\n${closing}\n${CREATOR_SIGNOFF}` };
 }
 
-export function startingNowText(first: string, joinUrl?: string | null): string {
-  return (
-    `Hi ${first || "there"}, this is McKenzie, creator coordinator at KESHAH. We're waiting for you to start the group interview.` +
-    (joinUrl ? ` Here's the link: ${joinUrl}` : " The link to join is in your Calendly email.")
-  );
+/**
+ * Start-time text. If the 1h text already went out, McKenzie has introduced
+ * herself, so the intro is dropped.
+ */
+export function startingNowText(first: string, joinUrl?: string | null, alreadyIntroduced = false): string {
+  const hi = alreadyIntroduced
+    ? `Hi ${first || "there"}, we're waiting for you to start the group interview.`
+    : `Hi ${first || "there"}, this is McKenzie, creator coordinator at KESHAH. We're waiting for you to start the group interview.`;
+  return hi + (joinUrl ? ` Here's the link: ${joinUrl}` : " The link to join is in your Calendly email.");
+}
+
+/** 1 hour before. No link: iMessage disables links from unknown senders until they reply. */
+export function oneHourText(first: string, time: string): string {
+  return `Hi ${first || "there"}, this is McKenzie, creator coordinator at KESHAH. Your group interview starts in 1 hour, at ${time}. Reply with your full name to check in.`;
+}
+
+export function checkInReplyText(first: string, time: string, joinUrl?: string | null): string {
+  return joinUrl
+    ? `Thanks ${first || "there"}, you're checked in. Here's the link for ${time}: ${joinUrl}`
+    : `Thanks ${first || "there"}, you're checked in. The link for ${time} is in your Calendly email.`;
+}
+
+/** Did the 1h text go out for THIS booking (not one before a reschedule)? */
+export function got1hText(app: Record<string, unknown>, startIso: string): boolean {
+  return present(app[REMINDER_1H_TEXT_FIELD]) && app[REMINDER_START_FIELD] === startIso;
+}
+
+const CHECKIN_AFFIRMATIONS = new Set([
+  "yes", "yeah", "yea", "yep", "yup", "y", "ya", "ok", "okay", "k", "sure", "ready", "present",
+  "here", "im here", "i am here", "here now", "confirmed", "confirm", "i confirm",
+  "check in", "checked in", "checking in", "check me in", "im in",
+  "will be there", "ill be there", "i will be there", "see you there", "see you soon",
+  "yes im here", "yes ill be there", "yes i will be there", "yes confirmed",
+]);
+const CHECKIN_BLOCKERS = /\b(late|reschedul\w*|cancel\w*|cant|cannot|can't|wont|won't|not|no|nope|miss\w*|sorry|who|what|when|where|why|how|link|help|stop)\b/i;
+
+/**
+ * Does a reply to the 1h text look like a check-in? 1 to 4 words, mostly
+ * letters, no question, and either overlaps the applicant's name or is a
+ * short yes/here. Anything else ("can I reschedule?", "running late") is left
+ * for a person to answer.
+ */
+export function looksLikeCheckIn(text: string, fullName?: unknown): boolean {
+  const raw = (text ?? "").trim();
+  if (!raw || raw.includes("?")) return false;
+  const cleaned = raw
+    .toLowerCase()
+    .replace(/[\u2019']/g, "")
+    .replace(/[.!,]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const words = cleaned.split(" ").filter(Boolean);
+  if (words.length < 1 || words.length > 4) return false;
+  const chars = cleaned.replace(/\s/g, "");
+  const letters = (chars.match(/\p{L}/gu) ?? []).length;
+  if (!chars.length || letters / chars.length < 0.8) return false;
+  if (CHECKIN_BLOCKERS.test(cleaned)) return false;
+  if (CHECKIN_AFFIRMATIONS.has(cleaned)) return true;
+  const nameWords = String(fullName ?? "")
+    .toLowerCase()
+    .replace(/[\u2019']/g, "")
+    .split(/[^\p{L}]+/u)
+    .filter((w) => w.length >= 2);
+  if (!nameWords.length) return false;
+  const filler = new Set(["its", "im", "i", "am", "this", "is", "here", "yes", "hi", "hey", "hello", "checking", "in", "name", "my"]);
+  const rest = words.filter((w) => !filler.has(w));
+  // Every non-filler word is part of the name, and at least one is there.
+  return rest.length > 0 && rest.every((w) => nameWords.includes(w));
+}
+
+/** How long before the start a reply still counts as a check-in. */
+export const CHECKIN_WINDOW_MS = 70 * MIN;
+
+/**
+ * Should a reply received at replyMs check this applicant in? Only when they
+ * got the 1h text for their current booking, the interview is coming up
+ * (starts within the next 70 min of the reply, and hasn't started yet when
+ * we process it), and they aren't checked in for this booking yet.
+ */
+export function checkInDue(app: Record<string, unknown>, replyMs: number, nowMs: number): boolean {
+  if (!isReminderEligible(app)) return false;
+  const startIso = typeof app.calendly_event_start_time === "string" ? app.calendly_event_start_time : "";
+  const startMs = startIso ? Date.parse(startIso) || 0 : 0;
+  if (!startMs) return false;
+  if (!got1hText(app, startIso)) return false;
+  if (present(app[CHECKED_IN_FIELD]) && app[CHECKED_IN_FOR_FIELD] === startIso) return false;
+  const lead = startMs - replyMs;
+  if (lead <= 0 || lead > CHECKIN_WINDOW_MS) return false;
+  return nowMs < startMs;
 }
 
 // ---------------------------------------------------------------- no-shows

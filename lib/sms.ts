@@ -77,24 +77,64 @@ async function hiBlueSend(req: HiBlueSendRequest, fetchImpl: typeof fetch = fetc
   return { sent: true, id: messageId };
 }
 
+/** One outbound applicant text, as logged to applicant_messages. */
+export type OutboundTextRecord = {
+  application_id: string | null;
+  phone: string;
+  text: string;
+  message_id: string | null;
+  kind: string;
+};
+
+async function defaultLogOutbound(rec: OutboundTextRecord): Promise<void> {
+  // Lazy so this module stays importable without Firestore (unit tests).
+  const { logOutboundText } = await import("./applicant-inbox-firestore");
+  await logOutboundText(rec);
+}
+
 export async function sendInterviewText(opts: {
   to: string;
   text: string;
   /** Optional reference (e.g. application id) passed along as metadata. */
   ref?: string;
+  /** What this text is, for the applicant inbox log (e.g. "interview_start"). */
+  kind?: string;
+  /** Test hooks. Defaults: global fetch, and a write to applicant_messages. */
+  fetchImpl?: typeof fetch;
+  logOutbound?: (rec: OutboundTextRecord) => Promise<void>;
 }): Promise<SendTextResult> {
   if (!smsConfigured()) return { skipped: "not configured" };
   const to = normalizePhone(opts.to);
   if (!to) return { skipped: "invalid phone number" };
+  let result: SendTextResult;
   try {
-    return await hiBlueSend({
-      apiKey: process.env.HIUBLUE_API_KEY!,
-      integrationId: process.env.HIUBLUE_INTEGRATION_ID || DEFAULT_INTEGRATION_ID,
-      to,
-      text: opts.text,
-      metadata: { kind: "interview", ...(opts.ref ? { ref: opts.ref } : {}) },
-    });
+    result = await hiBlueSend(
+      {
+        apiKey: process.env.HIUBLUE_API_KEY!,
+        integrationId: process.env.HIUBLUE_INTEGRATION_ID || DEFAULT_INTEGRATION_ID,
+        to,
+        text: opts.text,
+        metadata: { kind: "interview", ...(opts.ref ? { ref: opts.ref } : {}) },
+      },
+      opts.fetchImpl,
+    );
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }
+  if (textWasSent(result)) {
+    // Log for the applicant inbox. A failed log never changes the result:
+    // the text already went out.
+    try {
+      await (opts.logOutbound ?? defaultLogOutbound)({
+        application_id: opts.ref ?? null,
+        phone: to,
+        text: opts.text,
+        message_id: result.id,
+        kind: opts.kind ?? "interview",
+      });
+    } catch (e) {
+      console.error("applicant_messages outbound log failed:", e instanceof Error ? e.message : e);
+    }
+  }
+  return result;
 }

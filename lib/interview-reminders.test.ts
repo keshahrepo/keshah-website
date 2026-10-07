@@ -2,6 +2,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  CHECKIN_WINDOW_MS,
+  checkInDue,
+  checkInReplyText,
+  looksLikeCheckIn,
+  formatShortTime,
+  got1hText,
+  oneHourText,
+  startingNowText,
   classifyAttendance,
   formatInterviewTime,
   isReminderEligible,
@@ -27,11 +35,13 @@ test("pickReminder: 24h window is 23h to 25h before", () => {
   assert.equal(pickReminder(START, START - 22 * HOUR, none), null);
 });
 
-test("pickReminder: 1h window is 50 to 70 min before", () => {
-  assert.equal(pickReminder(START, START - 71 * MIN, none), null);
-  assert.equal(pickReminder(START, START - 70 * MIN, none), "1h");
-  assert.equal(pickReminder(START, START - 50 * MIN, none), "1h");
-  assert.equal(pickReminder(START, START - 49 * MIN, none), null);
+test("pickReminder: 1h text window is 59 to 61 min before", () => {
+  assert.equal(pickReminder(START, START - 62 * MIN, none), null);
+  assert.equal(pickReminder(START, START - 61 * MIN, none), "1h");
+  assert.equal(pickReminder(START, START - 60 * MIN, none), "1h");
+  assert.equal(pickReminder(START, START - 59 * MIN, none), "1h");
+  assert.equal(pickReminder(START, START - 58 * MIN, none), null);
+  assert.equal(pickReminder(START, START - 60 * MIN, new Set(["1h"])), null);
 });
 
 test("pickReminder: starting-now text goes out at the start, never before", () => {
@@ -168,4 +178,88 @@ test("sendInterviewText skips when HiBlue isn't configured", async () => {
   assert.deepEqual(await sendInterviewText({ to: "+13473312820", text: "hi" }), { skipped: "not configured" });
   if (saved.k !== undefined) process.env.HIUBLUE_API_KEY = saved.k;
   if (saved.l !== undefined) process.env.HIUBLUE_LINE = saved.l;
+});
+
+// ---------------------------------------------------------------- 1h check-in
+
+test("formatShortTime: invitee zone as CT/PT, else ET", () => {
+  assert.equal(formatShortTime(START, "America/Chicago"), "1:00 PM CT");
+  assert.equal(formatShortTime(START, "America/Los_Angeles"), "11:00 AM PT");
+  assert.equal(formatShortTime(START), "2:00 PM ET");
+  assert.equal(formatShortTime(START, "Not/AZone"), "2:00 PM ET");
+});
+
+test("oneHourText: intro, time, check-in ask, no link, no em dashes", () => {
+  const t = oneHourText("Sam", "5:00 PM CT");
+  assert.equal(t, "Hi Sam, this is McKenzie, creator coordinator at KESHAH. Your group interview starts in 1 hour, at 5:00 PM CT. Reply with your full name to check in.");
+  assert.ok(!/https?:/.test(t) && !t.includes("\u2014"));
+});
+
+test("startingNowText drops McKenzie's intro only after the 1h text", () => {
+  const link = "https://zoom.us/j/1";
+  assert.equal(startingNowText("Sam", link, true), `Hi Sam, we're waiting for you to start the group interview. Here's the link: ${link}`);
+  assert.match(startingNowText("Sam", link), /^Hi Sam, this is McKenzie, creator coordinator at KESHAH\. We're waiting/);
+  assert.match(startingNowText("Sam", link, false), /this is McKenzie/);
+});
+
+test("got1hText only counts the 1h text for the current booking", () => {
+  const iso = "2026-10-08T18:00:00.000000Z";
+  assert.equal(got1hText({ interview_reminder_1h_text_sent_at: "x", interview_reminders_start: iso }, iso), true);
+  assert.equal(got1hText({ interview_reminder_1h_text_sent_at: "x", interview_reminders_start: "2026-10-07T18:00:00Z" }, iso), false);
+  assert.equal(got1hText({ interview_reminder_1h_sent_at: "x", interview_reminders_start: iso }, iso), false);
+});
+
+test("checkInReplyText has the join link and time", () => {
+  assert.equal(checkInReplyText("Sam", "5:00 PM CT", "https://zoom.us/j/1"), "Thanks Sam, you're checked in. Here's the link for 5:00 PM CT: https://zoom.us/j/1");
+});
+
+test("checkInDue: only after the 1h text, inside the window, before the start, once per booking", () => {
+  const iso = "2026-10-08T18:00:00.000Z";
+  const base = {
+    status: "booked",
+    email: "a@b.co",
+    calendly_event_start_time: iso,
+    interview_reminders_start: iso,
+    interview_reminder_1h_text_sent_at: "x",
+  };
+  assert.equal(checkInDue(base, START - 55 * MIN, START - 55 * MIN), true);
+  assert.equal(checkInDue(base, START - 1 * MIN, START - 1 * MIN + 5000), true);
+  // too early (more than 70 min before) or after the start
+  assert.equal(checkInDue(base, START - CHECKIN_WINDOW_MS - MIN, START - 50 * MIN), false);
+  assert.equal(checkInDue(base, START + MIN, START + MIN), false);
+  // reply in time but we only process it after the start: no link sent
+  assert.equal(checkInDue(base, START - 5 * MIN, START + MIN), false);
+  // no 1h text, or 1h text for an older booking
+  const { interview_reminder_1h_text_sent_at: _drop, ...no1h } = base;
+  void _drop;
+  assert.equal(checkInDue(no1h, START - 30 * MIN, START - 30 * MIN), false);
+  assert.equal(checkInDue({ ...base, interview_reminders_start: "2026-10-07T18:00:00.000Z" }, START - 30 * MIN, START - 30 * MIN), false);
+  // already checked in for this booking
+  assert.equal(checkInDue({ ...base, interview_checked_in_at: "x", interview_checked_in_for: iso }, START - 30 * MIN, START - 30 * MIN), false);
+  // checked in for an older booking: this one still counts
+  assert.equal(checkInDue({ ...base, interview_checked_in_at: "x", interview_checked_in_for: "2026-10-07T18:00:00.000Z" }, START - 30 * MIN, START - 30 * MIN), true);
+  // denied applicants never check in
+  assert.equal(checkInDue({ ...base, status: "denied" }, START - 30 * MIN, START - 30 * MIN), false);
+});
+
+test("looksLikeCheckIn: name or short yes/here counts; questions and other text don't", () => {
+  const name = "Jamie Rivera";
+  for (const t of ["Jamie Rivera", "jamie rivera.", "Jamie", "Rivera", "It's Jamie Rivera", "yes", "Here!", "checked in", "I'm here", "Yes I'll be there", "ok"]) {
+    assert.equal(looksLikeCheckIn(t, name), true, t);
+  }
+  for (const t of [
+    "can I reschedule?",
+    "running late",
+    "Jamie running late",
+    "Jamie?",
+    "who is this",
+    "I can't make it",
+    "no",
+    "Hi, I wanted to ask about the interview time because I have class",
+    "Sam Smith", // someone else's name
+    "12345",
+    "",
+  ]) {
+    assert.equal(looksLikeCheckIn(t, name), false, t);
+  }
 });

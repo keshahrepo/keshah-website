@@ -28,6 +28,8 @@ export type SessionRow = {
   reminder_now_text_sent_at?: string | null;
   noshow_email_sent_at?: string | null;
   noshow_text_sent_at?: string | null;
+  reminder_1h_text_sent_at?: string | null;
+  checked_in_at?: string | null;
 };
 
 type SessionMeta = {
@@ -88,7 +90,7 @@ function fmt(iso: string | null, withDay = false) {
   });
 }
 
-function Badge({ text, title }: { text: string; title?: string }) {
+function Badge({ text, title, tone }: { text: string; title?: string; tone?: "green" }) {
   return (
     <span
       title={title}
@@ -96,8 +98,8 @@ function Badge({ text, title }: { text: string; title?: string }) {
         fontSize: 10.5,
         padding: "2px 7px",
         borderRadius: 999,
-        border: "1px solid rgba(255,255,255,0.14)",
-        color: "rgba(255,255,255,0.6)",
+        border: `1px solid ${tone === "green" ? "rgba(74,222,128,0.4)" : "rgba(255,255,255,0.14)"}`,
+        color: tone === "green" ? "#4ade80" : "rgba(255,255,255,0.6)",
         whiteSpace: "nowrap",
       }}
     >
@@ -106,10 +108,15 @@ function Badge({ text, title }: { text: string; title?: string }) {
   );
 }
 
-function rowBadges(r: SessionRow): { text: string; title: string }[] {
-  const out: { text: string; title: string }[] = [];
+function rowBadges(r: SessionRow): { text: string; title: string; tone?: "green" }[] {
+  const out: { text: string; title: string; tone?: "green" }[] = [];
+  if (r.checked_in_at) out.push({ text: "Checked in", title: `Replied to the 1h text ${fmt(r.checked_in_at)}`, tone: "green" });
   if (r.reminder_24h_sent_at) out.push({ text: "24h reminder", title: `24h reminder sent ${fmt(r.reminder_24h_sent_at)}` });
-  if (r.reminder_1h_sent_at) out.push({ text: "1h reminder", title: `1h reminder sent ${fmt(r.reminder_1h_sent_at)}` });
+  if (r.reminder_1h_sent_at)
+    out.push({
+      text: r.reminder_1h_text_sent_at ? "1h text" : "1h reminder",
+      title: `1h reminder sent ${fmt(r.reminder_1h_sent_at)}`,
+    });
   if (r.reminder_now_sent_at)
     out.push({
       text: r.reminder_now_text_sent_at ? "Starting-now email + text" : "Starting-now email",
@@ -550,7 +557,7 @@ export function SessionLiveView({
               {rowBadges(r).length > 0 && (
                 <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
                   {rowBadges(r).map((b) => (
-                    <Badge key={b.text} text={b.text} title={b.title} />
+                    <Badge key={b.text} text={b.text} title={b.title} tone={b.tone} />
                   ))}
                 </div>
               )}
