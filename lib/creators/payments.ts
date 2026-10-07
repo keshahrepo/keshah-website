@@ -185,7 +185,8 @@ export function creatorPaymentView(d: DocumentData | undefined, stripe?: StripeS
     legal_name: String(d?.legal_name || d?.name || ""),
     payment_details: { status: pd.status, bank_name: pd.bank_name, last4: pd.last4, account_type: pd.account_type, submitted_at: pd.submitted_at },
     tax_form: { type: tf.type, status: tf.status, submitted_at: tf.submitted_at, tin_last4: tf.tin_last4 },
-    complete: pd.status !== "missing" && tf.status === "submitted",
+    // Tax forms are collected at year end for now, so setup is done once the bank is in.
+    complete: pd.status !== "missing",
   };
 }
 
