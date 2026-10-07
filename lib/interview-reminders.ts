@@ -280,10 +280,10 @@ export function checkInDue(app: Record<string, unknown>, replyMs: number, nowMs:
 // ---------------------------------------------------------------- no-shows
 
 export const SLOT_TOLERANCE_MS = 30 * MIN;
-/** No-show email goes out once this long after the session starts. */
-export const NOSHOW_DELAY_MS = 30 * MIN;
-/** Attendees without a video keep the existing first follow-up at 60 min. */
-export const ATTENDEE_FIRST_DELAY_MS = 60 * MIN;
+/** No-show messages go out once this long after the session starts, i.e. after the call has ended. */
+export const NOSHOW_DELAY_MS = 90 * MIN; // after the interview has ended (calls run up to ~an hour)
+/** First follow-up for attendees without a video, also once the call has ended. */
+export const ATTENDEE_FIRST_DELAY_MS = 90 * MIN;
 
 export type AttendanceClass = "no_show" | "attendee";
 

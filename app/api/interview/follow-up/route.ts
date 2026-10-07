@@ -1,11 +1,11 @@
 // Cron (every 30 min, see vercel.json): follow up with group-interview
 // applicants who haven't sent their test video yet.
 //
-// For each OPEN session that started at least 30 minutes ago, for each
+// For each OPEN session that started at least 90 minutes ago (call over), for each
 // applicant in it (tagged or booked into its slot) without a video:
 //
 // No-shows (booked into the slot, never opened this session's page) get ONE
-// "sorry we missed you" email ≥ 30 min after the start, with the always-open
+// no-show email + text ≥ 90 min after the start, with the always-open
 // /interview/video link and the presentation recording (if set in
 // Settings/creator_portal.interview_recording_url), plus a text once HiBlue
 // is wired up. They don't get the session-link emails below.

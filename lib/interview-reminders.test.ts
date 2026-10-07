@@ -138,15 +138,15 @@ test("classifyAttendance: opened a different session's page still a no-show here
   );
 });
 
-test("noShowEmailDue: once, from 30 min after start until close, not after session follow-ups", () => {
+test("noShowEmailDue: once, from 90 min after start (call over) until close, not after session follow-ups", () => {
   const s = { starts_at_ms: START, closes_at_ms: START + 24 * HOUR };
-  assert.equal(noShowEmailDue({}, s, START + 29 * MIN), false);
-  assert.equal(noShowEmailDue({}, s, START + 30 * MIN), true);
+  assert.equal(noShowEmailDue({}, s, START + 89 * MIN), false);
+  assert.equal(noShowEmailDue({}, s, START + 90 * MIN), true);
   assert.equal(noShowEmailDue({}, s, START + 5 * HOUR), true);
   assert.equal(noShowEmailDue({}, s, START + 24 * HOUR), false);
-  assert.equal(noShowEmailDue({ interview_noshow_email_sent_at: "x" }, s, START + HOUR), false);
-  assert.equal(noShowEmailDue({ interview_followup_1_sent_at: "x" }, s, START + HOUR), false);
-  assert.equal(noShowEmailDue({ interview_video_submitted_at: "x" }, s, START + HOUR), false);
+  assert.equal(noShowEmailDue({ interview_noshow_email_sent_at: "x" }, s, START + 2 * HOUR), false);
+  assert.equal(noShowEmailDue({ interview_followup_1_sent_at: "x" }, s, START + 2 * HOUR), false);
+  assert.equal(noShowEmailDue({ interview_video_submitted_at: "x" }, s, START + 2 * HOUR), false);
 });
 
 test("noShowEmail: recording line only when set", () => {
