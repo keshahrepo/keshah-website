@@ -368,6 +368,9 @@ export interface RetitleResult {
   formats: number;
   videos: number;
   written: number;
+  /** Names the model returned, before dropping bad or repeated ones. */
+  returned: number;
+  sample?: string;
   titles?: Record<string, string>;
 }
 
@@ -402,7 +405,20 @@ export async function retitleFormats(opts: { db?: Firestore; dry?: boolean; gene
     if (!call || call.type !== "tool_use") throw new Error(`no titles (stop: ${resp.stop_reason})`);
     raw = call.input;
   }
-  const list = Array.isArray((raw as { titles?: unknown })?.titles) ? (raw as { titles: { id: string; title: string }[] }).titles : [];
+  // The tool input sometimes arrives with the array as a JSON string, or as an id -> name map.
+  let t: unknown = (raw as { titles?: unknown })?.titles ?? raw;
+  if (typeof t === "string") {
+    try {
+      t = JSON.parse(t);
+    } catch {
+      t = [];
+    }
+  }
+  const list: { id: string; title: string }[] = Array.isArray(t)
+    ? (t as { id: string; title: string }[])
+    : t && typeof t === "object"
+      ? Object.entries(t as Record<string, unknown>).map(([id, title]) => ({ id, title: String(title) }))
+      : [];
   const byFormat: Record<string, string> = {};
   const seen = new Set<string>();
   for (const t of list) {
@@ -411,7 +427,14 @@ export async function retitleFormats(opts: { db?: Firestore; dry?: boolean; gene
     seen.add(clean.toLowerCase());
     byFormat[t.id] = clean;
   }
-  const out: RetitleResult = { dry: !!opts.dry, formats: leads.length, videos: vids.length, written: 0 };
+  const out: RetitleResult = {
+    dry: !!opts.dry,
+    formats: leads.length,
+    videos: vids.length,
+    written: 0,
+    returned: list.length,
+    ...(Object.keys(byFormat).length ? {} : { sample: JSON.stringify(raw).slice(0, 300) }),
+  };
   if (opts.dry) return { ...out, titles: byFormat };
   let batch = db.batch();
   let n = 0;
