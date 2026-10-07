@@ -83,7 +83,7 @@ export async function POST(req: Request) {
       full_name: givenName,
       email: email.toLowerCase(),
       gender: givenGender,
-      source: "group_interview",
+      source: session.slug === "video" ? "video_link" : "group_interview",
       status: "booked",
       interview_session: session.slug,
       interview_opened_at: now,

@@ -209,6 +209,15 @@ export function SessionsPanel({ onOpenSession }: { onOpenSession: (slug: string)
         </button>
       </div>
       {qrFor === "live" && <QrBox url={liveUrl} />}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>Always-open video link</div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>
+            For anyone who couldn&apos;t film on the call, or applicants you&apos;re not inviting to a group interview. It never closes. Their video shows on their application (Watch video).
+          </div>
+        </div>
+        <CopyButton text="https://www.keshah.com/interview/video" labelText="Copy video link" />
+      </div>
 
       {/* Create */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginTop: 16 }}>

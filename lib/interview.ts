@@ -19,6 +19,19 @@ export const APPLICATIONS = "careers_applications";
 // session so the presentation QR code never needs regenerating.
 export const LIVE_SLUG = "live";
 
+// Always-open link for applicants who couldn't film on the call, or who
+// skip the group interview: /interview/video. Not a Firestore session, so
+// it never closes and the follow-up cron (which walks real sessions) leaves
+// it alone.
+export const VIDEO_SLUG = "video";
+const VIDEO_SESSION: InterviewSession = {
+  slug: VIDEO_SLUG,
+  title: "Video test",
+  starts_at_ms: 0,
+  follow_up_hours: 1_000_000,
+  is_open: true,
+};
+
 export const SITE_URL = "https://www.keshah.com";
 
 export type InterviewSession = {
@@ -73,6 +86,7 @@ export async function resolveSession(
   slug: string,
 ): Promise<InterviewSession | null> {
   const clean = slug.trim().toLowerCase();
+  if (clean === VIDEO_SLUG) return VIDEO_SESSION;
   if (clean !== LIVE_SLUG) {
     const d = await db.collection(SESSIONS).doc(clean).get();
     return sessionFromDoc(d);

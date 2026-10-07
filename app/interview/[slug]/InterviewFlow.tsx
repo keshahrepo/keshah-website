@@ -476,7 +476,9 @@ export default function InterviewFlow({
   const back = uploading || busy ? null : backFrom(phase);
   const railIdx = RAIL.indexOf(phase === "details" ? "email" : phase);
   const showRail = railIdx >= 0;
-  const callNote = (
+  // /interview/video is the always-open link for people not on a call.
+  const onCall = slug !== "video";
+  const callNote = !onCall ? null : (
     <div className={ui.note}>
       <strong>On the call from your phone?</strong> Keep the call running.
       It&apos;s fine if your video freezes. Come back when you&apos;ve submitted.
@@ -767,7 +769,7 @@ export default function InterviewFlow({
 
     case "done":
       title = "Thanks! We'll get back to you soon.";
-      subtitle = "You can head back to the call now.";
+      subtitle = onCall ? "You can head back to the call now." : "We'll email you once we've watched it.";
       break;
   }
 
