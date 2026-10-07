@@ -23,7 +23,7 @@ async function handle(req: NextRequest) {
   const n = Number(q.get("limit"));
   const limit = Number.isInteger(n) && n > 0 ? Math.min(n, BEATS_BACKFILL_CAP) : BEATS_BACKFILL_CAP;
   try {
-    const r = await generateProvenBeats({ limit, dry, deadlineMs: Date.now() + 240_000 });
+    const r = await generateProvenBeats({ limit, dry, deadlineMs: Date.now() + 180_000 });
     return NextResponse.json({ ok: true, ...r });
   } catch (e) {
     console.error("proven beats backfill error:", e);

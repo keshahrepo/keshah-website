@@ -33,6 +33,8 @@ export const BEATS_CRON_CAP = 40;
 export const BEATS_BACKFILL_CAP = 200;
 /** A video stops being retried after this many failed attempts. */
 export const BEATS_MAX_ATTEMPTS = 3;
+/** Failures from before the forced tool call don't count against a video. */
+const LEGACY_ERROR = "no JSON in model output";
 export const BEATS_CONCURRENCY = 6;
 /** Shorter transcripts (music-only, "watch until the end") have nothing to make points from. */
 export const BEATS_MIN_TRANSCRIPT = 80;
@@ -57,6 +59,7 @@ export function needsBeats(v: BeatsFields): boolean {
   if (v.status !== "active" || v.added_by === "founder_idea") return false;
   if ((v.transcript ?? "").trim().length < BEATS_MIN_TRANSCRIPT) return false;
   if (v.talking_points?.length && v.short_title && v.hook_full && typeof v.hook_first_person === "boolean") return false;
+  if (v.beats?.last_error?.startsWith(LEGACY_ERROR)) return true;
   return (v.beats?.attempts ?? 0) < BEATS_MAX_ATTEMPTS;
 }
 
@@ -194,17 +197,38 @@ export function parseBeats(raw: string, transcript = ""): ParsedBeats {
 
 export type GenerateFn = (system: string, user: string) => Promise<string>;
 
+const BEATS_TOOL = {
+  name: "save_notes",
+  description: "Save the speaking notes for this video.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      hook: { type: "string" },
+      hook_first_person: { type: "boolean" },
+      title: { type: "string" },
+      beats: { type: "array", items: { type: "string" } },
+      cta: { type: "string" },
+    },
+    required: ["hook", "hook_first_person", "title", "beats", "cta"],
+  },
+};
+
+/** Forced tool call, so the answer is always JSON (plain text answers sometimes came back without it). */
 function anthropicGenerate(apiKey: string): GenerateFn {
   const client = new Anthropic({ apiKey });
   return async (system, user) => {
     const resp = await client.messages.create({
       model: BEATS_MODEL,
-      max_tokens: 900,
+      max_tokens: 1200,
       system,
+      tools: [BEATS_TOOL],
+      tool_choice: { type: "tool", name: BEATS_TOOL.name },
       messages: [{ role: "user", content: user }],
     });
+    const call = resp.content.find((b) => b.type === "tool_use");
+    if (call && call.type === "tool_use") return JSON.stringify(call.input);
     const block = resp.content.find((b) => b.type === "text");
-    return block && block.type === "text" ? block.text : "";
+    return block && block.type === "text" ? block.text : `(stop: ${resp.stop_reason})`;
   };
 }
 
@@ -302,7 +326,7 @@ export async function generateProvenBeats(opts: {
           const prev = x.d.beats ?? {};
           await col
             .doc(x.id)
-            .update({ beats: { ...prev, attempts: (prev.attempts ?? 0) + 1, last_error: error, last_attempt_at: at } })
+            .update({ beats: { ...prev, attempts: (prev.last_error?.startsWith(LEGACY_ERROR) ? 0 : (prev.attempts ?? 0)) + 1, last_error: error, last_attempt_at: at } })
             .catch(() => undefined);
           out.failed.push({ id: x.id, error });
         }
