@@ -67,7 +67,31 @@ export function sessionFromDoc(d: DocumentSnapshot): InterviewSession | null {
 
 // Time after which the link is closed for everyone who hasn't submitted.
 export function sessionClosesAtMs(s: InterviewSession): number {
-  return s.starts_at_ms + s.follow_up_hours * 60 * 60 * 1000;
+  // Video deadline: 11:59 PM Eastern on the day after the interview (a clean
+  // time applicants can remember). The always-open video link never closes.
+  if (s.follow_up_hours >= 100_000) return s.starts_at_ms + s.follow_up_hours * 60 * 60 * 1000;
+  return endOfNextEasternDayMs(s.starts_at_ms);
+}
+
+/** 23:59:00 America/New_York on the calendar day after `ms` (Eastern date). */
+export function endOfNextEasternDayMs(ms: number): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(ms));
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
+  // Guess as if Eastern were UTC, then correct by the real offset at that moment.
+  const guess = Date.UTC(get("year"), get("month") - 1, get("day") + 1, 23, 59, 0);
+  const offsetMin = (at: number) => {
+    const tz = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", timeZoneName: "shortOffset" })
+      .formatToParts(new Date(at))
+      .find((p) => p.type === "timeZoneName")?.value ?? "GMT-5";
+    const m = tz.match(/GMT([+-]\d+)(?::(\d+))?/);
+    return m ? Number(m[1]) * 60 + Math.sign(Number(m[1])) * Number(m[2] ?? 0) : -300;
+  };
+  return guess - offsetMin(guess) * 60 * 1000;
 }
 
 // Is the page accepting submissions right now?

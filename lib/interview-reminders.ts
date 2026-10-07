@@ -330,7 +330,8 @@ export function noShowEmailDue(
 }
 
 export function videoLinkFor(siteUrl: string, email: string): string {
-  return `${siteUrl.replace(/\/+$/, "")}/interview/video?email=${encodeURIComponent(email)}`;
+  void email; // the page asks for their email; a bare link reads cleaner in a text
+  return `${siteUrl.replace(/\/+$/, "")}/interview/video`;
 }
 
 /** "6:00 PM ET on Thursday, Oct 8" for a deadline. */
@@ -360,8 +361,11 @@ export function noShowEmail(i: { first: string; link: string; deadline: string; 
 export function noShowText(first: string, link: string, deadline: string, alreadyIntroduced = false): string {
   // Worded for both cases our signal can't tell apart: missed the call, or
   // joined but didn't get to film. Skip the intro if we texted them at the start.
-  const hi = alreadyIntroduced ? `Hi ${first || "there"},` : `Hi ${first || "there"}, this is McKenzie, creator coordinator at KESHAH.`;
-  return `${hi} If you couldn't make the group interview or didn't get to film your video, you can still do it on your phone: ${link} It's due by ${deadline}. ${DENIAL_LINE}`;
+  const name = first || "there";
+  const opener = alreadyIntroduced
+    ? `Hi ${name}, if you couldn't make the group interview or didn't get to film your video, you can still do it on your phone.`
+    : `Hi ${name}, this is McKenzie, creator coordinator at KESHAH. If you couldn't make the group interview or didn't get to film your video, you can still do it on your phone.`;
+  return `${opener} It's due by ${deadline}. Applications without a test video are automatically denied.\n\n${link}`;
 }
 
 export function firstNameOf(app: Record<string, unknown>): string {
