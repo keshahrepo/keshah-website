@@ -216,6 +216,9 @@ export function SessionsPanel({ onOpenSession }: { onOpenSession: (slug: string)
             For anyone who couldn&apos;t film on the call, or applicants you&apos;re not inviting to a group interview. It never closes. Their video shows on their application (Watch video).
           </div>
         </div>
+        <button type="button" style={pill(true)} onClick={() => onOpenSession("video")}>
+          See responses
+        </button>
         <CopyButton text="https://www.keshah.com/interview/video" labelText="Copy video link" />
       </div>
 

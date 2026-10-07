@@ -10,7 +10,9 @@ import {
   getSessionApplicants,
   interviewUrl,
   isoOrNull,
+  resolveSession,
   sessionFromDoc,
+  VIDEO_SLUG,
 } from "@/lib/interview";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +27,9 @@ export async function GET(
   try {
     const { slug } = await params;
     const { db } = getFirebaseAdmin();
-    const s = sessionFromDoc(await db.collection(SESSIONS).doc(slug).get());
+    // The always-open video link isn't a stored session; resolve it virtually.
+    const s =
+      slug === VIDEO_SLUG ? await resolveSession(db, slug) : sessionFromDoc(await db.collection(SESSIONS).doc(slug).get());
     if (!s) return NextResponse.json({ error: "Session not found." }, { status: 404 });
     const docs = await getSessionApplicants(db, s);
     const rows = docs
