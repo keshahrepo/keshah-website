@@ -235,7 +235,8 @@ function anthropicGenerate(apiKey: string): GenerateFn {
   return async (system, user) => {
     const resp = await client.messages.create({
       model: BEATS_MODEL,
-      max_tokens: 1200,
+      // Room for the model's own thinking before the answer; a cut-off answer came back without JSON.
+      max_tokens: 4000,
       system,
       tools: [BEATS_TOOL],
       // This model only allows "auto" here; the system prompt and the message ask for the tool call.
