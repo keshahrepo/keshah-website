@@ -42,6 +42,7 @@ import { CREATOR_FROM_NAME, CREATOR_SIGNOFF } from "./invite";
 import { CREATORS_COLLECTION, CreatorDataError, DEFAULT_TIMEZONE, STORAGE_BUCKET, markContractStepDone } from "./db";
 import { adoptedSignatureText } from "./signature";
 import { isValidTimezone } from "./time";
+import { notify, PUSH_COPY } from "@/lib/push";
 import type { ContractAudit, ContractEvent, ContractSettings, ContractTemplate, CreatorContract } from "./types";
 
 export function sha256Hex(data: Uint8Array | string): string {
@@ -371,6 +372,8 @@ export async function sendContract(
   const contract: CreatorContract = { status: "sent", template_version: t.version, template_sha256: t.sha256, sent_at: now };
   await creatorRef(id).update({ contract, ...(opts.version ? { contract_template_version: t.version } : {}) });
   await logEvent(id, { type: "sent", at: now, actor: "admin", template_version: t.version, template_sha256: t.sha256 });
+  // KESHAH Creators app push (also reaches a phone still signed in as the applicant, by email). Never throws.
+  await notify({ creatorId: id, email: String(d.email ?? "").trim() || null }, PUSH_COPY.contractSent);
 
   let emailed = false;
   const to = String(d.email ?? "").trim();

@@ -4,6 +4,8 @@
 //   59 to 61 min before                 text only: "reply with your full name to check in" (no link)
 //   at the start time (0 to +2 min)    text only: "we're waiting for you" + join link
 //   (Calendly already emails the 24h / 1h reminders, so we don't.)
+//   Both also go as a push to the KESHAH Creators app when the applicant has
+//   it installed (once per booking, mobile_push_<kind>_for = start).
 // A reply to the 1h text checks the applicant in and gets the join link
 // back (handled by the inbox sync, lib/applicant-inbox-firestore.ts).
 //
@@ -21,7 +23,7 @@
 // GET ?dry=1 reports what would be sent without sending or writing.
 
 import { NextResponse } from "next/server";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp, type DocumentReference, type Firestore } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { requireCronSecret } from "@/lib/support/auth";
 import { emailConfigured, sendEmail } from "@/lib/email";
@@ -46,9 +48,38 @@ import {
 } from "@/lib/interview-reminders";
 import { normalizePhone, sendInterviewText, textWasSent } from "@/lib/sms";
 import { runApplicantInboxSync } from "@/lib/applicant-inbox-firestore";
+import { notify, PUSH_COPY } from "@/lib/push";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
+
+const PUSH_FIELDS = { "1h": "mobile_push_1h_for", now: "mobile_push_now_for" } as const;
+
+/** Push the 1h / start reminder to the applicant's devices once per booking. Never throws. */
+async function pushReminder(
+  db: Firestore,
+  ref: DocumentReference,
+  applicationId: string,
+  email: string,
+  kind: "1h" | "now",
+  startIso: string,
+): Promise<string> {
+  const field = PUSH_FIELDS[kind];
+  try {
+    const won = await claimOnce(db, ref, (cur) => (cur[field] === startIso ? null : { [field]: startIso }));
+    if (!won) return "already sent";
+    const r = await notify({ applicationId, email }, kind === "1h" ? PUSH_COPY.interview1h : PUSH_COPY.interviewNow);
+    if (!r || r.sent === 0) {
+      // No device (or it failed): free the marker so a later run in the window can try again.
+      await releaseClaim(ref, field).catch(() => {});
+      return r ? "no devices" : "failed";
+    }
+    return "sent";
+  } catch (e) {
+    console.error("interview reminder push failed:", e instanceof Error ? e.message : e);
+    return "failed";
+  }
+}
 
 export async function GET(req: Request) {
   if (!requireCronSecret(req)) {
@@ -88,6 +119,9 @@ export async function GET(req: Request) {
       const phone = normalizePhone(x.phone);
       const row: Record<string, unknown> = { id: d.id, email, kind, start: startIso, text_to: phone };
       report.push(row);
+      // App push (KESHAH Creators), alongside the text. Its own once-per-booking
+      // marker, and it never affects the text below.
+      if (!dry) row.push = await pushReminder(db, d.ref, d.id, email, kind, startIso);
       if (!phone) {
         row.result = "no phone number";
         continue;

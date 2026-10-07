@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
-import { getPayloadFromToken, COOKIE_NAME } from "@/lib/auth";
+import { creatorIdFromRequest } from "../_auth";
 import { FieldValue } from "firebase-admin/firestore";
 
 // Generate catchy on-screen text for TikTok/Instagram videos
@@ -75,13 +75,9 @@ function shortenPoint(point: string): string {
 // GET — get current creator's data + today's assignments (authenticated)
 export async function GET(req: NextRequest) {
   try {
-    const token = req.cookies.get(COOKIE_NAME)?.value;
-    if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const payload = await getPayloadFromToken(token);
-    if (!payload || payload.role !== "creator" || !payload.userId) {
-      return NextResponse.json({ error: "Creator access only" }, { status: 403 });
-    }
+    const who = await creatorIdFromRequest(req);
+    if (who instanceof NextResponse) return who;
+    const payload = { userId: who.id };
 
     const { db } = getFirebaseAdmin();
     const creatorDoc = await db.collection("ContentCreators").doc(payload.userId).get();

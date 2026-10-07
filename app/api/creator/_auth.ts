@@ -2,20 +2,56 @@ import { NextRequest, NextResponse } from "next/server";
 import { COOKIE_NAME, getPayloadFromToken } from "@/lib/auth";
 import { CreatorDataError, assertOnboarded, getCreator } from "@/lib/creators/db";
 import type { CreatorProfile } from "@/lib/creators/types";
+import { bearerToken, mobileAuthConfigured, MOBILE_OFF_MESSAGE, verifyMobileToken } from "@/lib/mobile/token";
+import { creatorIdForClaims } from "@/lib/mobile/identity";
+
+export interface CreatorAuthDeps {
+  /** Looks up an active creator by login email (mobile tokens without a cid claim). */
+  findCreatorByEmail?: (email: string) => Promise<{ id: string; name: string } | null>;
+}
+
+async function defaultFindCreatorByEmail(email: string) {
+  const [{ getFirebaseAdmin }, { findCreatorByEmail }] = await Promise.all([
+    import("@/lib/firebase-admin"),
+    import("@/lib/mobile/firestore"),
+  ]);
+  return findCreatorByEmail(getFirebaseAdmin().db, email);
+}
 
 /**
- * Resolve the signed-in creator from the session cookie. The creator id
- * ALWAYS comes from the token, never from the request, so a creator can only
- * ever read or write their own ContentCreators doc.
+ * The signed-in creator's id, from EITHER the portal session cookie OR an
+ * "Authorization: Bearer <token>" from the KESHAH Creators app. A bearer
+ * header, when present, is the only credential looked at. The id ALWAYS
+ * comes from a signed token (or the email inside one), never from the request
+ * body, so a creator can only ever reach their own ContentCreators doc.
  */
-export async function requireCreator(req: NextRequest): Promise<CreatorProfile | NextResponse> {
+export async function creatorIdFromRequest(
+  req: NextRequest,
+  deps: CreatorAuthDeps = {},
+): Promise<{ id: string } | NextResponse> {
+  const bearer = bearerToken(req.headers);
+  if (bearer) {
+    if (!mobileAuthConfigured()) return NextResponse.json({ error: MOBILE_OFF_MESSAGE }, { status: 503 });
+    const claims = await verifyMobileToken(bearer);
+    if (!claims) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const id = await creatorIdForClaims(claims, deps.findCreatorByEmail ?? defaultFindCreatorByEmail);
+    if (!id) return NextResponse.json({ error: "Creator access only" }, { status: 403 });
+    return { id };
+  }
   const token = req.cookies.get(COOKIE_NAME)?.value;
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const payload = await getPayloadFromToken(token);
   if (!payload || payload.role !== "creator" || !payload.userId) {
     return NextResponse.json({ error: "Creator access only" }, { status: 403 });
   }
-  const creator = await getCreator(payload.userId);
+  return { id: payload.userId };
+}
+
+/** Resolve the signed-in creator (cookie or mobile bearer token, see creatorIdFromRequest). */
+export async function requireCreator(req: NextRequest, deps: CreatorAuthDeps = {}): Promise<CreatorProfile | NextResponse> {
+  const who = await creatorIdFromRequest(req, deps);
+  if (who instanceof NextResponse) return who;
+  const creator = await getCreator(who.id);
   if (!creator || !creator.is_active) return NextResponse.json({ error: "Creator not found" }, { status: 404 });
   return creator;
 }

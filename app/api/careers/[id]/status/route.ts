@@ -6,6 +6,7 @@
 import { NextResponse } from "next/server";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { notify, PUSH_COPY } from "@/lib/push";
 
 const ALLOWED = new Set(["accepted", "denied", "completed", "booked"]);
 
@@ -21,9 +22,10 @@ export async function POST(
       return NextResponse.json({ error: "Invalid status." }, { status: 400 });
     }
     const { db } = getFirebaseAdmin();
-    await db
-      .collection("careers_applications")
-      .doc(id)
+    const ref = db.collection("careers_applications").doc(id);
+    const before = await ref.get();
+    const wasAccepted = before.exists && before.get("status") === "accepted";
+    await ref
       .set(
         {
           status,
@@ -35,6 +37,10 @@ export async function POST(
         },
         { merge: true }
       );
+    if (status === "accepted" && !wasAccepted) {
+      // KESHAH Creators app push. notify() never throws.
+      await notify({ applicationId: id, email: (before.get("email") as string) || null }, PUSH_COPY.accepted);
+    }
     return NextResponse.json({ ok: true });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

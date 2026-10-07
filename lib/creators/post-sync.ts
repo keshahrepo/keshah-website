@@ -311,6 +311,16 @@ export interface SyncDeps {
   log?: (msg: string) => void;
   /** Email sender for alerts (defaults to lib/email.sendEmail). */
   sendAlert?: (subject: string, text: string) => Promise<void>;
+  /**
+   * App push for a new auto bonus (defaults to lib/push.notify, but only when
+   * no `db` was injected, so tests and emulator runs never reach FCM).
+   */
+  notifyBonus?: (creator: { id: string; email: string }, kind: "100k" | "1m") => Promise<void>;
+}
+
+async function defaultNotifyBonus(creator: { id: string; email: string }, kind: "100k" | "1m"): Promise<void> {
+  const { notify, PUSH_COPY } = await import("@/lib/push");
+  await notify({ creatorId: creator.id, email: creator.email || null }, kind === "1m" ? PUSH_COPY.bonus1m : PUSH_COPY.bonus100k);
 }
 
 export interface PlatformSyncResult {
@@ -458,12 +468,20 @@ export async function syncCreatorPosts(creatorOrId: string | CreatorProfile, dep
           await ref.collection("bonus_claims").doc(a.id).create(a.claim);
           claims.push({ ...a.claim, id: a.id });
           result.claims_created.push(a.id);
+          const push = deps.notifyBonus ?? (deps.db ? null : defaultNotifyBonus);
+          if (push) {
+            await push({ id: creator.id, email: creator.email }, a.claim.crossed_1m_on ? "1m" : "100k").catch((e) =>
+              log(`[creator-posts] bonus push failed: ${errMsg(e)}`),
+            );
+          }
         } catch (e) {
           if ((e as { code?: number }).code !== 6) throw e; // 6 = ALREADY_EXISTS
         }
       } else if (a.op === "upgrade") {
         await ref.collection("bonus_claims").doc(a.id).update(a.patch);
         result.claims_upgraded.push(a.id);
+        const push = deps.notifyBonus ?? (deps.db ? null : defaultNotifyBonus);
+        if (push) await push({ id: creator.id, email: creator.email }, "1m").catch((e) => log(`[creator-posts] bonus push failed: ${errMsg(e)}`));
       }
     }
   };
