@@ -1,13 +1,12 @@
 // Cron (every 5 min, see vercel.json): pre-interview reminders for
 // applicants with a Calendly booking coming up.
 //
-//   24h before (23h to 25h left)       email
-//   1h before  (50 to 70 min left)     email
-//   starting now (-2 to +6 min)        email + text (text only once HiBlue is wired up)
+//   starting now (-2 to +6 min)        text only: "we're waiting for you" + join link
+//   (Calendly already emails the 24h / 1h reminders, so we don't.)
 //
 // Each goes out at most once per booking. The send is claimed first inside
 // a transaction (interview_reminder_<kind>_sent_at), so overlapping runs
-// can't double send; if the email fails the claim is removed and the next
+// can't double send; if the text fails the claim is removed and the next
 // run retries while the window is still open. Markers are tied to the
 // booked start (interview_reminders_start), so a reschedule starts fresh.
 //
@@ -68,7 +67,9 @@ export async function GET(req: Request) {
       const startIso = String(x.calendly_event_start_time);
       const startMs = Date.parse(startIso);
       const kind = pickReminder(startMs, now, sentReminders(x, startIso));
-      if (!kind) continue;
+      // Calendly already sends the 24h / 1h reminder emails. We only send the
+      // "we're waiting for you" text at the start time.
+      if (kind !== "now") continue;
 
       const email = String(x.email).trim();
       const first = firstNameOf(x);
@@ -79,14 +80,15 @@ export async function GET(req: Request) {
         joinUrl,
         rescheduleUrl: (x.calendly_reschedule_url as string) || null,
       });
-      const phone = kind === "now" ? normalizePhone(x.phone) : null;
+      void msg;
+      const phone = normalizePhone(x.phone);
       const row: Record<string, unknown> = { id: d.id, email, kind, start: startIso, text_to: phone };
       report.push(row);
-      if (dry) continue;
-      if (!canEmail) {
-        errors.push(`email not configured; skipped ${kind} reminder to ${email}`);
+      if (!phone) {
+        row.result = "no phone number";
         continue;
       }
+      if (dry) continue;
 
       const field = REMINDER_FIELDS[kind];
       const won = await claimOnce(db, d.ref, (cur) => {
@@ -103,24 +105,16 @@ export async function GET(req: Request) {
         row.result = "already claimed";
         continue;
       }
-      try {
-        await sendEmail({ to: email, fromName: CREATOR_FROM_NAME, ...msg });
+      const r = await sendInterviewText({ to: phone, text: startingNowText(first, joinUrl), ref: d.id });
+      row.text = r;
+      if (textWasSent(r)) {
         row.result = "sent";
-      } catch (e) {
+        await d.ref.set({ [REMINDER_NOW_TEXT_FIELD]: Timestamp.now() }, { merge: true });
+      } else {
+        // Not sent: free the claim so the next run (still inside the window) retries.
         await releaseClaim(d.ref, field).catch(() => {});
-        errors.push(`${kind} ${email}: ${e instanceof Error ? e.message : String(e)}`);
         row.result = "failed";
-        continue;
-      }
-
-      if (kind === "now" && phone) {
-        const r = await sendInterviewText({ to: phone, text: startingNowText(first, joinUrl), ref: d.id });
-        row.text = r;
-        if (textWasSent(r)) {
-          await d.ref.set({ [REMINDER_NOW_TEXT_FIELD]: Timestamp.now() }, { merge: true });
-        } else if ("error" in r) {
-          errors.push(`now text ${phone}: ${r.error}`);
-        }
+        if ("error" in r) errors.push(`now text ${phone}: ${r.error}`);
       }
     }
 
