@@ -6,6 +6,7 @@
 // If the client sends no draft_id (e.g. a script bypassing the form),
 // we create a fresh doc so the submission still lands somewhere.
 
+import { normalizePhone } from "@/lib/sms";
 import { NextResponse } from "next/server";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
@@ -79,6 +80,9 @@ export async function POST(req: Request) {
       full_name: p.full_name!.trim(),
       email: p.email!.trim().toLowerCase(),
       phone: p.phone!.trim(),
+      // Standard +1... form; the HiBlue paywall outreach skips creator
+      // applicants by matching on this.
+      phone_e164: normalizePhone(p.phone),
       gender: p.gender!.trim(),
       college: p.college!.trim(),
       graduation_year: p.graduation_year!.trim(),

@@ -5,6 +5,7 @@
 // with status "pending" while a draft is open. The final submit path
 // (/api/careers/apply) transitions the same doc to "completed".
 
+import { normalizePhone } from "@/lib/sms";
 import { NextResponse } from "next/server";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
@@ -79,6 +80,7 @@ export async function POST(req: Request) {
       full_name: (p.full_name ?? "").trim() || null,
       email: (p.email ?? "").trim().toLowerCase() || null,
       phone: (p.phone ?? "").trim() || null,
+      phone_e164: normalizePhone(p.phone),
       gender: (p.gender ?? "").trim() || null,
       college: (p.college ?? "").trim() || null,
       graduation_year: (p.graduation_year ?? "").trim() || null,
