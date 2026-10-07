@@ -34,7 +34,8 @@ export const BEATS_BACKFILL_CAP = 200;
 /** A video stops being retried after this many failed attempts. */
 export const BEATS_MAX_ATTEMPTS = 3;
 /** Failures from before the forced tool call don't count against a video. */
-const LEGACY_ERROR = "no JSON in model output";
+const LEGACY_ERRORS = ["no JSON in model output", "400 "];
+const isLegacy = (e?: string) => !!e && LEGACY_ERRORS.some((x) => e.startsWith(x));
 export const BEATS_CONCURRENCY = 6;
 /** Shorter transcripts (music-only, "watch until the end") have nothing to make points from. */
 export const BEATS_MIN_TRANSCRIPT = 80;
@@ -59,7 +60,7 @@ export function needsBeats(v: BeatsFields): boolean {
   if (v.status !== "active" || v.added_by === "founder_idea") return false;
   if ((v.transcript ?? "").trim().length < BEATS_MIN_TRANSCRIPT) return false;
   if (v.talking_points?.length && v.short_title && v.hook_full && typeof v.hook_first_person === "boolean") return false;
-  if (v.beats?.last_error?.startsWith(LEGACY_ERROR)) return true;
+  if (isLegacy(v.beats?.last_error)) return true;
   return (v.beats?.attempts ?? 0) < BEATS_MAX_ATTEMPTS;
 }
 
@@ -222,8 +223,9 @@ function anthropicGenerate(apiKey: string): GenerateFn {
       max_tokens: 1200,
       system,
       tools: [BEATS_TOOL],
-      tool_choice: { type: "tool", name: BEATS_TOOL.name },
-      messages: [{ role: "user", content: user }],
+      // This model only allows "auto" here; the system prompt and the message ask for the tool call.
+      tool_choice: { type: "auto" },
+      messages: [{ role: "user", content: `${user}\n\nAnswer by calling ${BEATS_TOOL.name}.` }],
     });
     const call = resp.content.find((b) => b.type === "tool_use");
     if (call && call.type === "tool_use") return JSON.stringify(call.input);
@@ -326,7 +328,7 @@ export async function generateProvenBeats(opts: {
           const prev = x.d.beats ?? {};
           await col
             .doc(x.id)
-            .update({ beats: { ...prev, attempts: (prev.last_error?.startsWith(LEGACY_ERROR) ? 0 : (prev.attempts ?? 0)) + 1, last_error: error, last_attempt_at: at } })
+            .update({ beats: { ...prev, attempts: (isLegacy(prev.last_error) ? 0 : (prev.attempts ?? 0)) + 1, last_error: error, last_attempt_at: at } })
             .catch(() => undefined);
           out.failed.push({ id: x.id, error });
         }
