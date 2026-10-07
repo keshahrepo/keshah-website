@@ -160,7 +160,7 @@ export function reminderEmail(kind: ReminderKind, i: ReminderInput): { subject: 
 
 export function startingNowText(first: string, joinUrl?: string | null): string {
   return (
-    `Hi ${first || "there"}, this is McKenzie from KESHAH. We're waiting for you to start the group interview.` +
+    `Hi ${first || "there"}, this is McKenzie, creator coordinator at KESHAH. We're waiting for you to start the group interview.` +
     (joinUrl ? ` Here's the link: ${joinUrl}` : " The link to join is in your Calendly email.")
   );
 }
@@ -251,7 +251,7 @@ export function noShowEmail(i: { first: string; link: string; deadline: string; 
 export function noShowText(first: string, link: string, deadline: string, alreadyIntroduced = false): string {
   // Worded for both cases our signal can't tell apart: missed the call, or
   // joined but didn't get to film. Skip the intro if we texted them at the start.
-  const hi = alreadyIntroduced ? `Hi ${first || "there"},` : `Hi ${first || "there"}, this is McKenzie from KESHAH.`;
+  const hi = alreadyIntroduced ? `Hi ${first || "there"},` : `Hi ${first || "there"}, this is McKenzie, creator coordinator at KESHAH.`;
   return `${hi} If you couldn't make the group interview or didn't get to film your video, you can still do it on your phone: ${link} It's due by ${deadline}. ${DENIAL_LINE}`;
 }
 

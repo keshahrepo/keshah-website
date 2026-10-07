@@ -24,6 +24,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { requireCronSecret } from "@/lib/support/auth";
 import { emailConfigured, sendEmail } from "@/lib/email";
+import { CREATOR_SIGNOFF } from "@/lib/creators/invite";
 import {
   SESSIONS,
   getSessionApplicants,
@@ -66,28 +67,27 @@ function hoursLeft(s: InterviewSession, now: number): number {
   return Math.max(1, Math.round((sessionClosesAtMs(s) - now) / HOUR));
 }
 
-function firstEmail(first: string, link: string, hrs: number) {
+function firstEmail(first: string, link: string, deadline: string) {
   return {
     subject: "Your KESHAH test video",
     text:
       `Hi ${first},\n\n` +
-      `Thanks for joining the group interview today. We haven't got your test video yet.\n\n` +
-      `It only takes a few minutes. Open this link on your phone, watch the example, then film yourself saying the short script:\n` +
+      `Thanks for joining the group interview today. We haven't received your test video yet.\n\n` +
+      `Open this link on your phone, watch the example, then film yourself saying the short script:\n` +
       `${link}\n\n` +
-      `The link stays open for about ${hrs} more hours.\n\n` +
-      `Thanks,\nAadi\nFounder, KESHAH`,
+      `It's due by ${deadline}. Applications without a test video are automatically denied.\n\n` +
+      CREATOR_SIGNOFF,
   };
 }
 
-function reminderEmail(first: string, link: string, hrs: number) {
+function reminderEmail(first: string, link: string, deadline: string) {
   return {
     subject: "Reminder: your KESHAH test video",
     text:
       `Hi ${first},\n\n` +
-      `Just a reminder, we still haven't got your test video, and the link closes in about ${hrs} ${hrs === 1 ? "hour" : "hours"}.\n\n` +
-      `Here it is again:\n${link}\n\n` +
-      `If you've already sent it, you can ignore this.\n\n` +
-      `Thanks,\nAadi\nFounder, KESHAH`,
+      `We still haven't received your test video. It's due by ${deadline}. Applications without a test video are automatically denied.\n\n` +
+      `Here's the link again:\n${link}\n\n` +
+      CREATOR_SIGNOFF,
   };
 }
 
@@ -202,8 +202,8 @@ export async function GET(req: Request) {
 
         const msg =
           kind === "first"
-            ? firstEmail(first, linkFor(s, email), hoursLeft(s, now))
-            : reminderEmail(first, linkFor(s, email), hoursLeft(s, now));
+            ? firstEmail(first, linkFor(s, email), formatDeadlineET(closesAt))
+            : reminderEmail(first, linkFor(s, email), formatDeadlineET(closesAt));
         counts[kind]++;
         if (dry) continue;
         if (!canEmail) {
@@ -211,7 +211,7 @@ export async function GET(req: Request) {
           continue;
         }
         try {
-          await sendEmail({ to: email, ...msg });
+          await sendEmail({ to: email, fromName: CREATOR_FROM_NAME, ...msg });
           await a.ref.set(
             {
               ...base,
