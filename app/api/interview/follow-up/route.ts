@@ -47,6 +47,7 @@ import {
   noShowEmailDue,
   noShowText,
   videoLinkFor,
+  formatDeadlineET,
 } from "@/lib/interview-reminders";
 import { normalizePhone, sendInterviewText, textWasSent } from "@/lib/sms";
 
@@ -173,7 +174,7 @@ export async function GET(req: Request) {
             await sendEmail({
               to: email,
               fromName: CREATOR_FROM_NAME,
-              ...noShowEmail({ first, link, recordingUrl }),
+              ...noShowEmail({ first, link, recordingUrl, deadline: formatDeadlineET(closesAt) }),
             });
           } catch (e) {
             await releaseClaim(a.ref, NOSHOW_EMAIL_FIELD).catch(() => {});
@@ -181,7 +182,7 @@ export async function GET(req: Request) {
             continue;
           }
           if (phone && !x[NOSHOW_TEXT_FIELD]) {
-            const r = await sendInterviewText({ to: phone, text: noShowText(first, link, !!x.interview_reminder_now_text_sent_at), ref: a.id });
+            const r = await sendInterviewText({ to: phone, text: noShowText(first, link, formatDeadlineET(closesAt), !!x.interview_reminder_now_text_sent_at), ref: a.id });
             if (textWasSent(r)) {
               counts.no_show_text++;
               await a.ref.set({ [NOSHOW_TEXT_FIELD]: Timestamp.now() }, { merge: true });

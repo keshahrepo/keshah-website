@@ -142,11 +142,11 @@ test("noShowEmailDue: once, from 30 min after start until close, not after sessi
 
 test("noShowEmail: recording line only when set", () => {
   const link = "https://www.keshah.com/interview/video?email=a%40b.co";
-  const withRec = noShowEmail({ first: "Sam", link, recordingUrl: "https://loom.com/x" });
+  const withRec = noShowEmail({ first: "Sam", link, deadline: "6:00 PM ET on Thursday, Oct 8", recordingUrl: "https://loom.com/x" });
   assert.match(withRec.text, /https:\/\/loom\.com\/x/);
   assert.match(withRec.text, /about 10 minutes/);
   assert.ok(withRec.text.includes(link));
-  const without = noShowEmail({ first: "Sam", link, recordingUrl: null });
+  const without = noShowEmail({ first: "Sam", link, deadline: "6:00 PM ET on Thursday, Oct 8", recordingUrl: null });
   assert.ok(!without.text.includes("recording"));
   assert.ok(!withRec.text.includes("—"));
 });
