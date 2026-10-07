@@ -270,16 +270,27 @@ test("formatGroups: re-filmed hooks share a format led by the most viewed", () =
   assert.equal(g.get("d"), "d");
 });
 
-test("selectDailyPicks: one video per format per day, formats rotate", () => {
+test("selectDailyPicks: one per family a day; a re-upload counts as done", () => {
   const candidates = [
-    { id: "p1", format: "p", recent_wins: 0, views: 900 },
-    { id: "p2", format: "p", recent_wins: 0, views: 800 },
-    { id: "m1", format: "m", recent_wins: 0, views: 500 },
-    { id: "e1", format: "e", recent_wins: 0, views: 100 },
+    { id: "p1", format: "p", family: "pinch", recent_wins: 0, views: 900 },
+    { id: "p2", format: "p", family: "pinch", recent_wins: 0, views: 800 },
+    { id: "m1", format: "m", family: "m", recent_wins: 0, views: 500 },
+    { id: "e1", format: "e", family: "e", recent_wins: 0, views: 100 },
   ];
   const day1 = selectDailyPicks({ candidates, history: {}, date: "2026-10-07", count: 2, creatorId: "c" });
   assert.deepEqual(day1, ["p1", "m1"]);
   // p was used yesterday through p1, so p2 waits behind the unused format e.
   const day2 = selectDailyPicks({ candidates, history: { p1: ["2026-10-07"], m1: ["2026-10-07"] }, date: "2026-10-08", count: 2, creatorId: "c" });
   assert.deepEqual(day2, ["e1", "p2"]);
+});
+
+test("selectDailyPicks: a pinch variation can come the next day, never two in a day", () => {
+  const candidates = [
+    { id: "top", format: "top", family: "pinch", recent_wins: 0, views: 900 },
+    { id: "hairline", format: "hairline", family: "pinch", recent_wins: 0, views: 800 },
+    { id: "m1", format: "m1", family: "m", recent_wins: 0, views: 100 },
+  ];
+  assert.deepEqual(selectDailyPicks({ candidates, history: {}, date: "2026-10-07", count: 2, creatorId: "c" }), ["top", "m1"]);
+  const next = selectDailyPicks({ candidates, history: { top: ["2026-10-07"], m1: ["2026-10-07"] }, date: "2026-10-08", count: 2, creatorId: "c" });
+  assert.equal(next[0], "hairline");
 });

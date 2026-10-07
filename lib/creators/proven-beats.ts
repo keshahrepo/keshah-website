@@ -24,7 +24,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Firestore } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
-import { PROVEN_COLLECTION, formatGroups, type ProvenVideo } from "./proven";
+import { DUPLICATE_SIMILARITY, PROVEN_COLLECTION, formatGroups, type ProvenVideo } from "./proven";
 
 export const BEATS_MODEL = "claude-sonnet-5-5";
 /** Most videos the daily cron fills per run. */
@@ -380,7 +380,7 @@ export async function retitleFormats(opts: { db?: Firestore; dry?: boolean; gene
   const col = db.collection(PROVEN_COLLECTION);
   const snap = await col.where("status", "==", "active").get();
   const vids = snap.docs.map((d) => ({ id: d.id, d: d.data() as ProvenVideo & { hook_full?: string } }));
-  const groups = formatGroups(vids.map((v) => ({ id: v.id, hook: v.d.hook_full || v.d.hook_line, views: v.d.views ?? 0 })));
+  const groups = formatGroups(vids.map((v) => ({ id: v.id, hook: v.d.hook_full || v.d.hook_line, views: v.d.views ?? 0 })), DUPLICATE_SIMILARITY);
   const leads = [...new Set(groups.values())].map((id) => vids.find((v) => v.id === id)!).filter((v) => (v.d.hook_full || v.d.hook_line || "").trim());
   const user = leads.map((v) => `${v.id}: ${(v.d.hook_full || v.d.hook_line).slice(0, 220)}`).join("\n");
 

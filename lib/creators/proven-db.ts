@@ -24,6 +24,8 @@ import {
   hookLineFrom,
   ideaInTest,
   formatGroups,
+  DUPLICATE_SIMILARITY,
+  FAMILY_SIMILARITY,
   normalViews,
   pickIdeaCreators,
   provenIdFor,
@@ -581,11 +583,13 @@ async function pickContext(db: Firestore, creator: CreatorProfile, date: YyyyMmD
   const forced = active
     .filter((v) => v.added_by === "founder_idea" && (v.idea_assignments ?? []).some((a) => a.creator_id === creator.id && a.date === date))
     .map((v) => v.id);
-  const formats = formatGroups(active.map((v) => ({ id: v.id, hook: v.hook_full || v.hook_line, views: v.views })));
+  const hooks = active.map((v) => ({ id: v.id, hook: v.hook_full || v.hook_line, views: v.views }));
+  const formats = formatGroups(hooks, DUPLICATE_SIMILARITY);
+  const families = formatGroups(hooks, FAMILY_SIMILARITY);
   const candidates = active
     // Hooks that claim the speaker's own results ("I fixed my hair loss") aren't given out.
     .filter((v) => !ideaInTest(v, nowIso) && !v.hook_first_person)
-    .map((v) => ({ id: v.id, format: formats.get(v.id), audience: v.audience, recent_wins: v.stats.recent_wins, views: v.views }));
+    .map((v) => ({ id: v.id, format: formats.get(v.id), family: families.get(v.id), audience: v.audience, recent_wins: v.stats.recent_wins, views: v.views }));
   const history: Record<string, YyyyMmDd[]> = {};
   for (const d of histSnap.docs) {
     const p = d.data() as DailyPicks;

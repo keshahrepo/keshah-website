@@ -276,8 +276,10 @@ export function fmtViews(n: number): string {
 
 export interface PickCandidate {
   id: string;
-  /** Near-identical videos share a format (formatGroups); one format per day, rotated as a whole. */
+  /** Re-uploads of the same video share a format (formatGroups at DUPLICATE_SIMILARITY): doing one counts for all. */
   format?: string;
+  /** Variations of one idea share a family (formatGroups at FAMILY_SIMILARITY), e.g. every pinch test: one per day. */
+  family?: string;
   audience?: Audience;
   recent_wins: number;
   views: number;
@@ -351,7 +353,7 @@ export function rankCandidates(input: PickInput): { id: string; week: number; fo
 export function selectDailyPicks(input: PickInput): string[] {
   const out: string[] = [];
   const taken = new Set(input.exclude ?? []);
-  const formatOf = new Map(input.candidates.map((c) => [c.id, c.format ?? c.id]));
+  const formatOf = new Map(input.candidates.map((c) => [c.id, c.family ?? c.format ?? c.id]));
   const usedFormats = new Set([...taken].map((id) => formatOf.get(id) ?? id));
   const add = (id: string, sameFormatOk = false) => {
     if (out.length >= input.count || taken.has(id)) return;
@@ -365,7 +367,7 @@ export function selectDailyPicks(input: PickInput): string[] {
   const ranked = rankCandidates(input);
   for (const r of ranked) if (r.week < MAX_PER_WEEK) add(r.id);
   for (const r of ranked) add(r.id);
-  // Only when there are fewer formats than slots: a second version of a format beats an empty slot.
+  // Only when there are fewer families than slots: a second one from a family beats an empty slot.
   for (const r of ranked) add(r.id, true);
   return out;
 }
@@ -380,7 +382,12 @@ function hookWords(h: string): Set<string> {
  * sharing at least half their words. Returns id -> format id (the group's
  * most viewed video). Videos without a hook are their own format.
  */
-export function formatGroups(videos: { id: string; hook: string; views: number }[], threshold = 0.5): Map<string, string> {
+/** Hooks sharing this much are the same video posted again. */
+export const DUPLICATE_SIMILARITY = 0.7;
+/** Hooks sharing this much are variations of one idea (every pinch test, every scalp-move test). */
+export const FAMILY_SIMILARITY = 0.5;
+
+export function formatGroups(videos: { id: string; hook: string; views: number }[], threshold = DUPLICATE_SIMILARITY): Map<string, string> {
   const words = videos.map((v) => hookWords(v.hook));
   const parent = videos.map((_, i) => i);
   const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
