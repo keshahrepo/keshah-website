@@ -1,13 +1,11 @@
-// Interview texts via HiBlue (DISABLED until the HiBlue API is wired up).
+// Interview texts via HiBlue (api.hiublue.com/api/v2, POST
+// /conversations/send-message, bearer auth).
 //
-// Turn on by setting both env vars in Vercel:
-//   HIUBLUE_API_KEY   HiBlue API key
-//   HIUBLUE_LINE      the sending line in E.164, e.g. +13473312820
-//
-// Until the HTTP call below is written, sendInterviewText always returns
-// { skipped }, so callers never mark a text as sent. Every text carries
-// kind "interview" so HiBlue paywall attribution can ignore these
-// conversations later.
+// On when HIUBLUE_API_KEY is set in Vercel. Texts go out through the
+// existing "Keshah Paywall Outreach" integration (it owns our only line,
+// (347) 331-2820); override with HIUBLUE_INTEGRATION_ID. Every message_id
+// starts with "interview_" and location_id is "keshah_interviews", so the
+// paywall webhook/attribution can tell these apart from paywall outreach.
 
 export type InterviewTextKind = "interview";
 
@@ -16,8 +14,11 @@ export type SendTextResult =
   | { skipped: string }
   | { error: string };
 
+const HIUBLUE_SEND_URL = "https://api.hiublue.com/api/v2/conversations/send-message";
+const DEFAULT_INTEGRATION_ID = "484ef85c-b57d-4144-b789-4908eef5dbe1"; // Keshah Paywall Outreach
+
 export function smsConfigured(): boolean {
-  return !!(process.env.HIUBLUE_API_KEY && process.env.HIUBLUE_LINE);
+  return !!process.env.HIUBLUE_API_KEY;
 }
 
 /** True only when the text actually went out. */
@@ -46,20 +47,34 @@ export function normalizePhone(raw: unknown): string | null {
 /** What the HiBlue send call will receive once it's implemented. */
 export type HiBlueSendRequest = {
   apiKey: string;
-  from: string; // HIUBLUE_LINE, E.164
+  integrationId: string;
   to: string; // E.164
   text: string;
   metadata: { kind: InterviewTextKind; ref?: string };
 };
 
-// TODO(hiblue): implement once the founder shares HiBlue's API docs.
-// Make the HTTP request, return { sent: true, id } on success (id = HiBlue's
-// message id if it returns one) and { error } on any failure. Pass
-// metadata.kind = "interview" in whatever field HiBlue offers for tags or
-// custom metadata, so paywall attribution can skip these threads.
-async function hiBlueSend(req: HiBlueSendRequest): Promise<SendTextResult> {
-  void req;
-  return { skipped: "HiBlue send not implemented yet" };
+async function hiBlueSend(req: HiBlueSendRequest, fetchImpl: typeof fetch = fetch): Promise<SendTextResult> {
+  const stamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
+  const ref = (req.metadata.ref ?? "x").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 60);
+  const messageId = `interview_${ref}_${stamp}_${Math.random().toString(36).slice(2, 6)}`;
+  const res = await fetchImpl(HIUBLUE_SEND_URL, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${req.apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      location_id: "keshah_interviews",
+      contact_id: ref,
+      phone: req.to,
+      message: req.text,
+      message_id: messageId,
+      integration_id: req.integrationId,
+    }),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    return { error: `HiBlue HTTP ${res.status}: ${body.slice(0, 200)}` };
+  }
+  return { sent: true, id: messageId };
 }
 
 export async function sendInterviewText(opts: {
@@ -74,7 +89,7 @@ export async function sendInterviewText(opts: {
   try {
     return await hiBlueSend({
       apiKey: process.env.HIUBLUE_API_KEY!,
-      from: process.env.HIUBLUE_LINE!,
+      integrationId: process.env.HIUBLUE_INTEGRATION_ID || DEFAULT_INTEGRATION_ID,
       to,
       text: opts.text,
       metadata: { kind: "interview", ...(opts.ref ? { ref: opts.ref } : {}) },
