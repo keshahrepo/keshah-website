@@ -3,12 +3,14 @@ import { requireAdmin } from "@/lib/creators/admin";
 import { CreatorDataError } from "@/lib/creators/db";
 import { updateProven, type ProvenAction } from "@/lib/creators/proven-db";
 import { mirrorProvenCovers, needsCover } from "@/lib/creators/proven-media";
+import { generateProvenBeats, needsBeats } from "@/lib/creators/proven-beats";
 
 export const dynamic = "force-dynamic";
 
-const ACTIONS = new Set<ProvenAction>(["approve", "dismiss", "pause", "retire", "restore", "keep", "edit_hook", "set_audience", "edit_idea"]);
+const ACTIONS = new Set<ProvenAction>(["approve", "dismiss", "pause", "retire", "restore", "keep", "edit_hook", "set_audience", "edit_idea", "edit_points"]);
 
 // PATCH { action, hook_line?, audience?, talking_points?, reference_url? }
+// edit_points: a proven video's beats edited by hand (marked "admin", never regenerated).
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const denied = await requireAdmin(req);
   if (denied) return denied;
@@ -25,6 +27,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // Approved / restored: copy its cover to our storage after responding (cron retries failures).
     if (needsCover(video)) {
       after(() => mirrorProvenCovers({ ids: [id], limit: 1 }).catch((e) => console.error("proven cover mirror error:", e)));
+    }
+    // ...and write its talking points from the transcript (cron retries failures).
+    if (needsBeats(video)) {
+      after(() => generateProvenBeats({ ids: [id], limit: 1 }).catch((e) => console.error("proven beats error:", e)));
     }
     return NextResponse.json({ video });
   } catch (e) {

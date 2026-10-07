@@ -106,6 +106,8 @@ export function toProven(d: DocumentData): ProvenVideo {
     stats: { ...emptyStats(), ...(d.stats ?? {}) },
     ...(d.idea_text ? { idea_text: d.idea_text } : {}),
     ...(Array.isArray(d.talking_points) ? { talking_points: d.talking_points.map(String) } : {}),
+    ...(d.talking_points_source === "auto" || d.talking_points_source === "admin" ? { talking_points_source: d.talking_points_source } : {}),
+    ...(typeof d.cta_line === "string" && d.cta_line ? { cta_line: d.cta_line } : {}),
     ...(d.reference_url ? { reference_url: d.reference_url } : {}),
     ...(Array.isArray(d.idea_assignments) ? { idea_assignments: d.idea_assignments } : {}),
     ...(d.source_creator_id ? { source_creator_id: d.source_creator_id } : {}),
@@ -336,7 +338,7 @@ export async function findProvenVideos(opts: {
 
 // ================================================================ admin actions
 
-export type ProvenAction = "approve" | "dismiss" | "pause" | "retire" | "restore" | "keep" | "edit_hook" | "set_audience" | "edit_idea";
+export type ProvenAction = "approve" | "dismiss" | "pause" | "retire" | "restore" | "keep" | "edit_hook" | "set_audience" | "edit_idea" | "edit_points";
 
 export async function updateProven(
   id: string,
@@ -391,6 +393,13 @@ export async function updateProven(
       if (cur.added_by !== "founder_idea") throw new CreatorDataError("Only ideas have talking points.");
       patch.talking_points = cleanPoints(body.talking_points);
       if (body.reference_url !== undefined) patch.reference_url = cleanUrl(body.reference_url);
+      break;
+    }
+    case "edit_points": {
+      // A proven video's beats (proven-beats.ts), edited by hand: never regenerated.
+      if (cur.added_by === "founder_idea") throw new CreatorDataError("Edit an idea's talking points with edit_idea.");
+      patch.talking_points = cleanPoints(body.talking_points);
+      patch.talking_points_source = "admin";
       break;
     }
     default:
@@ -485,6 +494,8 @@ export interface PublicProven {
   hook_line: string;
   transcript: string;
   talking_points: string[];
+  /** The original's own pinned-video ending, cleaned up ("" = the app picks one from its library). */
+  cta_line: string;
   reference_url: string | null;
   /** Cover of the original, null when we don't have one (the app shows a placeholder). */
   thumbnail_url: string | null;
@@ -517,6 +528,7 @@ function publicProven(id: string, v: ProvenVideo): PublicProven {
     hook_line: v.hook_line,
     transcript: v.transcript,
     talking_points: v.talking_points ?? [],
+    cta_line: v.cta_line ?? "",
     reference_url: v.reference_url || null,
     thumbnail_url: v.media?.thumbnail_url || v.thumbnail_url || null,
   };

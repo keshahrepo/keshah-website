@@ -107,6 +107,12 @@ export interface ProvenVideo {
   thumbnail_url?: string;
   /** Our own permanent copy of the cover (proven-media.ts). Wins over thumbnail_url. */
   media?: ProvenMedia;
+  /** Who wrote talking_points on a proven video: "auto" (proven-beats.ts) or "admin" (never overwritten). */
+  talking_points_source?: "auto" | "admin";
+  /** The original's pinned-video ending, cleaned up (proven-beats.ts). "" or missing = none. */
+  cta_line?: string;
+  /** Beat generation bookkeeping (proven-beats.ts). */
+  beats?: { generated_at?: string; model?: string; attempts?: number; last_error?: string; last_attempt_at?: string };
 }
 
 /** ProvenVideos/{id}.media: the mirrored cover, or why mirroring keeps failing. */

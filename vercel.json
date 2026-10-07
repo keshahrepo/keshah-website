@@ -67,6 +67,10 @@
     {
       "path": "/api/cron/proven-covers",
       "schedule": "20 5 * * *"
+    },
+    {
+      "path": "/api/cron/proven-beats",
+      "schedule": "40 5 * * *"
     }
   ]
 }
