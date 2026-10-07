@@ -195,5 +195,6 @@ test("parseTitleLines reads id | name lines", () => {
 test("cleanHeader: 3-9 words, no first person", () => {
   assert.equal(cleanHeader("If you're losing hair, try this."), "If you're losing hair, try this");
   assert.equal(cleanHeader("Pinch"), "");
+  assert.equal(cleanHeader("Using minoxidil? Watch this before you put it on again tonight"), "Using minoxidil? Watch this before you put it on again tonight");
   assert.equal(cleanHeader("I fixed my hair with this one trick"), "");
 });

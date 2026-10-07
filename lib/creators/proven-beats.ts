@@ -42,6 +42,8 @@ export const BEATS_MIN_TRANSCRIPT = 80;
 
 export interface ProvenBeatsMeta {
   generated_at?: string;
+  /** Runs that produced no usable header. */
+  header_attempts?: number;
   model?: string;
   attempts?: number;
   last_error?: string;
@@ -60,7 +62,9 @@ type BeatsFields = Pick<ProvenVideo, "status" | "added_by" | "transcript" | "tal
 export function needsBeats(v: BeatsFields): boolean {
   if (v.status !== "active" || v.added_by === "founder_idea") return false;
   if ((v.transcript ?? "").trim().length < BEATS_MIN_TRANSCRIPT) return false;
-  if (v.talking_points?.length && v.short_title && v.hook_full && typeof v.hook_first_person === "boolean" && v.header_text) return false;
+  // A header that keeps breaking the rules is given up on after 2 tries, so the queue moves on.
+  const headerDone = !!v.header_text || (v.beats?.header_attempts ?? 0) >= 2;
+  if (v.talking_points?.length && v.short_title && v.hook_full && typeof v.hook_first_person === "boolean" && headerDone) return false;
   if (isLegacy(v.beats?.last_error)) return true;
   return (v.beats?.attempts ?? 0) < BEATS_MAX_ATTEMPTS;
 }
@@ -181,8 +185,9 @@ export function cleanHook(raw: unknown, transcript: string): string {
 export function cleanHeader(raw: unknown): string {
   const t = String(raw ?? "").replace(DASHES, ", ").replace(/["“”#]/g, "").replace(/\s+/g, " ").replace(/[.]+$/, "").trim();
   const n = t.split(" ").filter(Boolean).length;
-  if (n < 3 || n > 9 || t.length > 60) return "";
-  if (FIRST_PERSON.test(t) || BANNED.test(t)) return "";
+  if (n < 2 || n > 12 || t.length > 80) return "";
+  // Claims about the speaker ("I fixed my hair") and banned words; "we" / "us" alone are fine.
+  if (/\b(i|i'm|i've|my|me|mine)\b/i.test(t) || BANNED.test(t)) return "";
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
@@ -332,8 +337,14 @@ export async function generateProvenBeats(opts: {
             if (!cur.data()?.hook_full && r.hook) patch.hook_full = r.hook;
             if (typeof cur.data()?.hook_first_person !== "boolean") patch.hook_first_person = r.hook_first_person;
             if (!cur.data()?.header_text && r.header) patch.header_text = r.header;
+            const prevBeats = (cur.data()?.beats ?? {}) as ProvenBeatsMeta;
+            const headerMissed = !cur.data()?.header_text && !r.header;
+            if (!Object.keys(patch).length && !headerMissed) return null;
+            tx.update(col.doc(x.id), {
+              ...patch,
+              beats: { generated_at: at, model: BEATS_MODEL, ...(headerMissed ? { header_attempts: (prevBeats.header_attempts ?? 0) + 1 } : {}) },
+            });
             if (!Object.keys(patch).length) return null;
-            tx.update(col.doc(x.id), { ...patch, beats: { generated_at: at, model: BEATS_MODEL } });
             return { points: !hasPoints };
           });
           if (wrote) {
