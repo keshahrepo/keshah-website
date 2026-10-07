@@ -191,14 +191,14 @@ test("formatShortTime: invitee zone as CT/PT, else ET", () => {
 
 test("oneHourText: intro, time, check-in ask, no link, no em dashes", () => {
   const t = oneHourText("Sam", "5:00 PM CT");
-  assert.equal(t, "Hi Sam, this is McKenzie, creator coordinator at KESHAH. Your group interview starts in 1 hour, at 5:00 PM CT. Reply with your full name to check in.");
+  assert.equal(t, "Hi Sam, this is McKenzie, creator coordinator at KESHAH.\n\nYour group interview starts in 1 hour, at 5:00 PM CT.\n\nReply with your full name to check in.");
   assert.ok(!/https?:/.test(t) && !t.includes("\u2014"));
 });
 
 test("startingNowText drops McKenzie's intro only after the 1h text", () => {
   const link = "https://zoom.us/j/1";
-  assert.equal(startingNowText("Sam", link, true), `Hi Sam, we're waiting for you to start the group interview. Here's the link: ${link}`);
-  assert.match(startingNowText("Sam", link), /^Hi Sam, this is McKenzie, creator coordinator at KESHAH\. We're waiting/);
+  assert.equal(startingNowText("Sam", link, true), `Hi Sam,\n\nWe're waiting for you to start the group interview.\n\nHere's the link:\n${link}`);
+  assert.match(startingNowText("Sam", link), /^Hi Sam, this is McKenzie, creator coordinator at KESHAH\.\n\nWe're waiting/);
   assert.match(startingNowText("Sam", link, false), /this is McKenzie/);
 });
 
@@ -210,7 +210,7 @@ test("got1hText only counts the 1h text for the current booking", () => {
 });
 
 test("checkInReplyText has the join link and time", () => {
-  assert.equal(checkInReplyText("Sam", "5:00 PM CT", "https://zoom.us/j/1"), "Thanks Sam, you're checked in. Here's the link for 5:00 PM CT: https://zoom.us/j/1");
+  assert.equal(checkInReplyText("Sam", "5:00 PM CT", "https://zoom.us/j/1"), "Thanks Sam, you're checked in.\n\nHere's the link for 5:00 PM CT:\nhttps://zoom.us/j/1");
 });
 
 test("checkInDue: only after the 1h text, inside the window, before the start, once per booking", () => {

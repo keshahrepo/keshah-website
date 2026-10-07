@@ -349,7 +349,7 @@ test("check-in: a reply to the 1h text checks in once and sends the link once", 
   assert.ok(doc.interview_checkin_text_sent_at);
   assert.equal(sends.length, 1);
   assert.equal(sends[0].kind, "checkin_reply");
-  assert.equal(sends[0].text, "Thanks Jamie, you're checked in. Here's the link for 1:00 PM CT: https://zoom.us/j/1");
+  assert.equal(sends[0].text, "Thanks Jamie, you're checked in.\n\nHere's the link for 1:00 PM CT:\nhttps://zoom.us/j/1");
 
   // A second reply doesn't check in again or resend.
   const again = parseIncoming(nested("e2", START - 45 * 60_000, APPLICANT, "hello?"))!;

@@ -188,21 +188,24 @@ export function reminderEmail(kind: ReminderKind, i: ReminderInput): { subject: 
  * herself, so the intro is dropped.
  */
 export function startingNowText(first: string, joinUrl?: string | null, alreadyIntroduced = false): string {
-  const hi = alreadyIntroduced
-    ? `Hi ${first || "there"}, we're waiting for you to start the group interview.`
-    : `Hi ${first || "there"}, this is McKenzie, creator coordinator at KESHAH. We're waiting for you to start the group interview.`;
-  return hi + (joinUrl ? ` Here's the link: ${joinUrl}` : " The link to join is in your Calendly email.");
+  const name = first || "there";
+  const hi = alreadyIntroduced ? `Hi ${name},` : `Hi ${name}, this is McKenzie, creator coordinator at KESHAH.`;
+  return [
+    hi,
+    "We're waiting for you to start the group interview.",
+    joinUrl ? `Here's the link:\n${joinUrl}` : "The link to join is in your Calendly email.",
+  ].join("\n\n");
 }
 
 /** 1 hour before. No link: iMessage disables links from unknown senders until they reply. */
 export function oneHourText(first: string, time: string): string {
-  return `Hi ${first || "there"}, this is McKenzie, creator coordinator at KESHAH. Your group interview starts in 1 hour, at ${time}. Reply with your full name to check in.`;
+  return `Hi ${first || "there"}, this is McKenzie, creator coordinator at KESHAH.\n\nYour group interview starts in 1 hour, at ${time}.\n\nReply with your full name to check in.`;
 }
 
 export function checkInReplyText(first: string, time: string, joinUrl?: string | null): string {
   return joinUrl
-    ? `Thanks ${first || "there"}, you're checked in. Here's the link for ${time}: ${joinUrl}`
-    : `Thanks ${first || "there"}, you're checked in. The link for ${time} is in your Calendly email.`;
+    ? `Thanks ${first || "there"}, you're checked in.\n\nHere's the link for ${time}:\n${joinUrl}`
+    : `Thanks ${first || "there"}, you're checked in.\n\nThe link for ${time} is in your Calendly email.`;
 }
 
 /** Did the 1h text go out for THIS booking (not one before a reschedule)? */
@@ -362,10 +365,12 @@ export function noShowText(first: string, link: string, deadline: string, alread
   // Worded for both cases our signal can't tell apart: missed the call, or
   // joined but didn't get to film. Skip the intro if we texted them at the start.
   const name = first || "there";
-  const opener = alreadyIntroduced
-    ? `Hi ${name}, if you couldn't make the group interview or didn't get to film your video, you can still do it on your phone.`
-    : `Hi ${name}, this is McKenzie, creator coordinator at KESHAH. If you couldn't make the group interview or didn't get to film your video, you can still do it on your phone.`;
-  return `${opener} It's due by ${deadline}. Applications without a test video are automatically denied.\n\n${link}`;
+  const hi = alreadyIntroduced ? `Hi ${name},` : `Hi ${name}, this is McKenzie, creator coordinator at KESHAH.`;
+  return [
+    hi,
+    `If you couldn't make the group interview or didn't get to film your video, you can still do it on your phone:\n${link}`,
+    `It's due by ${deadline}. Applications without a test video are automatically denied.`,
+  ].join("\n\n");
 }
 
 export function firstNameOf(app: Record<string, unknown>): string {
