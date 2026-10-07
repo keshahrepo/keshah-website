@@ -344,24 +344,14 @@ export async function generateProvenBeats(opts: {
 
 export const TITLES_SYSTEM = `You name short hair loss videos for a list in an app. Each line you get is one video format: its id and its hook.
 
-Return names by calling save_titles with one entry per id.
+Answer with one line per id, nothing else, in this exact form:
+<id> | <name>
 
 Rules for each name:
 - 2 to 4 words, sentence case, no punctuation, no first person, never "routine", no brand names.
 - Every name must be different from every other name. Make each one say what is specific about that hook, so someone scanning the list can tell them apart. Bad: "Pinch test" for five different videos. Good: "Pinch top vs sides", "Pinch where it's thin", "Fist press check", "Scalp won't move", "Crown pinch test".
 - Plain words a 5-year-old knows.`;
 
-const TITLES_TOOL = {
-  name: "save_titles",
-  description: "Save one name per video format.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      titles: { type: "array", items: { type: "object", properties: { id: { type: "string" }, title: { type: "string" } }, required: ["id", "title"] } },
-    },
-    required: ["titles"],
-  },
-};
 
 export interface RetitleResult {
   dry: boolean;
@@ -395,15 +385,13 @@ export async function retitleFormats(opts: { db?: Firestore; dry?: boolean; gene
     const client = new Anthropic({ apiKey });
     const resp = await client.messages.create({
       model: BEATS_MODEL,
-      max_tokens: 6000,
+      max_tokens: 8000,
       system: TITLES_SYSTEM,
-      tools: [TITLES_TOOL],
-      tool_choice: { type: "auto" },
-      messages: [{ role: "user", content: `${user}\n\nAnswer by calling ${TITLES_TOOL.name}.` }],
+      messages: [{ role: "user", content: user }],
     });
-    const call = resp.content.find((b) => b.type === "tool_use");
-    if (!call || call.type !== "tool_use") throw new Error(`no titles (stop: ${resp.stop_reason})`);
-    raw = call.input;
+    const text = resp.content.map((b) => (b.type === "text" ? b.text : "")).join("\n");
+    raw = parseTitleLines(text);
+    if (!(raw as { titles: unknown[] }).titles.length) throw new Error(`no titles (stop: ${resp.stop_reason}): ${text.slice(0, 200)}`);
   }
   // The tool input sometimes arrives with the array as a JSON string, or as an id -> name map.
   let t: unknown = (raw as { titles?: unknown })?.titles ?? raw;
@@ -450,4 +438,14 @@ export async function retitleFormats(opts: { db?: Firestore; dry?: boolean; gene
   }
   await batch.commit();
   return { ...out, titles: byFormat };
+}
+
+/** "<id> | <name>" lines -> { titles: [{ id, title }] }. */
+export function parseTitleLines(text: string): { titles: { id: string; title: string }[] } {
+  const titles: { id: string; title: string }[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const m = line.match(/^\s*[-*]?\s*([A-Za-z0-9_-]+)\s*[|:]\s*(.+?)\s*$/);
+    if (m) titles.push({ id: m[1], title: m[2] });
+  }
+  return { titles };
 }

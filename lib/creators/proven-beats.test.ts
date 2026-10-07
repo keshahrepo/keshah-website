@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Firestore } from "firebase-admin/firestore";
-import { BEATS_MAX_ATTEMPTS, beatProblem, beatsFor, cleanCta, cleanHook, retitleFormats, cleanTitle, generateProvenBeats, needsBeats, parseBeats, tidyLine } from "./proven-beats";
+import { BEATS_MAX_ATTEMPTS, beatProblem, beatsFor, cleanCta, cleanHook, parseTitleLines, retitleFormats, cleanTitle, generateProvenBeats, needsBeats, parseBeats, tidyLine } from "./proven-beats";
 
 const TRANSCRIPT =
   "Pinch the top of your scalp right now. Now pinch the sides. The top feels way tighter, right? That's restricting blood flow to your follicles. I fixed my own hair this way. Check my pinned video for the full routine.";
@@ -181,4 +181,13 @@ test("retitleFormats: one name per format, duplicates dropped, written to every 
   const r = await retitleFormats({ db, generate: async () => ({ titles: [{ id: "a", title: "Pinch top vs sides" }, { id: "c", title: "Pinch top vs sides" }] }) });
   assert.equal(r.formats, 2);
   assert.deepEqual(writes, { a: "Pinch top vs sides", b: "Pinch top vs sides" });
+});
+
+test("parseTitleLines reads id | name lines", () => {
+  assert.deepEqual(parseTitleLines("tiktok_1 | Pinch top vs sides\n- instagram_DdZ: Scalp won't move\nnoise"), {
+    titles: [
+      { id: "tiktok_1", title: "Pinch top vs sides" },
+      { id: "instagram_DdZ", title: "Scalp won't move" },
+    ],
+  });
 });
