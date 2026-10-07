@@ -865,10 +865,14 @@ export async function runProvenDaily(opts: {
             caption: p.caption ?? "",
             transcript: "",
             hook_line: hookLineFrom("", p.caption ?? ""),
-            status: "suggested",
+            // 100K+ goes straight in: it's only handed out once it has a script (talking points)
+            // and a hook that isn't a first-person claim, so nothing unusable reaches creators.
+            // Smaller "3x normal" wins still wait for the founder.
+            status: p.views >= PROVEN_MIN_VIEWS ? "active" : "suggested",
+            ...(p.views >= PROVEN_MIN_VIEWS ? { auto_approved: true } : {}),
             added_by: "auto",
             created_at: nowIso,
-            approved_at: null,
+            approved_at: p.views >= PROVEN_MIN_VIEWS ? nowIso : null,
             remake_count: 0,
             last_used_at: null,
             stats: emptyStats(),

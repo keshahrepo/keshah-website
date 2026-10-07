@@ -277,11 +277,12 @@ test("selectDailyPicks: one per family a day; a re-upload counts as done", () =>
     { id: "m1", format: "m", family: "m", recent_wins: 0, views: 500 },
     { id: "e1", format: "e", family: "e", recent_wins: 0, views: 100 },
   ];
-  const day1 = selectDailyPicks({ candidates, history: {}, date: "2026-10-07", count: 2, creatorId: "c" });
-  assert.deepEqual(day1, ["p1", "m1"]);
-  // p was used yesterday through p1, so p2 waits behind the unused format e.
-  const day2 = selectDailyPicks({ candidates, history: { p1: ["2026-10-07"], m1: ["2026-10-07"] }, date: "2026-10-08", count: 2, creatorId: "c" });
-  assert.deepEqual(day2, ["e1", "p2"]);
+  const fam = (id: string) => candidates.find((c) => c.id === id)!.family;
+  const day1 = selectDailyPicks({ candidates, history: {}, date: "2026-10-07", count: 3, creatorId: "c" });
+  assert.equal(new Set(day1.map(fam)).size, 3, "three different families");
+  // p1 was given yesterday, so its re-upload p2 is behind the unused format e.
+  const day2 = selectDailyPicks({ candidates, history: { p1: ["2026-10-07"], m1: ["2026-10-07"] }, date: "2026-10-08", count: 1, creatorId: "c" });
+  assert.deepEqual(day2, ["e1"]);
 });
 
 test("selectDailyPicks: a pinch variation can come the next day, never two in a day", () => {
@@ -290,7 +291,17 @@ test("selectDailyPicks: a pinch variation can come the next day, never two in a 
     { id: "hairline", format: "hairline", family: "pinch", recent_wins: 0, views: 800 },
     { id: "m1", format: "m1", family: "m", recent_wins: 0, views: 100 },
   ];
-  assert.deepEqual(selectDailyPicks({ candidates, history: {}, date: "2026-10-07", count: 2, creatorId: "c" }), ["top", "m1"]);
-  const next = selectDailyPicks({ candidates, history: { top: ["2026-10-07"], m1: ["2026-10-07"] }, date: "2026-10-08", count: 2, creatorId: "c" });
-  assert.equal(next[0], "hairline");
+  const day1 = selectDailyPicks({ candidates, history: {}, date: "2026-10-07", count: 2, creatorId: "c" });
+  assert.equal(day1.filter((x) => x === "top" || x === "hairline").length, 1);
+  const pinch = day1.find((x) => x !== "m1")!;
+  const other = pinch === "top" ? "hairline" : "top";
+  const next = selectDailyPicks({ candidates, history: { [pinch]: ["2026-10-07"], m1: ["2026-10-07"] }, date: "2026-10-08", count: 1, creatorId: "c" });
+  assert.deepEqual(next, [other]);
+});
+
+test("rankCandidates: new creators get different videos, big ones still favoured", () => {
+  const candidates = Array.from({ length: 40 }, (_, i) => ({ id: `v${i}`, recent_wins: 0, views: i < 5 ? 2_000_000 : 120_000 }));
+  const first = (creatorId: string) => selectDailyPicks({ candidates, history: {}, date: "2026-10-08", count: 4, creatorId }).join(",");
+  const days = new Set(["c1", "c2", "c3", "c4", "c5", "c6"].map(first));
+  assert.ok(days.size >= 5, `creators should mostly differ, got ${days.size} distinct sets`);
 });

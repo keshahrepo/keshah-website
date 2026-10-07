@@ -103,6 +103,8 @@ export interface ProvenVideo {
   views_history?: { at: string; views: number }[];
   tired?: TiredCheck & { checked_at: string; kept_at?: string | null };
   hook_edited?: boolean;
+  /** Came in at 100K+ from the daily scan and went straight to active. */
+  auto_approved?: boolean;
   /** Cover image of the original (signed CDN URL; refreshed by the seed / daily job, can expire). */
   thumbnail_url?: string;
   /** Our own permanent copy of the cover (proven-media.ts). Wins over thumbnail_url. */
@@ -314,9 +316,18 @@ function spread(s: string): number {
 }
 
 /**
+ * Weighted random order key (lower = earlier): -ln(u) / weight, with u a stable
+ * per-creator-per-day hash. Weight grows with views and recent wins.
+ */
+export function luckKey(seed: string, c: Pick<PickCandidate, "views" | "recent_wins">): number {
+  const u = (spread(seed) + 1) / 4294967297;
+  const weight = Math.log10(Math.max(c.views, 10)) + 2 * Math.max(0, c.recent_wins);
+  return -Math.log(u) / weight;
+}
+
+/**
  * Candidates in pick order: least recently used by this creator first (never
- * used = oldest), then recent winners, then most views, then a per-creator
- * per-day shuffle. Each entry carries this week's use count.
+ * used = oldest), then a per-creator per-day weighted shuffle (luckKey). Each entry carries this week's use count.
  */
 export function rankCandidates(input: PickInput): { id: string; week: number; format: string }[] {
   const weekStart = addDaysTo(input.date, -6);
@@ -335,13 +346,14 @@ export function rankCandidates(input: PickInput): { id: string; week: number; fo
       const last = dates.reduce((m, d) => (d > m ? d : m), "");
       return { c, last, flast: formatLast.get(fmt(c)) ?? "", week: dates.filter((d) => d >= weekStart).length };
     })
+    .map((x) => ({ ...x, luck: luckKey(`${input.creatorId}|${input.date}|${x.c.id}`, x.c) }))
     .sort(
       (a, b) =>
         a.flast.localeCompare(b.flast) ||
         a.last.localeCompare(b.last) ||
-        b.c.recent_wins - a.c.recent_wins ||
-        b.c.views - a.c.views ||
-        spread(`${input.creatorId}|${input.date}|${a.c.id}`) - spread(`${input.creatorId}|${input.date}|${b.c.id}`),
+        // Among equally fresh videos: a weighted shuffle per creator per day, so creators
+        // don't all get the same videos, while big and recently winning ones still come up more.
+        a.luck - b.luck,
     )
     .map((x) => ({ id: x.c.id, week: x.week, format: fmt(x.c) }));
 }
