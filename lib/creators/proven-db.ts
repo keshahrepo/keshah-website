@@ -115,6 +115,7 @@ export function toProven(d: DocumentData): ProvenVideo {
     ...(d.tired ? { tired: d.tired } : {}),
     ...(d.hook_edited ? { hook_edited: true } : {}),
     ...(typeof d.thumbnail_url === "string" && d.thumbnail_url ? { thumbnail_url: d.thumbnail_url } : {}),
+    ...(d.media && typeof d.media === "object" ? { media: d.media } : {}),
   };
 }
 
@@ -517,7 +518,7 @@ function publicProven(id: string, v: ProvenVideo): PublicProven {
     transcript: v.transcript,
     talking_points: v.talking_points ?? [],
     reference_url: v.reference_url || null,
-    thumbnail_url: v.thumbnail_url || null,
+    thumbnail_url: v.media?.thumbnail_url || v.thumbnail_url || null,
   };
 }
 
@@ -595,7 +596,7 @@ function payload(
 async function fillThumbnails(db: Firestore, ids: string[], byId: Map<string, ProvenVideo>): Promise<void> {
   const need = ids
     .map((id) => ({ id, v: byId.get(id) }))
-    .filter((x): x is { id: string; v: ProvenVideo } => !!x.v && !x.v.thumbnail_url && !!x.v.source_creator_id && !!x.v.source_url && !!x.v.platform);
+    .filter((x): x is { id: string; v: ProvenVideo } => !!x.v && !x.v.media?.thumbnail_url && !x.v.thumbnail_url && !!x.v.source_creator_id && !!x.v.source_url && !!x.v.platform);
   if (!need.length) return;
   try {
     const refs = need.map(({ v }) => {

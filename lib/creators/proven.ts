@@ -105,6 +105,18 @@ export interface ProvenVideo {
   hook_edited?: boolean;
   /** Cover image of the original (signed CDN URL; refreshed by the seed / daily job, can expire). */
   thumbnail_url?: string;
+  /** Our own permanent copy of the cover (proven-media.ts). Wins over thumbnail_url. */
+  media?: ProvenMedia;
+}
+
+/** ProvenVideos/{id}.media: the mirrored cover, or why mirroring keeps failing. */
+export interface ProvenMedia {
+  /** Firebase Storage download-token URL (never expires). */
+  thumbnail_url?: string;
+  mirrored_at?: string;
+  attempts?: number;
+  last_error?: string;
+  last_attempt_at?: string;
 }
 
 export interface ProvenRemake {

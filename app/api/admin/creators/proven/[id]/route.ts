@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { requireAdmin } from "@/lib/creators/admin";
 import { CreatorDataError } from "@/lib/creators/db";
 import { updateProven, type ProvenAction } from "@/lib/creators/proven-db";
+import { mirrorProvenCovers, needsCover } from "@/lib/creators/proven-media";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       talking_points: b.talking_points,
       reference_url: typeof b.reference_url === "string" ? b.reference_url : undefined,
     });
+    // Approved / restored: copy its cover to our storage after responding (cron retries failures).
+    if (needsCover(video)) {
+      after(() => mirrorProvenCovers({ ids: [id], limit: 1 }).catch((e) => console.error("proven cover mirror error:", e)));
+    }
     return NextResponse.json({ video });
   } catch (e) {
     if (e instanceof CreatorDataError) return NextResponse.json({ error: e.message }, { status: e.status });
