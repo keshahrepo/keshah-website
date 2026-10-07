@@ -94,6 +94,23 @@ export function firestoreInboxStore(db: Firestore): InboxStore {
         updated_ms: tsMs(d.get("last_updated_at")) || tsMs(d.get("created_at")),
       }));
     },
+    async isPaywallConversation(phone, receivedMs) {
+      const before = Timestamp.fromMillis(receivedMs);
+      const paywall = await db.collection("_HiBlueOutreachQueue").where("phone", "==", phone).get();
+      let paywallMs = 0;
+      for (const d of paywall.docs) {
+        const t = tsMs(d.get("sent_at"));
+        if (t && t <= receivedMs && t > paywallMs) paywallMs = t;
+      }
+      if (!paywallMs) return false;
+      const ours = await db.collection(APPLICANT_MESSAGES).where("phone", "==", phone).where("direction", "==", "out").get();
+      let oursMs = 0;
+      for (const d of ours.docs) {
+        const t = tsMs(d.get("sent_at") ?? d.get("at"));
+        if (t && t <= before.toMillis() && t > oursMs) oursMs = t;
+      }
+      return paywallMs > oursMs;
+    },
     async createMessageIfAbsent(id, rec) {
       const { received_ms, ...rest } = rec;
       const at = Timestamp.fromMillis(received_ms);

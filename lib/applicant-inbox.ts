@@ -166,6 +166,12 @@ export type InboundRecord = {
 };
 
 export interface InboxStore {
+  /**
+   * True when this reply belongs to a paywall-outreach conversation rather
+   * than ours: the paywall outreach texted this phone more recently than we
+   * did (or we never texted it). Optional; when missing, every match counts.
+   */
+  isPaywallConversation?(phone: string, receivedMs: number): Promise<boolean>;
   getCursor(): Promise<InboxCursor | null>;
   setCursor(c: InboxCursor): Promise<void>;
   /** Events with received_at >= sinceMs, oldest first. */
@@ -235,7 +241,9 @@ export async function syncApplicantInbox(
         res.incoming++;
         index ??= buildPhoneIndex(await store.listApplications());
         const app = index.get(m.phone);
-        if (app) {
+        if (app && store.isPaywallConversation && (await store.isPaywallConversation(m.phone, m.received_ms))) {
+          // Replying to a paywall text (applicant is also an app user): not ours.
+        } else if (app) {
           res.matched++;
           const id = inboundDocId(m);
           const created = await store.createMessageIfAbsent(id, {
