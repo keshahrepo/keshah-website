@@ -418,3 +418,10 @@ test("credit estimate: creators x 4 shallow x 2 + deep pages; alert under 7 days
   // one creator at 5 videos/day with no deep run yet: 8 + 31 = 39/day
   assert.equal(creditEstimate([DEEP_PAGES_GUESS], 1000).daily_credits, 39);
 });
+
+test("bonusAction: bonus_start_date lets videos from before start_date earn", () => {
+  const post = { platform: "tiktok", url: "https://www.tiktok.com/@h/video/1", post_id: "1", posted_at: "2026-09-20T12:00:00Z", local_date: "2026-09-20", views: 150000, pinned: false, crossed_100k_at: "2026-09-25T12:00:00Z", crossed_1m_at: null } as never;
+  const ctx = { startDate: "2026-10-01", timezone: "UTC", nowIso: "2026-10-07T00:00:00Z" };
+  assert.equal(bonusAction(post, [], ctx).op, "none");
+  assert.equal(bonusAction(post, [], { ...ctx, bonusStartDate: "2026-09-01" }).op, "create");
+});

@@ -226,10 +226,13 @@ export type BonusAction =
 export function bonusAction(
   post: CreatorPost,
   claims: ({ id: string } & BonusClaim)[],
-  ctx: { startDate: YyyyMmDd; timezone: string; nowIso: string },
+  ctx: { startDate: YyyyMmDd; timezone: string; nowIso: string; bonusStartDate?: YyyyMmDd },
 ): BonusAction {
   if (!isYyyyMmDd(ctx.startDate)) return { op: "none", reason: "not started" };
-  if (post.local_date < ctx.startDate) return { op: "none", reason: "posted before start_date" };
+  // A creator who worked before pay started in the system (Isai: September) can have
+  // an earlier bonus_start_date, so those videos still earn bonuses.
+  const from = ctx.bonusStartDate && isYyyyMmDd(ctx.bonusStartDate) && ctx.bonusStartDate < ctx.startDate ? ctx.bonusStartDate : ctx.startDate;
+  if (post.local_date < from) return { op: "none", reason: "posted before start_date" };
   if (!post.crossed_100k_at) return { op: "none", reason: "under 100K" };
   const within = (iso: string | null) => {
     if (!iso) return null;
@@ -462,7 +465,7 @@ export async function syncCreatorPosts(creatorOrId: string | CreatorProfile, dep
     const claimsSnap = await ref.collection("bonus_claims").get();
     const claims = claimsSnap.docs.map((d) => ({ ...(d.data() as BonusClaim), id: d.id }));
     for (const rec of cands) {
-      const a = bonusAction(rec, claims, { startDate, timezone: tz, nowIso });
+      const a = bonusAction(rec, claims, { startDate, timezone: tz, nowIso, bonusStartDate: creatorRaw.bonus_start_date });
       if (a.op === "create") {
         // create() fails if the doc appeared meanwhile (concurrent sync): idempotent.
         try {

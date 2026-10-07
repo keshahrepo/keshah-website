@@ -159,6 +159,8 @@ export interface CreatorPayFields {
   /** IANA zone, e.g. "America/Chicago". */
   timezone: string;
   start_date: YyyyMmDd;
+  /** Videos posted from this date earn bonuses, when it's before start_date (work done before pay started in the system). */
+  bonus_start_date?: YyyyMmDd;
   /** Completed months credited before start_date (default 0). */
   starting_completed_months: number;
   /** e.g. ["Isai TikTok", "Isai Insta"]. */

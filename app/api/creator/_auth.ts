@@ -90,6 +90,8 @@ export function publicCreator(c: CreatorProfile) {
     instagram_handle: c.instagram_handle,
     timezone: c.timezone,
     start_date: c.start_date,
+    // Work before pay started in the system (Isai: September): the app's months and Videos start here.
+    history_start_date: c.bonus_start_date && c.bonus_start_date < (c.start_date || "9999") ? c.bonus_start_date : c.start_date,
     tracking_url: c.tracking_url,
     format_creator: c.format_creator,
   };
