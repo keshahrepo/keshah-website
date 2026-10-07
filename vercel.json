@@ -42,7 +42,7 @@
     },
     {
       "path": "/api/interview/reminders",
-      "schedule": "*/5 * * * *"
+      "schedule": "* * * * *"
     },
     {
       "path": "/api/cron/creator-posts",

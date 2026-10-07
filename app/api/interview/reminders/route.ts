@@ -1,7 +1,7 @@
-// Cron (every 5 min, see vercel.json): pre-interview reminders for
+// Cron (every minute, see vercel.json): pre-interview reminders for
 // applicants with a Calendly booking coming up.
 //
-//   starting now (-2 to +6 min)        text only: "we're waiting for you" + join link
+//   at the start time (0 to +2 min)    text only: "we're waiting for you" + join link
 //   (Calendly already emails the 24h / 1h reminders, so we don't.)
 //
 // Each goes out at most once per booking. The send is claimed first inside

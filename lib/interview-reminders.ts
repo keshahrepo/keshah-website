@@ -39,11 +39,13 @@ export const NOSHOW_TEXT_FIELD = "interview_noshow_text_sent_at";
 export const REMINDER_WINDOWS: Record<ReminderKind, [number, number]> = {
   "24h": [23 * HOUR, 25 * HOUR],
   "1h": [50 * MIN, 70 * MIN],
-  now: [-6 * MIN, 2 * MIN],
+  // Cron runs every minute: the text goes out in the first minute after the
+  // start time (a second minute only as a retry if the first send failed).
+  now: [-2 * MIN, 0],
 };
 
 /** How far back / ahead the cron needs to look for bookings. */
-export const REMINDER_LOOKBACK_MS = 6 * MIN;
+export const REMINDER_LOOKBACK_MS = 3 * MIN;
 export const REMINDER_LOOKAHEAD_MS = 25 * HOUR;
 
 /** Statuses that never get reminders. */

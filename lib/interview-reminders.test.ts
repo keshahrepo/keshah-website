@@ -34,12 +34,11 @@ test("pickReminder: 1h window is 50 to 70 min before", () => {
   assert.equal(pickReminder(START, START - 49 * MIN, none), null);
 });
 
-test("pickReminder: starting-now window is -2 to +6 min around the start", () => {
-  assert.equal(pickReminder(START, START - 3 * MIN, none), null);
-  assert.equal(pickReminder(START, START - 2 * MIN, none), "now");
+test("pickReminder: starting-now text goes out at the start, never before", () => {
+  assert.equal(pickReminder(START, START - 30 * 1000, none), null);
   assert.equal(pickReminder(START, START, none), "now");
-  assert.equal(pickReminder(START, START + 6 * MIN, none), "now");
-  assert.equal(pickReminder(START, START + 7 * MIN, none), null);
+  assert.equal(pickReminder(START, START + 2 * MIN, none), "now");
+  assert.equal(pickReminder(START, START + 3 * MIN, none), null);
 });
 
 test("pickReminder: already sent kinds are skipped, and no start means nothing", () => {
@@ -48,10 +47,10 @@ test("pickReminder: already sent kinds are skipped, and no start means nothing",
   assert.equal(pickReminder(0, START, none), null);
 });
 
-test("every 5-minute tick hits each window at least once", () => {
-  for (let offset = 0; offset < 5; offset++) {
+test("every 1-minute tick hits each window at least once", () => {
+  for (let offset = 0; offset < 60; offset += 15) {
     const hits = new Set<string>();
-    for (let t = START - 26 * HOUR + offset * MIN; t <= START + 10 * MIN; t += 5 * MIN) {
+    for (let t = START - 26 * HOUR + offset * 1000; t <= START + 10 * MIN; t += MIN) {
       const k = pickReminder(START, t, none);
       if (k) hits.add(k);
     }
