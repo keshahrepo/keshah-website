@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { creatorToday, getCreator, getHistory, hasStarted, savePostingDay } from "@/lib/creators/db";
+import { claimDayComplete, creatorToday, getCreator, getHistory, hasStarted, savePostingDay } from "@/lib/creators/db";
 import { completeVideoCount, dayComplete, isPostedDay, VIDEOS_PER_WEEKDAY } from "@/lib/creators/pay";
 import type { PostedVideo } from "@/lib/creators/types";
 import { errorResponse, requireCreator, requireOnboarded } from "../_auth";
@@ -7,7 +7,8 @@ import { errorResponse, requireCreator, requireOnboarded } from "../_auth";
 // POST { videos: [{ tiktok_url, instagram_url }], date? } — date defaults to
 // the creator's today; savePostingDay rejects anything past 11:59 pm their time.
 // `day_complete` is set only when THIS save made the day count for pay (the
-// end-of-day screen); a day the post sync already completed gets null.
+// end-of-day screen); a day the post sync already completed gets null, and so
+// does a day already celebrated (claimDayComplete, shared with /posts/check).
 export async function POST(req: NextRequest) {
   const creator = await requireCreator(req);
   if (creator instanceof NextResponse) return creator;
@@ -24,6 +25,8 @@ export async function POST(req: NextRequest) {
       try {
         const [after, profile] = await Promise.all([getHistory(creator.id), hasStarted(creator) ? creator : getCreator(creator.id)]);
         if (profile && hasStarted(profile)) day_complete = dayComplete(profile, date, before.postingDays, after.postingDays, after.daysOff);
+        // Once per day across this save and the app's "I posted it" check.
+        if (day_complete && !(await claimDayComplete(creator.id, date))) day_complete = null;
       } catch (e) {
         console.error("day complete numbers failed:", e); // the save itself went through
       }

@@ -103,6 +103,8 @@ export interface ProvenVideo {
   views_history?: { at: string; views: number }[];
   tired?: TiredCheck & { checked_at: string; kept_at?: string | null };
   hook_edited?: boolean;
+  /** Cover image of the original (signed CDN URL; refreshed by the seed / daily job, can expire). */
+  thumbnail_url?: string;
 }
 
 export interface ProvenRemake {
@@ -136,6 +138,18 @@ export interface DailyPicks {
   swapped_out: string[];
   created_at: string;
   updated_at: string;
+  /**
+   * Which detected posts the creator said remake which slot ("I posted it" in
+   * the app, POST /api/creator/posts/check). Keyed by slot number as a string.
+   */
+  slot_attribution?: Record<string, SlotAttribution>;
+}
+
+export interface SlotAttribution {
+  proven_id: string | null;
+  tiktok_url?: string;
+  instagram_url?: string;
+  at: string;
 }
 
 export const emptyStats = (): ProvenStats => ({

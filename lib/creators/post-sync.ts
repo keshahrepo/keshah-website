@@ -197,6 +197,7 @@ export function applyObservation(
     last_synced_at: ctx.nowIso,
     crossed_100k_at: prev?.crossed_100k_at || (p.views >= VIEWS_100K ? ctx.nowIso : null),
     crossed_1m_at: prev?.crossed_1m_at || (p.views >= VIEWS_1M ? ctx.nowIso : null),
+    thumbnail_url: p.thumbnail_url || prev?.thumbnail_url || null,
   };
 }
 
@@ -705,6 +706,7 @@ export interface PostView {
   last_synced_at: string;
   crossed_100k_at: string | null;
   crossed_1m_at: string | null;
+  thumbnail_url: string | null;
   views_history?: { at: string; views: number }[];
 }
 
@@ -749,6 +751,7 @@ export async function listPosts(
         last_synced_at: r.last_synced_at,
         crossed_100k_at: r.crossed_100k_at ?? null,
         crossed_1m_at: r.crossed_1m_at ?? null,
+        thumbnail_url: r.thumbnail_url || null,
         ...(opts.withHistory ? { views_history: r.views_history ?? [] } : {}),
       };
     })

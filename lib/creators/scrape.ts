@@ -33,6 +33,8 @@ export interface ScrapedPost {
   caption: string;
   views: number;
   pinned: boolean;
+  /** Cover image (signed CDN URL, expires after a few days). Absent when the response has none. */
+  thumbnail_url?: string;
 }
 
 export interface ScrapedPage {
@@ -52,6 +54,28 @@ const num = (v: unknown): number => {
 const creditsOf = (d: Json): number | null =>
   typeof d.credits_remaining === "number" ? d.credits_remaining : null;
 
+/** First http(s) URL in `{ url_list: [...] }`. */
+function firstUrl(v: unknown): string {
+  const list = obj(v).url_list;
+  if (!Array.isArray(list)) return "";
+  const u = list.find((x) => typeof x === "string" && /^https?:\/\//.test(x));
+  return typeof u === "string" ? u : "";
+}
+
+/** TikTok cover: video.cover, then origin_cover, then dynamic_cover. */
+export function tiktokThumb(aweme: unknown): string {
+  const v = obj(obj(aweme).video);
+  return firstUrl(v.cover) || firstUrl(v.origin_cover) || firstUrl(v.dynamic_cover);
+}
+
+/** Instagram cover: the first image_versions2 candidate. */
+export function instagramThumb(media: unknown): string {
+  const c = obj(obj(media).image_versions2).candidates;
+  if (!Array.isArray(c)) return "";
+  const u = c.map((x) => obj(x).url).find((x) => typeof x === "string" && /^https?:\/\//.test(x));
+  return typeof u === "string" ? u : "";
+}
+
 export function cleanHandle(h: string): string {
   return String(h ?? "").trim().replace(/^@+/, "").replace(/\s+/g, "");
 }
@@ -70,6 +94,7 @@ export function parseTikTokPage(raw: unknown, handle: string): ScrapedPage {
     if (!/^\d+$/.test(id) || !created) continue;
     const share = typeof a.share_url === "string" ? a.share_url : "";
     const kind = /\/photo\//.test(share) ? "photo" : "video";
+    const thumb = tiktokThumb(a);
     posts.push({
       platform: "tiktok",
       post_id: id,
@@ -78,6 +103,7 @@ export function parseTikTokPage(raw: unknown, handle: string): ScrapedPage {
       caption: typeof a.desc === "string" ? a.desc.slice(0, 500) : "",
       views: num(obj(a.statistics).play_count),
       pinned: num(a.is_top) === 1 || a.is_top === true,
+      ...(thumb ? { thumbnail_url: thumb } : {}),
     });
   }
   const cursor = d.max_cursor != null && d.max_cursor !== "" ? String(d.max_cursor) : null;
@@ -94,6 +120,7 @@ export function parseInstagramPage(raw: unknown): ScrapedPage {
     const taken = num(m.taken_at);
     if (!code || !taken) continue;
     const pinnedIds = [m.clips_tab_pinned_user_ids, m.timeline_pinned_user_ids];
+    const thumb = instagramThumb(m);
     posts.push({
       platform: "instagram",
       post_id: code,
@@ -102,6 +129,7 @@ export function parseInstagramPage(raw: unknown): ScrapedPage {
       caption: typeof obj(m.caption).text === "string" ? String(obj(m.caption).text).slice(0, 500) : "",
       views: Math.max(num(m.play_count), num(m.ig_play_count), num(m.view_count)),
       pinned: pinnedIds.some((p) => Array.isArray(p) && p.length > 0),
+      ...(thumb ? { thumbnail_url: thumb } : {}),
     });
   }
   const p = obj(d.paging_info);

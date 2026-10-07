@@ -298,6 +298,8 @@ export interface CreatorPost {
   /** First sync that saw views >= 100K / 1M. */
   crossed_100k_at: IsoInstant | null;
   crossed_1m_at: IsoInstant | null;
+  /** Latest cover image seen (signed CDN URL that expires after a few days), null when none. */
+  thumbnail_url?: string | null;
 }
 
 /** ContentCreators/{id}.post_sync: health of the automatic post sync. */

@@ -589,10 +589,30 @@ export async function savePostingDay(
       ? { auto_urls: autoUrls, source: "manual+auto" as const, ...(existing.data()!.auto_synced_at ? { auto_synced_at: existing.data()!.auto_synced_at } : {}) }
       : {}),
   };
-  await ref.set(doc);
+  // The once-per-day "Day complete" marker survives a re-save (claimDayComplete).
+  const celebrated = existing.exists ? existing.data()!.day_complete_at : null;
+  await ref.set(celebrated ? { ...doc, day_complete_at: celebrated } : doc);
   if (clean.length && !hasStarted(creator)) await setStartDateIfUnset(id, date);
   await advanceCreatorStatus(id).catch((e) => console.error("creator status advance failed:", e));
   return { date, videos: clean, logged_at: nowIso, ...(autoUrls.length ? { auto_urls: autoUrls } : {}) };
+}
+
+/**
+ * Claims the end-of-day celebration for `date`, once: true the first time
+ * (stamps posting_days/{date}.day_complete_at), false after that. Both the
+ * posting save and the app's "I posted it" check go through this, so the Day
+ * complete screen shows once however the day got counted.
+ */
+export async function claimDayComplete(id: string, date: YyyyMmDd, opts: { db?: Firestore; now?: Date } = {}): Promise<boolean> {
+  const db = opts.db ?? fs();
+  const ref = db.collection(CREATORS_COLLECTION).doc(id).collection("posting_days").doc(date);
+  const nowIso = (opts.now ?? new Date()).toISOString();
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists || snap.data()!.day_complete_at) return false;
+    tx.update(ref, { day_complete_at: nowIso });
+    return true;
+  });
 }
 
 /** Pure rule behind advanceCreatorStatus (exported for tests). */

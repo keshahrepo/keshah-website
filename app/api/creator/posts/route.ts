@@ -38,6 +38,7 @@ export async function GET(req: NextRequest) {
         caption: p.caption,
         views: p.views,
         pinned: p.pinned,
+        thumbnail_url: p.thumbnail_url,
       })),
     });
   } catch (e) {

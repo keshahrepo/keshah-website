@@ -43,6 +43,7 @@ import {
   type ProvenRemake,
   type ProvenStatus,
   type ProvenVideo,
+  type SlotAttribution,
 } from "./proven";
 import { fetchRecentPosts, fetchTranscript, fetchVideoViews, postKey, type ScrapedPost } from "./scrape";
 import type { CreatorPost, CreatorProfile, Platform, YyyyMmDd } from "./types";
@@ -113,6 +114,7 @@ export function toProven(d: DocumentData): ProvenVideo {
     ...(Array.isArray(d.views_history) ? { views_history: d.views_history } : {}),
     ...(d.tired ? { tired: d.tired } : {}),
     ...(d.hook_edited ? { hook_edited: true } : {}),
+    ...(typeof d.thumbnail_url === "string" && d.thumbnail_url ? { thumbnail_url: d.thumbnail_url } : {}),
   };
 }
 
@@ -246,7 +248,12 @@ export async function findProvenVideos(opts: {
     snaps.forEach((s, i) => {
       if (!s.exists) return;
       existing.add(s.id);
-      batch.update(s.ref, { views: winners[i].post.views, views_history: pushHistory(s.data()!.views_history, nowIso, winners[i].post.views) });
+      const thumb = winners[i].post.thumbnail_url;
+      batch.update(s.ref, {
+        views: winners[i].post.views,
+        views_history: pushHistory(s.data()!.views_history, nowIso, winners[i].post.views),
+        ...(thumb ? { thumbnail_url: thumb } : {}),
+      });
     });
     if (existing.size) await batch.commit();
   } else if (opts.dryRun && winners.length) {
@@ -296,6 +303,7 @@ export async function findProvenVideos(opts: {
       stats: emptyStats(),
       views_history: [{ at: nowIso, views: post.views }],
       ...(pending ? { transcript_pending: true } : {}),
+      ...(post.thumbnail_url ? { thumbnail_url: post.thumbnail_url } : {}),
     };
     try {
       await col.doc(id).create(doc);
@@ -477,12 +485,22 @@ export interface PublicProven {
   transcript: string;
   talking_points: string[];
   reference_url: string | null;
+  /** Cover of the original, null when we don't have one (the app shows a placeholder). */
+  thumbnail_url: string | null;
+}
+
+/** What "I posted it" found for a slot (null until something was attributed). */
+export interface PickPosted {
+  tiktok_url: string | null;
+  instagram_url: string | null;
 }
 
 export interface PicksPayload {
   date: YyyyMmDd;
   given: number;
-  picks: { slot: number; video: PublicProven }[];
+  picks: { slot: number; video: PublicProven; posted: PickPosted | null }[];
+  /** Attributions for slots without a pick (a format creator's own concepts). */
+  extra_posted: { slot: number; posted: PickPosted }[];
   /** No more active videos to swap in today. */
   can_swap: boolean;
 }
@@ -499,7 +517,13 @@ function publicProven(id: string, v: ProvenVideo): PublicProven {
     transcript: v.transcript,
     talking_points: v.talking_points ?? [],
     reference_url: v.reference_url || null,
+    thumbnail_url: v.thumbnail_url || null,
   };
+}
+
+function pickPosted(a: SlotAttribution | undefined): PickPosted | null {
+  if (!a || (!a.tiktok_url && !a.instagram_url)) return null;
+  return { tiktok_url: a.tiktok_url || null, instagram_url: a.instagram_url || null };
 }
 
 export function givenCount(c: Pick<CreatorProfile, "format_creator">): number {
@@ -537,17 +561,56 @@ async function pickContext(db: Firestore, creator: CreatorProfile, date: YyyyMmD
   return { active, candidates, forced, history, audience: asAudience(raw.data()?.audience) };
 }
 
-function payload(date: YyyyMmDd, given: number, picks: DailyPick[], ctx: PickContext, canSwap: boolean, extra?: Map<string, ProvenVideo>): PicksPayload {
+function payload(
+  date: YyyyMmDd,
+  given: number,
+  picks: DailyPick[],
+  ctx: PickContext,
+  canSwap: boolean,
+  extra?: Map<string, ProvenVideo>,
+  attribution: Record<string, SlotAttribution> = {},
+): PicksPayload {
   const byId = new Map<string, ProvenVideo>(ctx.active.map((v) => [v.id, v]));
   for (const [k, v] of extra ?? []) byId.set(k, v);
+  const shown = picks.filter((p) => byId.has(p.proven_id));
+  const pickSlots = new Set(shown.map((p) => p.slot));
   return {
     date,
     given,
-    picks: picks
-      .filter((p) => byId.has(p.proven_id))
-      .map((p) => ({ slot: p.slot, video: publicProven(p.proven_id, byId.get(p.proven_id)!) })),
+    picks: shown.map((p) => ({ slot: p.slot, video: publicProven(p.proven_id, byId.get(p.proven_id)!), posted: pickPosted(attribution[String(p.slot)]) })),
+    extra_posted: Object.entries(attribution)
+      .filter(([k]) => !pickSlots.has(Number(k)))
+      .map(([k, a]) => ({ slot: Number(k), posted: pickPosted(a) }))
+      .filter((x): x is { slot: number; posted: PickPosted } => Number.isInteger(x.slot) && !!x.posted)
+      .sort((a, b) => a.slot - b.slot),
     can_swap: canSwap,
   };
+}
+
+/**
+ * Thumbnails for picks whose original has none stored: the original is often
+ * one of our own creators' posts (auto suggestions), whose post record keeps
+ * the latest cover. Best effort; never fails the picks read.
+ */
+async function fillThumbnails(db: Firestore, ids: string[], byId: Map<string, ProvenVideo>): Promise<void> {
+  const need = ids
+    .map((id) => ({ id, v: byId.get(id) }))
+    .filter((x): x is { id: string; v: ProvenVideo } => !!x.v && !x.v.thumbnail_url && !!x.v.source_creator_id && !!x.v.source_url && !!x.v.platform);
+  if (!need.length) return;
+  try {
+    const refs = need.map(({ v }) => {
+      const key = postKey(v.source_url!, v.platform!);
+      const postId = key.slice(key.indexOf(":") + 1);
+      return db.collection(CREATORS_COLLECTION).doc(v.source_creator_id!).collection("posts").doc(`${v.platform}_${postId}`);
+    });
+    const snaps = await db.getAll(...refs);
+    snaps.forEach((s, i) => {
+      const t = s.exists ? s.data()?.thumbnail_url : null;
+      if (typeof t === "string" && t) byId.set(need[i].id, { ...need[i].v, thumbnail_url: t });
+    });
+  } catch {
+    /* placeholder in the app */
+  }
 }
 
 /**
@@ -562,7 +625,7 @@ export async function getDailyPicks(creator: CreatorProfile, opts: { db?: Firest
   const nowIso = now.toISOString();
   const date = opts.date ?? creatorToday(creator, now);
   const given = givenCount(creator);
-  if (!isWeekday(date)) return { date, given, picks: [], can_swap: false };
+  if (!isWeekday(date)) return { date, given, picks: [], extra_posted: [], can_swap: false };
   const ref = db.collection(CREATORS_COLLECTION).doc(creator.id).collection("daily_picks").doc(date);
   const ctx = await pickContext(db, creator, date, nowIso);
 
@@ -570,7 +633,8 @@ export async function getDailyPicks(creator: CreatorProfile, opts: { db?: Firest
     const snap = await tx.get(ref);
     const cur = snap.exists ? (snap.data() as DailyPicks) : null;
     const existing = cur?.picks ?? [];
-    if (existing.length >= given) return { picks: existing, swappedOut: cur?.swapped_out ?? [], added: [] as string[] };
+    const attribution = cur?.slot_attribution ?? {};
+    if (existing.length >= given) return { picks: existing, swappedOut: cur?.swapped_out ?? [], added: [] as string[], attribution };
     const fresh = selectDailyPicks({
       candidates: ctx.candidates,
       history: ctx.history,
@@ -581,7 +645,7 @@ export async function getDailyPicks(creator: CreatorProfile, opts: { db?: Firest
       forced: ctx.forced,
       exclude: [...existing.map((p) => p.proven_id), ...(cur?.swapped_out ?? [])],
     });
-    if (!fresh.length) return { picks: existing, swappedOut: cur?.swapped_out ?? [], added: [] };
+    if (!fresh.length) return { picks: existing, swappedOut: cur?.swapped_out ?? [], added: [], attribution };
     const picks = topUpPicks(existing, given, fresh);
     const doc: DailyPicks = {
       date,
@@ -591,8 +655,8 @@ export async function getDailyPicks(creator: CreatorProfile, opts: { db?: Firest
       created_at: cur?.created_at ?? nowIso,
       updated_at: nowIso,
     };
-    tx.set(ref, doc);
-    return { picks, swappedOut: doc.swapped_out, added: fresh };
+    tx.set(ref, doc, { merge: true }); // merge keeps slot_attribution
+    return { picks, swappedOut: doc.swapped_out, added: fresh, attribution };
   });
   if (result.added.length) {
     const batch = db.batch();
@@ -606,6 +670,11 @@ export async function getDailyPicks(creator: CreatorProfile, opts: { db?: Firest
     const snaps = await db.getAll(...missing.map((id) => db.collection(PROVEN_COLLECTION).doc(id)));
     for (const s of snaps) if (s.exists) extra.set(s.id, toProven(s.data()!));
   }
+  const all = new Map<string, ProvenVideo>(ctx.active.map((v) => [v.id, v]));
+  for (const [k, v] of extra) all.set(k, v);
+  const ids = result.picks.map((p) => p.proven_id);
+  await fillThumbnails(db, ids, all);
+  for (const id of ids) if (all.has(id)) extra.set(id, all.get(id)!);
   const canSwap = !!swapCandidate({
     candidates: ctx.candidates,
     history: ctx.history,
@@ -615,7 +684,7 @@ export async function getDailyPicks(creator: CreatorProfile, opts: { db?: Firest
     current: result.picks.map((p) => p.proven_id),
     swappedOut: result.swappedOut,
   });
-  return payload(date, given, result.picks, ctx, canSwap, extra);
+  return payload(date, given, result.picks, ctx, canSwap, extra, result.attribution);
 }
 
 /** Swap the pick in `slot` for the next best active video under the same rules. */
@@ -634,6 +703,7 @@ export async function swapPick(creator: CreatorProfile, slot: number, opts: { db
     const cur = snap.data() as DailyPicks;
     const at = cur.picks.find((p) => p.slot === slot);
     if (!at) throw new CreatorDataError("That video can't be swapped.");
+    if (pickPosted(cur.slot_attribution?.[String(slot)])) throw new CreatorDataError("You already posted this one, so it can't be swapped.", 409);
     const swappedOut = [...new Set([...(cur.swapped_out ?? []), at.proven_id])];
     const next = swapCandidate({
       candidates: ctx.candidates,
@@ -647,7 +717,7 @@ export async function swapPick(creator: CreatorProfile, slot: number, opts: { db
     if (!next) throw new CreatorDataError("There's no other video to swap in today. Go with this one.", 409);
     const picks = cur.picks.map((p) => (p.slot === slot ? { slot, proven_id: next, swapped_from: at.proven_id } : p));
     tx.update(ref, { picks, swapped_out: swappedOut, updated_at: nowIso });
-    return { picks, swappedOut, next };
+    return { picks, swappedOut, next, attribution: cur.slot_attribution ?? {} };
   });
   await db.collection(PROVEN_COLLECTION).doc(res.next).update({ last_used_at: nowIso }).catch(() => {});
   const canSwap = !!swapCandidate({
@@ -659,7 +729,7 @@ export async function swapPick(creator: CreatorProfile, slot: number, opts: { db
     current: res.picks.map((p) => p.proven_id),
     swappedOut: res.swappedOut,
   });
-  return payload(date, given, res.picks, ctx, canSwap);
+  return payload(date, given, res.picks, ctx, canSwap, undefined, res.attribution);
 }
 
 // ================================================================ daily job (after the deep post sync)
@@ -731,7 +801,13 @@ export async function runProvenDaily(opts: {
           if (snaps[i].exists) {
             const d = snaps[i].data()!;
             // Keep the original's views fresh (free: the post sync already has them).
-            if (d.source_creator_id === c.id) await refs[i].update({ views: p.views, views_history: pushHistory(d.views_history, nowIso, p.views) });
+            if (d.source_creator_id === c.id) {
+              await refs[i].update({
+                views: p.views,
+                views_history: pushHistory(d.views_history, nowIso, p.views),
+                ...(p.thumbnail_url ? { thumbnail_url: p.thumbnail_url } : {}),
+              });
+            }
             continue;
           }
           const doc: ProvenVideo = {
@@ -754,6 +830,7 @@ export async function runProvenDaily(opts: {
             suggest_reason: `${c.name}: ${reason}`,
             transcript_pending: true,
             views_history: [{ at: nowIso, views: p.views }],
+            ...(p.thumbnail_url ? { thumbnail_url: p.thumbnail_url } : {}),
           };
           try {
             await refs[i].create(doc);
