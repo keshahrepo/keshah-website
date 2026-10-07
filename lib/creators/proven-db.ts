@@ -114,6 +114,7 @@ export function toProven(d: DocumentData): ProvenVideo {
     ...(typeof d.short_title === "string" && d.short_title ? { short_title: d.short_title } : {}),
     ...(typeof d.hook_full === "string" && d.hook_full ? { hook_full: d.hook_full } : {}),
     ...(typeof d.hook_first_person === "boolean" ? { hook_first_person: d.hook_first_person } : {}),
+    ...(typeof d.header_text === "string" && d.header_text ? { header_text: d.header_text } : {}),
     ...(d.reference_url ? { reference_url: d.reference_url } : {}),
     ...(Array.isArray(d.idea_assignments) ? { idea_assignments: d.idea_assignments } : {}),
     ...(d.source_creator_id ? { source_creator_id: d.source_creator_id } : {}),
@@ -509,6 +510,7 @@ export interface PublicProven {
   cover_url: string | null;
   /** 2-4 word name for the list row ("" = the app makes one from the hook). */
   short_title: string;
+  header_text: string;
 }
 
 /** What "I posted it" found for a slot (null until something was attributed). */
@@ -545,6 +547,7 @@ function publicProven(id: string, v: ProvenVideo): PublicProven {
     thumbnail_url: v.media?.thumb_small_url || v.media?.thumbnail_url || v.thumbnail_url || null,
     cover_url: v.media?.thumbnail_url || v.thumbnail_url || null,
     short_title: v.short_title ?? "",
+    header_text: v.header_text ?? "",
   };
 }
 
@@ -574,7 +577,7 @@ async function pickContext(db: Firestore, creator: CreatorProfile, date: YyyyMmD
     db
       .collection(PROVEN_COLLECTION)
       .where("status", "==", "active")
-      .select("added_by", "created_at", "idea_assignments", "audience", "stats.recent_wins", "views", "hook_first_person", "hook_line", "hook_full")
+      .select("added_by", "created_at", "idea_assignments", "audience", "stats.recent_wins", "views", "hook_first_person", "hook_line", "hook_full", "talking_points")
       .get(),
     cref.collection("daily_picks").where("date", ">=", addDaysTo(date, -30)).get(),
     cref.get(),
@@ -588,7 +591,8 @@ async function pickContext(db: Firestore, creator: CreatorProfile, date: YyyyMmD
   const families = formatGroups(hooks, FAMILY_SIMILARITY);
   const candidates = active
     // Hooks that claim the speaker's own results ("I fixed my hair loss") aren't given out.
-    .filter((v) => !ideaInTest(v, nowIso) && !v.hook_first_person)
+    // ...and only videos with a script to remake (talking points come from a real transcript).
+    .filter((v) => !ideaInTest(v, nowIso) && !v.hook_first_person && (v.added_by === "founder_idea" || (v.talking_points?.length ?? 0) > 0))
     .map((v) => ({ id: v.id, format: formats.get(v.id), family: families.get(v.id), audience: v.audience, recent_wins: v.stats.recent_wins, views: v.views }));
   const history: Record<string, YyyyMmDd[]> = {};
   for (const d of histSnap.docs) {

@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Firestore } from "firebase-admin/firestore";
-import { BEATS_MAX_ATTEMPTS, beatProblem, beatsFor, cleanCta, cleanHook, parseTitleLines, retitleFormats, cleanTitle, generateProvenBeats, needsBeats, parseBeats, tidyLine } from "./proven-beats";
+import { BEATS_MAX_ATTEMPTS, beatProblem, beatsFor, cleanCta, cleanHeader, cleanHook, parseTitleLines, retitleFormats, cleanTitle, generateProvenBeats, needsBeats, parseBeats, tidyLine } from "./proven-beats";
 
 const TRANSCRIPT =
   "Pinch the top of your scalp right now. Now pinch the sides. The top feels way tighter, right? That's restricting blood flow to your follicles. I fixed my own hair this way. Check my pinned video for the full routine.";
@@ -21,7 +21,7 @@ const GOOD = JSON.stringify({
 test("needsBeats: active proven videos with a transcript and no points, under the attempt cap", () => {
   const base = { status: "active" as const, added_by: "seed" as const, transcript: TRANSCRIPT };
   assert.equal(needsBeats(base), true);
-  assert.equal(needsBeats({ ...base, talking_points: ["x"], short_title: "Pinch test", hook_full: "If you are losing hair, pinch here.", hook_first_person: false }), false);
+  assert.equal(needsBeats({ ...base, talking_points: ["x"], short_title: "Pinch test", hook_full: "If you are losing hair, pinch here.", hook_first_person: false, header_text: "Losing hair? Try this test" }), false);
   assert.equal(needsBeats({ ...base, talking_points: ["x"], short_title: "Pinch test" }), true);
   // Points written by hand but no list title yet: still needs the title.
   assert.equal(needsBeats({ ...base, talking_points: ["x"] }), true);
@@ -190,4 +190,10 @@ test("parseTitleLines reads id | name lines", () => {
       { id: "instagram_DdZ", title: "Scalp won't move" },
     ],
   });
+});
+
+test("cleanHeader: 3-9 words, no first person", () => {
+  assert.equal(cleanHeader("If you're losing hair, try this."), "If you're losing hair, try this");
+  assert.equal(cleanHeader("Pinch"), "");
+  assert.equal(cleanHeader("I fixed my hair with this one trick"), "");
 });

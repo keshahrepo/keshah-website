@@ -52,6 +52,7 @@ type BeatsFields = Pick<ProvenVideo, "status" | "added_by" | "transcript" | "tal
   talking_points_source?: string;
   hook_full?: string;
   hook_first_person?: boolean;
+  header_text?: string;
   beats?: ProvenBeatsMeta;
 };
 
@@ -59,7 +60,7 @@ type BeatsFields = Pick<ProvenVideo, "status" | "added_by" | "transcript" | "tal
 export function needsBeats(v: BeatsFields): boolean {
   if (v.status !== "active" || v.added_by === "founder_idea") return false;
   if ((v.transcript ?? "").trim().length < BEATS_MIN_TRANSCRIPT) return false;
-  if (v.talking_points?.length && v.short_title && v.hook_full && typeof v.hook_first_person === "boolean") return false;
+  if (v.talking_points?.length && v.short_title && v.hook_full && typeof v.hook_first_person === "boolean" && v.header_text) return false;
   if (isLegacy(v.beats?.last_error)) return true;
   return (v.beats?.attempts ?? 0) < BEATS_MAX_ATTEMPTS;
 }
@@ -67,7 +68,9 @@ export function needsBeats(v: BeatsFields): boolean {
 export const BEATS_SYSTEM = `You write speaking notes for short hair loss videos. A creator will film their own version of a video that did well. They say the hook word for word, then make a few points in their own words, then point viewers to the pinned video on their profile.
 
 Return one JSON object, no prose, no code fence:
-{"hook": "...", "hook_first_person": false, "title": "...", "beats": ["...", "...", "..."], "cta": "..."}
+{"hook": "...", "hook_first_person": false, "header": "...", "title": "...", "beats": ["...", "...", "..."], "cta": "..."}
+
+"header": the text shown on screen at the top of the video, separate from the spoken hook. Its only job is to stop someone scrolling. 3 to 9 words. It opens a curiosity gap and never gives away the cause or the fix. Talk to the viewer, plain words a 5-year-old knows. Examples: "If you're losing hair, try this", "Pinch your scalp right now", "Why your hairline keeps going back", "Stop doing this to your scalp", "Losing hair? Do this test". No first person, no em dashes, no emojis, no hashtags, no quotes, never "routine", no brand names.
 
 "hook": the full hook, copied word for word from the start of the transcript. Keep going until the hook's thought is complete and the viewer wants to keep watching, usually 1 to 3 sentences (the first 5 to 12 seconds). Never stop after a fragment like "All right." or "If you're losing hair." if the next sentence finishes the thought. You may drop filler ("uh", "um", a word said twice) and fix punctuation, nothing else. Under 45 words.
 
@@ -139,6 +142,8 @@ export interface ParsedBeats {
   /** "" when the model's hook didn't match the transcript start. */
   hook: string;
   hook_first_person: boolean;
+  /** "" when the model's header broke the rules. */
+  header: string;
   beats: string[];
   cta: string;
   /** "" when the model's title broke the rules (the app makes one from the hook). */
@@ -172,13 +177,22 @@ export function cleanHook(raw: unknown, transcript: string): string {
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
+/** On-screen header: 3-9 words, no first person, no banned words; "" otherwise. */
+export function cleanHeader(raw: unknown): string {
+  const t = String(raw ?? "").replace(DASHES, ", ").replace(/["“”#]/g, "").replace(/\s+/g, " ").replace(/[.]+$/, "").trim();
+  const n = t.split(" ").filter(Boolean).length;
+  if (n < 3 || n > 9 || t.length > 60) return "";
+  if (FIRST_PERSON.test(t) || BANNED.test(t)) return "";
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
 /** Model output -> clean beats (3-4) + cta. Throws when fewer than 3 beats survive the rules. */
 export function parseBeats(raw: string, transcript = ""): ParsedBeats {
   const s = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
   const start = s.indexOf("{");
   const end = s.lastIndexOf("}");
   if (start < 0 || end <= start) throw new Error("no JSON in model output");
-  const j = JSON.parse(s.slice(start, end + 1)) as { beats?: unknown; cta?: unknown; title?: unknown; hook?: unknown; hook_first_person?: unknown };
+  const j = JSON.parse(s.slice(start, end + 1)) as { beats?: unknown; cta?: unknown; title?: unknown; hook?: unknown; hook_first_person?: unknown; header?: unknown };
   const list = Array.isArray(j.beats) ? j.beats.map((b) => tidyLine(String(b))) : [];
   const problems: string[] = [];
   const beats = list.filter((b) => {
@@ -190,6 +204,7 @@ export function parseBeats(raw: string, transcript = ""): ParsedBeats {
   return {
     hook: transcript ? cleanHook(j.hook, transcript) : "",
     hook_first_person: j.hook_first_person === true,
+    header: cleanHeader(j.header),
     beats: beats.slice(0, 4),
     cta: cleanCta(j.cta),
     title: cleanTitle(j.title),
@@ -315,6 +330,7 @@ export async function generateProvenBeats(opts: {
             if (!cur.data()?.short_title && r.title) patch.short_title = r.title;
             if (!cur.data()?.hook_full && r.hook) patch.hook_full = r.hook;
             if (typeof cur.data()?.hook_first_person !== "boolean") patch.hook_first_person = r.hook_first_person;
+            if (!cur.data()?.header_text && r.header) patch.header_text = r.header;
             if (!Object.keys(patch).length) return null;
             tx.update(col.doc(x.id), { ...patch, beats: { generated_at: at, model: BEATS_MODEL } });
             return { points: !hasPoints };

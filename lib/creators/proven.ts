@@ -117,6 +117,8 @@ export interface ProvenVideo {
   hook_full?: string;
   /** The hook claims the speaker's own results; such videos aren't given out (proven-beats.ts). */
   hook_first_person?: boolean;
+  /** Scroll-stopping on-screen text for the top of the video, separate from the spoken hook (proven-beats.ts). */
+  header_text?: string;
   /** Beat generation bookkeeping (proven-beats.ts). */
   beats?: { generated_at?: string; model?: string; attempts?: number; last_error?: string; last_attempt_at?: string };
 }
