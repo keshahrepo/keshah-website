@@ -342,18 +342,25 @@ export function videoLinkFor(siteUrl: string, email: string): string {
  * timezone and it isn't Eastern: "11:59 PM ET (8:59 PM your time) on
  * Wednesday, Oct 7". If their local day differs it says so.
  */
-export function formatDeadline(ms: number, timeZone?: unknown): string {
-  const et = formatDeadlineET(ms);
-  if (!validTimeZone(timeZone)) return et;
+export function formatDeadline(ms: number, timeZone?: unknown, nowMs: number = Date.now()): string {
+  // Relative to when the message goes out, on the Eastern calendar:
+  // "tonight at 11:59 PM ET", "tomorrow at 11:59 PM ET", else "on Wednesday, Oct 7 at 11:59 PM ET".
   const d = new Date(ms);
-  const part = (tz: string, o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("en-US", { timeZone: tz, ...o }).format(d);
+  const part = (tz: string, o: Intl.DateTimeFormatOptions, at: Date = d) => new Intl.DateTimeFormat("en-US", { timeZone: tz, ...o }).format(at);
+  const etDate = (at: Date) => part("America/New_York", { year: "numeric", month: "2-digit", day: "2-digit" }, at);
   const etTime = part("America/New_York", { hour: "numeric", minute: "2-digit" });
+  const today = etDate(new Date(nowMs));
+  const tomorrow = etDate(new Date(nowMs + 24 * 3600 * 1000));
+  const target = etDate(d);
+  let when: string;
+  if (target === today) when = `tonight at ${etTime} ET`;
+  else if (target === tomorrow) when = `tomorrow at ${etTime} ET`;
+  else when = `on ${part("America/New_York", { weekday: "long", month: "short", day: "numeric" })} at ${etTime} ET`;
+  if (!validTimeZone(timeZone)) return when;
   const localTime = part(timeZone, { hour: "numeric", minute: "2-digit" });
-  const etDay = part("America/New_York", { weekday: "long" });
-  const localDay = part(timeZone, { weekday: "long" });
-  if (etTime === localTime && etDay === localDay) return et;
-  const local = etDay === localDay ? `${localTime} your time` : `${localTime} ${localDay} your time`;
-  return et.replace(" ET on ", ` ET (${local}) on `);
+  const sameDay = part(timeZone, { weekday: "long" }) === part("America/New_York", { weekday: "long" });
+  if (localTime === etTime && sameDay) return when;
+  return `${when} (${localTime}${sameDay ? "" : " " + part(timeZone, { weekday: "long" })} your time)`;
 }
 
 /** "6:00 PM ET on Thursday, Oct 8" for a deadline. */
@@ -375,7 +382,7 @@ export function noShowEmail(i: { first: string; link: string; deadline: string; 
     "If you couldn't make the KESHAH group interview today, or didn't get to film your video, you can still do the video test on your phone.",
     ...(i.recordingUrl ? [`Here's a recording of the presentation:\n${i.recordingUrl}`] : []),
     `Open this link on your phone and film the short video. It takes about 10 minutes:\n${i.link}`,
-    `It's due by ${i.deadline}. ${DENIAL_LINE}`,
+    `It's due ${i.deadline}. ${DENIAL_LINE}`,
   ];
   return { subject: "Your KESHAH video test", text: `${blocks.join("\n\n")}\n\n${CREATOR_SIGNOFF}` };
 }
@@ -388,7 +395,7 @@ export function noShowText(first: string, link: string, deadline: string, alread
   return [
     hi,
     `If you couldn't make the group interview or didn't get to film your video, you can still do it on your phone:\n${link}`,
-    `It's due by ${deadline}. Applications without a test video are automatically denied.`,
+    `It's due ${deadline}. Applications without a test video are automatically denied.`,
   ].join("\n\n");
 }
 

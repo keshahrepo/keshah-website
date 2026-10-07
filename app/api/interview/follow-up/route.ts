@@ -75,7 +75,7 @@ function firstEmail(first: string, link: string, deadline: string) {
       `Thanks for joining the group interview today. We haven't received your test video yet.\n\n` +
       `Open this link on your phone, watch the example, then film yourself saying the short script:\n` +
       `${link}\n\n` +
-      `It's due by ${deadline}. Applications without a test video are automatically denied.\n\n` +
+      `It's due ${deadline}. Applications without a test video are automatically denied.\n\n` +
       CREATOR_SIGNOFF,
   };
 }
@@ -85,7 +85,7 @@ function reminderEmail(first: string, link: string, deadline: string) {
     subject: "Reminder: your KESHAH test video",
     text:
       `Hi ${first},\n\n` +
-      `We still haven't received your test video. It's due by ${deadline}. Applications without a test video are automatically denied.\n\n` +
+      `We still haven't received your test video. It's due ${deadline}. Applications without a test video are automatically denied.\n\n` +
       `Here's the link again:\n${link}\n\n` +
       CREATOR_SIGNOFF,
   };
