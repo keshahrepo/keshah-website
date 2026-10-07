@@ -10,6 +10,7 @@ import {
 } from "@/lib/creators/admin";
 import { CreatorDataError, draftOrGetInvoice, returnInvoiceToDraft } from "@/lib/creators/db";
 import type { Invoice } from "@/lib/creators/types";
+import { transferInvoice } from "@/lib/creators/stripe-connect";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
 //   { action: "approve" }
 //   { action: "unapprove" }      (back to submitted, only before payment)
 //   { action: "mark_paid", paid_on: "yyyy-mm-dd", reference, proof_path }
+//   { action: "pay_stripe" }     (Stripe transfer to the creator's Connect account, then paid + locked)
 //   { action: "resolve_dispute" } (clears the creator's "Something's off?" flag: dispute_resolved_at)
 //   { action: "return_to_draft" } (correction: recalculates; the cron re-submits it and restarts the 3-day window)
 // Approving during the creator's dispute window is allowed (the UI warns).
@@ -49,6 +51,32 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   const ref = db().collection(CREATORS_COLLECTION).doc(id).collection("invoices").doc(number);
 
   try {
+    if (body.action === "pay_stripe") {
+      const cur = await ref.get();
+      if (!cur.exists) throw new HttpError(404, "Invoice not found");
+      const inv = cur.data()!;
+      if (inv.locked || inv.status === "paid") throw new HttpError(409, "Invoice is paid and locked");
+      if (inv.status !== "approved") throw new HttpError(409, "Approve the invoice before paying it");
+      let transferId: string;
+      try {
+        transferId = await transferInvoice(id, number, Number(inv.total_cents));
+      } catch (e) {
+        if (e instanceof CreatorDataError) throw new HttpError(e.status, e.message);
+        throw new HttpError(502, e instanceof Error ? e.message : String(e));
+      }
+      const now = new Date().toISOString();
+      await ref.update({
+        status: "paid",
+        paid_at: now,
+        payment_reference: transferId,
+        payment_proof_path: null,
+        payment_method: "stripe_connect",
+        marked_paid_at: now,
+        locked: true,
+        updated_at: now,
+      });
+      return NextResponse.json({ ok: true, transfer_id: transferId });
+    }
     if (body.action === "return_to_draft") {
       try {
         await returnInvoiceToDraft(id, number);

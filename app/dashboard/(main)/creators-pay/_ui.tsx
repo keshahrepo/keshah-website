@@ -266,7 +266,7 @@ export async function uploadFile(
   return objectPath;
 }
 
-/** Record a manual Amex ACH payment: date + reference + optional proof file. Locks the invoice. */
+/** Pay an invoice: Stripe Connect transfer, or record a manual Amex ACH payment (date + reference + optional proof). Locks the invoice. */
 export function MarkPaidForm({
   creatorId,
   invoiceNumber,
@@ -286,6 +286,26 @@ export function MarkPaidForm({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [confirming, setConfirming] = useState(false);
+  const [stripeConfirm, setStripeConfirm] = useState(false);
+
+  // Stripe Connect: one transfer to the creator's account; the server marks it paid and locks it.
+  async function payStripe() {
+    setErr("");
+    if (!stripeConfirm) return setStripeConfirm(true);
+    setBusy(true);
+    try {
+      await api(`/api/admin/creators/${creatorId}/invoices/${encodeURIComponent(invoiceNumber)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "pay_stripe" }),
+      });
+      onDone();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+      setStripeConfirm(false);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function submit() {
     setErr("");
@@ -309,6 +329,12 @@ export function MarkPaidForm({
 
   return (
     <div style={{ ...card, marginBottom: 0, marginTop: 8, padding: 14, background: "rgba(255,255,255,0.05)" }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+        <Btn kind="primary" onClick={payStripe} disabled={busy}>
+          {busy && stripeConfirm ? "Paying..." : stripeConfirm ? `Confirm: send ${fmtUsd(amountCents)} with Stripe` : `Pay ${fmtUsd(amountCents)} with Stripe`}
+        </Btn>
+        <span style={muted}>{stripeConfirm ? "Sends the money now and locks the invoice." : "Or record a manual payment below."}</span>
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
         <Field label="Payment date">
           <input type="date" value={paidOn} onChange={(e) => setPaidOn(e.target.value)} style={input} />

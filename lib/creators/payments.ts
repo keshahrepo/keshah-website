@@ -15,6 +15,7 @@
  *
  * Nothing here ever stores a full account number, routing number or TIN in plaintext.
  */
+import { refreshStripeStatus, storedSummary, stripePayoutsOn, type StripeSummary } from "./stripe-connect";
 import { createHash, randomUUID } from "crypto";
 import { getStorage } from "firebase-admin/storage";
 import type { DocumentData } from "firebase-admin/firestore";
@@ -161,10 +162,24 @@ export function taxFormOf(d: DocumentData | undefined): TaxFormSummary {
 }
 
 /** What the creator sees: no storage paths, no hashes. */
-export function creatorPaymentView(d: DocumentData | undefined) {
+export function creatorPaymentView(d: DocumentData | undefined, stripe?: StripeSummary) {
   const pd = paymentDetailsOf(d);
   const tf = taxFormOf(d);
+  if (stripePayoutsOn()) {
+    const s = stripe ?? storedSummary(d);
+    // Stripe holds the bank and tax details; the app only shows where setup stands.
+    return {
+      enabled: true,
+      provider: "stripe" as const,
+      legal_name: String(d?.legal_name || d?.name || ""),
+      stripe: s,
+      payment_details: { status: s.status === "ready" ? "submitted" : "missing", bank_name: s.bank_name, last4: s.last4, account_type: null, submitted_at: null },
+      tax_form: { type: null, status: s.status === "ready" ? "submitted" : "missing", submitted_at: null, tin_last4: null },
+      complete: s.status === "ready",
+    };
+  }
   return {
+    provider: "manual" as const,
     enabled: encryptionConfigured(),
     /** Prefills the forms (the creator's own name). */
     legal_name: String(d?.legal_name || d?.name || ""),
@@ -174,10 +189,15 @@ export function creatorPaymentView(d: DocumentData | undefined) {
   };
 }
 
-export async function getCreatorPaymentView(id: string) {
+export async function getCreatorPaymentView(id: string, opts: { fresh?: boolean } = {}) {
   const snap = await creatorRef(id).get();
   if (!snap.exists) throw new CreatorDataError("Creator not found", 404);
-  return creatorPaymentView(snap.data());
+  // A live look at Stripe while setup isn't finished (it can change while they're in Stripe's screens).
+  let stripe: StripeSummary | undefined;
+  if (stripePayoutsOn() && opts.fresh && snap.data()?.stripe_account_id && snap.data()?.stripe?.status !== "ready") {
+    stripe = await refreshStripeStatus(id).catch(() => undefined);
+  }
+  return creatorPaymentView(snap.data(), stripe);
 }
 
 // ---------------------------------------------------------------- bank details
