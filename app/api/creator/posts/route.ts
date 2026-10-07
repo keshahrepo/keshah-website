@@ -23,7 +23,16 @@ export async function GET(req: NextRequest) {
     if ((Date.parse(to) - Date.parse(from)) / 86400000 > MAX_RANGE_DAYS) {
       return NextResponse.json({ error: `Pick a range of ${MAX_RANGE_DAYS} days or less` }, { status: 400 });
     }
-    const [posts, sync] = await Promise.all([listPosts(creator.id, from, to), getPostSyncState(creator.id)]);
+    const [all, sync] = await Promise.all([listPosts(creator.id, from, to), getPostSyncState(creator.id)]);
+    // Only posts from the creator's current handles: after a handle change, the old
+    // account's posts stay stored but don't show (or count) here.
+    const norm = (h: unknown) => String(h ?? "").trim().replace(/^@/, "").toLowerCase();
+    const current: Record<string, string> = { tiktok: norm(creator.tiktok_handle), instagram: norm(creator.instagram_handle) };
+    const posts = all.filter((p) => {
+      const want = current[p.platform];
+      const h = norm((p as { handle?: string }).handle);
+      return !want || !h || h === want;
+    });
     return NextResponse.json({
       today,
       from,
