@@ -2,6 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  formatGroups,
   hookLineFrom,
   median,
   normalViews,
@@ -254,4 +255,31 @@ test("parseVideoViews finds the biggest view count", () => {
   assert.equal(parseVideoViews({ aweme_detail: { statistics: { play_count: 1234 } } }), 1234);
   assert.equal(parseVideoViews({ data: { xdt_shortcode_media: { video_play_count: 50, video_view_count: 40 } } }), 50);
   assert.equal(parseVideoViews({ nothing: 1 }), null);
+});
+
+test("formatGroups: re-filmed hooks share a format led by the most viewed", () => {
+  const g = formatGroups([
+    { id: "a", hook: "Pinch the top of your scalp right now. Now pinch the sides. Feel the difference?", views: 100 },
+    { id: "b", hook: "Pinch the top of your scalp right now. Now pinch the sides. Feel the difference? The top is tighter.", views: 900 },
+    { id: "c", hook: "Are you using minoxidil? I just found out something crazy about it.", views: 50 },
+    { id: "d", hook: "", views: 10 },
+  ]);
+  assert.equal(g.get("a"), "b");
+  assert.equal(g.get("b"), "b");
+  assert.equal(g.get("c"), "c");
+  assert.equal(g.get("d"), "d");
+});
+
+test("selectDailyPicks: one video per format per day, formats rotate", () => {
+  const candidates = [
+    { id: "p1", format: "p", recent_wins: 0, views: 900 },
+    { id: "p2", format: "p", recent_wins: 0, views: 800 },
+    { id: "m1", format: "m", recent_wins: 0, views: 500 },
+    { id: "e1", format: "e", recent_wins: 0, views: 100 },
+  ];
+  const day1 = selectDailyPicks({ candidates, history: {}, date: "2026-10-07", count: 2, creatorId: "c" });
+  assert.deepEqual(day1, ["p1", "m1"]);
+  // p was used yesterday through p1, so p2 waits behind the unused format e.
+  const day2 = selectDailyPicks({ candidates, history: { p1: ["2026-10-07"], m1: ["2026-10-07"] }, date: "2026-10-08", count: 2, creatorId: "c" });
+  assert.deepEqual(day2, ["e1", "p2"]);
 });

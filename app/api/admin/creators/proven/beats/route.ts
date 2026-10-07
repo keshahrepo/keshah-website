@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/creators/admin";
 import { requireCronSecret } from "@/lib/support/auth";
-import { BEATS_BACKFILL_CAP, generateProvenBeats } from "@/lib/creators/proven-beats";
+import { BEATS_BACKFILL_CAP, generateProvenBeats, retitleFormats } from "@/lib/creators/proven-beats";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -23,6 +23,7 @@ async function handle(req: NextRequest) {
   const n = Number(q.get("limit"));
   const limit = Number.isInteger(n) && n > 0 ? Math.min(n, BEATS_BACKFILL_CAP) : BEATS_BACKFILL_CAP;
   try {
+    if (q.get("titles") === "1") return NextResponse.json({ ok: true, ...(await retitleFormats({ dry })) });
     const r = await generateProvenBeats({ limit, dry, deadlineMs: Date.now() + 180_000 });
     return NextResponse.json({ ok: true, ...r });
   } catch (e) {

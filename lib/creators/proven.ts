@@ -276,6 +276,8 @@ export function fmtViews(n: number): string {
 
 export interface PickCandidate {
   id: string;
+  /** Near-identical videos share a format (formatGroups); one format per day, rotated as a whole. */
+  format?: string;
   audience?: Audience;
   recent_wins: number;
   views: number;
@@ -312,23 +314,32 @@ function spread(s: string): number {
  * used = oldest), then recent winners, then most views, then a per-creator
  * per-day shuffle. Each entry carries this week's use count.
  */
-export function rankCandidates(input: PickInput): { id: string; week: number }[] {
+export function rankCandidates(input: PickInput): { id: string; week: number; format: string }[] {
   const weekStart = addDaysTo(input.date, -6);
+  const fmt = (c: PickCandidate) => c.format ?? c.id;
+  // A format counts as used whenever any of its versions was given.
+  const formatLast = new Map<string, string>();
+  for (const c of input.candidates) {
+    for (const d of input.history[c.id] ?? []) {
+      if (d < input.date && d > (formatLast.get(fmt(c)) ?? "")) formatLast.set(fmt(c), d);
+    }
+  }
   return input.candidates
     .filter((c) => audienceOk(c.audience, input.creatorAudience))
     .map((c) => {
       const dates = (input.history[c.id] ?? []).filter((d) => d < input.date);
       const last = dates.reduce((m, d) => (d > m ? d : m), "");
-      return { c, last, week: dates.filter((d) => d >= weekStart).length };
+      return { c, last, flast: formatLast.get(fmt(c)) ?? "", week: dates.filter((d) => d >= weekStart).length };
     })
     .sort(
       (a, b) =>
+        a.flast.localeCompare(b.flast) ||
         a.last.localeCompare(b.last) ||
         b.c.recent_wins - a.c.recent_wins ||
         b.c.views - a.c.views ||
         spread(`${input.creatorId}|${input.date}|${a.c.id}`) - spread(`${input.creatorId}|${input.date}|${b.c.id}`),
     )
-    .map((x) => ({ id: x.c.id, week: x.week }));
+    .map((x) => ({ id: x.c.id, week: x.week, format: fmt(x.c) }));
 }
 
 /**
@@ -340,16 +351,55 @@ export function rankCandidates(input: PickInput): { id: string; week: number }[]
 export function selectDailyPicks(input: PickInput): string[] {
   const out: string[] = [];
   const taken = new Set(input.exclude ?? []);
-  const add = (id: string) => {
+  const formatOf = new Map(input.candidates.map((c) => [c.id, c.format ?? c.id]));
+  const usedFormats = new Set([...taken].map((id) => formatOf.get(id) ?? id));
+  const add = (id: string, sameFormatOk = false) => {
     if (out.length >= input.count || taken.has(id)) return;
+    const f = formatOf.get(id) ?? id;
+    if (!sameFormatOk && usedFormats.has(f)) return;
     taken.add(id);
+    usedFormats.add(f);
     out.push(id);
   };
-  for (const id of input.forced ?? []) add(id);
+  for (const id of input.forced ?? []) add(id, true);
   const ranked = rankCandidates(input);
   for (const r of ranked) if (r.week < MAX_PER_WEEK) add(r.id);
   for (const r of ranked) add(r.id);
+  // Only when there are fewer formats than slots: a second version of a format beats an empty slot.
+  for (const r of ranked) add(r.id, true);
   return out;
+}
+
+/** Words that carry meaning in a hook (lowercase, 3+ letters). */
+function hookWords(h: string): Set<string> {
+  return new Set(h.toLowerCase().replace(/[^a-z ]+/g, " ").split(/\s+/).filter((w) => w.length > 2));
+}
+
+/**
+ * Groups near-identical videos (the same hook re-filmed) into formats: hooks
+ * sharing at least half their words. Returns id -> format id (the group's
+ * most viewed video). Videos without a hook are their own format.
+ */
+export function formatGroups(videos: { id: string; hook: string; views: number }[], threshold = 0.5): Map<string, string> {
+  const words = videos.map((v) => hookWords(v.hook));
+  const parent = videos.map((_, i) => i);
+  const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+  for (let i = 0; i < videos.length; i++) {
+    if (!words[i].size) continue;
+    for (let j = i + 1; j < videos.length; j++) {
+      if (!words[j].size) continue;
+      let both = 0;
+      for (const w of words[i]) if (words[j].has(w)) both++;
+      if (both / (words[i].size + words[j].size - both) >= threshold) parent[find(i)] = find(j);
+    }
+  }
+  const lead = new Map<number, number>();
+  videos.forEach((v, i) => {
+    const r = find(i);
+    const cur = lead.get(r);
+    if (cur === undefined || v.views > videos[cur].views) lead.set(r, i);
+  });
+  return new Map(videos.map((v, i) => [v.id, videos[lead.get(find(i))!].id]));
 }
 
 /** Replacement for a swapped pick under the same rules (null = nothing left to offer). */

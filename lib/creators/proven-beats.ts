@@ -24,7 +24,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Firestore } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
-import { PROVEN_COLLECTION, type ProvenVideo } from "./proven";
+import { PROVEN_COLLECTION, formatGroups, type ProvenVideo } from "./proven";
 
 export const BEATS_MODEL = "claude-sonnet-5-5";
 /** Most videos the daily cron fills per run. */
@@ -338,4 +338,93 @@ export async function generateProvenBeats(opts: {
   out.remaining = need.length - out.generated;
   log(`proven beats: ${out.generated}/${out.attempted} generated (${out.with_cta} with the original's ending), ${out.failed.length} failed`);
   return out;
+}
+
+// ---------------------------------------------------------------- unique names
+
+export const TITLES_SYSTEM = `You name short hair loss videos for a list in an app. Each line you get is one video format: its id and its hook.
+
+Return names by calling save_titles with one entry per id.
+
+Rules for each name:
+- 2 to 4 words, sentence case, no punctuation, no first person, never "routine", no brand names.
+- Every name must be different from every other name. Make each one say what is specific about that hook, so someone scanning the list can tell them apart. Bad: "Pinch test" for five different videos. Good: "Pinch top vs sides", "Pinch where it's thin", "Fist press check", "Scalp won't move", "Crown pinch test".
+- Plain words a 5-year-old knows.`;
+
+const TITLES_TOOL = {
+  name: "save_titles",
+  description: "Save one name per video format.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      titles: { type: "array", items: { type: "object", properties: { id: { type: "string" }, title: { type: "string" } }, required: ["id", "title"] } },
+    },
+    required: ["titles"],
+  },
+};
+
+export interface RetitleResult {
+  dry: boolean;
+  formats: number;
+  videos: number;
+  written: number;
+  titles?: Record<string, string>;
+}
+
+/**
+ * Names every format (near-identical videos grouped by formatGroups) with a
+ * name no other format has, and writes it to all of its videos. One call.
+ */
+export async function retitleFormats(opts: { db?: Firestore; dry?: boolean; generate?: (system: string, user: string) => Promise<unknown> } = {}): Promise<RetitleResult> {
+  const db = opts.db ?? getFirebaseAdmin().db;
+  const col = db.collection(PROVEN_COLLECTION);
+  const snap = await col.where("status", "==", "active").get();
+  const vids = snap.docs.map((d) => ({ id: d.id, d: d.data() as ProvenVideo & { hook_full?: string } }));
+  const groups = formatGroups(vids.map((v) => ({ id: v.id, hook: v.d.hook_full || v.d.hook_line, views: v.d.views ?? 0 })));
+  const leads = [...new Set(groups.values())].map((id) => vids.find((v) => v.id === id)!).filter((v) => (v.d.hook_full || v.d.hook_line || "").trim());
+  const user = leads.map((v) => `${v.id}: ${(v.d.hook_full || v.d.hook_line).slice(0, 220)}`).join("\n");
+
+  let raw: unknown;
+  if (opts.generate) raw = await opts.generate(TITLES_SYSTEM, user);
+  else {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set");
+    const client = new Anthropic({ apiKey });
+    const resp = await client.messages.create({
+      model: BEATS_MODEL,
+      max_tokens: 6000,
+      system: TITLES_SYSTEM,
+      tools: [TITLES_TOOL],
+      tool_choice: { type: "auto" },
+      messages: [{ role: "user", content: `${user}\n\nAnswer by calling ${TITLES_TOOL.name}.` }],
+    });
+    const call = resp.content.find((b) => b.type === "tool_use");
+    if (!call || call.type !== "tool_use") throw new Error(`no titles (stop: ${resp.stop_reason})`);
+    raw = call.input;
+  }
+  const list = Array.isArray((raw as { titles?: unknown })?.titles) ? (raw as { titles: { id: string; title: string }[] }).titles : [];
+  const byFormat: Record<string, string> = {};
+  const seen = new Set<string>();
+  for (const t of list) {
+    const clean = cleanTitle(t.title);
+    if (!clean || seen.has(clean.toLowerCase())) continue;
+    seen.add(clean.toLowerCase());
+    byFormat[t.id] = clean;
+  }
+  const out: RetitleResult = { dry: !!opts.dry, formats: leads.length, videos: vids.length, written: 0 };
+  if (opts.dry) return { ...out, titles: byFormat };
+  let batch = db.batch();
+  let n = 0;
+  for (const v of vids) {
+    const title = byFormat[groups.get(v.id) ?? v.id];
+    if (!title || v.d.short_title === title) continue;
+    batch.update(col.doc(v.id), { short_title: title });
+    out.written++;
+    if (++n % 400 === 0) {
+      await batch.commit();
+      batch = db.batch();
+    }
+  }
+  await batch.commit();
+  return { ...out, titles: byFormat };
 }

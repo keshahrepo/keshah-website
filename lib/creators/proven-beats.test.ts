@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Firestore } from "firebase-admin/firestore";
-import { BEATS_MAX_ATTEMPTS, beatProblem, beatsFor, cleanCta, cleanHook, cleanTitle, generateProvenBeats, needsBeats, parseBeats, tidyLine } from "./proven-beats";
+import { BEATS_MAX_ATTEMPTS, beatProblem, beatsFor, cleanCta, cleanHook, retitleFormats, cleanTitle, generateProvenBeats, needsBeats, parseBeats, tidyLine } from "./proven-beats";
 
 const TRANSCRIPT =
   "Pinch the top of your scalp right now. Now pinch the sides. The top feels way tighter, right? That's restricting blood flow to your follicles. I fixed my own hair this way. Check my pinned video for the full routine.";
@@ -162,4 +162,23 @@ test("parseBeats reads hook and hook_first_person", () => {
   );
   assert.equal(r.hook_first_person, true);
   assert.equal(r.hook, "I fixed my own hair loss four years ago without any drugs.");
+});
+
+test("retitleFormats: one name per format, duplicates dropped, written to every version", async () => {
+  const docs: Record<string, Record<string, unknown>> = {
+    a: { status: "active", views: 900, hook_full: "Pinch the top of your scalp right now. Now pinch the sides. Feel the difference?" },
+    b: { status: "active", views: 100, hook_full: "Pinch the top of your scalp right now. Now pinch the sides. Feel the difference? Top is tight." },
+    c: { status: "active", views: 50, hook_full: "Are you using minoxidil? I just found out something crazy about it." },
+  };
+  const writes: Record<string, unknown> = {};
+  const db = {
+    collection: () => ({
+      where: () => ({ get: async () => ({ docs: Object.entries(docs).map(([id, d]) => ({ id, data: () => d })) }) }),
+      doc: (id: string) => id,
+    }),
+    batch: () => ({ update: (id: string, p: { short_title: string }) => (writes[id] = p.short_title), commit: async () => undefined }),
+  } as unknown as Firestore;
+  const r = await retitleFormats({ db, generate: async () => ({ titles: [{ id: "a", title: "Pinch top vs sides" }, { id: "c", title: "Pinch top vs sides" }] }) });
+  assert.equal(r.formats, 2);
+  assert.deepEqual(writes, { a: "Pinch top vs sides", b: "Pinch top vs sides" });
 });

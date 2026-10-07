@@ -23,6 +23,7 @@ import {
   emptyStats,
   hookLineFrom,
   ideaInTest,
+  formatGroups,
   normalViews,
   pickIdeaCreators,
   provenIdFor,
@@ -571,7 +572,7 @@ async function pickContext(db: Firestore, creator: CreatorProfile, date: YyyyMmD
     db
       .collection(PROVEN_COLLECTION)
       .where("status", "==", "active")
-      .select("added_by", "created_at", "idea_assignments", "audience", "stats.recent_wins", "views", "hook_first_person")
+      .select("added_by", "created_at", "idea_assignments", "audience", "stats.recent_wins", "views", "hook_first_person", "hook_line", "hook_full")
       .get(),
     cref.collection("daily_picks").where("date", ">=", addDaysTo(date, -30)).get(),
     cref.get(),
@@ -580,10 +581,11 @@ async function pickContext(db: Firestore, creator: CreatorProfile, date: YyyyMmD
   const forced = active
     .filter((v) => v.added_by === "founder_idea" && (v.idea_assignments ?? []).some((a) => a.creator_id === creator.id && a.date === date))
     .map((v) => v.id);
+  const formats = formatGroups(active.map((v) => ({ id: v.id, hook: v.hook_full || v.hook_line, views: v.views })));
   const candidates = active
     // Hooks that claim the speaker's own results ("I fixed my hair loss") aren't given out.
     .filter((v) => !ideaInTest(v, nowIso) && !v.hook_first_person)
-    .map((v) => ({ id: v.id, audience: v.audience, recent_wins: v.stats.recent_wins, views: v.views }));
+    .map((v) => ({ id: v.id, format: formats.get(v.id), audience: v.audience, recent_wins: v.stats.recent_wins, views: v.views }));
   const history: Record<string, YyyyMmDd[]> = {};
   for (const d of histSnap.docs) {
     const p = d.data() as DailyPicks;

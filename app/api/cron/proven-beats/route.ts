@@ -5,7 +5,7 @@
 // Auth: Vercel cron sends Authorization: Bearer ${CRON_SECRET}.
 import { NextResponse } from "next/server";
 import { requireCronSecret } from "@/lib/support/auth";
-import { BEATS_CRON_CAP, generateProvenBeats } from "@/lib/creators/proven-beats";
+import { BEATS_CRON_CAP, generateProvenBeats, retitleFormats } from "@/lib/creators/proven-beats";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -13,7 +13,9 @@ export const maxDuration = 300;
 export async function GET(req: Request) {
   if (!requireCronSecret(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
-    const r = await generateProvenBeats({ limit: BEATS_CRON_CAP, deadlineMs: Date.now() + 240_000 });
+    const r = await generateProvenBeats({ limit: BEATS_CRON_CAP, deadlineMs: Date.now() + 200_000 });
+    // New videos got names on their own; re-name all formats so no two share one.
+    if (r.generated > 0) await retitleFormats().catch((e) => console.error("proven retitle error:", e));
     return NextResponse.json({ ok: true, ...r });
   } catch (e) {
     console.error("proven beats cron error:", e);
