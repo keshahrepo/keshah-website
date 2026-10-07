@@ -4,6 +4,7 @@
 // making the bucket world-readable.
 
 import { NextResponse } from "next/server";
+import { requireDashboardSession } from "@/lib/support/auth";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 import { getStorage } from "firebase-admin/storage";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
@@ -28,6 +29,9 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!(await requireDashboardSession())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   try {
     const { id } = await params;
     bootAdmin();

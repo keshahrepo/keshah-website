@@ -4,6 +4,7 @@
 // (the Recruit tab's Reopen button sends "booked").
 
 import { NextResponse } from "next/server";
+import { requireDashboardSession } from "@/lib/support/auth";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { notify, PUSH_COPY } from "@/lib/push";
@@ -14,6 +15,9 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!(await requireDashboardSession())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   try {
     const { id } = await params;
     const body = (await req.json()) as { status?: string };
