@@ -85,3 +85,45 @@ export function bearerToken(headers: Headers): string | null {
   const m = h.match(/^Bearer\s+(\S+)\s*$/i);
   return m ? m[1] : null;
 }
+
+// ---------------------------------------------------------------- link tokens
+
+/**
+ * Short-lived token handed back by /api/mobile/auth/firebase when a Google /
+ * Apple sign-in needs linking to an application email (Apple private relay,
+ * or an email we don't know). Carries only the Firebase uid. It has no role,
+ * so verifyMobileToken never accepts it as a session.
+ */
+const LINK_AUDIENCE = "keshah-creators-link";
+export const LINK_TTL_SECONDS = 30 * 60;
+
+export async function signLinkToken(uid: string, opts: { secret?: string; now?: Date } = {}): Promise<string> {
+  const key = secretBytes(opts.secret ?? process.env.MOBILE_JWT_SECRET);
+  if (!key) throw new Error(MOBILE_OFF_MESSAGE);
+  const iat = Math.floor((opts.now ?? new Date()).getTime() / 1000);
+  return new SignJWT({ typ: "link" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(uid)
+    .setIssuer(ISSUER)
+    .setAudience(LINK_AUDIENCE)
+    .setIssuedAt(iat)
+    .setExpirationTime(iat + LINK_TTL_SECONDS)
+    .sign(key);
+}
+
+/** The Firebase uid inside a valid, unexpired link token, else null. */
+export async function verifyLinkToken(token: unknown, opts: { secret?: string; now?: Date } = {}): Promise<string | null> {
+  const key = secretBytes(opts.secret ?? process.env.MOBILE_JWT_SECRET);
+  if (!key || typeof token !== "string" || !token) return null;
+  try {
+    const { payload } = await jwtVerify(token, key, {
+      issuer: ISSUER,
+      audience: LINK_AUDIENCE,
+      algorithms: ["HS256"],
+      ...(opts.now ? { currentDate: opts.now } : {}),
+    });
+    return payload.typ === "link" && typeof payload.sub === "string" && payload.sub ? payload.sub : null;
+  } catch {
+    return null;
+  }
+}

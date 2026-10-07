@@ -21,6 +21,8 @@ import { applicantStatus, checkInWindow, interviewCard, videoDeadlineMs, videoPr
 import { dailyNudge, registerPushToken, sendPush, validPushToken, type PushMessenger, type PushStore, type PushTokenRecord } from "../push";
 import { nudgeDateDue, nudgeNeeded } from "../mobile/nudge";
 import { creatorIdFromRequest } from "../../app/api/creator/_auth";
+import { completeLink, firebaseSignIn, type DecodedIdToken, type LinkStore } from "../mobile/firebase-signin";
+import { signLinkToken, verifyLinkToken } from "../mobile/token";
 
 const SECRET = "test-secret-123";
 const T0 = Date.parse("2026-10-07T16:00:00.000Z");
@@ -350,4 +352,89 @@ test("nudge: 8 PM local on a weekday, posting creators only, once a day", () => 
   assert.equal(nudgeNeeded(4, false), true);
   assert.equal(nudgeNeeded(5, false), false);
   assert.equal(nudgeNeeded(0, true), false);
+});
+
+// ---------------------------------------------------------------- Google / Apple
+
+function firebaseDeps(tokens: Record<string, DecodedIdToken>) {
+  const links = new Map<string, { email: string; linked_at: string }>();
+  const store: LinkStore = {
+    async get(uid) {
+      return links.get(uid) ?? null;
+    },
+    async set(uid, rec) {
+      links.set(uid, rec);
+    },
+  };
+  return {
+    links,
+    deps: {
+      verifyIdToken: async (t: string) => {
+        if (!tokens[t]) throw new Error("auth/argument-error");
+        return tokens[t];
+      },
+      links: store,
+      identity: lookup({ "c@x.com": "C1" }, { "a@x.com": "A1" }),
+      secret: SECRET,
+    },
+  };
+}
+
+test("firebase: a verified Google email resolves the role and gets a session", async () => {
+  const { deps } = firebaseDeps({ g: { uid: "u1", email: "A@X.com", email_verified: true } });
+  const r = await firebaseSignIn(deps, "g");
+  assert.ok(r.ok && "token" in r.body);
+  if (r.ok && "token" in r.body) {
+    assert.equal(r.body.role, "applicant");
+    assert.equal(r.body.email, "a@x.com");
+    assert.equal(r.body.application_id, "A1");
+    assert.deepEqual(await verifyMobileToken(r.body.token, { secret: SECRET }), { sub: "a@x.com", role: "applicant", aid: "A1" });
+  }
+});
+
+test("firebase: Apple private relay, unknown or unverified email -> needs_link with a uid link token", async () => {
+  const { deps } = firebaseDeps({
+    apple: { uid: "u2", email: "abc123@privaterelay.appleid.com", email_verified: true },
+    stranger: { uid: "u3", email: "z@x.com", email_verified: true },
+    unverified: { uid: "u4", email: "c@x.com", email_verified: false },
+  });
+  for (const [t, uid] of [["apple", "u2"], ["stranger", "u3"], ["unverified", "u4"]] as const) {
+    const r = await firebaseSignIn(deps, t);
+    assert.ok(r.ok && "needs_link" in r.body, t);
+    if (r.ok && "needs_link" in r.body) {
+      assert.equal(await verifyLinkToken(r.body.link_token, { secret: SECRET }), uid);
+      // A link token is never a session.
+      assert.equal(await verifyMobileToken(r.body.link_token, { secret: SECRET }), null);
+    }
+  }
+});
+
+test("firebase: link flow completes, and the next Apple sign-in uses the link", async () => {
+  const { deps, links } = firebaseDeps({ apple: { uid: "u2", email: "abc123@privaterelay.appleid.com", email_verified: true } });
+  const first = await firebaseSignIn(deps, "apple");
+  assert.ok(first.ok && "needs_link" in first.body);
+  const linkToken = first.ok && "needs_link" in first.body ? first.body.link_token : "";
+  // link/start + link/verify: code to the application email, then link.
+  const store = memoryCodeStore();
+  await issueCode(store, { email: "c@x.com", ip: "ip", secret: SECRET, nowMs: T0, code: "654321" });
+  assert.equal((await verifyCode(store, { email: "c@x.com", code: "654321", secret: SECRET, nowMs: T0 })).result, "ok");
+  const uid = await verifyLinkToken(linkToken, { secret: SECRET });
+  assert.equal(uid, "u2");
+  const session = await completeLink(deps, uid!, "c@x.com");
+  assert.equal(session.role, "creator");
+  assert.equal(session.creator_id, "C1");
+  assert.equal(links.get("u2")!.email, "c@x.com");
+  const again = await firebaseSignIn(deps, "apple");
+  assert.ok(again.ok && "token" in again.body && again.body.role === "creator" && again.body.email === "c@x.com");
+});
+
+test("firebase: invalid id_token -> 401; expired link token is refused", async () => {
+  const { deps } = firebaseDeps({});
+  const r = await firebaseSignIn(deps, "forged");
+  assert.ok(!r.ok && r.status === 401);
+  const missing = await firebaseSignIn(deps, "");
+  assert.ok(!missing.ok && missing.status === 400);
+  const lt = await signLinkToken("u9", { secret: SECRET, now: new Date(T0) });
+  assert.equal(await verifyLinkToken(lt, { secret: SECRET, now: new Date(T0 + 29 * MIN) }), "u9");
+  assert.equal(await verifyLinkToken(lt, { secret: SECRET, now: new Date(T0 + 31 * MIN) }), null);
 });

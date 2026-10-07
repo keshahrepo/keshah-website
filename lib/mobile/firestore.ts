@@ -14,6 +14,7 @@ import {
 } from "@/lib/interview";
 import { CODES_COLLECTION, IP_COLLECTION, type CodeState, type CodeStore, type IpState } from "./codes";
 import { pickRole, type IdentityLookup, type PersonRef } from "./identity";
+import { LINKS_COLLECTION, type LinkStore } from "./firebase-signin";
 
 export function firestoreCodeStore(db: Firestore): CodeStore {
   return {
@@ -106,4 +107,18 @@ export async function loadApplicant(db: Firestore, email: string): Promise<Appli
     }
   }
   return { doc, app, sessionClosesAtMs, sessionOpen, sessionSlug };
+}
+
+export function firestoreLinkStore(db: Firestore): LinkStore {
+  const col = db.collection(LINKS_COLLECTION);
+  return {
+    async get(uid) {
+      const d = await col.doc(uid).get();
+      const email = d.exists ? d.get("email") : null;
+      return typeof email === "string" && email ? { email } : null;
+    },
+    async set(uid, rec) {
+      await col.doc(uid).set(rec);
+    },
+  };
 }
