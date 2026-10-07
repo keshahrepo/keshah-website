@@ -337,6 +337,25 @@ export function videoLinkFor(siteUrl: string, email: string): string {
   return `${siteUrl.replace(/\/+$/, "")}/interview/video`;
 }
 
+/**
+ * Deadline in Eastern, plus the applicant's own time when we know their
+ * timezone and it isn't Eastern: "11:59 PM ET (8:59 PM your time) on
+ * Wednesday, Oct 7". If their local day differs it says so.
+ */
+export function formatDeadline(ms: number, timeZone?: unknown): string {
+  const et = formatDeadlineET(ms);
+  if (!validTimeZone(timeZone)) return et;
+  const d = new Date(ms);
+  const part = (tz: string, o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("en-US", { timeZone: tz, ...o }).format(d);
+  const etTime = part("America/New_York", { hour: "numeric", minute: "2-digit" });
+  const localTime = part(timeZone, { hour: "numeric", minute: "2-digit" });
+  const etDay = part("America/New_York", { weekday: "long" });
+  const localDay = part(timeZone, { weekday: "long" });
+  if (etTime === localTime && etDay === localDay) return et;
+  const local = etDay === localDay ? `${localTime} your time` : `${localTime} ${localDay} your time`;
+  return et.replace(" ET on ", ` ET (${local}) on `);
+}
+
 /** "6:00 PM ET on Thursday, Oct 8" for a deadline. */
 export function formatDeadlineET(ms: number): string {
   const d = new Date(ms);

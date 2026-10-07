@@ -48,7 +48,7 @@ import {
   noShowEmailDue,
   noShowText,
   videoLinkFor,
-  formatDeadlineET,
+  formatDeadline,
 } from "@/lib/interview-reminders";
 import { normalizePhone, sendInterviewText, textWasSent } from "@/lib/sms";
 
@@ -174,7 +174,7 @@ export async function GET(req: Request) {
             await sendEmail({
               to: email,
               fromName: CREATOR_FROM_NAME,
-              ...noShowEmail({ first, link, recordingUrl, deadline: formatDeadlineET(closesAt) }),
+              ...noShowEmail({ first, link, recordingUrl, deadline: formatDeadline(closesAt, x.calendly_invitee_timezone) }),
             });
           } catch (e) {
             await releaseClaim(a.ref, NOSHOW_EMAIL_FIELD).catch(() => {});
@@ -182,7 +182,7 @@ export async function GET(req: Request) {
             continue;
           }
           if (phone && !x[NOSHOW_TEXT_FIELD]) {
-            const r = await sendInterviewText({ to: phone, text: noShowText(first, link, formatDeadlineET(closesAt), !!x.interview_reminder_now_text_sent_at), ref: a.id, kind: "interview_noshow" });
+            const r = await sendInterviewText({ to: phone, text: noShowText(first, link, formatDeadline(closesAt, x.calendly_invitee_timezone), !!x.interview_reminder_now_text_sent_at), ref: a.id, kind: "interview_noshow" });
             if (textWasSent(r)) {
               counts.no_show_text++;
               await a.ref.set({ [NOSHOW_TEXT_FIELD]: Timestamp.now() }, { merge: true });
@@ -202,8 +202,8 @@ export async function GET(req: Request) {
 
         const msg =
           kind === "first"
-            ? firstEmail(first, linkFor(s, email), formatDeadlineET(closesAt))
-            : reminderEmail(first, linkFor(s, email), formatDeadlineET(closesAt));
+            ? firstEmail(first, linkFor(s, email), formatDeadline(closesAt, x.calendly_invitee_timezone))
+            : reminderEmail(first, linkFor(s, email), formatDeadline(closesAt, x.calendly_invitee_timezone));
         counts[kind]++;
         if (dry) continue;
         if (!canEmail) {
