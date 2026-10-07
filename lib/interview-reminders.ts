@@ -230,7 +230,7 @@ export function noShowEmail(i: { first: string; link: string; recordingUrl?: str
 } {
   const blocks = [
     `Hi ${i.first || "there"},`,
-    "We didn't see you at the KESHAH group interview today. You can still do the video test on your own time.",
+    "If you couldn't make the KESHAH group interview today, or didn't get to film your video, you can still do the video test on your own time.",
     ...(i.recordingUrl ? [`Here's a recording of the presentation, so you don't miss anything:\n${i.recordingUrl}`] : []),
     `When you're ready, open this link on your phone and film the short video:\n${i.link}`,
     "It takes about 10 minutes.",
@@ -238,11 +238,11 @@ export function noShowEmail(i: { first: string; link: string; recordingUrl?: str
   return { subject: "Your KESHAH video test", text: `${blocks.join("\n\n")}\n\nThanks,\n${CREATOR_SIGNOFF}` };
 }
 
-export function noShowText(first: string, link: string): string {
-  return (
-    `Hi ${first || "there"}, this is McKenzie from KESHAH. We didn't see you at the group interview today. ` +
-    `You can still do the video test on your phone, it takes about 10 minutes: ${link}`
-  );
+export function noShowText(first: string, link: string, alreadyIntroduced = false): string {
+  // Worded for both cases our signal can't tell apart: missed the call, or
+  // joined but didn't get to film. Skip the intro if we texted them at the start.
+  const hi = alreadyIntroduced ? `Hi ${first || "there"},` : `Hi ${first || "there"}, this is McKenzie from KESHAH.`;
+  return `${hi} If you couldn't make the group interview or didn't get to film your video, you can still do it on your phone. It takes about 10 minutes: ${link}`;
 }
 
 export function firstNameOf(app: Record<string, unknown>): string {

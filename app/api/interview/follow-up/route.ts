@@ -181,7 +181,7 @@ export async function GET(req: Request) {
             continue;
           }
           if (phone && !x[NOSHOW_TEXT_FIELD]) {
-            const r = await sendInterviewText({ to: phone, text: noShowText(first, link), ref: a.id });
+            const r = await sendInterviewText({ to: phone, text: noShowText(first, link, !!x.interview_reminder_now_text_sent_at), ref: a.id });
             if (textWasSent(r)) {
               counts.no_show_text++;
               await a.ref.set({ [NOSHOW_TEXT_FIELD]: Timestamp.now() }, { merge: true });
