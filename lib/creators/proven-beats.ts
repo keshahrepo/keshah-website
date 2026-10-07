@@ -47,6 +47,8 @@ export interface ProvenBeatsMeta {
 
 type BeatsFields = Pick<ProvenVideo, "status" | "added_by" | "transcript" | "talking_points" | "short_title"> & {
   talking_points_source?: string;
+  hook_full?: string;
+  hook_first_person?: boolean;
   beats?: ProvenBeatsMeta;
 };
 
@@ -54,14 +56,18 @@ type BeatsFields = Pick<ProvenVideo, "status" | "added_by" | "transcript" | "tal
 export function needsBeats(v: BeatsFields): boolean {
   if (v.status !== "active" || v.added_by === "founder_idea") return false;
   if ((v.transcript ?? "").trim().length < BEATS_MIN_TRANSCRIPT) return false;
-  if (v.talking_points?.length && v.short_title) return false;
+  if (v.talking_points?.length && v.short_title && v.hook_full && typeof v.hook_first_person === "boolean") return false;
   return (v.beats?.attempts ?? 0) < BEATS_MAX_ATTEMPTS;
 }
 
 export const BEATS_SYSTEM = `You write speaking notes for short hair loss videos. A creator will film their own version of a video that did well. They say the hook word for word, then make a few points in their own words, then point viewers to the pinned video on their profile.
 
 Return one JSON object, no prose, no code fence:
-{"title": "...", "beats": ["...", "...", "..."], "cta": "..."}
+{"hook": "...", "hook_first_person": false, "title": "...", "beats": ["...", "...", "..."], "cta": "..."}
+
+"hook": the full hook, copied word for word from the start of the transcript. Keep going until the hook's thought is complete and the viewer wants to keep watching, usually 1 to 3 sentences (the first 5 to 12 seconds). Never stop after a fragment like "All right." or "If you're losing hair." if the next sentence finishes the thought. You may drop filler ("uh", "um", a word said twice) and fix punctuation, nothing else. Under 45 words.
+
+"hook_first_person": true if the hook makes a claim about the speaker's own hair, results or story ("I fixed my own hair loss", "I stopped my hair fall", "Four years ago I was losing my hair", "my hair used to look like this"). False for neutral first person like "let me show you", "I'll tell you", "do this test with me".
 
 "title": a 2 to 4 word name for the video, shown in a list next to its cover. Names the angle, not the claim. Examples: "Pinch test", "Minoxidil truth", "Crown vs sides", "Massage mistake", "Neck tension", "Tight scalp check". Sentence case, no punctuation, no first person, never "routine".
 
@@ -126,6 +132,9 @@ export function cleanCta(raw: unknown): string {
 }
 
 export interface ParsedBeats {
+  /** "" when the model's hook didn't match the transcript start. */
+  hook: string;
+  hook_first_person: boolean;
   beats: string[];
   cta: string;
   /** "" when the model's title broke the rules (the app makes one from the hook). */
@@ -145,13 +154,27 @@ export function cleanTitle(raw: unknown): string {
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
+const words = (t: string) => t.toLowerCase().replace(/[^a-z0-9' ]+/g, " ").split(/\s+/).filter((w) => w && !/^(uh|um)$/.test(w));
+
+/** The full hook, or "" unless it really is the start of the transcript (word for word, filler aside). */
+export function cleanHook(raw: unknown, transcript: string): string {
+  const t = String(raw ?? "").replace(DASHES, ", ").replace(/["“”]/g, "").replace(/\s+/g, " ").trim();
+  const hw = words(t);
+  if (hw.length < 3 || hw.length > 60) return "";
+  const tw = words(transcript).slice(0, hw.length + 20).join(" ");
+  if (!tw.startsWith(hw.slice(0, 3).join(" "))) return "";
+  const hit = hw.filter((w) => tw.includes(w)).length;
+  if (hit / hw.length < 0.9) return "";
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
 /** Model output -> clean beats (3-4) + cta. Throws when fewer than 3 beats survive the rules. */
-export function parseBeats(raw: string): ParsedBeats {
+export function parseBeats(raw: string, transcript = ""): ParsedBeats {
   const s = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
   const start = s.indexOf("{");
   const end = s.lastIndexOf("}");
   if (start < 0 || end <= start) throw new Error("no JSON in model output");
-  const j = JSON.parse(s.slice(start, end + 1)) as { beats?: unknown; cta?: unknown; title?: unknown };
+  const j = JSON.parse(s.slice(start, end + 1)) as { beats?: unknown; cta?: unknown; title?: unknown; hook?: unknown; hook_first_person?: unknown };
   const list = Array.isArray(j.beats) ? j.beats.map((b) => tidyLine(String(b))) : [];
   const problems: string[] = [];
   const beats = list.filter((b) => {
@@ -160,7 +183,13 @@ export function parseBeats(raw: string): ParsedBeats {
     return !p;
   });
   if (beats.length < 3) throw new Error(`only ${beats.length} usable beats (${problems.join("; ").slice(0, 200)})`);
-  return { beats: beats.slice(0, 4), cta: cleanCta(j.cta), title: cleanTitle(j.title) };
+  return {
+    hook: transcript ? cleanHook(j.hook, transcript) : "",
+    hook_first_person: j.hook_first_person === true,
+    beats: beats.slice(0, 4),
+    cta: cleanCta(j.cta),
+    title: cleanTitle(j.title),
+  };
 }
 
 export type GenerateFn = (system: string, user: string) => Promise<string>;
@@ -170,7 +199,7 @@ function anthropicGenerate(apiKey: string): GenerateFn {
   return async (system, user) => {
     const resp = await client.messages.create({
       model: BEATS_MODEL,
-      max_tokens: 600,
+      max_tokens: 900,
       system,
       messages: [{ role: "user", content: user }],
     });
@@ -181,11 +210,11 @@ function anthropicGenerate(apiKey: string): GenerateFn {
 
 /** Beats for one video. Retries once when the output breaks the rules. No Firestore writes. */
 export async function beatsFor(v: Pick<ProvenVideo, "hook_line" | "transcript">, generate: GenerateFn): Promise<ParsedBeats> {
-  const user = `HOOK (the creator says this word for word, don't repeat it):\n${v.hook_line}\n\nORIGINAL TRANSCRIPT:\n${v.transcript.slice(0, 6000)}`;
+  const user = `FIRST LINE OF THE HOOK (it may be cut short):\n${v.hook_line}\n\nORIGINAL TRANSCRIPT:\n${v.transcript.slice(0, 6000)}`;
   let last: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      return parseBeats(await generate(BEATS_SYSTEM, attempt ? `${user}\n\nYour last answer broke a rule (${String(last).slice(0, 160)}). Follow every rule.` : user));
+      return parseBeats(await generate(BEATS_SYSTEM, attempt ? `${user}\n\nYour last answer broke a rule (${String(last).slice(0, 160)}). Follow every rule.` : user), v.transcript);
     } catch (e) {
       last = e instanceof Error ? e.message : e;
     }
@@ -258,6 +287,8 @@ export async function generateProvenBeats(opts: {
             const patch: Record<string, unknown> = {};
             if (!hasPoints) Object.assign(patch, { talking_points: r.beats, talking_points_source: "auto", cta_line: r.cta });
             if (!cur.data()?.short_title && r.title) patch.short_title = r.title;
+            if (!cur.data()?.hook_full && r.hook) patch.hook_full = r.hook;
+            if (typeof cur.data()?.hook_first_person !== "boolean") patch.hook_first_person = r.hook_first_person;
             if (!Object.keys(patch).length) return null;
             tx.update(col.doc(x.id), { ...patch, beats: { generated_at: at, model: BEATS_MODEL } });
             return { points: !hasPoints };

@@ -109,6 +109,8 @@ export function toProven(d: DocumentData): ProvenVideo {
     ...(d.talking_points_source === "auto" || d.talking_points_source === "admin" ? { talking_points_source: d.talking_points_source } : {}),
     ...(typeof d.cta_line === "string" && d.cta_line ? { cta_line: d.cta_line } : {}),
     ...(typeof d.short_title === "string" && d.short_title ? { short_title: d.short_title } : {}),
+    ...(typeof d.hook_full === "string" && d.hook_full ? { hook_full: d.hook_full } : {}),
+    ...(typeof d.hook_first_person === "boolean" ? { hook_first_person: d.hook_first_person } : {}),
     ...(d.reference_url ? { reference_url: d.reference_url } : {}),
     ...(Array.isArray(d.idea_assignments) ? { idea_assignments: d.idea_assignments } : {}),
     ...(d.source_creator_id ? { source_creator_id: d.source_creator_id } : {}),
@@ -530,7 +532,8 @@ function publicProven(id: string, v: ProvenVideo): PublicProven {
     platform: v.platform,
     handle: v.handle,
     views: v.views,
-    hook_line: v.hook_line,
+    // The generated full hook, unless the founder edited the hook by hand.
+    hook_line: (!v.hook_edited && v.hook_full) || v.hook_line,
     transcript: v.transcript,
     talking_points: v.talking_points ?? [],
     cta_line: v.cta_line ?? "",
@@ -568,7 +571,7 @@ async function pickContext(db: Firestore, creator: CreatorProfile, date: YyyyMmD
     db
       .collection(PROVEN_COLLECTION)
       .where("status", "==", "active")
-      .select("added_by", "created_at", "idea_assignments", "audience", "stats.recent_wins", "views")
+      .select("added_by", "created_at", "idea_assignments", "audience", "stats.recent_wins", "views", "hook_first_person")
       .get(),
     cref.collection("daily_picks").where("date", ">=", addDaysTo(date, -30)).get(),
     cref.get(),
@@ -578,7 +581,8 @@ async function pickContext(db: Firestore, creator: CreatorProfile, date: YyyyMmD
     .filter((v) => v.added_by === "founder_idea" && (v.idea_assignments ?? []).some((a) => a.creator_id === creator.id && a.date === date))
     .map((v) => v.id);
   const candidates = active
-    .filter((v) => !ideaInTest(v, nowIso))
+    // Hooks that claim the speaker's own results ("I fixed my hair loss") aren't given out.
+    .filter((v) => !ideaInTest(v, nowIso) && !v.hook_first_person)
     .map((v) => ({ id: v.id, audience: v.audience, recent_wins: v.stats.recent_wins, views: v.views }));
   const history: Record<string, YyyyMmDd[]> = {};
   for (const d of histSnap.docs) {

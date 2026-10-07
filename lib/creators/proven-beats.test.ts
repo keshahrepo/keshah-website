@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Firestore } from "firebase-admin/firestore";
-import { BEATS_MAX_ATTEMPTS, beatProblem, beatsFor, cleanCta, cleanTitle, generateProvenBeats, needsBeats, parseBeats, tidyLine } from "./proven-beats";
+import { BEATS_MAX_ATTEMPTS, beatProblem, beatsFor, cleanCta, cleanHook, cleanTitle, generateProvenBeats, needsBeats, parseBeats, tidyLine } from "./proven-beats";
 
 const TRANSCRIPT =
   "Pinch the top of your scalp right now. Now pinch the sides. The top feels way tighter, right? That's restricting blood flow to your follicles. I fixed my own hair this way. Check my pinned video for the full routine.";
@@ -21,7 +21,8 @@ const GOOD = JSON.stringify({
 test("needsBeats: active proven videos with a transcript and no points, under the attempt cap", () => {
   const base = { status: "active" as const, added_by: "seed" as const, transcript: TRANSCRIPT };
   assert.equal(needsBeats(base), true);
-  assert.equal(needsBeats({ ...base, talking_points: ["x"], short_title: "Pinch test" }), false);
+  assert.equal(needsBeats({ ...base, talking_points: ["x"], short_title: "Pinch test", hook_full: "If you are losing hair, pinch here.", hook_first_person: false }), false);
+  assert.equal(needsBeats({ ...base, talking_points: ["x"], short_title: "Pinch test" }), true);
   // Points written by hand but no list title yet: still needs the title.
   assert.equal(needsBeats({ ...base, talking_points: ["x"] }), true);
   assert.equal(needsBeats({ ...base, status: "suggested" }), false);
@@ -144,4 +145,21 @@ test("generateProvenBeats: fills missing beats as auto, leaves edited ones, coun
   assert.equal(docs.b.short_title, "Tight scalp check");
   assert.equal((docs.c.beats as { attempts: number }).attempts, 1);
   assert.equal(docs.d.talking_points, undefined);
+});
+
+test("cleanHook keeps the full hook only when it starts the transcript", () => {
+  const tr = "If you're losing hair. You would have never heard this before. Take two fingers. Try to pinch the areas of your scalp.";
+  assert.equal(cleanHook("If you're losing hair. You would have never heard this before. Take two fingers.", tr), "If you're losing hair. You would have never heard this before. Take two fingers.");
+  assert.equal(cleanHook("Pinch your scalp right now, it will shock you.", tr), "");
+  assert.equal(cleanHook("If", tr), "");
+});
+
+test("parseBeats reads hook and hook_first_person", () => {
+  const tr = "I fixed my own hair loss four years ago without any drugs. So I made an app.";
+  const r = parseBeats(
+    JSON.stringify({ hook: "I fixed my own hair loss four years ago without any drugs.", hook_first_person: true, title: "Drug free fix", beats: ["For most people the scalp on top is tight.", "A tight scalp squeezes the blood vessels.", "Scalp exercises can loosen it up."], cta: "" }),
+    tr,
+  );
+  assert.equal(r.hook_first_person, true);
+  assert.equal(r.hook, "I fixed my own hair loss four years ago without any drugs.");
 });

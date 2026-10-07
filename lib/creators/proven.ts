@@ -113,6 +113,10 @@ export interface ProvenVideo {
   cta_line?: string;
   /** 2-4 word name for list rows (proven-beats.ts), e.g. "Pinch test". */
   short_title?: string;
+  /** The whole hook from the transcript start (proven-beats.ts); hook_line is often only its first sentence. */
+  hook_full?: string;
+  /** The hook claims the speaker's own results; such videos aren't given out (proven-beats.ts). */
+  hook_first_person?: boolean;
   /** Beat generation bookkeeping (proven-beats.ts). */
   beats?: { generated_at?: string; model?: string; attempts?: number; last_error?: string; last_attempt_at?: string };
 }
