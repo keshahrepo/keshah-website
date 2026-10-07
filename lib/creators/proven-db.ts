@@ -108,6 +108,7 @@ export function toProven(d: DocumentData): ProvenVideo {
     ...(Array.isArray(d.talking_points) ? { talking_points: d.talking_points.map(String) } : {}),
     ...(d.talking_points_source === "auto" || d.talking_points_source === "admin" ? { talking_points_source: d.talking_points_source } : {}),
     ...(typeof d.cta_line === "string" && d.cta_line ? { cta_line: d.cta_line } : {}),
+    ...(typeof d.short_title === "string" && d.short_title ? { short_title: d.short_title } : {}),
     ...(d.reference_url ? { reference_url: d.reference_url } : {}),
     ...(Array.isArray(d.idea_assignments) ? { idea_assignments: d.idea_assignments } : {}),
     ...(d.source_creator_id ? { source_creator_id: d.source_creator_id } : {}),
@@ -497,8 +498,12 @@ export interface PublicProven {
   /** The original's own pinned-video ending, cleaned up ("" = the app picks one from its library). */
   cta_line: string;
   reference_url: string | null;
-  /** Cover of the original, null when we don't have one (the app shows a placeholder). */
+  /** Cover of the original for list rows (small when we have one), null when we don't have one (the app shows a placeholder). */
   thumbnail_url: string | null;
+  /** Full-size cover (Film this). */
+  cover_url: string | null;
+  /** 2-4 word name for the list row ("" = the app makes one from the hook). */
+  short_title: string;
 }
 
 /** What "I posted it" found for a slot (null until something was attributed). */
@@ -530,7 +535,10 @@ function publicProven(id: string, v: ProvenVideo): PublicProven {
     talking_points: v.talking_points ?? [],
     cta_line: v.cta_line ?? "",
     reference_url: v.reference_url || null,
-    thumbnail_url: v.media?.thumbnail_url || v.thumbnail_url || null,
+    // Lists get the small (~360px) cover; Film this shows cover_url.
+    thumbnail_url: v.media?.thumb_small_url || v.media?.thumbnail_url || v.thumbnail_url || null,
+    cover_url: v.media?.thumbnail_url || v.thumbnail_url || null,
+    short_title: v.short_title ?? "",
   };
 }
 
@@ -544,7 +552,8 @@ export function givenCount(c: Pick<CreatorProfile, "format_creator">): number {
 }
 
 interface PickContext {
-  active: ({ id: string } & ProvenVideo)[];
+  /** Ids of the active videos (the picks' full docs are loaded separately, see loadFull). */
+  activeIds: Set<string>;
   candidates: PickCandidate[];
   forced: string[];
   history: Record<string, YyyyMmDd[]>;
@@ -554,7 +563,13 @@ interface PickContext {
 async function pickContext(db: Firestore, creator: CreatorProfile, date: YyyyMmDd, nowIso: string): Promise<PickContext> {
   const cref = db.collection(CREATORS_COLLECTION).doc(creator.id);
   const [activeSnap, histSnap, raw] = await Promise.all([
-    db.collection(PROVEN_COLLECTION).where("status", "==", "active").get(),
+    // Only the fields picking needs: the full docs carry transcripts and view
+    // histories (hundreds of KB for the whole list) and were read on every open.
+    db
+      .collection(PROVEN_COLLECTION)
+      .where("status", "==", "active")
+      .select("added_by", "created_at", "idea_assignments", "audience", "stats.recent_wins", "views")
+      .get(),
     cref.collection("daily_picks").where("date", ">=", addDaysTo(date, -30)).get(),
     cref.get(),
   ]);
@@ -571,20 +586,27 @@ async function pickContext(db: Firestore, creator: CreatorProfile, date: YyyyMmD
     if (p.date >= date) continue;
     for (const x of p.picks ?? []) (history[x.proven_id] ??= []).push(p.date);
   }
-  return { active, candidates, forced, history, audience: asAudience(raw.data()?.audience) };
+  return { activeIds: new Set(active.map((v) => v.id)), candidates, forced, history, audience: asAudience(raw.data()?.audience) };
+}
+
+/** Full docs for just these videos (the day's picks). */
+async function loadFull(db: Firestore, ids: string[]): Promise<Map<string, ProvenVideo>> {
+  const out = new Map<string, ProvenVideo>();
+  const uniq = [...new Set(ids)];
+  if (!uniq.length) return out;
+  const snaps = await db.getAll(...uniq.map((id) => db.collection(PROVEN_COLLECTION).doc(id)));
+  for (const s of snaps) if (s.exists) out.set(s.id, toProven(s.data()!));
+  return out;
 }
 
 function payload(
   date: YyyyMmDd,
   given: number,
   picks: DailyPick[],
-  ctx: PickContext,
+  byId: Map<string, ProvenVideo>,
   canSwap: boolean,
-  extra?: Map<string, ProvenVideo>,
   attribution: Record<string, SlotAttribution> = {},
 ): PicksPayload {
-  const byId = new Map<string, ProvenVideo>(ctx.active.map((v) => [v.id, v]));
-  for (const [k, v] of extra ?? []) byId.set(k, v);
   const shown = picks.filter((p) => byId.has(p.proven_id));
   const pickSlots = new Set(shown.map((p) => p.slot));
   return {
@@ -640,9 +662,13 @@ export async function getDailyPicks(creator: CreatorProfile, opts: { db?: Firest
   const given = givenCount(creator);
   if (!isWeekday(date)) return { date, given, picks: [], extra_posted: [], can_swap: false };
   const ref = db.collection(CREATORS_COLLECTION).doc(creator.id).collection("daily_picks").doc(date);
-  const ctx = await pickContext(db, creator, date, nowIso);
+  const [ctx, first] = await Promise.all([pickContext(db, creator, date, nowIso), ref.get()]);
+  const firstDoc = first.exists ? (first.data() as DailyPicks) : null;
 
-  const result = await db.runTransaction(async (tx) => {
+  // Usual case: the day's picks already exist and are full, so no transaction.
+  const result = firstDoc && (firstDoc.picks ?? []).length >= given
+    ? { picks: firstDoc.picks, swappedOut: firstDoc.swapped_out ?? [], added: [] as string[], attribution: firstDoc.slot_attribution ?? {} }
+    : await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const cur = snap.exists ? (snap.data() as DailyPicks) : null;
     const existing = cur?.picks ?? [];
@@ -676,18 +702,10 @@ export async function getDailyPicks(creator: CreatorProfile, opts: { db?: Firest
     for (const id of result.added) batch.update(db.collection(PROVEN_COLLECTION).doc(id), { last_used_at: nowIso });
     await batch.commit().catch(() => {});
   }
-  // Picks whose video was paused/retired since this morning still show (stable day): load them too.
-  const missing = result.picks.map((p) => p.proven_id).filter((id) => !ctx.active.some((v) => v.id === id));
-  const extra = new Map<string, ProvenVideo>();
-  if (missing.length) {
-    const snaps = await db.getAll(...missing.map((id) => db.collection(PROVEN_COLLECTION).doc(id)));
-    for (const s of snaps) if (s.exists) extra.set(s.id, toProven(s.data()!));
-  }
-  const all = new Map<string, ProvenVideo>(ctx.active.map((v) => [v.id, v]));
-  for (const [k, v] of extra) all.set(k, v);
+  // Full docs for the picks only (including any paused/retired since this morning: the day is stable).
   const ids = result.picks.map((p) => p.proven_id);
+  const all = await loadFull(db, ids);
   await fillThumbnails(db, ids, all);
-  for (const id of ids) if (all.has(id)) extra.set(id, all.get(id)!);
   const canSwap = !!swapCandidate({
     candidates: ctx.candidates,
     history: ctx.history,
@@ -697,7 +715,7 @@ export async function getDailyPicks(creator: CreatorProfile, opts: { db?: Firest
     current: result.picks.map((p) => p.proven_id),
     swappedOut: result.swappedOut,
   });
-  return payload(date, given, result.picks, ctx, canSwap, extra, result.attribution);
+  return payload(date, given, result.picks, all, canSwap, result.attribution);
 }
 
 /** Swap the pick in `slot` for the next best active video under the same rules. */
@@ -742,7 +760,8 @@ export async function swapPick(creator: CreatorProfile, slot: number, opts: { db
     current: res.picks.map((p) => p.proven_id),
     swappedOut: res.swappedOut,
   });
-  return payload(date, given, res.picks, ctx, canSwap, undefined, res.attribution);
+  const full = await loadFull(db, res.picks.map((p) => p.proven_id));
+  return payload(date, given, res.picks, full, canSwap, res.attribution);
 }
 
 // ================================================================ daily job (after the deep post sync)

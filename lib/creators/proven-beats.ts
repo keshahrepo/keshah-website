@@ -14,11 +14,12 @@
  *   ProvenVideos/{id}.talking_points        string[] (3-4)
  *   ProvenVideos/{id}.talking_points_source "auto" (generated) | "admin" (edited, never overwritten)
  *   ProvenVideos/{id}.cta_line              cleaned-up pinned-video ending of the original, or ""
+ *   ProvenVideos/{id}.short_title           2-4 word name for the app's list row ("Pinch test")
  *   ProvenVideos/{id}.beats                 { generated_at, model } or failures { attempts, last_error, last_attempt_at }
  *
  * Runs on approve (route `after()`), from the daily cron (capped) and from the
- * admin backfill route. Only videos with no talking points are filled, so a
- * founder edit is never replaced.
+ * admin backfill route. Talking points are only written where there are none,
+ * so a founder edit is never replaced; a missing short_title is filled on its own.
  */
 import Anthropic from "@anthropic-ai/sdk";
 import type { Firestore } from "firebase-admin/firestore";
@@ -44,7 +45,7 @@ export interface ProvenBeatsMeta {
   last_attempt_at?: string;
 }
 
-type BeatsFields = Pick<ProvenVideo, "status" | "added_by" | "transcript" | "talking_points"> & {
+type BeatsFields = Pick<ProvenVideo, "status" | "added_by" | "transcript" | "talking_points" | "short_title"> & {
   talking_points_source?: string;
   beats?: ProvenBeatsMeta;
 };
@@ -53,14 +54,16 @@ type BeatsFields = Pick<ProvenVideo, "status" | "added_by" | "transcript" | "tal
 export function needsBeats(v: BeatsFields): boolean {
   if (v.status !== "active" || v.added_by === "founder_idea") return false;
   if ((v.transcript ?? "").trim().length < BEATS_MIN_TRANSCRIPT) return false;
-  if (v.talking_points?.length) return false;
+  if (v.talking_points?.length && v.short_title) return false;
   return (v.beats?.attempts ?? 0) < BEATS_MAX_ATTEMPTS;
 }
 
 export const BEATS_SYSTEM = `You write speaking notes for short hair loss videos. A creator will film their own version of a video that did well. They say the hook word for word, then make a few points in their own words, then point viewers to the pinned video on their profile.
 
 Return one JSON object, no prose, no code fence:
-{"beats": ["...", "...", "..."], "cta": "..."}
+{"title": "...", "beats": ["...", "...", "..."], "cta": "..."}
+
+"title": a 2 to 4 word name for the video, shown in a list next to its cover. Names the angle, not the claim. Examples: "Pinch test", "Minoxidil truth", "Crown vs sides", "Massage mistake", "Neck tension", "Tight scalp check". Sentence case, no punctuation, no first person, never "routine".
 
 "beats": 3 or 4 points that come after the hook.
 - Follow this chain, in this order, using the parts the original covers: the scalp on top is tight (often tighter than the sides); a tight scalp squeezes the blood vessels; so blood can't reach the hair well; so the hair gets weak and falls out; the fix is daily scalp exercises that loosen the scalp. The last beat is always the fix.
@@ -125,6 +128,21 @@ export function cleanCta(raw: unknown): string {
 export interface ParsedBeats {
   beats: string[];
   cta: string;
+  /** "" when the model's title broke the rules (the app makes one from the hook). */
+  title: string;
+}
+
+/** 2-4 words, sentence case, no punctuation; "" when it breaks the rules. */
+export function cleanTitle(raw: unknown): string {
+  const t = String(raw ?? "")
+    .replace(DASHES, " ")
+    .replace(/["“”.!?,:;]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const words = t.split(" ").filter(Boolean);
+  if (words.length < 2 || words.length > 4 || t.length > 28) return "";
+  if (FIRST_PERSON.test(t) || BANNED.test(t)) return "";
+  return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
 /** Model output -> clean beats (3-4) + cta. Throws when fewer than 3 beats survive the rules. */
@@ -133,7 +151,7 @@ export function parseBeats(raw: string): ParsedBeats {
   const start = s.indexOf("{");
   const end = s.lastIndexOf("}");
   if (start < 0 || end <= start) throw new Error("no JSON in model output");
-  const j = JSON.parse(s.slice(start, end + 1)) as { beats?: unknown; cta?: unknown };
+  const j = JSON.parse(s.slice(start, end + 1)) as { beats?: unknown; cta?: unknown; title?: unknown };
   const list = Array.isArray(j.beats) ? j.beats.map((b) => tidyLine(String(b))) : [];
   const problems: string[] = [];
   const beats = list.filter((b) => {
@@ -142,7 +160,7 @@ export function parseBeats(raw: string): ParsedBeats {
     return !p;
   });
   if (beats.length < 3) throw new Error(`only ${beats.length} usable beats (${problems.join("; ").slice(0, 200)})`);
-  return { beats: beats.slice(0, 4), cta: cleanCta(j.cta) };
+  return { beats: beats.slice(0, 4), cta: cleanCta(j.cta), title: cleanTitle(j.title) };
 }
 
 export type GenerateFn = (system: string, user: string) => Promise<string>;
@@ -235,18 +253,18 @@ export async function generateProvenBeats(opts: {
           // Re-check inside a transaction so an edit made meanwhile is never replaced.
           const wrote = await db.runTransaction(async (tx) => {
             const cur = await tx.get(col.doc(x.id));
-            if (!cur.exists || (cur.data()?.talking_points ?? []).length) return false;
-            tx.update(col.doc(x.id), {
-              talking_points: r.beats,
-              talking_points_source: "auto",
-              cta_line: r.cta,
-              beats: { generated_at: at, model: BEATS_MODEL },
-            });
-            return true;
+            if (!cur.exists) return null;
+            const hasPoints = (cur.data()?.talking_points ?? []).length > 0;
+            const patch: Record<string, unknown> = {};
+            if (!hasPoints) Object.assign(patch, { talking_points: r.beats, talking_points_source: "auto", cta_line: r.cta });
+            if (!cur.data()?.short_title && r.title) patch.short_title = r.title;
+            if (!Object.keys(patch).length) return null;
+            tx.update(col.doc(x.id), { ...patch, beats: { generated_at: at, model: BEATS_MODEL } });
+            return { points: !hasPoints };
           });
           if (wrote) {
             out.generated++;
-            if (r.cta) out.with_cta++;
+            if (wrote.points && r.cta) out.with_cta++;
           }
         } catch (e) {
           const error = (e instanceof Error ? e.message : String(e)).slice(0, 300);

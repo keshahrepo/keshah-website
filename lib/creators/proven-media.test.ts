@@ -1,7 +1,8 @@
 // Run: npx tsx --test lib/creators/proven-media.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MEDIA_MAX_ATTEMPTS, mirrorCover, needsCover, parseCoverUrls } from "./proven-media";
+import sharp from "sharp";
+import { MEDIA_MAX_ATTEMPTS, SMALL_COVER_WIDTH, mirrorCover, needsCover, needsSmallCover, parseCoverUrls, resizeSmall } from "./proven-media";
 
 const JPEG = Buffer.alloc(2000, 1);
 const img = (type = "image/jpeg") => new Response(JPEG, { status: 200, headers: { "content-type": type } });
@@ -102,4 +103,21 @@ test("mirrorCover: deleted original reports an error, nothing stored", async () 
   assert.equal(r.credits_used, 1);
   assert.match(r.error!, /HTTP 404/);
   assert.equal(stored.length, before);
+});
+
+test("resizeSmall: ~360px-wide JPEG from a full-size cover", async () => {
+  const big = await sharp({ create: { width: 1080, height: 1920, channels: 3, background: { r: 40, g: 40, b: 40 } } }).png().toBuffer();
+  const small = await resizeSmall(big);
+  const meta = await sharp(small).metadata();
+  assert.equal(meta.format, "jpeg");
+  assert.equal(meta.width, SMALL_COVER_WIDTH);
+  assert.equal(meta.height, 640);
+  assert.ok(small.length < big.length);
+});
+
+test("needsSmallCover: mirrored active covers without a small one", () => {
+  assert.equal(needsSmallCover({ status: "active", media: { thumbnail_url: "https://x/y.jpg" } }), true);
+  assert.equal(needsSmallCover({ status: "active", media: { thumbnail_url: "https://x/y.jpg", thumb_small_url: "https://x/s.jpg" } }), false);
+  assert.equal(needsSmallCover({ status: "active", media: {} }), false);
+  assert.equal(needsSmallCover({ status: "active", media: { thumbnail_url: "https://x/y.jpg", small_attempts: MEDIA_MAX_ATTEMPTS } }), false);
 });

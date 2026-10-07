@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Firestore } from "firebase-admin/firestore";
-import { BEATS_MAX_ATTEMPTS, beatProblem, beatsFor, cleanCta, generateProvenBeats, needsBeats, parseBeats, tidyLine } from "./proven-beats";
+import { BEATS_MAX_ATTEMPTS, beatProblem, beatsFor, cleanCta, cleanTitle, generateProvenBeats, needsBeats, parseBeats, tidyLine } from "./proven-beats";
 
 const TRANSCRIPT =
   "Pinch the top of your scalp right now. Now pinch the sides. The top feels way tighter, right? That's restricting blood flow to your follicles. I fixed my own hair this way. Check my pinned video for the full routine.";
@@ -15,12 +15,15 @@ const GOOD = JSON.stringify({
     "Scalp exercises every day can loosen it up",
   ],
   cta: "Check my pinned video, it's the first one on my profile.",
+  title: "Tight scalp check.",
 });
 
 test("needsBeats: active proven videos with a transcript and no points, under the attempt cap", () => {
   const base = { status: "active" as const, added_by: "seed" as const, transcript: TRANSCRIPT };
   assert.equal(needsBeats(base), true);
-  assert.equal(needsBeats({ ...base, talking_points: ["x"] }), false);
+  assert.equal(needsBeats({ ...base, talking_points: ["x"], short_title: "Pinch test" }), false);
+  // Points written by hand but no list title yet: still needs the title.
+  assert.equal(needsBeats({ ...base, talking_points: ["x"] }), true);
   assert.equal(needsBeats({ ...base, status: "suggested" }), false);
   assert.equal(needsBeats({ ...base, added_by: "founder_idea" }), false);
   assert.equal(needsBeats({ ...base, transcript: "watch until the end!!" }), false);
@@ -49,12 +52,22 @@ test("cleanCta: only pinned-video endings without asks or result claims", () => 
   assert.equal(cleanCta(""), "");
 });
 
+test("cleanTitle: 2-4 words, no punctuation, no first person or 'routine'", () => {
+  assert.equal(cleanTitle("Tight scalp check."), "Tight scalp check");
+  assert.equal(cleanTitle("minoxidil truth"), "Minoxidil truth");
+  assert.equal(cleanTitle("Pinch"), "");
+  assert.equal(cleanTitle("How I fixed it"), "");
+  assert.equal(cleanTitle("Daily routine tip"), "");
+  assert.equal(cleanTitle("This is far too long a title"), "");
+});
+
 test("parseBeats: tidies and keeps 3-4 beats; throws when too few survive", () => {
   const r = parseBeats("```json\n" + GOOD + "\n```");
   assert.equal(r.beats.length, 4);
   assert.equal(r.beats[1], "A tight scalp squeezes the blood vessels, so blood can't reach the hair.");
   assert.equal(r.beats[3], "Scalp exercises every day can loosen it up.");
   assert.equal(r.cta, "Check my pinned video, it's the first one on my profile.");
+  assert.equal(r.title, "Tight scalp check");
   assert.throws(() => parseBeats(JSON.stringify({ beats: ["I fixed mine.", "My friend too.", "Scalp exercises help."] })), /usable beats/);
 });
 
@@ -110,8 +123,8 @@ test("generateProvenBeats: fills missing beats as auto, leaves edited ones, coun
   };
   const db = fakeDb(docs);
   const dry = await generateProvenBeats({ db, dry: true, log: () => {} });
-  assert.equal(dry.needing, 2);
-  assert.deepEqual(dry.ids, ["a", "c"]);
+  assert.equal(dry.needing, 3);
+  assert.deepEqual(dry.ids, ["a", "b", "c"]);
 
   const r = await generateProvenBeats({
     db,
@@ -119,13 +132,16 @@ test("generateProvenBeats: fills missing beats as auto, leaves edited ones, coun
     now: () => new Date("2026-10-07T10:00:00Z"),
     generate: async (_s, u) => (u.includes("broken") ? "no json here" : GOOD),
   });
-  assert.equal(r.generated, 1);
+  assert.equal(r.generated, 2);
   assert.equal(r.with_cta, 1);
   assert.equal(r.failed.length, 1);
   assert.equal(docs.a.talking_points_source, "auto");
   assert.equal((docs.a.talking_points as string[]).length, 4);
   assert.equal(docs.a.cta_line, "Check my pinned video, it's the first one on my profile.");
+  assert.equal(docs.a.short_title, "Tight scalp check");
+  // Hand-edited points stay; only the missing title is added.
   assert.deepEqual(docs.b.talking_points, ["Edited by hand."]);
+  assert.equal(docs.b.short_title, "Tight scalp check");
   assert.equal((docs.c.beats as { attempts: number }).attempts, 1);
   assert.equal(docs.d.talking_points, undefined);
 });

@@ -6,7 +6,9 @@
  * placeholders. This copies the cover into Firebase Storage once and keeps a
  * permanent download-token URL on the doc:
  *
- *   ProvenVideos/{id}.media = { thumbnail_url, mirrored_at }
+ *   ProvenVideos/{id}.media = { thumbnail_url, thumb_small_url, mirrored_at }
+ *   (thumb_small_url: a ~360px-wide JPEG for list rows; covers mirrored before
+ *   it existed get one from makeSmallCovers, run by the cron and the backfill)
  *   (failures: media.attempts / media.last_error / media.last_attempt_at)
  *
  * Source order per video, cheapest first: the stored (maybe stale)
@@ -20,6 +22,7 @@
 import { randomUUID } from "node:crypto";
 import type { Firestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
+import sharp from "sharp";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { STORAGE_BUCKET } from "./db";
 import { PROVEN_COLLECTION, type ProvenMedia, type ProvenVideo } from "./proven";
@@ -37,6 +40,10 @@ export const MEDIA_MAX_ATTEMPTS = 3;
 export const MEDIA_CONCURRENCY = 6;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const COVER_PREFIX = "proven_covers";
+/** List-row cover width (3x the 70pt row thumbnail, with room for Film this's placeholder). */
+export const SMALL_COVER_WIDTH = 360;
+/** Most small covers one run makes (no credits: our own stored covers, resized). */
+export const SMALL_COVER_CAP = 200;
 
 type Json = Record<string, unknown>;
 const obj = (v: unknown): Json => (v && typeof v === "object" ? (v as Json) : {});
@@ -212,6 +219,24 @@ export const storeInFirebase: StoreFn = async (path, buf, contentType) => {
   return `https://firebasestorage.googleapis.com/v0/b/${STORAGE_BUCKET}/o/${encodeURIComponent(path)}?alt=media&token=${token}`;
 };
 
+/** ~360px-wide JPEG for list rows. */
+export async function resizeSmall(buf: Buffer): Promise<Buffer> {
+  return sharp(buf).rotate().resize({ width: SMALL_COVER_WIDTH, withoutEnlargement: true }).jpeg({ quality: 72, mozjpeg: true }).toBuffer();
+}
+
+function smallPath(id: string): string {
+  return `${COVER_PREFIX}/small/${id.replace(/[^A-Za-z0-9_-]/g, "_")}.jpg`;
+}
+
+/** Resize and store the small cover. Never throws (no small cover = the list uses the full one). */
+async function storeSmall(id: string, buf: Buffer, store: StoreFn): Promise<string | undefined> {
+  try {
+    return await store(smallPath(id), await resizeSmall(buf), "image/jpeg");
+  } catch {
+    return undefined;
+  }
+}
+
 function coverPath(id: string, contentType: string): string {
   const ext = contentType === "image/png" ? "png" : contentType === "image/webp" ? "webp" : "jpg";
   return `${COVER_PREFIX}/${id.replace(/[^A-Za-z0-9_-]/g, "_")}.${ext}`;
@@ -220,6 +245,7 @@ function coverPath(id: string, contentType: string): string {
 export interface MirrorOneResult {
   ok: boolean;
   thumbnail_url?: string;
+  thumb_small_url?: string;
   /** "stored" (old CDN URL still worked) and "oembed" (TikTok) cost 0 credits; "api" costs 1. */
   source?: "stored" | "oembed" | "api";
   credits_used: number;
@@ -257,7 +283,8 @@ export async function mirrorCover(
       if (!img) return { ok: false, credits_used: credits, credits_remaining: creditsRemaining, error: "cover download failed" };
     }
     const url = await store(coverPath(id, img.contentType), img.buf, img.contentType);
-    return { ok: true, thumbnail_url: url, source, credits_used: credits, credits_remaining: creditsRemaining };
+    const small = await storeSmall(id, img.buf, store);
+    return { ok: true, thumbnail_url: url, ...(small ? { thumb_small_url: small } : {}), source, credits_used: credits, credits_remaining: creditsRemaining };
   } catch (e) {
     return { ok: false, credits_used: credits, credits_remaining: creditsRemaining, error: (e instanceof Error ? e.message : String(e)).slice(0, 300) };
   }
@@ -340,7 +367,7 @@ export async function mirrorProvenCovers(opts: {
         const at = now().toISOString();
         try {
           if (r.ok) {
-            await col.doc(x.id).update({ media: { thumbnail_url: r.thumbnail_url, mirrored_at: at } });
+            await col.doc(x.id).update({ media: { thumbnail_url: r.thumbnail_url, ...(r.thumb_small_url ? { thumb_small_url: r.thumb_small_url } : {}), mirrored_at: at } });
             out.mirrored++;
             if (r.source === "stored") out.from_stored++;
             if (r.source === "oembed") out.from_oembed++;
@@ -359,5 +386,71 @@ export async function mirrorProvenCovers(opts: {
   );
   out.remaining = need.length - out.mirrored;
   log(`proven covers: ${out.mirrored}/${out.attempted} mirrored (${out.from_stored} stored URL, ${out.from_oembed} oEmbed), ${out.failed.length} failed, ${out.credits_used} credits`);
+  return out;
+}
+
+// ---------------------------------------------------------------- small covers for list rows
+
+/** Mirrored, but no small list cover yet (and not given up on). */
+export function needsSmallCover(v: Pick<ProvenVideo, "status" | "media">): boolean {
+  return v.status === "active" && !!v.media?.thumbnail_url && !v.media.thumb_small_url && (v.media.small_attempts ?? 0) < MEDIA_MAX_ATTEMPTS;
+}
+
+export interface SmallRunResult {
+  dry: boolean;
+  needing: number;
+  attempted: number;
+  made: number;
+  failed: { id: string; error: string }[];
+  remaining: number;
+  ids?: string[];
+}
+
+/**
+ * Small (~360px) list covers for videos mirrored before they existed: download
+ * our own stored cover, resize, store, save media.thumb_small_url. No credits.
+ */
+export async function makeSmallCovers(opts: {
+  db?: Firestore;
+  limit?: number;
+  dry?: boolean;
+  deadlineMs?: number;
+  fetchImpl?: typeof fetch;
+  store?: StoreFn;
+  log?: (m: string) => void;
+} = {}): Promise<SmallRunResult> {
+  const db = opts.db ?? getFirebaseAdmin().db;
+  const col = db.collection(PROVEN_COLLECTION);
+  const log = opts.log ?? ((m: string) => console.log(m));
+  const store = opts.store ?? storeInFirebase;
+  const limit = Math.max(0, opts.limit ?? SMALL_COVER_CAP);
+  const docs = (await col.where("status", "==", "active").get()).docs;
+  const need = docs.map((s) => ({ id: s.id, d: s.data() as ProvenVideo })).filter((x) => needsSmallCover(x.d));
+  const out: SmallRunResult = { dry: !!opts.dry, needing: need.length, attempted: 0, made: 0, failed: [], remaining: need.length };
+  const batch = need.slice(0, limit);
+  if (opts.dry) return { ...out, ids: batch.map((x) => x.id) };
+  const queue = [...batch];
+  await Promise.all(
+    Array.from({ length: Math.min(MEDIA_CONCURRENCY, queue.length) }, async () => {
+      for (let x = queue.shift(); x; x = queue.shift()) {
+        if (opts.deadlineMs && Date.now() > opts.deadlineMs) return;
+        out.attempted++;
+        const media = x.d.media ?? {};
+        try {
+          const img = await downloadImage([media.thumbnail_url!], opts.fetchImpl);
+          if (!img) throw new Error("stored cover download failed");
+          const url = await store(smallPath(x.id), await resizeSmall(img.buf), "image/jpeg");
+          await col.doc(x.id).update({ "media.thumb_small_url": url });
+          out.made++;
+        } catch (e) {
+          const error = (e instanceof Error ? e.message : String(e)).slice(0, 200);
+          await col.doc(x.id).update({ "media.small_attempts": (media.small_attempts ?? 0) + 1 }).catch(() => undefined);
+          out.failed.push({ id: x.id, error });
+        }
+      }
+    }),
+  );
+  out.remaining = need.length - out.made;
+  log(`proven small covers: ${out.made}/${out.attempted} made, ${out.failed.length} failed`);
   return out;
 }

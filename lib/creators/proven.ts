@@ -111,6 +111,8 @@ export interface ProvenVideo {
   talking_points_source?: "auto" | "admin";
   /** The original's pinned-video ending, cleaned up (proven-beats.ts). "" or missing = none. */
   cta_line?: string;
+  /** 2-4 word name for list rows (proven-beats.ts), e.g. "Pinch test". */
+  short_title?: string;
   /** Beat generation bookkeeping (proven-beats.ts). */
   beats?: { generated_at?: string; model?: string; attempts?: number; last_error?: string; last_attempt_at?: string };
 }
@@ -119,6 +121,9 @@ export interface ProvenVideo {
 export interface ProvenMedia {
   /** Firebase Storage download-token URL (never expires). */
   thumbnail_url?: string;
+  /** ~360px-wide JPEG of the same cover, for list rows. */
+  thumb_small_url?: string;
+  small_attempts?: number;
   mirrored_at?: string;
   attempts?: number;
   last_error?: string;
