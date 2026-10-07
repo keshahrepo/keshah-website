@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     const current: Record<string, string> = { tiktok: norm(creator.tiktok_handle), instagram: norm(creator.instagram_handle) };
     const posts = all.filter((p) => {
       const want = current[p.platform];
-      const h = norm((p as { handle?: string }).handle);
+      const h = norm(p.handle);
       return !want || !h || h === want;
     });
     return NextResponse.json({

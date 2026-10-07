@@ -710,6 +710,8 @@ export interface PostView {
   crossed_100k_at: string | null;
   crossed_1m_at: string | null;
   thumbnail_url: string | null;
+  /** The account it was found on (posts from an old handle are filtered out for the app). */
+  handle?: string;
   views_history?: { at: string; views: number }[];
 }
 
@@ -755,6 +757,7 @@ export async function listPosts(
         crossed_100k_at: r.crossed_100k_at ?? null,
         crossed_1m_at: r.crossed_1m_at ?? null,
         thumbnail_url: r.thumbnail_url || null,
+        ...(r.handle ? { handle: r.handle } : {}),
         ...(opts.withHistory ? { views_history: r.views_history ?? [] } : {}),
       };
     })
