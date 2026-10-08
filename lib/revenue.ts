@@ -76,12 +76,15 @@ async function projectId(headers: Record<string, string>): Promise<string | null
   if (cachedProject) return cachedProject;
   try {
     const res = await fetch("https://api.revenuecat.com/v2/projects", { headers, cache: "no-store" });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error("revenuecat projects lookup:", res.status, (await res.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 200));
+      return null;
+    }
     const data = await res.json();
     const items = Array.isArray(data?.items) ? data.items : [];
     const keshah = items.find((p: { name?: string }) => /keshah/i.test(String(p?.name ?? ""))) ?? items[0];
     cachedProject = typeof keshah?.id === "string" ? keshah.id : null;
-    if (cachedProject) console.log("revenuecat project:", cachedProject, keshah?.name ?? "");
+    console.log("revenuecat projects:", items.map((p: { id?: string; name?: string }) => `${p?.id}:${p?.name}`).join(", "));
     return cachedProject;
   } catch {
     return null;
