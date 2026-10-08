@@ -46,9 +46,10 @@ export async function revenueOverview(): Promise<RevenueOverview> {
     ["v1", "https://api.revenuecat.com/v1/developers/me/overview"],
   ] as const) {
     try {
-      const res = await fetch(url, { headers, next: { revalidate: 300 } });
+      const res = await fetch(url, { headers, cache: "no-store" });
       if (!res.ok) {
-        errors.push(`${source} ${res.status}`);
+        const body = (await res.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 160);
+        errors.push(`${source} ${res.status}${body ? ` ${body}` : ""}`);
         continue;
       }
       const data = await res.json();
