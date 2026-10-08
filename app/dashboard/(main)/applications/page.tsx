@@ -208,6 +208,7 @@ function ApplicationsInner() {
             load();
           }}
           onStatus={async (row, status) => {
+            if (status === "accepted" && !confirmAccept(row)) return;
             await updateStatus(row.id, status);
           }}
         />
@@ -342,7 +343,9 @@ function ApplicationsInner() {
             row={row}
             expanded={expandedId === row.id}
             onToggle={() => setExpandedId((cur) => (cur === row.id ? null : row.id))}
-            onAccept={() => updateStatus(row.id, "accepted")}
+            onAccept={() => {
+              if (confirmAccept(row)) updateStatus(row.id, "accepted");
+            }}
             onDeny={() => updateStatus(row.id, "denied")}
             onReopen={() => updateStatus(row.id, "booked")}
             hasThread={threadIds.has(row.id)}
@@ -642,5 +645,13 @@ function Detail({ label, value }: { label: string; value: string | null }) {
       </div>
       <div style={{ color: "rgba(255,255,255,0.9)", fontSize: 13 }}>{value ?? "—"}</div>
     </div>
+  );
+}
+
+/** Accept sends emails and sets up accounts, so it always asks first. */
+function confirmAccept(row: { full_name?: string | null; email?: string | null }): boolean {
+  const name = row.full_name || row.email || "this applicant";
+  return window.confirm(
+    `Accept ${name}?\n\nThis will:\n• make them a creator (they show up in Creator pay)\n• set up their @keshah.com email\n• email them the welcome note with the app link and the contract\n• start their 20-day trial\n\nNothing is sent until you press OK.`,
   );
 }

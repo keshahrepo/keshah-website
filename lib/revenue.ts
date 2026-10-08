@@ -112,3 +112,48 @@ export async function rcRevenue(startDate: string, endDate: string, type: "reven
   if (typeof data?.value !== "number") throw new Error("RevenueCat returned no value");
   return data.value;
 }
+
+/** RevenueCat chart options (resolutions, segments, filters, selectors) for a chart. */
+export async function rcChartOptions(chart: string): Promise<Record<string, unknown>> {
+  const apiKey = process.env.REVENUECAT_METRICS_KEY || process.env.REVENUECAT_API_KEY;
+  if (!apiKey) throw new Error("RevenueCat key not set");
+  const headers = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
+  const project = (await projectId(headers)) ?? "app4e0f50f36b";
+  const res = await fetch(`https://api.revenuecat.com/v2/projects/${project}/charts/${chart}/options`, { headers, cache: "no-store" });
+  const body = await res.text();
+  if (!res.ok) throw new Error(`RevenueCat ${res.status} ${body.replace(/\s+/g, " ").slice(0, 200)}`);
+  return JSON.parse(body);
+}
+
+/** Raw RevenueCat chart data (GET /charts/{chart}) with query params. */
+export async function rcChart(chart: string, params: Record<string, string>): Promise<Record<string, unknown>> {
+  const apiKey = process.env.REVENUECAT_METRICS_KEY || process.env.REVENUECAT_API_KEY;
+  if (!apiKey) throw new Error("RevenueCat key not set");
+  const headers = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
+  const project = (await projectId(headers)) ?? "app4e0f50f36b";
+  const res = await fetch(`https://api.revenuecat.com/v2/projects/${project}/charts/${chart}?${new URLSearchParams(params)}`, { headers, cache: "no-store" });
+  const body = await res.text();
+  if (!res.ok) throw new Error(`RevenueCat ${res.status} ${body.replace(/\s+/g, " ").slice(0, 300)}`);
+  return JSON.parse(body);
+}
+
+/**
+ * RevenueCat revenue (or proceeds) for an inclusive date range, split by
+ * attribution campaign (the campaign a creator's link sets). Keys are the
+ * campaign names as RevenueCat shows them ("Isai TikTok", "No campaign", "Total").
+ */
+export async function rcRevenueByCampaign(startDate: string, endDate: string, type: "revenue" | "proceeds"): Promise<Map<string, number>> {
+  const o = await rcChart("revenue", {
+    resolution: "2",
+    start_date: startDate,
+    end_date: endDate,
+    segment: "attribution_campaign",
+    currency: "USD",
+    selectors: JSON.stringify({ revenue_type: type }),
+  });
+  const total = ((o.summary as Record<string, unknown> | undefined)?.total ?? {}) as Record<string, Record<string, number>>;
+  const out = new Map<string, number>();
+  for (const [name, m] of Object.entries(total)) if (typeof m?.Revenue === "number") out.set(name, m.Revenue);
+  if (!out.has("Total")) throw new Error("RevenueCat chart had no totals");
+  return out;
+}
