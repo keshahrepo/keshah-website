@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireDashboardSession } from "@/lib/support/auth";
+import { flattenOverview } from "@/lib/revenue";
+
+const stripUndefined = (o: object) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
 
 // Proxy to RevenueCat REST API for subscription revenue
 export async function GET() {
@@ -33,24 +36,12 @@ export async function GET() {
       }
 
       const v1Data = await v1Res.json();
-      return NextResponse.json(v1Data);
+      return NextResponse.json({ ...v1Data, ...stripUndefined(flattenOverview(v1Data)) });
     }
 
     const data = await res.json();
     // v2 returns metrics: [{ id, value }]; flatten the ones the dashboard and the founder app read.
-    const flat: Record<string, number> = {};
-    for (const m of Array.isArray(data?.metrics) ? data.metrics : []) {
-      if (typeof m?.id === "string" && typeof m?.value === "number") flat[m.id] = m.value;
-    }
-    return NextResponse.json({
-      ...data,
-      ...(flat.mrr !== undefined ? { mrr: flat.mrr } : {}),
-      ...(flat.active_subscriptions !== undefined ? { active_subscribers: flat.active_subscriptions } : {}),
-      ...(flat.active_trials !== undefined ? { active_trials: flat.active_trials } : {}),
-      ...(flat.revenue !== undefined ? { revenue: flat.revenue } : {}),
-      ...(flat.new_customers !== undefined ? { new_customers: flat.new_customers } : {}),
-      ...(flat.active_users !== undefined ? { active_users: flat.active_users } : {}),
-    });
+    return NextResponse.json({ ...data, ...stripUndefined(flattenOverview(data)) });
   } catch (error) {
     console.error("RevenueCat error:", error);
     return NextResponse.json({ error: "Failed to fetch revenue data" }, { status: 500 });

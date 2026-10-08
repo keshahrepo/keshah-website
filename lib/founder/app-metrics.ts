@@ -37,7 +37,10 @@ export interface AppMetrics {
 
 export async function appMetrics(slug?: string): Promise<AppMetrics> {
   const releases = MOBILE_RELEASES.filter((r) => !r.slug.startsWith("all_time")).map((r) => ({ slug: r.slug, label: r.label, date: r.date }));
-  const curSlug = slug && getRelease(slug) ? slug : releases[0]?.slug;
+  // Default: the newest release old enough to have finished trials (shipped 9+ days ago).
+  const matureCut = Date.now() - 9 * 86_400_000;
+  const settled = releases.find((r) => r.date && Date.parse(r.date) < matureCut);
+  const curSlug = slug && getRelease(slug) ? slug : (settled ?? releases[0])?.slug;
   if (!curSlug) return { releases, current: null, previous: null };
   const prevSlug = getPreviousRelease(curSlug, MOBILE_RELEASES)?.slug;
   const wins = [curSlug, prevSlug].filter(Boolean).map((s) => ({ slug: s!, win: getReleaseWindow(s!, MOBILE_RELEASES) }));

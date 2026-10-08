@@ -34,7 +34,7 @@ export interface Need {
 
 export interface FounderHome {
   needs: Need[];
-  revenue: RevenueOverview | null;
+  revenue: RevenueOverview;
   counts: { creators_active: number; creators_trial: number; applications_open: number };
 }
 

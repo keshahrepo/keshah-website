@@ -1,4 +1,8 @@
-/** RevenueCat project overview (v2 metrics, flattened), shared by the web overview and the founder app. */
+/**
+ * RevenueCat project overview, shared by the web overview and the founder app.
+ * Tries the v2 metrics API, then the v1 overview (what the original route fell
+ * back to), and flattens whichever answers into the same fields.
+ */
 export interface RevenueOverview {
   mrr?: number;
   active_subscribers?: number;
@@ -6,32 +10,57 @@ export interface RevenueOverview {
   revenue?: number;
   new_customers?: number;
   active_users?: number;
+  /** Which API answered, or why none did (shown to the founder when numbers are missing). */
+  source?: string;
+  error?: string;
 }
 
-export async function revenueOverview(): Promise<RevenueOverview | null> {
-  const apiKey = process.env.REVENUECAT_API_KEY;
-  if (!apiKey) return null;
-  try {
-    const res = await fetch("https://api.revenuecat.com/v2/projects/app4e0f50f36b/metrics/overview", {
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      next: { revalidate: 300 },
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const flat: Record<string, number> = {};
-    for (const m of Array.isArray(data?.metrics) ? data.metrics : []) {
-      if (typeof m?.id === "string" && typeof m?.value === "number") flat[m.id] = m.value;
-    }
-    return {
-      mrr: flat.mrr,
-      active_subscribers: flat.active_subscriptions,
-      active_trials: flat.active_trials,
-      revenue: flat.revenue,
-      new_customers: flat.new_customers,
-      active_users: flat.active_users,
-    };
-  } catch (e) {
-    console.error("revenue overview failed:", e);
-    return null;
+/** Pull numbers out of either shape: { metrics: [{ id, value }] } or flat keys. */
+export function flattenOverview(data: unknown): RevenueOverview {
+  const flat: Record<string, number> = {};
+  const obj = (data && typeof data === "object" ? data : {}) as Record<string, unknown>;
+  const metrics = Array.isArray(obj.metrics) ? obj.metrics : [];
+  for (const m of metrics as Array<Record<string, unknown>>) {
+    if (typeof m?.id === "string" && typeof m?.value === "number") flat[m.id] = m.value;
   }
+  for (const [k, v] of Object.entries(obj)) if (typeof v === "number") flat[k] = v;
+  const pick = (...keys: string[]) => keys.map((k) => flat[k]).find((v) => typeof v === "number");
+  return {
+    mrr: pick("mrr"),
+    active_subscribers: pick("active_subscriptions", "active_subscribers", "active_subscribers_count", "active_subscriptions_count"),
+    active_trials: pick("active_trials", "active_trials_count"),
+    revenue: pick("revenue", "revenue_last_28_days"),
+    new_customers: pick("new_customers", "new_customers_count"),
+    active_users: pick("active_users", "active_users_count"),
+  };
+}
+
+export async function revenueOverview(): Promise<RevenueOverview> {
+  const apiKey = process.env.REVENUECAT_API_KEY;
+  if (!apiKey) return { error: "RevenueCat key not set" };
+  const headers = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
+  const errors: string[] = [];
+  for (const [source, url] of [
+    ["v2", "https://api.revenuecat.com/v2/projects/app4e0f50f36b/metrics/overview"],
+    ["v1", "https://api.revenuecat.com/v1/developers/me/overview"],
+  ] as const) {
+    try {
+      const res = await fetch(url, { headers, next: { revalidate: 300 } });
+      if (!res.ok) {
+        errors.push(`${source} ${res.status}`);
+        continue;
+      }
+      const data = await res.json();
+      const out = flattenOverview(data);
+      if (out.mrr === undefined && out.active_trials === undefined && out.active_subscribers === undefined) {
+        errors.push(`${source} no metrics (keys: ${Object.keys(data ?? {}).slice(0, 8).join(",")})`);
+        continue;
+      }
+      return { ...out, source };
+    } catch (e) {
+      errors.push(`${source} ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  console.error("revenue overview failed:", errors.join("; "));
+  return { error: errors.join("; ") };
 }
