@@ -158,6 +158,8 @@ function toProfile(id: string, d: DocumentData, legacyStart: boolean): CreatorPr
     email: d.email ?? "",
     timezone: typeof d.timezone === "string" && isValidTimezone(d.timezone) ? d.timezone : DEFAULT_TIMEZONE,
     start_date: startDate,
+    // A start date filled in from the old program (trial_start_date / created_at), not real pay.
+    ...(legacyStart && !isYyyyMmDd(d.start_date) ? { legacy_start: true } : {}),
     starting_completed_months: Number(d.starting_completed_months ?? 0),
     ...(d.trial_plan === "v2" ? { trial_plan: "v2" as const } : {}),
     ...(d.trial_outcome === "keep" || d.trial_outcome === "end" ? { trial_outcome: d.trial_outcome } : {}),

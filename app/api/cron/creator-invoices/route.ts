@@ -27,7 +27,9 @@ export async function GET(req: Request) {
       {
         // Inactive creators only when they have an ended_on (invoiceMonthDue then
         // stops after their final month); a deactivated creator with no end date is skipped.
-        listCreators: async () => (await listCreators({ includeInactive: true })).filter((c) => c.is_active || !!c.ended_on),
+        // Only creators actually paid through this system: old-program records with a
+        // fallback start date (e.g. March 2026 managers) never get invoices.
+        listCreators: async () => (await listCreators({ includeInactive: true })).filter((c) => (c.is_active || !!c.ended_on) && !c.legacy_start),
         draftOrGet: (id, month, now) => draftOrGetInvoice(id, month, { now }),
         autoSubmit: (id, number, now) => autoSubmitInvoice(id, number, { now }),
         sendEmail: async (to, subject, text) => {

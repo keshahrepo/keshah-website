@@ -178,6 +178,8 @@ export interface CreatorPayFields {
   trial_decided_on?: YyyyMmDd;
   /** Set once the 20th trial day is counted (for cheap checks: nudges, health email). */
   trial_completed_on?: YyyyMmDd;
+  /** start_date came from the old program's fallback (trial_start_date / created_at): not paid through this system. */
+  legacy_start?: boolean;
   /** e.g. ["Isai TikTok", "Isai Insta"]. */
   campaign_tags: string[];
   status: CreatorStatus;
