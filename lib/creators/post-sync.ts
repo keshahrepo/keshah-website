@@ -32,8 +32,8 @@
 import type { Firestore } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { emailConfigured, sendEmail } from "@/lib/email";
-import { advanceCreatorStatus, getCreator, getOnboarding, isOnboarded, isYyyyMmDd, listCreators } from "./db";
-import { BONUS_WINDOW_DAYS, VIDEOS_PER_WEEKDAY, isWeekday, localDate } from "./pay";
+import { advanceCreatorStatus, getCreator, getOnboarding, isOnboarded, isYyyyMmDd, listCreators, toPostingDay } from "./db";
+import { BONUS_WINDOW_DAYS, TRIAL_V2_VIDEOS, VIDEOS_PER_WEEKDAY, isWeekday, localDate, trialWindow } from "./pay";
 import { fetchRecentPosts, postKey, type FetchPostsResult, type ScrapedPost } from "./scrape";
 import type {
   BonusClaim,
@@ -118,10 +118,10 @@ export interface DayDetection {
   posted: boolean;
 }
 
-export function detectDay(b: DayBucket | undefined): DayDetection {
+export function detectDay(b: DayBucket | undefined, need: number = VIDEOS_PER_WEEKDAY): DayDetection {
   const tiktok = b?.tiktok.length ?? 0;
   const instagram = b?.instagram.length ?? 0;
-  return { tiktok, instagram, posted: tiktok >= VIDEOS_PER_WEEKDAY && instagram >= VIDEOS_PER_WEEKDAY };
+  return { tiktok, instagram, posted: tiktok >= need && instagram >= need };
 }
 
 /**
@@ -226,9 +226,11 @@ export type BonusAction =
 export function bonusAction(
   post: CreatorPost,
   claims: ({ id: string } & BonusClaim)[],
-  ctx: { startDate: YyyyMmDd; timezone: string; nowIso: string; bonusStartDate?: YyyyMmDd },
+  ctx: { startDate: YyyyMmDd; timezone: string; nowIso: string; bonusStartDate?: YyyyMmDd; trialUntil?: YyyyMmDd },
 ): BonusAction {
   if (!isYyyyMmDd(ctx.startDate)) return { op: "none", reason: "not started" };
+  // v2 trial videos earn no bonuses: only videos from the promotion date on.
+  if (ctx.trialUntil && post.local_date < ctx.trialUntil) return { op: "none", reason: "trial video" };
   // A creator who worked before pay started in the system (Isai: September) can have
   // an earlier bonus_start_date, so those videos still earn bonuses.
   const from = ctx.bonusStartDate && isYyyyMmDd(ctx.bonusStartDate) && ctx.bonusStartDate < ctx.startDate ? ctx.bonusStartDate : ctx.startDate;
@@ -464,8 +466,17 @@ export async function syncCreatorPosts(creatorOrId: string | CreatorProfile, dep
     if (!cands.length || !isYyyyMmDd(startDate)) return;
     const claimsSnap = await ref.collection("bonus_claims").get();
     const claims = claimsSnap.docs.map((d) => ({ ...(d.data() as BonusClaim), id: d.id }));
+    let trialUntil: YyyyMmDd | undefined;
+    if (creatorRaw.trial_plan === "v2") {
+      const pd = await ref.collection("posting_days").get();
+      const tw = trialWindow(
+        { start_date: startDate, trial_plan: "v2", ...(creator.ended_on ? { ended_on: creator.ended_on } : {}) },
+        pd.docs.map((x) => toPostingDay(x.id, x.data())),
+      );
+      trialUntil = tw?.promotedOn ?? "9999-12-31";
+    }
     for (const rec of cands) {
-      const a = bonusAction(rec, claims, { startDate, timezone: tz, nowIso, bonusStartDate: creatorRaw.bonus_start_date });
+      const a = bonusAction(rec, claims, { startDate, timezone: tz, nowIso, bonusStartDate: creatorRaw.bonus_start_date, trialUntil });
       if (a.op === "create") {
         // create() fails if the doc appeared meanwhile (concurrent sync): idempotent.
         try {
@@ -509,7 +520,9 @@ export async function syncCreatorPosts(creatorOrId: string | CreatorProfile, dep
     const days = [...buckets.keys()]
       .filter((d) => isWeekday(d) && d <= today && d >= coverageFrom && (!creator.ended_on || d <= creator.ended_on))
       .sort();
-    result.posted_days_detected = days.filter((d) => detectDay(buckets.get(d)).posted);
+    // A v2 creator's first day (the trial) needs 3 videos; precise per-day pay rules live in pay.ts.
+    const firstDayNeed = creator.trial_plan === "v2" ? TRIAL_V2_VIDEOS : VIDEOS_PER_WEEKDAY;
+    result.posted_days_detected = days.filter((d) => detectDay(buckets.get(d), firstDayNeed).posted);
 
     if (!isYyyyMmDd(startDate)) {
       const onb = await getOnboarding(creator.id);

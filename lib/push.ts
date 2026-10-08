@@ -178,6 +178,6 @@ export const PUSH_COPY = {
   bonus1m: { title: "Bonus added", body: "A video passed 1M views. Bonus added.", data: { type: "bonus" } },
 } satisfies Record<string, PushMessage>;
 
-export function dailyNudge(done: number): PushMessage {
-  return { title: "Today's videos", body: `${done} of 5 videos so far today. Deadline 11:59 PM.`, data: { type: "daily_nudge" } };
+export function dailyNudge(done: number, of = 5): PushMessage {
+  return { title: "Today's videos", body: `${done} of ${of} videos so far today. Deadline 11:59 PM.`, data: { type: "daily_nudge" } };
 }

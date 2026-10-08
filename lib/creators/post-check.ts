@@ -215,7 +215,7 @@ export async function runPostCheck(creator: CreatorProfile, input: PostCheckInpu
     if (day_complete && !(await deps.claimDayComplete(creator.id, date))) day_complete = null;
   }
   const log = after.postingDays.find((d) => d.date === date);
-  const counted = isWeekday(date) && isPostedDay(after.postingDays, date);
+  const counted = isWeekday(date) && isPostedDay(after.postingDays, date, profile ?? undefined);
   const deadlineIso = new Date(now.getTime() + msUntilLocalDeadline(now, creator.timezone)).toISOString();
   return {
     status: 200,

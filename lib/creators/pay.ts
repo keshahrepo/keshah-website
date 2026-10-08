@@ -34,6 +34,18 @@ export const BONUS_WINDOW_DAYS = 30;
 export const BONUS_100K_CENTS = 1500;
 export const BONUS_1M_TOTAL_CENTS = 10000;
 
+/**
+ * Trial v2 (profiles with trial_plan "v2"): the first TRIAL_V2_DAYS posted
+ * weekdays need TRIAL_V2_VIDEOS videos each and pay TRIAL_V2_DAY_CENTS each
+ * ($15 a day, $300 in all), with no bonuses. The next weekday after the 20th
+ * is the promotion date: from then on it's the normal plan (5 videos, monthly
+ * base, bonuses), with the ladder counting from the promotion date.
+ */
+export const TRIAL_V2_DAYS = 20;
+export const TRIAL_V2_VIDEOS = 3;
+export const TRIAL_V2_DAY_CENTS = 1500;
+export const TRIAL_V2_TOTAL_CENTS = TRIAL_V2_DAYS * TRIAL_V2_DAY_CENTS;
+
 /** [completed months threshold, monthly base cents], ascending. */
 export const BASE_LADDER: ReadonlyArray<readonly [number, Cents]> = [
   [0, 50000],
@@ -143,17 +155,58 @@ export function completeVideoCount(day: Pick<PostingDay, "videos">): number {
   return (day.videos ?? []).filter(isCompleteVideo).length;
 }
 
-/**
- * Weekday dates with >= VIDEOS_PER_WEEKDAY videos posted on BOTH platforms
- * (duplicate docs for the same date merged).
- */
-function postedWeekdaySet(postingDays: PostingDay[]): Set<YyyyMmDd> {
+/** Complete videos per weekday (duplicate docs for the same date merged). */
+function weekdayCounts(postingDays: PostingDay[]): Map<YyyyMmDd, number> {
   const counts = new Map<YyyyMmDd, number>();
   for (const p of postingDays) {
+    if (!isWeekday(p.date)) continue;
     counts.set(p.date, (counts.get(p.date) ?? 0) + completeVideoCount(p));
   }
+  return counts;
+}
+
+function nextWeekday(d: YyyyMmDd): YyyyMmDd {
+  let t = parseDate(d) + DAY_MS;
+  while (!isWeekday(fmtDate(t))) t += DAY_MS;
+  return fmtDate(t);
+}
+
+export interface TrialWindow {
+  /** The trial's posted weekdays so far, oldest first (at most TRIAL_V2_DAYS). */
+  days: YyyyMmDd[];
+  /** First weekday on the full plan; null while still in the trial. */
+  promotedOn: YyyyMmDd | null;
+}
+
+type TrialProfile = Pick<PayProfile, "start_date" | "trial_plan"> & Partial<Pick<PayProfile, "ended_on">>;
+
+/** The v2 trial for this profile, or null on the original plan. */
+export function trialWindow(profile: TrialProfile | undefined, postingDays: PostingDay[]): TrialWindow | null {
+  if (profile?.trial_plan !== "v2") return null;
+  const days = [...weekdayCounts(postingDays)]
+    .filter(([d, n]) => n >= TRIAL_V2_VIDEOS && d >= profile.start_date && (!profile.ended_on || d <= profile.ended_on))
+    .map(([d]) => d)
+    .sort()
+    .slice(0, TRIAL_V2_DAYS);
+  return { days, promotedOn: days.length === TRIAL_V2_DAYS ? nextWeekday(days[TRIAL_V2_DAYS - 1]) : null };
+}
+
+/** Videos a weekday needs to count: 3 during a v2 trial, else 5. */
+export function videosRequiredOn(profile: TrialProfile | undefined, postingDays: PostingDay[], date: YyyyMmDd): number {
+  const tw = trialWindow(profile, postingDays);
+  if (!tw || (tw.promotedOn && date >= tw.promotedOn)) return VIDEOS_PER_WEEKDAY;
+  return TRIAL_V2_VIDEOS;
+}
+
+/**
+ * Weekday dates with enough videos posted on BOTH platforms: 5, or 3 on the
+ * days before a v2 creator's promotion.
+ */
+function postedWeekdaySet(postingDays: PostingDay[], profile?: TrialProfile): Set<YyyyMmDd> {
+  const tw = trialWindow(profile, postingDays);
+  const need = (d: YyyyMmDd) => (!tw || (tw.promotedOn && d >= tw.promotedOn) ? VIDEOS_PER_WEEKDAY : TRIAL_V2_VIDEOS);
   const out = new Set<YyyyMmDd>();
-  for (const [d, n] of counts) if (n >= VIDEOS_PER_WEEKDAY && isWeekday(d)) out.add(d);
+  for (const [d, n] of weekdayCounts(postingDays)) if (n >= need(d)) out.add(d);
   return out;
 }
 
@@ -161,11 +214,34 @@ function approvedOffSet(daysOff: DayOff[]): Set<YyyyMmDd> {
   return new Set(daysOff.filter((d) => d.status === "approved" && isWeekday(d.date)).map((d) => d.date));
 }
 
-export function trialStatus(postingDays: PostingDay[]): {
+export function trialStatus(
+  postingDays: PostingDay[],
+  profile?: TrialProfile,
+): {
   postedDays: number;
   isInTrial: boolean;
   trialEndsAfterDate?: YyyyMmDd;
+  /** v2 only: the trial's length, videos per trial day, pay per trial day, and the promotion date. */
+  plan?: "v2";
+  requiredDays?: number;
+  videosPerDay?: number;
+  dayCents?: Cents;
+  totalCents?: Cents;
+  promotedOn?: YyyyMmDd;
 } {
+  const tw = trialWindow(profile, postingDays);
+  if (tw) {
+    return {
+      postedDays: tw.days.length,
+      isInTrial: !tw.promotedOn,
+      ...(tw.promotedOn ? { trialEndsAfterDate: tw.days[TRIAL_V2_DAYS - 1], promotedOn: tw.promotedOn } : {}),
+      plan: "v2",
+      requiredDays: TRIAL_V2_DAYS,
+      videosPerDay: TRIAL_V2_VIDEOS,
+      dayCents: TRIAL_V2_DAY_CENTS,
+      totalCents: TRIAL_V2_TOTAL_CENTS,
+    };
+  }
   const posted = [...postedWeekdaySet(postingDays)].sort();
   const isInTrial = posted.length < TRIAL_POSTED_DAYS;
   return {
@@ -237,6 +313,7 @@ function attendance(
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function completedMonthsAsOf(profile: PayProfile, month: YyyyMm, history?: PayHistory): number {
+  if (profile.trial_plan === "v2" && history) profile = fullPlanProfile(profile, trialWindow(profile, history.postingDays));
   const none = new Set<YyyyMmDd>();
   let count = profile.starting_completed_months ?? 0;
   for (let m = monthOf(profile.start_date); m < month; m = addMonths(m, 1)) {
@@ -256,9 +333,12 @@ export function nextLevel(
   asOfMonth: YyyyMm,
 ): { nextBaseCents: Cents | null; monthsNeeded: number | null; earliestMonth: YyyyMm | null } {
   const have = completedMonthsAsOf(profile, asOfMonth, history);
+  if (profile.trial_plan === "v2") profile = fullPlanProfile(profile, trialWindow(profile, history.postingDays));
   const next = BASE_LADDER.find(([t]) => t > have);
   if (!next) return { nextBaseCents: null, monthsNeeded: null, earliestMonth: null };
   const monthsNeeded = next[0] - have;
+  // Still in a v2 trial: the ladder hasn't started, so there's no date yet.
+  if (profile.start_date === NEVER) return { nextBaseCents: next[1], monthsNeeded, earliestMonth: null };
   // A partial first month never counts, so counting starts the month after.
   const startMonth = monthOf(profile.start_date);
   let firstCountable = asOfMonth > startMonth ? asOfMonth : startMonth;
@@ -268,6 +348,18 @@ export function nextLevel(
   }
   return { nextBaseCents: next[1], monthsNeeded, earliestMonth: addMonths(firstCountable, monthsNeeded) };
 }
+
+/**
+ * A v2 profile seen from the full plan: it starts on the promotion date (or
+ * never, while in the trial), so base pay, the ladder and bonuses all count
+ * from promotion.
+ */
+function fullPlanProfile(profile: PayProfile, tw: TrialWindow | null): PayProfile {
+  if (!tw) return profile;
+  return { ...profile, start_date: tw.promotedOn ?? NEVER };
+}
+
+const NEVER = "9999-12-31";
 
 // ---------------------------------------------------------------- bonuses
 
@@ -329,6 +421,13 @@ export interface MonthSummary {
   completedMonthsBefore: number;
   levelBaseCents: Cents;
   baseDueCents: Cents;
+  /** v2 trial days posted in this month, and what they pay ($15 each). 0 otherwise. */
+  trialDays: number;
+  trialCents: Cents;
+  /** Weekdays of this month on the full plan (all of them, unless a v2 trial covers some). */
+  baseExpectedWeekdays: number;
+  /** Weekdays credited toward base pay (posted + approved off; after promotion for v2). */
+  baseCreditedDays: number;
   bonusLines: InvoiceLine[];
   adjustmentLines: InvoiceLine[];
   totalCents: Cents;
@@ -348,18 +447,26 @@ export function monthSummary(
   adjustments: Adjustment[],
   opts: { today?: YyyyMmDd } = {},
 ): MonthSummary {
-  const posted = postedWeekdaySet(postingDays);
+  const posted = postedWeekdaySet(postingDays, profile);
   const off = approvedOffSet(daysOff);
   const a = attendance(profile, month, posted, off, opts.today);
-  const completedMonthsBefore = completedMonthsAsOf(profile, month, { postingDays, daysOff });
+  // v2: trial days pay $15 each; base, ladder and bonuses count from promotion.
+  const tw = trialWindow(profile, postingDays);
+  const full = fullPlanProfile(profile, tw);
+  const b = tw ? attendance(full, month, posted, off, opts.today) : a;
+  const trialDays = tw ? tw.days.filter((d) => monthOf(d) === month).length : 0;
+  const trialCents = trialDays * TRIAL_V2_DAY_CENTS;
+  const completedMonthsBefore = completedMonthsAsOf(full, month);
   const levelBaseCents = baseForCompletedMonths(completedMonthsBefore);
-  const credited = a.postedDays + a.approvedOffDays;
-  const baseDueCents = a.calendarWeekdays ? Math.round((levelBaseCents * credited) / a.calendarWeekdays) : 0;
-  const bonusLines = bonusLinesForMonth(bonusClaims, month);
+  const credited = b.postedDays + b.approvedOffDays;
+  const baseDueCents = b.calendarWeekdays ? Math.round((levelBaseCents * credited) / b.calendarWeekdays) : 0;
+  const claims = tw ? (tw.promotedOn ? bonusClaims.filter((c) => c.posted_on >= tw.promotedOn!) : []) : bonusClaims;
+  const bonusLines = bonusLinesForMonth(claims, month);
   const adjustmentLines: InvoiceLine[] = adjustments
     .filter((x) => x.month === month)
     .map((x) => ({ kind: "adjustment", label: x.note || "Adjustment", amount_cents: Math.round(x.amount_cents) }));
   const totalCents =
+    trialCents +
     baseDueCents +
     bonusLines.reduce((s, l) => s + l.amount_cents, 0) +
     adjustmentLines.reduce((s, l) => s + l.amount_cents, 0);
@@ -375,6 +482,10 @@ export function monthSummary(
     completedMonthsBefore,
     levelBaseCents,
     baseDueCents,
+    trialDays,
+    trialCents,
+    baseExpectedWeekdays: b.expectedWeekdays,
+    baseCreditedDays: credited,
     bonusLines,
     adjustmentLines,
     totalCents,
@@ -382,9 +493,18 @@ export function monthSummary(
 }
 
 export function draftInvoiceLines(summary: MonthSummary): InvoiceLine[] {
-  const credited = summary.postedDays + summary.approvedOffDays;
+  const trialDays = summary.trialDays ?? 0;
+  const credited = summary.baseCreditedDays ?? summary.postedDays + summary.approvedOffDays;
   const lines: InvoiceLine[] = [];
-  if (summary.expectedWeekdays > 0 || summary.baseDueCents !== 0) {
+  if (trialDays > 0) {
+    lines.push({
+      kind: "trial",
+      label: `Trial ${fmtMonth(summary.month)}: ${trialDays} posting day${trialDays === 1 ? "" : "s"} at ${fmtUsd(TRIAL_V2_DAY_CENTS)}/day`,
+      amount_cents: summary.trialCents,
+    });
+  }
+  // A month that's all trial has no base line.
+  if (summary.baseDueCents !== 0 || (summary.baseExpectedWeekdays ?? summary.expectedWeekdays) > 0) {
     lines.push({
       kind: "base",
       label: `Base pay ${fmtMonth(summary.month)}: ${credited}/${summary.calendarWeekdays} weekdays at ${fmtUsd(summary.levelBaseCents)}/month`,
@@ -418,8 +538,8 @@ export function dayPayCents(levelBaseCents: Cents, month: YyyyMm): Cents {
 }
 
 /** True if `date` counts as a posted weekday (5 videos on both platforms). */
-export function isPostedDay(postingDays: PostingDay[], date: YyyyMmDd): boolean {
-  return postedWeekdaySet(postingDays).has(date);
+export function isPostedDay(postingDays: PostingDay[], date: YyyyMmDd, profile?: TrialProfile): boolean {
+  return postedWeekdaySet(postingDays, profile).has(date);
 }
 
 /**
@@ -428,12 +548,12 @@ export function isPostedDay(postingDays: PostingDay[], date: YyyyMmDd): boolean 
  * start_date. 0 when `date` itself isn't posted.
  */
 export function postingStreak(
-  profile: Pick<PayProfile, "start_date">,
+  profile: TrialProfile,
   postingDays: PostingDay[],
   daysOff: DayOff[],
   date: YyyyMmDd,
 ): number {
-  const posted = postedWeekdaySet(postingDays);
+  const posted = postedWeekdaySet(postingDays, profile);
   const off = approvedOffSet(daysOff);
   let n = 0;
   for (let t = parseDate(date); ; t -= DAY_MS) {
@@ -456,6 +576,8 @@ export interface DayComplete {
   monthBaseCents: Cents;
   streak: number;
   nextLevel: { nextBaseCents: Cents; earliestMonth: YyyyMm } | null;
+  /** v2 trial progress after this day ("day 7 of 20"); promoted = this was the 20th. */
+  trial?: { day: number; of: number; totalCents: Cents; promoted: boolean };
 }
 
 /**
@@ -472,15 +594,18 @@ export function dayComplete(
   daysOff: DayOff[],
 ): DayComplete | null {
   if (!isWeekday(date) || date < profile.start_date || (profile.ended_on && date > profile.ended_on)) return null;
-  if (isPostedDay(before, date) || !isPostedDay(after, date)) return null;
+  if (isPostedDay(before, date, profile) || !isPostedDay(after, date, profile)) return null;
   if (approvedOffSet(daysOff).has(date)) return null;
   const month = monthOf(date);
   const s = monthSummary(profile, month, after, daysOff, [], [], { today: date });
+  const tw = trialWindow(profile, after);
+  const trialDay = !!tw && tw.days.includes(date);
   const nl = nextLevel(profile, { postingDays: after, daysOff }, month);
   return {
     date,
-    dayPayCents: dayPayCents(s.levelBaseCents, month),
-    monthEarnedCents: s.baseDueCents,
+    dayPayCents: trialDay ? TRIAL_V2_DAY_CENTS : dayPayCents(s.levelBaseCents, month),
+    monthEarnedCents: s.trialCents + s.baseDueCents,
+    ...(tw ? { trial: { day: tw.days.length, of: TRIAL_V2_DAYS, totalCents: TRIAL_V2_TOTAL_CENTS, promoted: trialDay && !!tw.promotedOn } } : {}),
     monthBaseCents: s.levelBaseCents,
     streak: postingStreak(profile, after, daysOff, date),
     nextLevel: nl.nextBaseCents !== null && nl.earliestMonth ? { nextBaseCents: nl.nextBaseCents, earliestMonth: nl.earliestMonth } : null,

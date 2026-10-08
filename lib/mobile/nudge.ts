@@ -46,6 +46,6 @@ export function nudgeDateDue(c: NudgeCreator, now: Date, lastNudgeDate: string |
 }
 
 /** Should the nudge go out, given today's counted videos and whether today is an approved day off? */
-export function nudgeNeeded(doneToday: number, dayOff: boolean): boolean {
-  return !dayOff && doneToday < VIDEOS_PER_WEEKDAY;
+export function nudgeNeeded(doneToday: number, dayOff: boolean, need: number = VIDEOS_PER_WEEKDAY): boolean {
+  return !dayOff && doneToday < need;
 }

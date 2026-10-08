@@ -25,6 +25,9 @@ export async function monthPayload(creator: CreatorProfile, month: YyyyMm, histo
     completedMonthsBefore: s.completedMonthsBefore,
     levelBaseCents: s.levelBaseCents,
     baseDueCents: s.baseDueCents,
+    /** v2 trial days this month and their pay ($15 each). */
+    trialDays: s.trialDays,
+    trialCents: s.trialCents,
     bonusLines: s.bonusLines,
     adjustmentLines: s.adjustmentLines,
     bonusCents: s.bonusLines.reduce((a, l) => a + l.amount_cents, 0),

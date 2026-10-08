@@ -15,7 +15,7 @@ import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { getStorage } from "firebase-admin/storage";
 import type { DocumentData, DocumentSnapshot, Firestore } from "firebase-admin/firestore";
 import {
-  VIDEOS_PER_WEEKDAY,
+  videosRequiredOn,
   addMonths,
   completeVideoCount,
   creatorPrefix,
@@ -156,6 +156,7 @@ function toProfile(id: string, d: DocumentData, legacyStart: boolean): CreatorPr
     timezone: typeof d.timezone === "string" && isValidTimezone(d.timezone) ? d.timezone : DEFAULT_TIMEZONE,
     start_date: startDate,
     starting_completed_months: Number(d.starting_completed_months ?? 0),
+    ...(d.trial_plan === "v2" ? { trial_plan: "v2" as const } : {}),
     campaign_tags: Array.isArray(d.campaign_tags) ? d.campaign_tags : [],
     status: mapCreatorStatus(d.status),
     ...(isYyyyMmDd(d.ended_on) ? { ended_on: d.ended_on } : {}),
@@ -330,7 +331,7 @@ export interface CreatorHistory {
   invoices: Invoice[];
 }
 
-function toPostingDay(id: string, d: DocumentData): PostingDay {
+export function toPostingDay(id: string, d: DocumentData): PostingDay {
   return {
     date: d.date || id,
     videos: Array.isArray(d.videos)
@@ -445,8 +446,12 @@ export async function getMonthOverview(
  * The first-two-weeks trial, except for creators who are past it already: made active
  * by an admin, or credited with earlier months (Isai's September).
  */
-export function creatorTrial(creator: Pick<CreatorProfile, "status" | "starting_completed_months">, postingDays: PostingDay[]) {
-  const t = trialStatus(postingDays);
+export function creatorTrial(
+  creator: Pick<CreatorProfile, "status" | "starting_completed_months" | "start_date" | "trial_plan" | "ended_on">,
+  postingDays: PostingDay[],
+) {
+  const t = trialStatus(postingDays, creator);
+  if (t.plan === "v2") return t; // the v2 trial ends on the 20th posting day, whatever the status says
   if (creator.status === "active" || (creator.starting_completed_months ?? 0) > 0) return { ...t, isInTrial: false };
   return t;
 }
@@ -460,7 +465,7 @@ export type DayState = "posted" | "off" | "off_requested" | "missed" | "pending"
  * the calculator: posted = >= VIDEOS_PER_WEEKDAY videos on BOTH platforms.
  */
 export function monthDayStates(
-  creator: Pick<CreatorProfile, "start_date" | "ended_on" | "timezone">,
+  creator: Pick<CreatorProfile, "start_date" | "ended_on" | "timezone" | "trial_plan">,
   month: YyyyMm,
   history: Pick<CreatorHistory, "postingDays" | "daysOff">,
   now: Date = new Date(),
@@ -475,7 +480,7 @@ export function monthDayStates(
     .map((date) => {
       const videos = counts.get(date) ?? 0;
       let state: DayState;
-      if (videos >= VIDEOS_PER_WEEKDAY) state = "posted";
+      if (videos >= videosRequiredOn(creator, history.postingDays, date)) state = "posted";
       else if (off.get(date) === "approved") state = "off";
       else if (date >= today) state = off.get(date) === "requested" ? "off_requested" : "pending";
       else state = "missed";
@@ -582,7 +587,7 @@ export async function savePostingDay(
     return false;
   };
   if (dupe("tiktok_url") || dupe("instagram_url")) {
-    throw new CreatorDataError("The same link is in there twice. Each of the 5 videos needs to be a different video.");
+    throw new CreatorDataError("The same link is in there twice. Each video needs to be a different one.");
   }
   const ref = creatorRef(id).collection("posting_days").doc(date);
   const existing = await ref.get();
@@ -628,10 +633,15 @@ export async function claimDayComplete(id: string, date: YyyyMmDd, opts: { db?: 
 }
 
 /** Pure rule behind advanceCreatorStatus (exported for tests). */
-export function nextAutoStatus(from: CreatorStatus, onboarded: boolean, postingDays: PostingDay[]): CreatorStatus {
+export function nextAutoStatus(
+  from: CreatorStatus,
+  onboarded: boolean,
+  postingDays: PostingDay[],
+  profile?: Parameters<typeof trialStatus>[1],
+): CreatorStatus {
   if (from !== "onboarding" && from !== "trial") return from;
   if (from === "onboarding" && !onboarded) return from;
-  return trialStatus(postingDays).isInTrial ? "trial" : "active";
+  return trialStatus(postingDays, profile).isInTrial ? "trial" : "active";
 }
 
 /**
@@ -658,7 +668,10 @@ export async function advanceCreatorStatus(id: string, opts: { db?: Firestore; n
     if (!onboarded) return null;
   }
   const days = await ref.collection("posting_days").get();
-  const to = nextAutoStatus(from, onboarded, days.docs.map((x) => toPostingDay(x.id, x.data())));
+  const profile = isYyyyMmDd(d.start_date)
+    ? { start_date: d.start_date as YyyyMmDd, ...(d.trial_plan === "v2" ? { trial_plan: "v2" as const } : {}), ...(isYyyyMmDd(d.ended_on) ? { ended_on: d.ended_on as YyyyMmDd } : {}) }
+    : undefined;
+  const to = nextAutoStatus(from, onboarded, days.docs.map((x) => toPostingDay(x.id, x.data())), profile);
   if (to === from) return null;
   const nowIso = (opts.now ?? new Date()).toISOString();
   const changed = await db.runTransaction(async (tx) => {

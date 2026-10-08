@@ -7,11 +7,14 @@
  *   - a posting creator with no posts found for 2+ weekdays (renamed / private handle?)
  *   - the usable proven library getting small (creators start repeating)
  *   - proven videos stuck without talking points after every retry
+ *   - a creator 3 posting days or fewer from the end of the 20-day trial
+ *     (promotion is automatic; this is the chance to end them first)
  */
 import type { Firestore } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { emailConfigured, sendEmail } from "@/lib/email";
-import { CREATORS_COLLECTION } from "./db";
+import { CREATORS_COLLECTION, isYyyyMmDd, toPostingDay } from "./db";
+import { trialStatus } from "./pay";
 import { PROVEN_COLLECTION } from "./proven";
 import { BEATS_MAX_ATTEMPTS } from "./proven-beats";
 
@@ -26,7 +29,12 @@ export interface CreatorHealthInput {
   post_sync?: { last_ok_at?: string; consecutive_failures?: number; credits_remaining?: number | null };
   /** Newest detected post (ISO), if any. */
   newest_post_at?: string | null;
+  /** v2 trial creators still in the trial: posting days done of the 20. */
+  trial?: { day: number; of: number };
 }
+
+/** Warn this many posting days before automatic promotion. */
+export const TRIAL_WARN_DAYS = 3;
 
 export interface ProvenHealthInput {
   status?: string;
@@ -71,6 +79,15 @@ export function healthProblems(creators: CreatorHealthInput[], proven: ProvenHea
     }
   }
 
+  for (const c of creators) {
+    const t = c.trial;
+    if (!t || t.day < t.of - TRIAL_WARN_DAYS) continue;
+    const left = t.of - t.day;
+    out.push(
+      `${c.name} is on trial day ${t.day} of ${t.of}. They move up to the full plan (5 videos, $500/mo) automatically after ${left === 0 ? "today" : `${left} more posting day${left === 1 ? "" : "s"}`}. To stop that, end them in Creator pay.`,
+    );
+  }
+
   const active = proven.filter((v) => v.status === "active");
   const usable = active.filter((v) => (v.talking_points?.length ?? 0) > 0 && !v.hook_first_person).length;
   if (active.length && usable < MIN_USABLE_VIDEOS) {
@@ -101,7 +118,13 @@ export async function runCreatorHealth(opts: { db?: Firestore; dry?: boolean; no
       const p = await d.ref.collection("posts").orderBy("posted_at", "desc").limit(1).get();
       newest = (p.docs[0]?.data().posted_at as string | undefined) ?? null;
     }
-    creators.push({ name: String(x.name ?? d.id), status, start_date: x.start_date, post_sync: x.post_sync, newest_post_at: newest });
+    let trial: CreatorHealthInput["trial"];
+    if (x.trial_plan === "v2" && status === "trial" && isYyyyMmDd(x.start_date) && !x.ended_on) {
+      const pd = await d.ref.collection("posting_days").get();
+      const t = trialStatus(pd.docs.map((p) => toPostingDay(p.id, p.data())), { start_date: x.start_date, trial_plan: "v2" });
+      if (t.isInTrial) trial = { day: t.postedDays, of: t.requiredDays ?? 20 };
+    }
+    creators.push({ name: String(x.name ?? d.id), status, start_date: x.start_date, post_sync: x.post_sync, newest_post_at: newest, ...(trial ? { trial } : {}) });
   }
   const pv = await db
     .collection(PROVEN_COLLECTION)

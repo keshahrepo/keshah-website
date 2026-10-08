@@ -14,7 +14,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { requireCronSecret } from "@/lib/support/auth";
 import { CREATORS_COLLECTION, listCreators } from "@/lib/creators/db";
-import { completeVideoCount } from "@/lib/creators/pay";
+import { completeVideoCount, TRIAL_V2_VIDEOS, VIDEOS_PER_WEEKDAY } from "@/lib/creators/pay";
 import type { PostingDay } from "@/lib/creators/types";
 import { claimOnce } from "@/lib/interview";
 import { nudgeDateDue, nudgeNeeded } from "@/lib/mobile/nudge";
@@ -46,7 +46,9 @@ export async function GET(req: Request) {
       const dayOff = off.exists && off.get("status") === "approved";
       const row: Record<string, unknown> = { id: c.id, name: c.name, date, done, day_off: dayOff };
       report.push(row);
-      if (!nudgeNeeded(done, dayOff)) {
+      // A v2 creator still in the trial (status "trial") needs 3 a day.
+      const need = c.trial_plan === "v2" && c.status === "trial" ? TRIAL_V2_VIDEOS : VIDEOS_PER_WEEKDAY;
+      if (!nudgeNeeded(done, dayOff, need)) {
         row.result = "not needed";
         continue;
       }
@@ -56,7 +58,7 @@ export async function GET(req: Request) {
         row.result = "already sent";
         continue;
       }
-      const r = await notify({ creatorId: c.id, email: c.email || null }, dailyNudge(done));
+      const r = await notify({ creatorId: c.id, email: c.email || null }, dailyNudge(done, need));
       if (!r || r.sent === 0) {
         await markerRef.update({ nudge_date: FieldValue.delete() }).catch(() => {});
         row.result = r ? "no devices" : "failed";

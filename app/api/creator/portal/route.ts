@@ -17,7 +17,7 @@ import {
   publicQuiz,
   suggestedHandle,
 } from "@/lib/creators/onboarding-content";
-import { isWeekday, monthOf, VIDEOS_PER_WEEKDAY } from "@/lib/creators/pay";
+import { isWeekday, monthOf, videosRequiredOn } from "@/lib/creators/pay";
 import { msUntilLocalDeadline } from "@/lib/creators/time";
 import { errorResponse, publicCreator, requireCreator } from "../_auth";
 import { monthPayload } from "../_payload";
@@ -60,7 +60,8 @@ export async function GET(req: NextRequest) {
         first_posting_day_text: FIRST_POSTING_DAY_TEXT,
         posting_guide_url: POSTING_GUIDE_URL || null,
         posting_rules: POSTING_RULES,
-        videos_per_weekday: VIDEOS_PER_WEEKDAY,
+        // 3 during a v2 trial, 5 after (and always 5 on the original plan).
+        videos_per_weekday: videosRequiredOn(creator.start_date ? creator : { ...creator, start_date: today }, history.postingDays, today),
       },
       today: {
         date: today,

@@ -171,6 +171,9 @@ export async function acceptCreator(id: string, opts: AcceptOptions): Promise<Ac
     const top: Record<string, unknown> = { "accept.last_run_at": now() };
     if (!d.accepted_at) {
       top.accepted_at = now();
+      // New creators start on the 20-day trial (3 videos, $15 a day). Anyone
+      // already paid or credited with earlier months (Isai) keeps their terms.
+      if (!d.trial_plan && !d.start_date && !Number(d.starting_completed_months ?? 0)) top.trial_plan = "v2";
       const mapped = mapCreatorStatus(d.status);
       if (mapped === "onboarding" || mapped === "trial") {
         if (d.status !== "onboarding") top.status_changed_at = FieldValue.serverTimestamp();

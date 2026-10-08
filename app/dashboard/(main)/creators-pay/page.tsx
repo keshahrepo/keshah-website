@@ -38,6 +38,7 @@ interface Row {
     post_sync: { last_ok_at?: string; last_error?: string | null; last_error_at?: string | null; consecutive_failures: number } | null;
   };
   completedMonths: number | null;
+  trial?: { day: number; of: number; promotedOn: string | null } | null;
   levelBaseCents: number | null;
   nextLevel: { nextBaseCents: number | null; earliestMonth: string | null } | null;
   postedDays: number;
@@ -180,6 +181,11 @@ export default function CreatorsPayPage() {
                       </Link>
                       <div style={{ marginTop: 4, display: "flex", gap: 4, flexWrap: "wrap" }}>
                         <Pill>{r.creator.status_display}</Pill>
+                        {r.trial && !r.trial.promotedOn && (
+                          <Pill color={r.trial.day >= r.trial.of - 3 ? "#fbbf24" : "#60a5fa"}>
+                            trial {r.trial.day}/{r.trial.of}
+                          </Pill>
+                        )}
                         {r.onboarding.done < r.onboarding.total && (
                           <Pill color="#60a5fa">
                             setup {r.onboarding.done}/{r.onboarding.total}

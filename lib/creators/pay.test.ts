@@ -382,3 +382,81 @@ test("dayComplete: no raise line at the top of the ladder", () => {
   assert.equal(dc.nextLevel, null);
   assert.equal(dc.streak, 1);
 });
+
+// ---------------------------------------------------------------- trial v2
+
+const v2 = (start_date: string, ended_on?: string): PayProfile => ({ ...prof(start_date, 0, ended_on), trial_plan: "v2" });
+// Oct 2026: the 20th weekday from Oct 1 is Oct 28, so promotion is Oct 29.
+const trialOct = () => weekdaysBetween("2026-10-01", "2026-10-28").map((d) => day(d, 3));
+
+test("v2: 3 videos count during the trial, $15 a day, no base", () => {
+  const pd = weekdaysBetween("2026-10-01", "2026-10-09").map((d) => day(d, 3));
+  const s = monthSummary(v2("2026-10-01"), "2026-10", pd, [], [], [], { today: "2026-10-12" });
+  assert.equal(s.postedDays, 7);
+  assert.equal(s.trialDays, 7);
+  assert.equal(s.trialCents, 7 * 1500);
+  assert.equal(s.baseDueCents, 0);
+  assert.equal(s.totalCents, 10500);
+  assert.deepEqual(draftInvoiceLines(s).map((l) => [l.kind, l.amount_cents]), [["trial", 10500]]);
+  const t = trialStatus(pd, v2("2026-10-01"));
+  assert.equal(t.isInTrial, true);
+  assert.equal(t.postedDays, 7);
+  assert.equal(t.requiredDays, 20);
+  assert.equal(t.totalCents, 30000);
+});
+
+test("v2: promotion month mixes $300 of trial with prorated base at 5 videos", () => {
+  const pd = [...trialOct(), day("2026-10-29", 5), day("2026-10-30", 3)];
+  const p = v2("2026-10-01");
+  const s = monthSummary(p, "2026-10", pd, [], [], []);
+  assert.equal(s.trialDays, 20);
+  assert.equal(s.trialCents, 30000);
+  // Only Oct 29 counts after promotion (Oct 30 had 3, not 5).
+  assert.equal(s.baseCreditedDays, 1);
+  assert.equal(s.baseDueCents, Math.round(50000 / 22));
+  assert.equal(s.missedDays, 1);
+  assert.equal(s.totalCents, 30000 + Math.round(50000 / 22));
+  assert.deepEqual(draftInvoiceLines(s).map((l) => l.kind), ["trial", "base"]);
+  const t = trialStatus(pd, p);
+  assert.equal(t.isInTrial, false);
+  assert.equal(t.promotedOn, "2026-10-29");
+});
+
+test("v2: ladder counts from promotion; bonuses only for videos posted after it", () => {
+  const p = v2("2026-10-01");
+  const pd = [...trialOct(), ...postAll("2026-10-29", "2026-12-31")];
+  const hist = { postingDays: pd, daysOff: [] };
+  assert.equal(completedMonthsAsOf(p, "2026-11", hist), 0);
+  assert.equal(completedMonthsAsOf(p, "2026-12", hist), 1);
+  assert.equal(monthSummary(p, "2026-11", pd, [], [], []).levelBaseCents, 50000);
+  assert.equal(monthSummary(p, "2026-12", pd, [], [], []).levelBaseCents, 65000);
+  assert.equal(nextLevel(p, hist, "2026-10").earliestMonth, "2026-12");
+  const claim = (posted_on: string): BonusClaim => ({
+    platform: "tiktok",
+    video_url: `https://www.tiktok.com/@x/video/${posted_on}`,
+    posted_on,
+    crossed_100k_on: posted_on,
+    status: "approved",
+  } as BonusClaim);
+  const s = monthSummary(p, "2026-11", pd, [], [claim("2026-10-20"), claim("2026-10-29")], []);
+  assert.equal(s.bonusLines.length, 1);
+  assert.match(s.bonusLines[0].label, /2026-10-29/);
+});
+
+test("v2: dayComplete pays $15 on trial days and flags the 20th", () => {
+  const p = v2("2026-10-01");
+  const before = trialOct().slice(0, 19);
+  const dc = dayComplete(p, "2026-10-28", before, trialOct(), [])!;
+  assert.equal(dc.dayPayCents, 1500);
+  assert.equal(dc.monthEarnedCents, 30000);
+  assert.deepEqual(dc.trial, { day: 20, of: 20, totalCents: 30000, promoted: true });
+  const mid = dayComplete(p, "2026-10-05", trialOct().slice(0, 2), trialOct().slice(0, 3), [])!;
+  assert.deepEqual(mid.trial, { day: 3, of: 20, totalCents: 30000, promoted: false });
+});
+
+test("original plan unchanged: 3 videos don't count", () => {
+  const pd = weekdaysBetween("2026-10-01", "2026-10-09").map((d) => day(d, 3));
+  const s = monthSummary(prof("2026-10-01"), "2026-10", pd, [], [], []);
+  assert.equal(s.postedDays, 0);
+  assert.equal(s.trialCents, 0);
+});

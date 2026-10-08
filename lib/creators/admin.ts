@@ -27,10 +27,11 @@ import {
   addMonths,
   baseForCompletedMonths,
   completedMonthsAsOf,
+  trialStatus,
   monthSummary,
   nextLevel,
   weekdaysBetween,
-  VIDEOS_PER_WEEKDAY,
+  videosRequiredOn,
   type MonthSummary,
 } from "./pay";
 import { acceptCreator, acceptOf, type AcceptOptions, type AcceptResult } from "./accept";
@@ -176,6 +177,8 @@ export interface AdminCreator {
   timezone: string;
   start_date: string;
   starting_completed_months: number;
+  /** "v2": 20-day trial at 3 videos / $15 a day before the full plan. */
+  trial_plan?: "v2";
   campaign_tags: string[];
   /** Raw ContentCreators.status (kept for the editor). */
   status: string;
@@ -222,6 +225,7 @@ export function toAdminCreator(id: string, d: DocumentData): AdminCreator {
     timezone: String(d.timezone ?? ""),
     start_date: isDate(d.start_date) ? d.start_date : "",
     starting_completed_months: Number(d.starting_completed_months ?? 0) || 0,
+    ...(d.trial_plan === "v2" ? { trial_plan: "v2" as const } : {}),
     campaign_tags: Array.isArray(d.campaign_tags) ? d.campaign_tags.map(String) : [],
     status: String(d.status ?? ""),
     status_display: mapCreatorStatus(d.status),
@@ -262,6 +266,7 @@ export function payProfileOf(c: AdminCreator): PayProfile {
   return {
     start_date: c.start_date,
     starting_completed_months: c.starting_completed_months,
+    ...(c.trial_plan ? { trial_plan: c.trial_plan } : {}),
     ...(c.ended_on ? { ended_on: c.ended_on } : {}),
     legal_name: c.legal_name,
     timezone: c.timezone || "UTC",
@@ -447,12 +452,13 @@ export function calendarFor(c: AdminCreator, h: CreatorHistory, month: YyyyMm): 
     posting.set(p.date, { n: (cur?.n ?? 0) + p.complete, at: cur?.at ?? p.logged_at });
   }
   const off = new Map(h.daysOff.map((d) => [d.date, d.status]));
+  const profile = c.start_date ? payProfileOf(c) : undefined;
   return weekdaysBetween(first, last).map((date) => {
     const p = posting.get(date);
     const n = p?.n ?? 0;
     let state: DayState;
     if (!c.start_date || date < c.start_date || (c.ended_on && date > c.ended_on)) state = "inactive";
-    else if (n >= VIDEOS_PER_WEEKDAY) state = "posted";
+    else if (n >= videosRequiredOn(profile, h.postingDays, date)) state = "posted";
     else if (off.get(date) === "approved") state = "approved_off";
     else if (off.get(date) === "requested") state = "requested_off";
     else if (date >= today) state = "pending";
@@ -559,6 +565,8 @@ export interface CreatorRow {
   roiFlag: ReturnType<typeof roiFlag>;
   onboarding: { done: number; total: number };
   latestInvoice: { number: string; month: string; status: string; paid_at: string | null; total_cents: number } | null;
+  /** v2 trial: posting days done of 20, and the promotion date once reached. */
+  trial: { day: number; of: number; promotedOn: string | null } | null;
 }
 
 export async function buildRow(c: AdminCreator, month: YyyyMm): Promise<CreatorRow> {
@@ -588,10 +596,12 @@ export async function buildRow(c: AdminCreator, month: YyyyMm): Promise<CreatorR
   const payWindowCents = s?.totalCents ?? 0;
   const roiRatio = payWindowCents > 0 ? estProceedsWindowUsd / (payWindowCents / 100) : null;
   const inv = h.invoices[0];
+  const ts = c.trial_plan && c.pay_ready ? trialStatus(h.postingDays, payProfileOf(c)) : null;
 
   return {
     creator: c,
     month,
+    trial: ts ? { day: ts.postedDays, of: ts.requiredDays ?? 20, promotedOn: ts.promotedOn ?? null } : null,
     completedMonths,
     levelBaseCents: level,
     nextLevel: next,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { claimDayComplete, creatorToday, getCreator, getHistory, hasStarted, savePostingDay } from "@/lib/creators/db";
-import { completeVideoCount, dayComplete, isPostedDay, localDate, VIDEOS_PER_WEEKDAY } from "@/lib/creators/pay";
+import { completeVideoCount, dayComplete, isPostedDay, localDate, videosRequiredOn } from "@/lib/creators/pay";
 import type { PostedVideo } from "@/lib/creators/types";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { CREATORS_COLLECTION } from "@/lib/creators/db";
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     const saved = await savePostingDay(creator.id, date, (body.videos ?? []) as PostedVideo[]);
     const complete = completeVideoCount(saved);
     let day_complete = null;
-    if (complete >= VIDEOS_PER_WEEKDAY && !isPostedDay(before.postingDays, date)) {
+    if (complete >= videosRequiredOn(creator, before.postingDays, date) && !isPostedDay(before.postingDays, date, creator)) {
       try {
         const [after, profile] = await Promise.all([getHistory(creator.id), hasStarted(creator) ? creator : getCreator(creator.id)]);
         if (profile && hasStarted(profile)) day_complete = dayComplete(profile, date, before.postingDays, after.postingDays, after.daysOff);

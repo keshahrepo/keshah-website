@@ -163,6 +163,12 @@ export interface CreatorPayFields {
   bonus_start_date?: YyyyMmDd;
   /** Completed months credited before start_date (default 0). */
   starting_completed_months: number;
+  /**
+   * "v2": the first 20 posting days are a trial at 3 videos a day, paid $15 a
+   * day ($300 in all), no bonuses; promoted automatically after the 20th.
+   * Unset: the original plan (5 videos a day from the start).
+   */
+  trial_plan?: "v2";
   /** e.g. ["Isai TikTok", "Isai Insta"]. */
   campaign_tags: string[];
   status: CreatorStatus;
@@ -212,7 +218,7 @@ export type CreatorProfile = { id: string } & ContentCreatorLegacyFields &
 
 /** The subset of a profile the pay calculator needs. */
 export type PayProfile = Pick<CreatorPayFields, "start_date" | "starting_completed_months"> &
-  Partial<Pick<CreatorPayFields, "ended_on" | "legal_name" | "timezone">>;
+  Partial<Pick<CreatorPayFields, "ended_on" | "legal_name" | "timezone" | "trial_plan">>;
 
 export type Platform = "tiktok" | "instagram";
 
@@ -327,6 +333,7 @@ export interface Adjustment {
 
 export type InvoiceLineKind =
   | "base"
+  | "trial"
   | "bonus_100k"
   | "bonus_1m"
   | "bonus_1m_topup"
