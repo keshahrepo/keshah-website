@@ -127,9 +127,6 @@ export function welcomeEmail(input: {
           "Everything happens in the KESHAH Creators app. Download it here and sign in with this email address:",
           app,
           "",
-          "Prefer a computer for some things? Set a password for the web portal (this link works once and expires in 7 days):",
-          input.link,
-          "",
         ]
       : ["Everything happens in your creator portal. First, set your password (this link works once and expires in 7 days):", input.link, ""]),
     ...(input.keshahEmail
