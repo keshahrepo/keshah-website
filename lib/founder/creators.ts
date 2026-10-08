@@ -130,7 +130,12 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
   const today = todayIn(c.timezone);
   const thisMonth = today.slice(0, 7);
   const h = await loadHistory(c.id, { contractSigned: c.contract.status === "signed" });
-  const bonusStart = h.bonusClaims.map((b) => b.posted_on).filter(Boolean).sort()[0];
+  // Cost paid outside the system (e.g. Isai's September base before pay moved here):
+  // ContentCreators.off_system_costs { "yyyy-mm": cents }. Counts toward cost / ROI only, never invoices.
+  const offSnap = await db().collection(CREATORS_COLLECTION).doc(c.id).get();
+  const offSystem = (offSnap.get("off_system_costs") ?? {}) as Record<string, number>;
+  const offMonths = Object.keys(offSystem).filter((k) => /^\d{4}-\d{2}$/.test(k)).sort();
+  const bonusStart = [...h.bonusClaims.map((b) => b.posted_on).filter(Boolean), ...offMonths.map((m) => `${m}-01`)].sort()[0];
   const first = [c.start_date || thisMonth, bonusStart || thisMonth].sort()[0].slice(0, 7);
   const months: string[] = [];
   if (period === "all") {
@@ -154,8 +159,9 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
     payoutCents += !current && inv ? inv.total_cents : p.baseCents + p.bonusCents + p.trialCents + p.adjustmentCents;
     // Bonuses earned by THIS month's videos (they're settled on next month's invoice).
     const earned = bonusLinesForMonth(h.bonusClaims, addMonths(m, 1)).reduce((a, l) => a + l.amount_cents, 0);
-    payCents += p.baseCents + p.trialCents + p.adjustmentCents + earned;
-    pay.baseCents += p.baseCents;
+    const off = Number(offSystem[m] ?? 0) || 0;
+    payCents += p.baseCents + p.trialCents + p.adjustmentCents + earned + off;
+    pay.baseCents += p.baseCents + off;
     pay.bonusCents += earned;
     pay.trialCents += p.trialCents;
     pay.adjustmentCents += p.adjustmentCents;
