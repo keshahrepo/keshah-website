@@ -115,7 +115,10 @@ function monthPay(s: MonthSummary, current: boolean) {
 }
 
 export async function founderCreators(period: string): Promise<FounderCreatorRow[]> {
-  const all = (await listCreators()).filter((c) => c.pay_ready || c.legal_name);
+  const excluded = new Set(
+    (await db().collection(CREATORS_COLLECTION).where("exclude_from_reports", "==", true).select().get()).docs.map((d) => d.id),
+  );
+  const all = (await listCreators()).filter((c) => (c.pay_ready || c.legal_name) && !excluded.has(c.id));
   const [from, to] = period === "all" ? [0, Date.now() + DAY_MS] : monthWindow(period);
   const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
   const startDate = period === "all" ? "2020-01-01" : day(from);
@@ -163,8 +166,11 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
     // Bonuses earned by THIS month's videos (they're settled on next month's invoice).
     const earned = bonusLinesForMonth(h.bonusClaims, addMonths(m, 1)).reduce((a, l) => a + l.amount_cents, 0);
     const off = Number(offSystem[m] ?? 0) || 0;
-    payCents += p.baseCents + p.trialCents + p.adjustmentCents + earned + off;
-    pay.baseCents += p.baseCents + off;
+    // Cost = what the work has earned so far (this month: base up to today, like
+    // the money it's compared with); the payout above stays the full-month projection.
+    const baseEarned = current ? s.baseDueCents : p.baseCents;
+    payCents += baseEarned + p.trialCents + p.adjustmentCents + earned + off;
+    pay.baseCents += baseEarned + off;
     pay.bonusCents += earned;
     pay.trialCents += p.trialCents;
     pay.adjustmentCents += p.adjustmentCents;
@@ -200,7 +206,10 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
       };
     })
     .sort((a, b) => b.month.localeCompare(a.month));
-  const paidOutCents = payouts.filter((p) => period === "all" || p.payoutMonth === period).reduce((a, p) => a + p.totalCents, 0);
+  // Cash actually sent: paid invoices, by the month they were paid.
+  const paidOutCents = payouts
+    .filter((p) => p.status === "paid" && (period === "all" || (p.paidAt ?? "").slice(0, 7) === period))
+    .reduce((a, p) => a + p.totalCents, 0);
   const startDay = new Date(from).toISOString().slice(0, 10);
   const endDay = new Date(Math.min(to - DAY_MS, Date.now())).toISOString().slice(0, 10);
   const countryGroups = c.campaign_tags.length
@@ -238,9 +247,27 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
     views += v;
     if (!top || v > top.views) top = { url: String(x.url ?? ""), platform: String(x.platform ?? ""), views: v, thumbnail: (x.thumbnail_url as string) || null };
   }
-  const videos = h.postingDays
-    .filter((p) => p.date >= fromDate && p.date < toDate)
-    .reduce((a, p) => a + completeVideoCount(p), 0);
+  // Videos per day: the posting log, or (days before the log existed, e.g. Isai's
+  // September) the synced posts: a video = one TikTok + one Instagram post that day.
+  const logged = new Map<string, number>();
+  for (const p of h.postingDays) if (p.date >= fromDate && p.date < toDate) logged.set(p.date, (logged.get(p.date) ?? 0) + completeVideoCount(p));
+  const perDayPosts = new Map<string, { tiktok: number; instagram: number }>();
+  for (const d of postsSnap.docs) {
+    const x = d.data();
+    const want = handles[String(x.platform)];
+    if (x.pinned || (want && x.handle && norm(x.handle) !== want)) continue;
+    const day = String(x.local_date ?? "");
+    if (!day) continue;
+    const e = perDayPosts.get(day) ?? { tiktok: 0, instagram: 0 };
+    if (x.platform === "tiktok") e.tiktok++;
+    else if (x.platform === "instagram") e.instagram++;
+    perDayPosts.set(day, e);
+  }
+  let videos = 0;
+  for (const day of new Set([...logged.keys(), ...perDayPosts.keys()])) {
+    const fromPosts = perDayPosts.get(day);
+    videos += Math.max(logged.get(day) ?? 0, fromPosts ? Math.min(fromPosts.tiktok, fromPosts.instagram) : 0);
+  }
   const ts = c.trial_plan && c.pay_ready ? trialStatus(h.postingDays, payProfileOf(c)) : null;
   return {
     id: c.id,

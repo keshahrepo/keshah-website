@@ -98,7 +98,8 @@ export async function countryStats(startDate: string, endDate: string, filters: 
     c.conversions += Number(m["Conversions"] ?? 0);
     c.finished += Math.max(0, starts - pending);
   }
-  return [...by.values()];
+  // Blank / "Unknown" country segments aren't a country: leave them out.
+  return [...by.values()].filter((c) => c.name.trim() && c.code !== "unknown" && !/^unknown$/i.test(c.name));
 }
 
 function row(c: CountryStats, allInstalls: number): CountryRow {

@@ -10,7 +10,7 @@ export async function GET() {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const awaiting = await listAwaitingConversations({ limit: 100 });
+  const awaiting = await listAwaitingConversations({ limit: 1000 });
 
   // Hydrate each conversation with profile + last 5 messages for the UI.
   // Parallel because each round-trip is independent.

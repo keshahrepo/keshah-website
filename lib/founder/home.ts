@@ -52,7 +52,7 @@ export async function founderHome(now = new Date()): Promise<FounderHome> {
   const [creatorsSnap, appsSnap, support, revenue, inbox] = await Promise.all([
     db.collection(CREATORS_COLLECTION).where("is_active", "==", true).get(),
     db.collection("careers_applications").where("status", "in", ["booked", "completed", "awaiting_booking", "pending"]).get(),
-    listAwaitingConversations({ limit: 100 }).catch(() => []),
+    listAwaitingConversations({ limit: 1000 }).catch(() => []),
     revenueOverview(),
     listInboxMessages(db).then(groupConversations).catch(() => []),
   ]);
@@ -76,6 +76,7 @@ export async function founderHome(now = new Date()): Promise<FounderHome> {
       ]);
       for (const i of invs.docs) {
         const v = i.data();
+        if (!Number(v.total_cents ?? 0)) continue; // a $0 invoice needs nothing from you
         const month = String(v.month ?? "");
         const total = Number(v.total_cents ?? 0);
         const money = `$${(total / 100).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;

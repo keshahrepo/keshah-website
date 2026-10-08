@@ -236,6 +236,11 @@ export async function runInvoiceAutoSubmit(
         row.result = `already ${draft.status}`;
         continue;
       }
+      // Nothing earned that month (e.g. no start date yet): don't submit a $0 invoice.
+      if (draft.total_cents === 0) {
+        row.result = "skipped (nothing earned)";
+        continue;
+      }
       const inv = await deps.autoSubmit(c.id, draft.number, now);
       if (!inv) {
         row.result = "already submitted";
