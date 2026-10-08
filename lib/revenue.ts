@@ -161,3 +161,44 @@ export async function rcRevenueByCampaign(startDate: string, endDate: string, ty
   }
   return out;
 }
+
+export interface ValuePerUser {
+  /** New RevenueCat customers whose first day falls in the range. */
+  customers: number;
+  /** Their proceeds over their first 14 days (after store fees). */
+  proceedsUsd: number;
+  /** proceedsUsd / customers. */
+  perUserUsd: number | null;
+  /** Some cohorts in the range haven't had 14 days yet, so the number is still rising. */
+  incomplete: boolean;
+}
+
+/**
+ * What a new user is worth in their first 14 days, from RevenueCat's
+ * "LTV per customer" chart (customer_lifetime = 14 days): proceeds earned on
+ * days 0–14 after each customer's first day, over the customers who started
+ * in [startDate, endDate]. filters use RevenueCat's ids (e.g. attribution_campaign,
+ * first_country, first_platform).
+ */
+export async function rcValuePerUser(startDate: string, endDate: string, filters: { name: string; values: string[] }[] = []): Promise<ValuePerUser> {
+  const o = await rcChart("ltv_per_customer", {
+    resolution: "2",
+    start_date: startDate,
+    end_date: endDate,
+    currency: "USD",
+    selectors: JSON.stringify({ customer_lifetime: "14_days" }),
+    ...(filters.length ? { filters: JSON.stringify(filters) } : {}),
+  });
+  const measures = ((o.measures as Array<Record<string, unknown>> | undefined) ?? []).map((m) => String(m.display_name ?? ""));
+  const total = ((o.summary as Record<string, unknown> | undefined)?.total ?? {}) as Record<string, number>;
+  const customersKey = measures.find((m) => /new customers/i.test(m));
+  const proceedsKey = measures.find((m) => /realized proceeds/i.test(m));
+  if (!customersKey || !proceedsKey || typeof total[customersKey] !== "number" || typeof total[proceedsKey] !== "number") {
+    throw new Error(`RevenueCat LTV chart missing measures (${measures.join(", ")})`);
+  }
+  const proceedsIdx = measures.indexOf(proceedsKey);
+  const incomplete = ((o.values as Array<Record<string, unknown>> | undefined) ?? []).some((v) => v.measure === proceedsIdx && v.incomplete === true);
+  const customers = total[customersKey];
+  const proceeds = total[proceedsKey];
+  return { customers, proceedsUsd: Math.round(proceeds * 100) / 100, perUserUsd: customers > 0 ? proceeds / customers : null, incomplete };
+}

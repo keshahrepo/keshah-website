@@ -23,6 +23,7 @@ import { matchesInstallSource } from "@/app/dashboard/(main)/_lib/installSource"
 import { matchesCountryFilter, type CountryFilter } from "@/app/dashboard/(main)/_lib/countryFilter";
 import { normalizeCampaignName } from "@/app/dashboard/(main)/_lib/campaign";
 import { CREATORS_COLLECTION } from "@/lib/creators/db";
+import { rcValuePerUser } from "@/lib/revenue";
 
 export interface CohortQuery {
   period: string; // "all" | "yyyy-mm"
@@ -103,6 +104,14 @@ export interface CohortResult {
   checkIn3: CheckInStats;
   checkIn6: CheckInStats;
   alarm: { completed: number; skipped: number };
+  /**
+   * What a new user in this slice is worth in their first 14 days (RevenueCat
+   * proceeds per new customer), and the same for the period just before.
+   * Null with valueNote when RevenueCat can't apply a filter or didn't answer.
+   */
+  value14: { perUserUsd: number | null; customers: number; incomplete: boolean } | null;
+  value14Prev: number | null;
+  valueNote?: string;
 }
 
 export async function cohort(q: CohortQuery): Promise<CohortResult> {
@@ -133,8 +142,11 @@ export async function cohort(q: CohortQuery): Promise<CohortResult> {
     checkIn3: { total: 0, rows: {} as CheckInStats["rows"] },
     checkIn6: { total: 0, rows: {} as CheckInStats["rows"] },
     alarm: { completed: 0, skipped: 0 },
+    value14: null,
+    value14Prev: null,
   };
   if (!w) return empty;
+  const value = valueFor(q, w, names);
 
   const snap = await getFirebaseAdmin()
     .db.collection("Users")
@@ -179,8 +191,10 @@ export async function cohort(q: CohortQuery): Promise<CohortResult> {
   }
 
   const m = computeMetrics(users, signups, Date.now());
+  const v = await value;
   return {
     ...empty,
+    ...v,
     campaigns: [...campCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([name, count]) => ({ name, count })),
     signups,
     trials: m.total,
@@ -201,7 +215,7 @@ export async function cohort(q: CohortQuery): Promise<CohortResult> {
 
 /** cohort() through a Firestore cache: 15 min while the window is open, 6 h once closed. */
 export async function cachedCohort(q: CohortQuery, opts: { fresh?: boolean } = {}): Promise<CohortResult & { computed_at?: string }> {
-  const ref = getFirebaseAdmin().db.collection("DashboardMetrics").doc(`founder_cohort_${cohortKey(q)}`.slice(0, 1400));
+  const ref = getFirebaseAdmin().db.collection("DashboardMetrics").doc(`founder_cohort_v2_${cohortKey(q)}`.slice(0, 1400));
   if (!opts.fresh) {
     const snap = await ref.get();
     if (snap.exists) {
@@ -217,4 +231,34 @@ export async function cachedCohort(q: CohortQuery, opts: { fresh?: boolean } = {
   const closed = !!out.to && Date.parse(out.to) < Date.now() - 9 * 86_400_000;
   await ref.set({ json: JSON.stringify(out), computed_at, closed }).catch((e) => console.error("cohort cache write failed:", e));
   return { ...out, computed_at };
+}
+
+/** RevenueCat's 14-day value per new user for the slice, plus the previous equal-length window. */
+async function valueFor(q: CohortQuery, w: { from: number; to: number }, names: Map<string, string>) {
+  if (q.gender !== "all") return { value14: null, value14Prev: null, valueNote: "RevenueCat can't split value by gender" };
+  if (q.source !== "all") return { value14: null, value14Prev: null, valueNote: "RevenueCat can't split value by paid vs organic" };
+  const filters: { name: string; values: string[] }[] = [];
+  if (q.country === "us") filters.push({ name: "first_country", values: ["US"] });
+  else if (q.country === "india") filters.push({ name: "first_country", values: ["IN"] });
+  else if (q.country !== "all") return { value14: null, value14Prev: null, valueNote: "RevenueCat can't split value by country tier" };
+  if (q.campaign !== "all") {
+    // A creator's name stands for all of their campaign tags.
+    const tags = [...names.entries()].filter(([, n]) => n.toLowerCase() === q.campaign.toLowerCase()).map(([t]) => t);
+    const raw = await getFirebaseAdmin().db.collection(CREATORS_COLLECTION).select("campaign_tags").get();
+    const exact = raw.docs.flatMap((d) => ((d.get("campaign_tags") as string[] | undefined) ?? []).filter((t) => tags.includes(t.trim().toLowerCase())));
+    filters.push({ name: "attribution_campaign", values: exact.length ? exact : [q.campaign] });
+  }
+  const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  const end = Math.min(w.to, Date.now());
+  const len = end - w.from;
+  try {
+    const [cur, prev] = await Promise.all([
+      rcValuePerUser(day(w.from), day(end - 86_400_000), filters),
+      len > 0 ? rcValuePerUser(day(w.from - len), day(w.from - 86_400_000), filters).catch(() => null) : Promise.resolve(null),
+    ]);
+    return { value14: { perUserUsd: cur.perUserUsd, customers: cur.customers, incomplete: cur.incomplete }, value14Prev: prev?.perUserUsd ?? null };
+  } catch (e) {
+    console.error("cohort value per user:", e instanceof Error ? e.message : e);
+    return { value14: null, value14Prev: null, valueNote: "RevenueCat didn't answer" };
+  }
 }
