@@ -24,7 +24,6 @@ import { matchesCountryFilter, type CountryFilter } from "@/app/dashboard/(main)
 import { normalizeCampaignName } from "@/app/dashboard/(main)/_lib/campaign";
 import { CREATORS_COLLECTION } from "@/lib/creators/db";
 import { rcValuePerUser } from "@/lib/revenue";
-import { founderCreators } from "./creators";
 
 export interface CohortQuery {
   period: string; // "all" | "yyyy-mm"
@@ -113,9 +112,6 @@ export interface CohortResult {
   value14: { perUserUsd: number | null; grossPerUserUsd: number | null; customers: number; incomplete: boolean } | null;
   value14Prev: number | null;
   valueNote?: string;
-  /** Cost per install, only when the slice is one creator (their cost / their installs). */
-  cpiUsd: number | null;
-  cpiNote?: string;
 }
 
 export async function cohort(q: CohortQuery): Promise<CohortResult> {
@@ -148,7 +144,6 @@ export async function cohort(q: CohortQuery): Promise<CohortResult> {
     alarm: { completed: 0, skipped: 0 },
     value14: null,
     value14Prev: null,
-    cpiUsd: null,
   };
   if (!w) return empty;
   const value = valueFor(q, w, names);
@@ -197,11 +192,9 @@ export async function cohort(q: CohortQuery): Promise<CohortResult> {
 
   const m = computeMetrics(users, signups, Date.now());
   const v = await value;
-  const cpi = await cpiFor(q, v.value14?.customers ?? null);
   return {
     ...empty,
     ...v,
-    ...cpi,
     campaigns: [...campCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([name, count]) => ({ name, count })),
     signups,
     trials: m.total,
@@ -270,13 +263,3 @@ async function valueFor(q: CohortQuery, w: { from: number; to: number }, names: 
   }
 }
 
-/** CPI for a slice that is one creator: their cost for the period / installs RevenueCat counted. */
-async function cpiFor(q: CohortQuery, installs: number | null): Promise<{ cpiUsd: number | null; cpiNote?: string }> {
-  if (q.campaign === "all") return { cpiUsd: null, cpiNote: "Pick a creator in Filters to see CPI (ad spend isn't connected)" };
-  if (!installs) return { cpiUsd: null };
-  const rows = await founderCreators(q.period);
-  const first = (n: string) => n.trim().split(/\s+/)[0].toLowerCase();
-  const row = rows.find((r) => first(r.name) === q.campaign.toLowerCase());
-  if (!row) return { cpiUsd: null, cpiNote: "CPI needs a creator campaign" };
-  return { cpiUsd: row.payCents / 100 / installs };
-}

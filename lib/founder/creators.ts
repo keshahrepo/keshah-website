@@ -63,7 +63,7 @@ export interface FounderCreatorRow {
   paidOutCents: number;
   /** Installs from their link in the period (RevenueCat new customers on their campaigns). */
   installs: number | null;
-  /** Revenue per install: RevenueCat proceeds in each install's first 7 days, averaged. */
+  /** PPI: RevenueCat proceeds in each install's first 7 days, averaged (the field keeps its old name). */
   rpiUsd: number | null;
   /** The same in gross revenue (before store fees). */
   rpiGrossUsd: number | null;
@@ -254,4 +254,30 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
     rpiGrossUsd: value?.grossPerUserUsd ?? null,
     cpiUsd: value && value.customers > 0 ? payCents / 100 / value.customers : null,
   };
+}
+
+/**
+ * The whole creator program for a period: installs from every creator's link
+ * (RevenueCat), PPI (7-day proceeds per install), RPI (gross) and CPI (total
+ * creator cost / installs). Null fields when RevenueCat didn't answer.
+ */
+export async function programValue(period: string, rows: FounderCreatorRow[]) {
+  const tags = [...new Set(rows.flatMap((r) => r.campaignTags))];
+  const cost = rows.reduce((a, r) => a + r.payCents, 0) / 100;
+  if (!tags.length) return { installs: null, ppiUsd: null, rpiUsd: null, cpiUsd: null, incomplete: false };
+  const [from, to] = period === "all" ? [0, Date.now() + DAY_MS] : monthWindow(period);
+  const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  try {
+    const v = await rcValuePerUser(period === "all" ? "2020-01-01" : day(from), day(Math.min(to - DAY_MS, Date.now())), [{ name: "attribution_campaign", values: tags }]);
+    return {
+      installs: v.customers,
+      ppiUsd: v.perUserUsd,
+      rpiUsd: v.grossPerUserUsd,
+      cpiUsd: v.customers > 0 ? cost / v.customers : null,
+      incomplete: v.incomplete,
+    };
+  } catch (e) {
+    console.error("program value:", e instanceof Error ? e.message : e);
+    return { installs: null, ppiUsd: null, rpiUsd: null, cpiUsd: null, incomplete: false };
+  }
 }
