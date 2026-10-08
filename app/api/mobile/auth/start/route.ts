@@ -5,6 +5,7 @@
 
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { emailConfigured, sendEmail } from "@/lib/email";
+import { demoLogin } from "@/lib/mobile/demo";
 import { codeEmail, issueCode, ISSUE_ERRORS } from "@/lib/mobile/codes";
 import { firestoreCodeStore } from "@/lib/mobile/firestore";
 import { clientIp, jsonError, mobileOff, readJson, serverError } from "@/lib/mobile/http";
@@ -17,6 +18,11 @@ export async function POST(req: Request) {
   const body = await readJson(req);
   const email = normalizeEmail(body.email);
   if (!email) return jsonError("That email doesn't look right.", 400);
+  // The App Review demo account signs in with its fixed code; no email is sent.
+  {
+    const demo = await demoLogin(getFirebaseAdmin().db).catch(() => null);
+    if (demo && email === demo.email) return Response.json({ ok: true });
+  }
   if (!emailConfigured()) return jsonError("We can't send codes right now. Try again later.", 503);
   try {
     const { db } = getFirebaseAdmin();
