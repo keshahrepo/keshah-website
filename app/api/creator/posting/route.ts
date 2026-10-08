@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { claimDayComplete, creatorToday, getCreator, getHistory, hasStarted, savePostingDay } from "@/lib/creators/db";
-import { completeVideoCount, dayComplete, isPostedDay, VIDEOS_PER_WEEKDAY } from "@/lib/creators/pay";
+import { completeVideoCount, dayComplete, isPostedDay, localDate, VIDEOS_PER_WEEKDAY } from "@/lib/creators/pay";
 import type { PostedVideo } from "@/lib/creators/types";
+import { getFirebaseAdmin } from "@/lib/firebase-admin";
+import { CREATORS_COLLECTION } from "@/lib/creators/db";
+
 import { errorResponse, requireCreator, requireOnboarded } from "../_auth";
 
 // POST { videos: [{ tiktok_url, instagram_url }], date? } — date defaults to
@@ -18,6 +21,19 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const date = typeof body.date === "string" ? body.date : creatorToday(creator);
     const before = await getHistory(creator.id);
+    // Pasted links must be to videos posted that day: an old post can't fill a slot.
+    const was = new Set(
+      (before.postingDays.find((d) => d.date === date)?.videos ?? []).flatMap((v) => [v.tiktok_url, v.instagram_url]).filter(Boolean),
+    );
+    for (const v of (body.videos ?? []) as PostedVideo[]) {
+      for (const url of [v.tiktok_url, v.instagram_url]) {
+        if (!url || was.has(url)) continue;
+        const posted = await postedOn(creator.id, url, creator.timezone);
+        if (posted && posted < date) {
+          return NextResponse.json({ error: `That ${url.includes("tiktok") ? "TikTok" : "Instagram"} link is to a video posted before today. Paste the one you posted today.` }, { status: 400 });
+        }
+      }
+    }
     const saved = await savePostingDay(creator.id, date, (body.videos ?? []) as PostedVideo[]);
     const complete = completeVideoCount(saved);
     let day_complete = null;
@@ -35,4 +51,25 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     return errorResponse(e, "posting");
   }
+}
+
+/**
+ * The local date a pasted video went up, when we can tell: TikTok ids carry their
+ * upload time (top 32 bits = unix seconds); otherwise the synced post, if we have it.
+ */
+async function postedOn(creatorId: string, url: string, tz: string): Promise<string | null> {
+  const tt = url.match(/tiktok\.com\/.*\/video\/(\d{15,25})/);
+  if (tt) {
+    const secs = Number(BigInt(tt[1]) >> BigInt(32));
+    if (secs > 1_400_000_000) return localDate(new Date(secs * 1000).toISOString(), tz);
+  }
+  const ig = url.match(/instagram\.com\/(?:reel|reels|p)\/([A-Za-z0-9_-]+)/);
+  if (ig) {
+    const snap = await getFirebaseAdmin()
+      .db.collection(CREATORS_COLLECTION).doc(creatorId).collection("posts")
+      .where("post_id", "==", ig[1]).limit(1).get();
+    const d = snap.docs[0]?.data();
+    if (d && typeof d.local_date === "string") return d.local_date;
+  }
+  return null;
 }
