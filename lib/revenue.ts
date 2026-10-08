@@ -151,9 +151,13 @@ export async function rcRevenueByCampaign(startDate: string, endDate: string, ty
     currency: "USD",
     selectors: JSON.stringify({ revenue_type: type }),
   });
+  // The first measure is the money column; its name follows revenue_type ("Revenue", "Proceeds"…).
+  const measure = String(((o.measures as Array<Record<string, unknown>> | undefined) ?? [])[0]?.display_name ?? "Revenue");
   const total = ((o.summary as Record<string, unknown> | undefined)?.total ?? {}) as Record<string, Record<string, number>>;
   const out = new Map<string, number>();
-  for (const [name, m] of Object.entries(total)) if (typeof m?.Revenue === "number") out.set(name, m.Revenue);
-  if (!out.has("Total")) throw new Error("RevenueCat chart had no totals");
+  for (const [name, m] of Object.entries(total)) if (typeof m?.[measure] === "number") out.set(name, m[measure]);
+  if (!out.has("Total")) {
+    throw new Error(`RevenueCat chart had no totals (measure ${measure}; keys ${Object.keys(total).slice(0, 5).join(",")}; ${JSON.stringify(Object.values(total)[0] ?? {}).slice(0, 120)})`);
+  }
   return out;
 }
