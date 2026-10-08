@@ -25,6 +25,7 @@ import { normalizeCampaignName } from "@/app/dashboard/(main)/_lib/campaign";
 import { CREATORS_COLLECTION } from "@/lib/creators/db";
 import { rcValuePerUser } from "@/lib/revenue";
 import { countryStats, groupCountries, groupOf, type CountryGroup, type CountryStats } from "./countries";
+import { ALL_TIME_START_MS } from "./start";
 
 export interface CohortQuery {
   period: string; // "all" | "yyyy-mm"
@@ -55,7 +56,7 @@ export function cohortKey(q: CohortQuery): string {
   return [q.period, q.release, q.gender, q.source, q.country, q.campaign].join("|").replace(/[^A-Za-z0-9|_-]/g, "_");
 }
 
-const FIRST_DATA = Date.UTC(2026, 1, 1); // Feb 2026: earliest signups the dashboards use
+const FIRST_DATA = ALL_TIME_START_MS; // first day trial starts were tracked (see ./start)
 
 function window(q: CohortQuery): { from: number; to: number } | null {
   let from = FIRST_DATA;
@@ -219,7 +220,7 @@ export async function cohort(q: CohortQuery): Promise<CohortResult> {
 
 /** cohort() through a Firestore cache: 15 min while the window is open, 6 h once closed. */
 export async function cachedCohort(q: CohortQuery, opts: { fresh?: boolean } = {}): Promise<CohortResult & { computed_at?: string }> {
-  const ref = getFirebaseAdmin().db.collection("DashboardMetrics").doc(`founder_cohort_v6_${cohortKey(q)}`.slice(0, 1400));
+  const ref = getFirebaseAdmin().db.collection("DashboardMetrics").doc(`founder_cohort_v7_${cohortKey(q)}`.slice(0, 1400));
   if (!opts.fresh) {
     const snap = await ref.get();
     if (snap.exists) {

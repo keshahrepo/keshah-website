@@ -14,6 +14,7 @@ import { rcRevenue, rcRevenueByCampaign } from "@/lib/revenue";
 import { cachedCohort } from "./app-cohort";
 import { founderCreators, programValue } from "./creators";
 import { cached } from "./cache";
+import { ALL_TIME_START } from "./start";
 
 export interface FounderSummary {
   period: string;
@@ -50,7 +51,7 @@ export async function founderSummary(period: string, opts: { fresh?: boolean } =
   const db = getFirebaseAdmin().db;
   const [from, to] = window(period);
   const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
-  const startDate = period === "all" ? "2020-01-01" : day(from);
+  const startDate = period === "all" ? ALL_TIME_START : day(from);
   const endDate = day(Math.min(to - DAY_MS, Date.now()));
 
   const [cohortRes, creators, creatorDocs] = await Promise.all([
