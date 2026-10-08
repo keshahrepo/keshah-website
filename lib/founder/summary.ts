@@ -24,10 +24,10 @@ export interface FounderSummary {
   paid: number;
   revenueUsd: number;
   proceedsUsd: number;
-  /** Cost of the period's creator work (base + bonuses its videos earned), see lib/founder/creators.ts. */
+  /** Cost of the period's creator work (base + bonuses its videos earned; an open month's whole committed base), see lib/founder/creators.ts. */
   creatorCostUsd: number;
-  /** Open month only: cost with base pay projected to month end if creators keep posting (contract pay, not a guess at revenue). Null once the month is closed. */
-  creatorCommittedUsd: number | null;
+  /** Open month only: cost earned so far (creatorCostUsd is then the whole month's committed pay). Null once the month is closed. */
+  creatorCostSoFarUsd: number | null;
   netUsd: number;
   /** Cash paid to creators in the period (invoices paid out in it), for reference; net uses cost. */
   paidOutUsd: number;
@@ -93,9 +93,11 @@ export async function founderSummary(period: string, opts: { fresh?: boolean } =
     paid: cohortRes.paid,
     revenueUsd: round(money?.revenue ?? 0),
     proceedsUsd: round(proceeds),
-    creatorCostUsd: round(cost),
-    creatorCommittedUsd: committed > cost + 0.005 ? round(committed) : null,
-    netUsd: round(proceeds - cost),
+    // A month still running counts the whole month's committed pay (base through
+    // month end, contract pay, not a guess) as its cost; so far is kept alongside.
+    creatorCostUsd: round(committed),
+    creatorCostSoFarUsd: committed > cost + 0.005 ? round(cost) : null,
+    netUsd: round(proceeds - committed),
     paidOutUsd: round(creators.reduce((a, r) => a + r.paidOutCents, 0) / 100),
     fromCreatorsUsd: round(money?.fromCreators ?? 0),
     otherUsd: round(Math.max(0, proceeds - (money?.fromCreators ?? 0))),
