@@ -41,6 +41,8 @@ export interface FounderCreatorRow {
   levelBaseCents: number | null;
   /** Cost of the period's work: base + trial + adjustments + bonuses its videos earned (see header). */
   payCents: number;
+  /** payCents with the open month's base projected to month end (if they keep posting); equals payCents for closed months. */
+  committedCents: number;
   /** Cash paid / payable for the period's invoice (bonuses here are last month's videos). */
   payoutCents: number;
   pay: { baseCents: number; bonusCents: number; trialCents: number; adjustmentCents: number; missedDays: number; missedCents: number };
@@ -151,6 +153,7 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
   }
   const pay = { baseCents: 0, bonusCents: 0, trialCents: 0, adjustmentCents: 0, missedDays: 0, missedCents: 0 };
   let payCents = 0;
+  let committedCents = 0;
   let payoutCents = 0;
   let posted = 0;
   let expected = 0;
@@ -170,6 +173,7 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
     // the money it's compared with); the payout above stays the full-month projection.
     const baseEarned = current ? s.baseDueCents : p.baseCents;
     payCents += baseEarned + p.trialCents + p.adjustmentCents + earned + off;
+    committedCents += (current ? Math.max(p.baseCents, baseEarned) : baseEarned) + p.trialCents + p.adjustmentCents + earned + off;
     pay.baseCents += baseEarned + off;
     pay.bonusCents += earned;
     pay.trialCents += p.trialCents;
@@ -278,6 +282,7 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
     trial: ts ? { day: ts.postedDays, of: ts.requiredDays ?? 20, reviewing: !!ts.reviewing, ended: !!ts.ended, promotedOn: ts.promotedOn ?? null } : null,
     levelBaseCents: c.pay_ready ? level : null,
     payCents,
+    committedCents,
     payoutCents,
     pay,
     postedDays: posted,

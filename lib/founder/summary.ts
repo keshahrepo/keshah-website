@@ -26,6 +26,8 @@ export interface FounderSummary {
   proceedsUsd: number;
   /** Cost of the period's creator work (base + bonuses its videos earned), see lib/founder/creators.ts. */
   creatorCostUsd: number;
+  /** Open month only: cost with base pay projected to month end if creators keep posting (contract pay, not a guess at revenue). Null once the month is closed. */
+  creatorCommittedUsd: number | null;
   netUsd: number;
   /** Cash paid to creators in the period (invoices paid out in it), for reference; net uses cost. */
   paidOutUsd: number;
@@ -80,6 +82,7 @@ export async function founderSummary(period: string, opts: { fresh?: boolean } =
 
   const round = (n: number) => Math.round(n * 100) / 100;
   const cost = creators.reduce((a, r) => a + r.payCents, 0) / 100;
+  const committed = creators.reduce((a, r) => a + (r.committedCents ?? r.payCents), 0) / 100;
   const proceeds = money?.proceeds ?? 0;
   return {
     period,
@@ -91,6 +94,7 @@ export async function founderSummary(period: string, opts: { fresh?: boolean } =
     revenueUsd: round(money?.revenue ?? 0),
     proceedsUsd: round(proceeds),
     creatorCostUsd: round(cost),
+    creatorCommittedUsd: committed > cost + 0.005 ? round(committed) : null,
     netUsd: round(proceeds - cost),
     paidOutUsd: round(creators.reduce((a, r) => a + r.paidOutCents, 0) / 100),
     fromCreatorsUsd: round(money?.fromCreators ?? 0),
