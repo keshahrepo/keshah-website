@@ -23,7 +23,8 @@ import { matchesInstallSource } from "@/app/dashboard/(main)/_lib/installSource"
 import { matchesCountryFilter, type CountryFilter } from "@/app/dashboard/(main)/_lib/countryFilter";
 import { normalizeCampaignName } from "@/app/dashboard/(main)/_lib/campaign";
 import { CREATORS_COLLECTION } from "@/lib/creators/db";
-import { rcValueByCountry, rcValuePerUser, type CountryValue } from "@/lib/revenue";
+import { rcValuePerUser } from "@/lib/revenue";
+import { countryStats, groupCountries, groupOf, type CountryGroup, type CountryStats } from "./countries";
 
 export interface CohortQuery {
   period: string; // "all" | "yyyy-mm"
@@ -112,8 +113,8 @@ export interface CohortResult {
   value14: { perUserUsd: number | null; grossPerUserUsd: number | null; customers: number; incomplete: boolean } | null;
   value14Prev: number | null;
   valueNote?: string;
-  /** Installs and PPI by first country (RevenueCat), same slice. Null when RevenueCat can't apply a filter. */
-  countries: CountryValue[] | null;
+  /** US / Tier 1 / Tier 2 / India with their countries (RevenueCat), same slice minus the country filter. */
+  countryGroups: CountryGroup[] | null;
 }
 
 export async function cohort(q: CohortQuery): Promise<CohortResult> {
@@ -146,7 +147,7 @@ export async function cohort(q: CohortQuery): Promise<CohortResult> {
     alarm: { completed: 0, skipped: 0 },
     value14: null,
     value14Prev: null,
-    countries: null,
+    countryGroups: null,
   };
   if (!w) return empty;
   const value = valueFor(q, w, names);
@@ -218,7 +219,7 @@ export async function cohort(q: CohortQuery): Promise<CohortResult> {
 
 /** cohort() through a Firestore cache: 15 min while the window is open, 6 h once closed. */
 export async function cachedCohort(q: CohortQuery, opts: { fresh?: boolean } = {}): Promise<CohortResult & { computed_at?: string }> {
-  const ref = getFirebaseAdmin().db.collection("DashboardMetrics").doc(`founder_cohort_v5_${cohortKey(q)}`.slice(0, 1400));
+  const ref = getFirebaseAdmin().db.collection("DashboardMetrics").doc(`founder_cohort_v6_${cohortKey(q)}`.slice(0, 1400));
   if (!opts.fresh) {
     const snap = await ref.get();
     if (snap.exists) {
@@ -236,14 +237,16 @@ export async function cachedCohort(q: CohortQuery, opts: { fresh?: boolean } = {
   return { ...out, computed_at };
 }
 
-/** RevenueCat's 14-day value per new user for the slice, plus the previous equal-length window. */
+/**
+ * RevenueCat's 7-day PPI for the slice (plus the previous equal window) and the
+ * country groups. Countries are always fetched without the country filter and
+ * grouped here, so the US / India / Tier 1 / Tier 2 filters work on PPI too.
+ */
 async function valueFor(q: CohortQuery, w: { from: number; to: number }, names: Map<string, string>) {
-  if (q.gender !== "all") return { value14: null, value14Prev: null, countries: null, valueNote: "RevenueCat can't split value by gender" };
-  if (q.source !== "all") return { value14: null, value14Prev: null, countries: null, valueNote: "RevenueCat can't split value by paid vs organic" };
+  const none = { value14: null, value14Prev: null, countryGroups: null };
+  if (q.gender !== "all") return { ...none, valueNote: "RevenueCat can't split value by gender" };
+  if (q.source !== "all") return { ...none, valueNote: "RevenueCat can't split value by paid vs organic" };
   const filters: { name: string; values: string[] }[] = [];
-  if (q.country === "us") filters.push({ name: "first_country", values: ["US"] });
-  else if (q.country === "india") filters.push({ name: "first_country", values: ["IN"] });
-  else if (q.country !== "all") return { value14: null, value14Prev: null, countries: null, valueNote: "RevenueCat can't split value by country tier" };
   if (q.campaign !== "all") {
     // A creator's name stands for all of their campaign tags.
     const tags = [...names.entries()].filter(([, n]) => n.toLowerCase() === q.campaign.toLowerCase()).map(([t]) => t);
@@ -254,23 +257,40 @@ async function valueFor(q: CohortQuery, w: { from: number; to: number }, names: 
   const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
   const end = Math.min(w.to, Date.now());
   const len = end - w.from;
+  const inGroup = (code: string) => q.country === "all" || groupOf(code) === (q.country === "india" ? "india" : q.country);
+  const ppiOf = (st: CountryStats[]) => {
+    const sel = st.filter((c) => inGroup(c.code));
+    const installs = sel.reduce((a, c) => a + c.installs, 0);
+    const proceeds = sel.reduce((a, c) => a + c.proceedsUsd, 0);
+    return { installs, perUser: installs > 0 ? proceeds / installs : null };
+  };
   try {
-    const [cur, prev, countries] = await Promise.all([
+    const [cur, prev, stats, prevStats] = await Promise.all([
       rcValuePerUser(day(w.from), day(end - 86_400_000), filters),
       len > 0 ? rcValuePerUser(day(w.from - len), day(w.from - 86_400_000), filters).catch(() => null) : Promise.resolve(null),
-      rcValueByCountry(day(w.from), day(end - 86_400_000), filters).catch((e) => {
+      countryStats(day(w.from), day(end - 86_400_000), filters).catch((e) => {
         console.error("cohort countries:", e instanceof Error ? e.message : e);
         return null;
       }),
+      q.country !== "all" && len > 0 ? countryStats(day(w.from - len), day(w.from - 86_400_000), filters).catch(() => null) : Promise.resolve(null),
     ]);
+    const groups = stats ? groupCountries(stats) : null;
+    if (q.country === "all") {
+      return {
+        value14: { perUserUsd: cur.perUserUsd, grossPerUserUsd: cur.grossPerUserUsd, customers: cur.customers, incomplete: cur.incomplete },
+        value14Prev: prev?.perUserUsd ?? null,
+        countryGroups: groups,
+      };
+    }
+    // A country filter: PPI for just that group, from the per-country numbers.
+    const g = stats ? ppiOf(stats) : null;
     return {
-      value14: { perUserUsd: cur.perUserUsd, grossPerUserUsd: cur.grossPerUserUsd, customers: cur.customers, incomplete: cur.incomplete },
-      value14Prev: prev?.perUserUsd ?? null,
-      countries,
+      value14: g ? { perUserUsd: g.perUser, grossPerUserUsd: null, customers: g.installs, incomplete: cur.incomplete } : null,
+      value14Prev: prevStats ? ppiOf(prevStats).perUser : null,
+      countryGroups: groups,
     };
   } catch (e) {
     console.error("cohort value per user:", e instanceof Error ? e.message : e);
-    return { value14: null, value14Prev: null, countries: null, valueNote: "RevenueCat didn't answer" };
+    return { ...none, valueNote: "RevenueCat didn't answer" };
   }
 }
-
