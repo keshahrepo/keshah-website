@@ -220,7 +220,7 @@ export async function cohort(q: CohortQuery): Promise<CohortResult> {
 
 /** cohort() through a Firestore cache: 15 min while the window is open, 6 h once closed. */
 export async function cachedCohort(q: CohortQuery, opts: { fresh?: boolean } = {}): Promise<CohortResult & { computed_at?: string }> {
-  const ref = getFirebaseAdmin().db.collection("DashboardMetrics").doc(`founder_cohort_v7_${cohortKey(q)}`.slice(0, 1400));
+  const ref = getFirebaseAdmin().db.collection("DashboardMetrics").doc(`founder_cohort_v8_${cohortKey(q)}`.slice(0, 1400));
   if (!opts.fresh) {
     const snap = await ref.get();
     if (snap.exists) {
