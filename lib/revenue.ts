@@ -41,8 +41,9 @@ export async function revenueOverview(): Promise<RevenueOverview> {
   if (!apiKey) return { error: "RevenueCat key not set" };
   const headers = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
   const errors: string[] = [];
+  const project = (await projectId(headers)) ?? "app4e0f50f36b";
   for (const [source, url] of [
-    ["v2", "https://api.revenuecat.com/v2/projects/app4e0f50f36b/metrics/overview"],
+    ["v2", `https://api.revenuecat.com/v2/projects/${project}/metrics/overview`],
     ["v1", "https://api.revenuecat.com/v1/developers/me/overview"],
   ] as const) {
     try {
@@ -65,4 +66,24 @@ export async function revenueOverview(): Promise<RevenueOverview> {
   }
   console.error("revenue overview failed:", errors.join("; "));
   return { error: errors.join("; ") };
+}
+
+let cachedProject: string | null = null;
+
+/** The project the key belongs to: REVENUECAT_PROJECT_ID, else the first one /v2/projects lists. */
+async function projectId(headers: Record<string, string>): Promise<string | null> {
+  if (process.env.REVENUECAT_PROJECT_ID) return process.env.REVENUECAT_PROJECT_ID;
+  if (cachedProject) return cachedProject;
+  try {
+    const res = await fetch("https://api.revenuecat.com/v2/projects", { headers, cache: "no-store" });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const items = Array.isArray(data?.items) ? data.items : [];
+    const keshah = items.find((p: { name?: string }) => /keshah/i.test(String(p?.name ?? ""))) ?? items[0];
+    cachedProject = typeof keshah?.id === "string" ? keshah.id : null;
+    if (cachedProject) console.log("revenuecat project:", cachedProject, keshah?.name ?? "");
+    return cachedProject;
+  } catch {
+    return null;
+  }
 }
