@@ -489,8 +489,10 @@ export interface Attribution {
   recordedProceedsUsd: number;
   /** Converted users with a recorded proceeds total. */
   purchasesWithProceeds: number;
-  /** Proceeds from users who converted in the selected month (missing ones filled at the average). */
+  /** Recorded proceeds from users who converted in the window (nothing estimated). */
   proceedsInWindowUsd: number;
+  /** Purchases in the window with no amount recorded yet. */
+  purchasesMissingProceeds: number;
 }
 
 /**
@@ -500,7 +502,7 @@ export interface Attribution {
  */
 export async function attributionFor(tags: string[], windowStartMs: number, windowEndMs: number = Infinity): Promise<Attribution> {
   const clean = [...new Set(tags.map((t) => t.trim()).filter(Boolean))].slice(0, 30);
-  const empty = { trials: 0, trialsInWindow: 0, purchases: 0, purchasesInWindow: 0, recordedProceedsUsd: 0, purchasesWithProceeds: 0, proceedsInWindowUsd: 0 };
+  const empty = { purchasesMissingProceeds: 0, trials: 0, trialsInWindow: 0, purchases: 0, purchasesInWindow: 0, recordedProceedsUsd: 0, purchasesWithProceeds: 0, proceedsInWindowUsd: 0 };
   if (!clean.length) return empty;
   const snap = await db()
     .collection("Users")
@@ -541,8 +543,10 @@ export async function attributionFor(tags: string[], windowStartMs: number, wind
       }
     }
   }
-  const avg = out.purchasesWithProceeds > 0 ? out.recordedProceedsUsd / out.purchasesWithProceeds : FALLBACK_PROCEEDS_PER_PURCHASE_USD;
-  out.proceedsInWindowUsd = windowRecorded + windowMissing * avg;
+  // Recorded amounts only: a purchase RevenueCat hasn't sent an amount for yet
+  // counts as a purchase but adds nothing (no estimates).
+  out.proceedsInWindowUsd = windowRecorded;
+  out.purchasesMissingProceeds = windowMissing;
   return out;
 }
 

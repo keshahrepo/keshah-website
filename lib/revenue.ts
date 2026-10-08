@@ -90,3 +90,25 @@ async function projectId(headers: Record<string, string>): Promise<string | null
     return null;
   }
 }
+
+/**
+ * Exact revenue for an inclusive date range, straight from RevenueCat
+ * (GET /v2/projects/{id}/metrics/revenue). type: "revenue" (gross) or
+ * "proceeds" (after taxes and store commission). Throws when RevenueCat
+ * doesn't answer, so callers never show a made-up number.
+ */
+export async function rcRevenue(startDate: string, endDate: string, type: "revenue" | "proceeds"): Promise<number> {
+  const apiKey = process.env.REVENUECAT_METRICS_KEY || process.env.REVENUECAT_API_KEY;
+  if (!apiKey) throw new Error("RevenueCat key not set");
+  const headers = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
+  const project = (await projectId(headers)) ?? "app4e0f50f36b";
+  const q = new URLSearchParams({ start_date: startDate, end_date: endDate, currency: "USD", revenue_type: type });
+  const res = await fetch(`https://api.revenuecat.com/v2/projects/${project}/metrics/revenue?${q}`, { headers, cache: "no-store" });
+  if (!res.ok) {
+    const body = (await res.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 200);
+    throw new Error(`RevenueCat ${res.status} ${body}`);
+  }
+  const data = await res.json();
+  if (typeof data?.value !== "number") throw new Error("RevenueCat returned no value");
+  return data.value;
+}
