@@ -110,7 +110,7 @@ export interface CohortResult {
    * proceeds per new customer), and the same for the period just before.
    * Null with valueNote when RevenueCat can't apply a filter or didn't answer.
    */
-  value14: { perUserUsd: number | null; customers: number; incomplete: boolean } | null;
+  value14: { perUserUsd: number | null; grossPerUserUsd: number | null; customers: number; incomplete: boolean } | null;
   value14Prev: number | null;
   valueNote?: string;
   /** Cost per install, only when the slice is one creator (their cost / their installs). */
@@ -222,7 +222,7 @@ export async function cohort(q: CohortQuery): Promise<CohortResult> {
 
 /** cohort() through a Firestore cache: 15 min while the window is open, 6 h once closed. */
 export async function cachedCohort(q: CohortQuery, opts: { fresh?: boolean } = {}): Promise<CohortResult & { computed_at?: string }> {
-  const ref = getFirebaseAdmin().db.collection("DashboardMetrics").doc(`founder_cohort_v3_${cohortKey(q)}`.slice(0, 1400));
+  const ref = getFirebaseAdmin().db.collection("DashboardMetrics").doc(`founder_cohort_v4_${cohortKey(q)}`.slice(0, 1400));
   if (!opts.fresh) {
     const snap = await ref.get();
     if (snap.exists) {
@@ -263,7 +263,7 @@ async function valueFor(q: CohortQuery, w: { from: number; to: number }, names: 
       rcValuePerUser(day(w.from), day(end - 86_400_000), filters),
       len > 0 ? rcValuePerUser(day(w.from - len), day(w.from - 86_400_000), filters).catch(() => null) : Promise.resolve(null),
     ]);
-    return { value14: { perUserUsd: cur.perUserUsd, customers: cur.customers, incomplete: cur.incomplete }, value14Prev: prev?.perUserUsd ?? null };
+    return { value14: { perUserUsd: cur.perUserUsd, grossPerUserUsd: cur.grossPerUserUsd, customers: cur.customers, incomplete: cur.incomplete }, value14Prev: prev?.perUserUsd ?? null };
   } catch (e) {
     console.error("cohort value per user:", e instanceof Error ? e.message : e);
     return { value14: null, value14Prev: null, valueNote: "RevenueCat didn't answer" };

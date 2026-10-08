@@ -63,8 +63,10 @@ export interface FounderCreatorRow {
   paidOutCents: number;
   /** Installs from their link in the period (RevenueCat new customers on their campaigns). */
   installs: number | null;
-  /** Revenue per install: RevenueCat proceeds in each install's first 14 days, averaged. */
+  /** Revenue per install: RevenueCat proceeds in each install's first 7 days, averaged. */
   rpiUsd: number | null;
+  /** The same in gross revenue (before store fees). */
+  rpiGrossUsd: number | null;
   /** Cost per install: their cost for the period / installs. */
   cpiUsd: number | null;
 }
@@ -249,6 +251,7 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
     paidOutCents,
     installs: value ? value.customers : null,
     rpiUsd: value?.perUserUsd ?? null,
+    rpiGrossUsd: value?.grossPerUserUsd ?? null,
     cpiUsd: value && value.customers > 0 ? payCents / 100 / value.customers : null,
   };
 }

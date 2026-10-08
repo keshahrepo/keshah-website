@@ -165,18 +165,20 @@ export async function rcRevenueByCampaign(startDate: string, endDate: string, ty
 export interface ValuePerUser {
   /** New RevenueCat customers whose first day falls in the range. */
   customers: number;
-  /** Their proceeds over their first 14 days (after store fees). */
+  /** Their proceeds over their first 7 days (after store fees and tax). */
   proceedsUsd: number;
-  /** proceedsUsd / customers. */
+  /** proceedsUsd / customers: RPI. */
   perUserUsd: number | null;
-  /** Some cohorts in the range haven't had 14 days yet, so the number is still rising. */
+  /** Gross revenue per customer over the same 7 days (RevenueCat's headline LTV). */
+  grossPerUserUsd: number | null;
+  /** Some cohorts in the range haven't had 7 days yet, so the number is still rising. */
   incomplete: boolean;
 }
 
 /**
- * What a new user is worth in their first 14 days, from RevenueCat's
- * "LTV per customer" chart (customer_lifetime = 14 days): proceeds earned on
- * days 0–14 after each customer's first day, over the customers who started
+ * RPI: what a new user is worth in their first 7 days, from RevenueCat's
+ * "LTV per customer" chart (customer_lifetime = 7 days): proceeds earned on
+ * days 0–7 after each customer's first day, over the customers who started
  * in [startDate, endDate]. filters use RevenueCat's ids (e.g. attribution_campaign,
  * first_country, first_platform).
  */
@@ -186,13 +188,14 @@ export async function rcValuePerUser(startDate: string, endDate: string, filters
     start_date: startDate,
     end_date: endDate,
     currency: "USD",
-    selectors: JSON.stringify({ customer_lifetime: "14_days" }),
+    selectors: JSON.stringify({ customer_lifetime: "7_days" }),
     ...(filters.length ? { filters: JSON.stringify(filters) } : {}),
   });
   const measures = ((o.measures as Array<Record<string, unknown>> | undefined) ?? []).map((m) => String(m.display_name ?? ""));
   const total = ((o.summary as Record<string, unknown> | undefined)?.total ?? {}) as Record<string, number>;
   const customersKey = measures.find((m) => /new customers/i.test(m));
   const proceedsKey = measures.find((m) => /realized proceeds/i.test(m));
+  const grossKey = measures.find((m) => /^realized ltv \([^)]*\)$/i.test(m));
   if (!customersKey || !proceedsKey || typeof total[customersKey] !== "number" || typeof total[proceedsKey] !== "number") {
     throw new Error(`RevenueCat LTV chart missing measures (${measures.join(", ")})`);
   }
@@ -200,5 +203,12 @@ export async function rcValuePerUser(startDate: string, endDate: string, filters
   const incomplete = ((o.values as Array<Record<string, unknown>> | undefined) ?? []).some((v) => v.measure === proceedsIdx && v.incomplete === true);
   const customers = total[customersKey];
   const proceeds = total[proceedsKey];
-  return { customers, proceedsUsd: Math.round(proceeds * 100) / 100, perUserUsd: customers > 0 ? proceeds / customers : null, incomplete };
+  const gross = grossKey && typeof total[grossKey] === "number" ? total[grossKey] : null;
+  return {
+    customers,
+    proceedsUsd: Math.round(proceeds * 100) / 100,
+    perUserUsd: customers > 0 ? proceeds / customers : null,
+    grossPerUserUsd: customers > 0 && gross !== null ? gross / customers : null,
+    incomplete,
+  };
 }
