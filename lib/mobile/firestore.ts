@@ -45,12 +45,12 @@ export function firestoreCodeStore(db: Firestore): CodeStore {
 
 /** Active creator whose portal login email is this (same query as /api/auth/login). */
 export async function findCreatorByEmail(db: Firestore, email: string): Promise<PersonRef | null> {
-  const snap = await db
-    .collection(CREATORS_COLLECTION)
-    .where("email", "==", email.toLowerCase().trim())
-    .where("is_active", "==", true)
-    .limit(1)
-    .get();
+  const e = email.toLowerCase().trim();
+  const active = (field: "email" | "keshah_email") =>
+    db.collection(CREATORS_COLLECTION).where(field, "==", e).where("is_active", "==", true).limit(1).get();
+  // Their personal email first; their KESHAH (Workspace) email signs in to the same account.
+  let snap = await active("email");
+  if (snap.empty) snap = await active("keshah_email");
   const d = snap.docs[0];
   if (!d) return null;
   const x = d.data();
