@@ -61,6 +61,12 @@ function esc(s: string): string {
 export const CREATOR_FROM_NAME = "McKenzie from KESHAH";
 export const CREATOR_SIGNOFF = "McKenzie\nCreator Coordinator, KESHAH";
 
+/** The KESHAH Creators app link for acceptance emails (TestFlight now, App Store later). Unset: the web portal. */
+export function creatorAppUrl(): string | null {
+  const u = process.env.CREATOR_APP_URL?.trim();
+  return u && /^https:\/\//.test(u) ? u : null;
+}
+
 export function welcomeEmail(input: {
   firstName: string;
   link: string;
@@ -97,9 +103,10 @@ export function welcomeEmail(input: {
     ].join("\n");
     return { subject: "Your KESHAH creator portal", text, html: `<pre style="font-family:inherit;white-space:pre-wrap">${esc(text)}</pre>` };
   }
+  const app = creatorAppUrl();
   const contractStep = input.contractReady
-    ? "Sign the agreement. It's the first thing you'll see in your portal, and it takes a couple of minutes."
-    : "Sign the agreement. It'll be in your portal shortly, and you'll sign it right there.";
+    ? "Sign the agreement. It's the first step in the app, and it takes a couple of minutes."
+    : "Sign the agreement. It'll be the first step in the app shortly, and you'll sign it right there.";
   const text = [
     `Hi ${first},`,
     "",
@@ -115,9 +122,16 @@ export function welcomeEmail(input: {
     "",
     "Our best creators can also be invited to become Format Creators, inventing the new formats everyone else uses.",
     "",
-    "Everything happens in your creator portal. First, set your password (this link works once and expires in 7 days):",
-    input.link,
-    "",
+    ...(app
+      ? [
+          "Everything happens in the KESHAH Creators app. Download it here and sign in with this email address:",
+          app,
+          "",
+          "Prefer a computer for some things? Set a password for the web portal (this link works once and expires in 7 days):",
+          input.link,
+          "",
+        ]
+      : ["Everything happens in your creator portal. First, set your password (this link works once and expires in 7 days):", input.link, ""]),
     ...(input.keshahEmail
       ? [
           `We've also set up ${input.keshahEmail} for you. You'll use it to create your KESHAH TikTok and Instagram accounts, and anything sent to it, like verification codes, also lands in this inbox.`,
@@ -126,7 +140,7 @@ export function welcomeEmail(input: {
       : []),
     "Next steps:",
     "",
-    "1. Set your password and log in to the portal.",
+    app ? "1. Download KESHAH Creators and sign in with this email." : "1. Set your password and log in to the portal.",
     `2. ${contractStep}`,
     "3. Go through the Getting started steps. They cover Slack, setting up your accounts and your first 3 days.",
     "",

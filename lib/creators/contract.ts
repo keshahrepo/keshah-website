@@ -375,23 +375,9 @@ export async function sendContract(
   // KESHAH Creators app push (also reaches a phone still signed in as the applicant, by email). Never throws.
   await notify({ creatorId: id, email: String(d.email ?? "").trim() || null }, PUSH_COPY.contractSent);
 
-  let emailed = false;
-  const to = String(d.email ?? "").trim();
-  // opts.email false: the caller already told them (e.g. the Accept welcome email).
-  if (to && emailConfigured() && opts.email !== false) {
-    const first = String(d.name || d.legal_name || "").split(" ")[0] || "there";
-    try {
-      await sendEmail({
-        to,
-        subject: "Your KESHAH contract is ready to sign",
-        text: `Hey ${first},\n\nYour contract is ready. Log in to the creator portal and it's the first thing you'll see:\n${portalUrl()}\n\nRead it through, then sign it right there. It takes a couple of minutes.\n\n${CREATOR_SIGNOFF}`,
-        fromName: CREATOR_FROM_NAME,
-      });
-      emailed = true;
-    } catch (e) {
-      console.error("contract send email failed:", e);
-    }
-  }
+  // No separate "ready to sign" email: new hires read about it in the acceptance email and sign
+  // as the first step in the app; anyone else sees "Sign your contract" on Today (plus the push).
+  const emailed = false;
   return { contract, emailed };
 }
 

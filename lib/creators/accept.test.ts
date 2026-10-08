@@ -163,8 +163,22 @@ test("welcome email: no em dashes, has link and next steps", () => {
   assert.equal(m.subject, "Your offer from KESHAH");
   assert.ok(m.text.includes("https://x/creator/set-password?token=t"));
   assert.ok(m.text.includes("jen@keshah.com"));
-  assert.ok(m.text.includes("It'll be in your portal shortly"));
+  assert.ok(m.text.includes("It'll be the first step in the app shortly"));
   assert.ok(m.text.includes("Next steps"));
+});
+
+test("welcome email sends people to the app when CREATOR_APP_URL is set", () => {
+  const prev = process.env.CREATOR_APP_URL;
+  process.env.CREATOR_APP_URL = "https://testflight.apple.com/join/abc";
+  try {
+    const m = welcomeEmail({ firstName: "Jen", link: "https://x/l", contractReady: true });
+    assert.ok(m.text.includes("https://testflight.apple.com/join/abc"));
+    assert.ok(m.text.includes("Download KESHAH Creators"));
+    assert.ok(m.text.includes("first step in the app"));
+  } finally {
+    if (prev === undefined) delete process.env.CREATOR_APP_URL;
+    else process.env.CREATOR_APP_URL = prev;
+  }
 });
 
 test("welcome email for an existing creator is a portal intro, not an offer", () => {
