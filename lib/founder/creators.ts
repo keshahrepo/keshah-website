@@ -30,7 +30,7 @@ import { db } from "@/lib/creators/admin";
 import { CREATORS_COLLECTION } from "@/lib/creators/db";
 import type { MonthSummary } from "@/lib/creators/pay";
 import { payProfileOf } from "@/lib/creators/admin";
-import { ALL_TIME_START } from "./start";
+import { clampStart } from "./start";
 
 export interface FounderCreatorRow {
   id: string;
@@ -124,7 +124,7 @@ export async function founderCreators(period: string): Promise<FounderCreatorRow
   const all = (await listCreators()).filter((c) => (c.pay_ready || c.legal_name) && !excluded.has(c.id));
   const [from, to] = period === "all" ? [0, Date.now() + DAY_MS] : monthWindow(period);
   const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
-  const startDate = period === "all" ? ALL_TIME_START : day(from);
+  const startDate = clampStart(day(from));
   const endDate = day(Math.min(to - DAY_MS, Date.now()));
   let byCampaign: Map<string, number> | null = null;
   try {
@@ -218,7 +218,7 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
   const startDay = new Date(from).toISOString().slice(0, 10);
   const endDay = new Date(Math.min(to - DAY_MS, Date.now())).toISOString().slice(0, 10);
   const countryGroups = c.campaign_tags.length
-    ? await countryStats(period === "all" ? ALL_TIME_START : startDay, endDay, [{ name: "attribution_campaign", values: c.campaign_tags }])
+    ? await countryStats(clampStart(startDay), endDay, [{ name: "attribution_campaign", values: c.campaign_tags }])
         .then(groupCountries)
         .catch((e) => {
           console.error("creator countries:", e instanceof Error ? e.message : e);
@@ -226,7 +226,7 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
         })
     : null;
   const value = c.campaign_tags.length
-    ? await rcValuePerUser(period === "all" ? ALL_TIME_START : startDay, endDay, [{ name: "attribution_campaign", values: c.campaign_tags }]).catch((e) => {
+    ? await rcValuePerUser(clampStart(startDay), endDay, [{ name: "attribution_campaign", values: c.campaign_tags }]).catch((e) => {
         console.error("creator value per install:", e instanceof Error ? e.message : e);
         return null;
       })
@@ -320,7 +320,7 @@ export async function programValue(period: string, rows: FounderCreatorRow[]) {
   const [from, to] = period === "all" ? [0, Date.now() + DAY_MS] : monthWindow(period);
   const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
   try {
-    const v = await rcValuePerUser(period === "all" ? ALL_TIME_START : day(from), day(Math.min(to - DAY_MS, Date.now())), [{ name: "attribution_campaign", values: tags }]);
+    const v = await rcValuePerUser(clampStart(day(from)), day(Math.min(to - DAY_MS, Date.now())), [{ name: "attribution_campaign", values: tags }]);
     return {
       installs: v.customers,
       ppiUsd: v.perUserUsd,
