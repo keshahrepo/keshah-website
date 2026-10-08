@@ -198,3 +198,23 @@ export async function cohort(q: CohortQuery): Promise<CohortResult> {
     alarm: { completed: alarmCompleted, skipped: alarmSkipped },
   };
 }
+
+/** cohort() through a Firestore cache: 15 min while the window is open, 6 h once closed. */
+export async function cachedCohort(q: CohortQuery, opts: { fresh?: boolean } = {}): Promise<CohortResult & { computed_at?: string }> {
+  const ref = getFirebaseAdmin().db.collection("DashboardMetrics").doc(`founder_cohort_${cohortKey(q)}`.slice(0, 1400));
+  if (!opts.fresh) {
+    const snap = await ref.get();
+    if (snap.exists) {
+      const at = Date.parse(String(snap.get("computed_at") ?? ""));
+      const closed = snap.get("closed") === true;
+      if (Number.isFinite(at) && Date.now() - at < (closed ? 6 * 3600_000 : 15 * 60_000)) {
+        return { ...JSON.parse(String(snap.get("json"))), computed_at: snap.get("computed_at") };
+      }
+    }
+  }
+  const out = await cohort(q);
+  const computed_at = new Date().toISOString();
+  const closed = !!out.to && Date.parse(out.to) < Date.now() - 9 * 86_400_000;
+  await ref.set({ json: JSON.stringify(out), computed_at, closed }).catch((e) => console.error("cohort cache write failed:", e));
+  return { ...out, computed_at };
+}

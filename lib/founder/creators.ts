@@ -18,7 +18,9 @@ import {
   todayIn,
   type AdminCreator,
 } from "@/lib/creators/admin";
-import { addMonths, trialStatus } from "@/lib/creators/pay";
+import { addMonths, completeVideoCount, trialStatus } from "@/lib/creators/pay";
+import { db } from "@/lib/creators/admin";
+import { CREATORS_COLLECTION } from "@/lib/creators/db";
 import type { MonthSummary } from "@/lib/creators/pay";
 import { payProfileOf } from "@/lib/creators/admin";
 
@@ -41,6 +43,11 @@ export interface FounderCreatorRow {
   paidUsers: number;
   roi: number | null;
   onboarding?: { done: number; total: number };
+  /** Videos posted in the period (each on both apps counts once). */
+  videos: number;
+  /** Views on their posts from the period (TikTok + Instagram, current counts). */
+  views: number;
+  topVideo: { url: string; platform: string; views: number; thumbnail: string | null } | null;
 }
 
 const DAY_MS = 86_400_000;
@@ -109,7 +116,31 @@ async function row(c: AdminCreator, period: string): Promise<FounderCreatorRow> 
     if (current || m === months[months.length - 1]) level = s.levelBaseCents;
   }
   const [from, to] = period === "all" ? [0, Date.now() + DAY_MS] : monthWindow(period);
-  const attr = await attributionFor(c.campaign_tags, from, to);
+  const fromDate = new Date(from).toISOString().slice(0, 10);
+  const toDate = new Date(to).toISOString().slice(0, 10);
+  const [attr, postsSnap] = await Promise.all([
+    attributionFor(c.campaign_tags, from, to),
+    period === "all"
+      ? db().collection(CREATORS_COLLECTION).doc(c.id).collection("posts").select("platform", "url", "views", "handle", "thumbnail_url", "local_date", "pinned").get()
+      : db().collection(CREATORS_COLLECTION).doc(c.id).collection("posts").where("local_date", ">=", fromDate).where("local_date", "<", toDate).select("platform", "url", "views", "handle", "thumbnail_url", "local_date", "pinned").get(),
+  ]);
+  // Only posts from their current handles (an old account's posts stay stored but don't count).
+  const norm = (h: unknown) => String(h ?? "").trim().replace(/^@/, "").toLowerCase();
+  const handles: Record<string, string> = { tiktok: norm(c.tiktok_handle), instagram: norm(c.instagram_handle) };
+  let views = 0;
+  let top: FounderCreatorRow["topVideo"] = null;
+  for (const d of postsSnap.docs) {
+    const x = d.data();
+    const want = handles[String(x.platform)];
+    if (want && x.handle && norm(x.handle) !== want) continue;
+    if (x.pinned) continue;
+    const v = Number(x.views ?? 0) || 0;
+    views += v;
+    if (!top || v > top.views) top = { url: String(x.url ?? ""), platform: String(x.platform ?? ""), views: v, thumbnail: (x.thumbnail_url as string) || null };
+  }
+  const videos = h.postingDays
+    .filter((p) => p.date >= fromDate && p.date < toDate)
+    .reduce((a, p) => a + completeVideoCount(p), 0);
   const ts = c.trial_plan && c.pay_ready ? trialStatus(h.postingDays, payProfileOf(c)) : null;
   return {
     id: c.id,
@@ -129,5 +160,8 @@ async function row(c: AdminCreator, period: string): Promise<FounderCreatorRow> 
     paidUsers: attr.purchasesInWindow,
     roi: payCents > 0 ? attr.proceedsInWindowUsd / (payCents / 100) : null,
     onboarding: h.onboarding ? { done: h.onboarding.done, total: h.onboarding.total } : undefined,
+    videos,
+    views,
+    topVideo: top,
   };
 }
