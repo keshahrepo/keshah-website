@@ -292,7 +292,8 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
     broughtInUsd: broughtIn === null ? null : Math.round(broughtIn * 100) / 100,
     trials: attr.trialsInWindow,
     paidUsers: attr.purchasesInWindow,
-    roi: payCents > 0 && broughtIn !== null ? broughtIn / (payCents / 100) : null,
+    // All time counts this month's whole committed pay (same cost the app shows); a month's own ROI uses its cost.
+    roi: (period === "all" ? committedCents : payCents) > 0 && broughtIn !== null ? broughtIn / ((period === "all" ? committedCents : payCents) / 100) : null,
     onboarding: h.onboarding ? { done: h.onboarding.done, total: h.onboarding.total } : undefined,
     videos,
     views,

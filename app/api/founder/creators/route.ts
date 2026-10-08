@@ -38,7 +38,7 @@ export async function GET(req: Request) {
     const allRoi = new Map((all?.rows ?? []).map((r) => [r.id, r.roi]));
     // Program-wide all-time return (brought in ÷ cost, every creator).
     const allIn = (all?.rows ?? []).reduce((a, r) => a + (r.broughtInUsd ?? 0), 0);
-    const allCost = (all?.rows ?? []).reduce((a, r) => a + r.payCents, 0) / 100;
+    const allCost = (all?.rows ?? []).reduce((a, r) => a + (r.committedCents ?? r.payCents), 0) / 100;
     return NextResponse.json({
       ...out,
       monthOpen: open,
