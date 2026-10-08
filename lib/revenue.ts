@@ -212,3 +212,42 @@ export async function rcValuePerUser(startDate: string, endDate: string, filters
     incomplete,
   };
 }
+
+export interface CountryValue {
+  country: string;
+  installs: number;
+  proceedsUsd: number;
+  /** PPI: proceeds in the first 7 days per install. */
+  ppiUsd: number | null;
+}
+
+/**
+ * Installs and 7-day proceeds per install by each customer's first country,
+ * from RevenueCat's LTV per customer chart (segment first_country). Sorted by
+ * installs, biggest first.
+ */
+export async function rcValueByCountry(startDate: string, endDate: string, filters: { name: string; values: string[] }[] = []): Promise<CountryValue[]> {
+  const o = await rcChart("ltv_per_customer", {
+    resolution: "2",
+    start_date: startDate,
+    end_date: endDate,
+    currency: "USD",
+    segment: "first_country",
+    limit_num_segments: "50",
+    selectors: JSON.stringify({ customer_lifetime: "7_days" }),
+    ...(filters.length ? { filters: JSON.stringify(filters) } : {}),
+  });
+  const measures = ((o.measures as Array<Record<string, unknown>> | undefined) ?? []).map((m) => String(m.display_name ?? ""));
+  const customersKey = measures.find((m) => /new customers/i.test(m));
+  const proceedsKey = measures.find((m) => /realized proceeds/i.test(m));
+  if (!customersKey || !proceedsKey) throw new Error(`RevenueCat LTV chart missing measures (${measures.join(", ")})`);
+  const total = ((o.summary as Record<string, unknown> | undefined)?.total ?? {}) as Record<string, Record<string, number>>;
+  const out: CountryValue[] = [];
+  for (const [country, m] of Object.entries(total)) {
+    if (country === "Total" || typeof m?.[customersKey] !== "number") continue;
+    const installs = m[customersKey];
+    const proceeds = typeof m[proceedsKey] === "number" ? m[proceedsKey] : 0;
+    out.push({ country, installs, proceedsUsd: Math.round(proceeds * 100) / 100, ppiUsd: installs > 0 ? proceeds / installs : null });
+  }
+  return out.sort((a, b) => b.installs - a.installs);
+}

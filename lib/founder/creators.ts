@@ -24,7 +24,7 @@ import {
   type AdminCreator,
 } from "@/lib/creators/admin";
 import { addMonths, bonusLinesForMonth, completeVideoCount, trialStatus } from "@/lib/creators/pay";
-import { rcRevenueByCampaign, rcValuePerUser } from "@/lib/revenue";
+import { rcRevenueByCampaign, rcValueByCountry, rcValuePerUser, type CountryValue } from "@/lib/revenue";
 import { db } from "@/lib/creators/admin";
 import { CREATORS_COLLECTION } from "@/lib/creators/db";
 import type { MonthSummary } from "@/lib/creators/pay";
@@ -69,6 +69,8 @@ export interface FounderCreatorRow {
   rpiGrossUsd: number | null;
   /** Cost per install: their cost for the period / installs. */
   cpiUsd: number | null;
+  /** Their installs by first country (RevenueCat), biggest first (top 5). */
+  countries: CountryValue[] | null;
 }
 
 export interface Payout {
@@ -200,6 +202,11 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
   const paidOutCents = payouts.filter((p) => period === "all" || p.payoutMonth === period).reduce((a, p) => a + p.totalCents, 0);
   const startDay = new Date(from).toISOString().slice(0, 10);
   const endDay = new Date(Math.min(to - DAY_MS, Date.now())).toISOString().slice(0, 10);
+  const countries = c.campaign_tags.length
+    ? await rcValueByCountry(period === "all" ? "2020-01-01" : startDay, endDay, [{ name: "attribution_campaign", values: c.campaign_tags }])
+        .then((l) => l.slice(0, 5))
+        .catch(() => null)
+    : null;
   const value = c.campaign_tags.length
     ? await rcValuePerUser(period === "all" ? "2020-01-01" : startDay, endDay, [{ name: "attribution_campaign", values: c.campaign_tags }]).catch((e) => {
         console.error("creator value per install:", e instanceof Error ? e.message : e);
@@ -259,6 +266,7 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
     rpiUsd: value?.perUserUsd ?? null,
     rpiGrossUsd: value?.grossPerUserUsd ?? null,
     cpiUsd: value && value.customers > 0 ? payCents / 100 / value.customers : null,
+    countries,
   };
 }
 
