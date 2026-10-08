@@ -14,7 +14,7 @@ import {
   summaryFor,
   todayIn,
 } from "@/lib/creators/admin";
-import { addMonths, completedMonthsAsOf, draftInvoiceLines, nextLevel } from "@/lib/creators/pay";
+import { addMonths, completedMonthsAsOf, draftInvoiceLines, nextLevel, trialStatus } from "@/lib/creators/pay";
 import { listContractEvents } from "@/lib/creators/contract";
 import { markContractStepDone } from "@/lib/creators/db";
 
@@ -51,6 +51,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
     completedMonths: creator.pay_ready ? completedMonthsAsOf(payProfileOf(creator), month, hist) : null,
     nextLevel: creator.pay_ready ? nextLevel(payProfileOf(creator), hist, month) : null,
     calendar: calendarFor(creator, h, month),
+    trial: creator.trial_plan && creator.pay_ready ? trialStatus(h.postingDays, payProfileOf(creator)) : null,
     postingDays: h.postingRaw.filter((p) => p.date.startsWith(month)).sort((a, b) => a.date.localeCompare(b.date)),
     daysOff: [...h.daysOff].sort((a, b) => b.date.localeCompare(a.date)),
     bonusClaims: [...h.bonusClaims].sort((a, b) => (b.posted_on || "").localeCompare(a.posted_on || "")),

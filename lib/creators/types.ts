@@ -169,6 +169,15 @@ export interface CreatorPayFields {
    * Unset: the original plan (5 videos a day from the start).
    */
   trial_plan?: "v2";
+  /**
+   * The founder's call once the 20 trial days are done: "keep" moves them up
+   * from the next weekday after trial_decided_on; "end" ends the agreement at
+   * the 20th day. Unset after day 20 = waiting for a decision (no posting).
+   */
+  trial_outcome?: "keep" | "end";
+  trial_decided_on?: YyyyMmDd;
+  /** Set once the 20th trial day is counted (for cheap checks: nudges, health email). */
+  trial_completed_on?: YyyyMmDd;
   /** e.g. ["Isai TikTok", "Isai Insta"]. */
   campaign_tags: string[];
   status: CreatorStatus;
@@ -218,7 +227,7 @@ export type CreatorProfile = { id: string } & ContentCreatorLegacyFields &
 
 /** The subset of a profile the pay calculator needs. */
 export type PayProfile = Pick<CreatorPayFields, "start_date" | "starting_completed_months"> &
-  Partial<Pick<CreatorPayFields, "ended_on" | "legal_name" | "timezone" | "trial_plan">>;
+  Partial<Pick<CreatorPayFields, "ended_on" | "legal_name" | "timezone" | "trial_plan" | "trial_outcome" | "trial_decided_on">>;
 
 export type Platform = "tiktok" | "instagram";
 

@@ -166,6 +166,7 @@ interface Detail {
   completedMonths: number | null;
   nextLevel: { nextBaseCents: number | null; monthsNeeded: number | null; earliestMonth: string | null } | null;
   calendar: { date: string; state: string; videos: number; logged_at: string | null }[];
+  trial: { postedDays: number; requiredDays?: number; completedOn?: string; reviewing?: boolean; ended?: boolean; promotedOn?: string } | null;
   postingDays: { date: string; videos: Record<string, unknown>[]; complete: number; logged_at: string | null }[];
   daysOff: { id: string; date: string; status: string; reason?: string }[];
   bonusClaims: Claim[];
@@ -275,6 +276,7 @@ function CreatorDetail() {
       </div>
 
       <AcceptPanel c={c} isNew={sp.get("new") === "1"} reload={load} />
+      {d.trial && <TrialPanel creatorId={c.id} t={d.trial} reload={load} />}
       <PostingLog d={d} detected={posts?.month === d.month ? posts.days : []} />
       <Videos creatorId={c.id} month={d.month} data={posts?.month === d.month ? posts : null} err={postsErr} reload={load} />
       <DaysOff d={d} reload={load} />
@@ -284,6 +286,71 @@ function CreatorDetail() {
       <ContractW9 c={c} events={d.contractEvents ?? []} reload={load} />
       {c.payment_details && c.tax_form && <PaymentPanel creatorId={c.id} p={{ payment_details: c.payment_details, tax_form: c.tax_form }} reload={load} />}
       <ProfileEditor c={c} reload={load} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- trial
+
+/** 20-day trial: progress, then Keep / Don't continue once all 20 days are in. */
+function TrialPanel({ creatorId, t, reload }: { creatorId: string; t: NonNullable<Detail["trial"]>; reload: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [confirmEnd, setConfirmEnd] = useState(false);
+  const of = t.requiredDays ?? 20;
+
+  async function decide(decision: "keep" | "end" | "undo") {
+    setBusy(true);
+    setErr("");
+    try {
+      await api(`/api/admin/creators/${creatorId}/trial`, { method: "POST", body: JSON.stringify({ decision }) });
+      setConfirmEnd(false);
+      reload();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  let status: string;
+  if (t.promotedOn) status = `Kept. Full plan (5 videos, $500/mo) from ${t.promotedOn}.`;
+  else if (t.ended) status = `Not continuing. Agreement ended on ${t.completedOn}; paid for all ${of} trial days ($300).`;
+  else if (t.reviewing) status = `All ${of} days done on ${t.completedOn}. They aren't posting until you decide.`;
+  else status = `Day ${t.postedDays} of ${of}. 3 videos a day, $15 a day ($300 for the full trial). You decide once all ${of} days are in.`;
+
+  return (
+    <div style={{ ...card, ...(t.reviewing ? { border: "1px solid rgba(251,191,36,0.5)" } : {}) }}>
+      <h3 style={h3}>Trial</h3>
+      <p style={{ fontSize: 13, margin: "0 0 12px" }}>{status}</p>
+      {t.reviewing && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <Btn kind="primary" disabled={busy} onClick={() => decide("keep")}>
+            Keep
+          </Btn>
+          {confirmEnd ? (
+            <>
+              <span style={muted}>They&apos;ll see they didn&apos;t pass and that they&apos;re still paid $300.</span>
+              <Btn kind="danger" disabled={busy} onClick={() => decide("end")}>
+                Yes, don&apos;t continue
+              </Btn>
+              <Btn disabled={busy} onClick={() => setConfirmEnd(false)}>
+                Cancel
+              </Btn>
+            </>
+          ) : (
+            <Btn kind="danger" disabled={busy} onClick={() => setConfirmEnd(true)}>
+              Don&apos;t continue
+            </Btn>
+          )}
+        </div>
+      )}
+      {(t.promotedOn || t.ended) && (
+        <Btn disabled={busy} onClick={() => decide("undo")}>
+          Undo decision
+        </Btn>
+      )}
+      <ErrorText>{err}</ErrorText>
     </div>
   );
 }

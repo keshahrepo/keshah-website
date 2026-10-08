@@ -34,6 +34,8 @@ export async function GET(req: Request) {
     for (const c of creators) {
       const date = nudgeDateDue(c, now, null);
       if (!date) continue;
+      // Trial done, waiting on the founder's decision: nothing to post.
+      if (c.trial_plan === "v2" && c.status === "trial" && c.trial_completed_on && !c.trial_outcome) continue;
       const ref = db.collection(CREATORS_COLLECTION).doc(c.id);
       const markerRef = ref.collection("mobile").doc("push");
       const [marker, day, off] = await Promise.all([

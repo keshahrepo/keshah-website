@@ -117,7 +117,7 @@ export function welcomeEmail(input: {
     "• On-camera content creator. You'll film and post short videos every weekday to KESHAH-owned TikTok and Instagram accounts.",
     "• Weekdays only (Mon to Fri), and you choose your own filming hours.",
     "• You start with a paid trial: your first 20 posting days, 3 videos a day. You get $15 for every day you post all 3, so $300 for the full trial.",
-    "• After your 20th day you move up automatically: 5 videos a day, $500 a month to start, growing to $1,100 the longer you're with us. Plus view bonuses: $15 when a video passes 100K views and $100 when it passes 1M.",
+    "• After your 20th day, we look at your trial. If you pass, you move up to 5 videos a day and $500 a month to start, growing to $1,100 the longer you're with us. Plus view bonuses: $15 when a video passes 100K views and $100 when it passes 1M.",
     "• We give you proven videos to remake, scripts and direction. You bring the energy.",
     "",
     "Our best creators can also be invited to become Format Creators, inventing the new formats everyone else uses.",

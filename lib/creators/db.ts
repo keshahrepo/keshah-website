@@ -16,6 +16,8 @@ import { getStorage } from "firebase-admin/storage";
 import type { DocumentData, DocumentSnapshot, Firestore } from "firebase-admin/firestore";
 import {
   videosRequiredOn,
+  isScheduledDay,
+  trialWindow,
   addMonths,
   completeVideoCount,
   creatorPrefix,
@@ -157,6 +159,9 @@ function toProfile(id: string, d: DocumentData, legacyStart: boolean): CreatorPr
     start_date: startDate,
     starting_completed_months: Number(d.starting_completed_months ?? 0),
     ...(d.trial_plan === "v2" ? { trial_plan: "v2" as const } : {}),
+    ...(d.trial_outcome === "keep" || d.trial_outcome === "end" ? { trial_outcome: d.trial_outcome } : {}),
+    ...(isYyyyMmDd(d.trial_decided_on) ? { trial_decided_on: d.trial_decided_on } : {}),
+    ...(isYyyyMmDd(d.trial_completed_on) ? { trial_completed_on: d.trial_completed_on } : {}),
     campaign_tags: Array.isArray(d.campaign_tags) ? d.campaign_tags : [],
     status: mapCreatorStatus(d.status),
     ...(isYyyyMmDd(d.ended_on) ? { ended_on: d.ended_on } : {}),
@@ -447,7 +452,7 @@ export async function getMonthOverview(
  * by an admin, or credited with earlier months (Isai's September).
  */
 export function creatorTrial(
-  creator: Pick<CreatorProfile, "status" | "starting_completed_months" | "start_date" | "trial_plan" | "ended_on">,
+  creator: Pick<CreatorProfile, "status" | "starting_completed_months" | "start_date" | "trial_plan" | "ended_on" | "trial_outcome" | "trial_decided_on">,
   postingDays: PostingDay[],
 ) {
   const t = trialStatus(postingDays, creator);
@@ -465,7 +470,7 @@ export type DayState = "posted" | "off" | "off_requested" | "missed" | "pending"
  * the calculator: posted = >= VIDEOS_PER_WEEKDAY videos on BOTH platforms.
  */
 export function monthDayStates(
-  creator: Pick<CreatorProfile, "start_date" | "ended_on" | "timezone" | "trial_plan">,
+  creator: Pick<CreatorProfile, "start_date" | "ended_on" | "timezone" | "trial_plan" | "trial_outcome" | "trial_decided_on">,
   month: YyyyMm,
   history: Pick<CreatorHistory, "postingDays" | "daysOff">,
   now: Date = new Date(),
@@ -476,7 +481,7 @@ export function monthDayStates(
   for (const p of history.postingDays) counts.set(p.date, (counts.get(p.date) ?? 0) + completeVideoCount(p));
   const off = new Map(history.daysOff.map((d) => [d.date, d.status]));
   return weekdaysBetween(monthFirst(month), monthLast(month))
-    .filter((d) => d >= creator.start_date && (!creator.ended_on || d <= creator.ended_on))
+    .filter((d) => isScheduledDay(creator, history.postingDays, d))
     .map((date) => {
       const videos = counts.get(date) ?? 0;
       let state: DayState;
@@ -641,7 +646,9 @@ export function nextAutoStatus(
 ): CreatorStatus {
   if (from !== "onboarding" && from !== "trial") return from;
   if (from === "onboarding" && !onboarded) return from;
-  return trialStatus(postingDays, profile).isInTrial ? "trial" : "active";
+  const t = trialStatus(postingDays, profile);
+  if (t.ended) return "ended";
+  return t.isInTrial ? "trial" : "active";
 }
 
 /**
@@ -669,9 +676,19 @@ export async function advanceCreatorStatus(id: string, opts: { db?: Firestore; n
   }
   const days = await ref.collection("posting_days").get();
   const profile = isYyyyMmDd(d.start_date)
-    ? { start_date: d.start_date as YyyyMmDd, ...(d.trial_plan === "v2" ? { trial_plan: "v2" as const } : {}), ...(isYyyyMmDd(d.ended_on) ? { ended_on: d.ended_on as YyyyMmDd } : {}) }
+    ? {
+        start_date: d.start_date as YyyyMmDd,
+        ...(d.trial_plan === "v2" ? { trial_plan: "v2" as const } : {}),
+        ...(isYyyyMmDd(d.ended_on) ? { ended_on: d.ended_on as YyyyMmDd } : {}),
+        ...(d.trial_outcome === "keep" || d.trial_outcome === "end" ? { trial_outcome: d.trial_outcome as "keep" | "end" } : {}),
+        ...(isYyyyMmDd(d.trial_decided_on) ? { trial_decided_on: d.trial_decided_on as YyyyMmDd } : {}),
+      }
     : undefined;
-  const to = nextAutoStatus(from, onboarded, days.docs.map((x) => toPostingDay(x.id, x.data())), profile);
+  const postingDays = days.docs.map((x) => toPostingDay(x.id, x.data()));
+  // The 20th trial day just counted: remember it (nudges stop; the founder is asked to decide).
+  const tw = trialWindow(profile, postingDays);
+  if (tw?.completedOn && !isYyyyMmDd(d.trial_completed_on)) await ref.update({ trial_completed_on: tw.completedOn });
+  const to = nextAutoStatus(from, onboarded, postingDays, profile);
   if (to === from) return null;
   const nowIso = (opts.now ?? new Date()).toISOString();
   const changed = await db.runTransaction(async (tx) => {

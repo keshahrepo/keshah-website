@@ -7,14 +7,13 @@
  *   - a posting creator with no posts found for 2+ weekdays (renamed / private handle?)
  *   - the usable proven library getting small (creators start repeating)
  *   - proven videos stuck without talking points after every retry
- *   - a creator 3 posting days or fewer from the end of the 20-day trial
- *     (promotion is automatic; this is the chance to end them first)
+ *   - a creator who finished the 20-day trial and is waiting for the
+ *     founder's Keep / Don't continue (nothing happens until then)
  */
 import type { Firestore } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { emailConfigured, sendEmail } from "@/lib/email";
-import { CREATORS_COLLECTION, isYyyyMmDd, toPostingDay } from "./db";
-import { trialStatus } from "./pay";
+import { CREATORS_COLLECTION, isYyyyMmDd } from "./db";
 import { PROVEN_COLLECTION } from "./proven";
 import { BEATS_MAX_ATTEMPTS } from "./proven-beats";
 
@@ -29,12 +28,9 @@ export interface CreatorHealthInput {
   post_sync?: { last_ok_at?: string; consecutive_failures?: number; credits_remaining?: number | null };
   /** Newest detected post (ISO), if any. */
   newest_post_at?: string | null;
-  /** v2 trial creators still in the trial: posting days done of the 20. */
-  trial?: { day: number; of: number };
+  /** Finished the 20-day trial on this date, no decision yet. */
+  trial_review_since?: string;
 }
-
-/** Warn this many posting days before automatic promotion. */
-export const TRIAL_WARN_DAYS = 3;
 
 export interface ProvenHealthInput {
   status?: string;
@@ -67,12 +63,13 @@ export function healthProblems(creators: CreatorHealthInput[], proven: ProvenHea
 
   for (const c of posting) {
     const ps = c.post_sync ?? {};
+    const waiting = !!c.trial_review_since;
     const lastOk = ps.last_ok_at ? Date.parse(ps.last_ok_at) : 0;
     if ((ps.consecutive_failures ?? 0) >= 2) out.push(`Post sync is failing for ${c.name} (${ps.consecutive_failures} times in a row).`);
     else if (lastOk && nowMs - lastOk > DAY_MS) out.push(`Post sync hasn't worked for ${c.name} in over a day.`);
 
     const started = c.start_date && Date.parse(`${c.start_date}T00:00:00Z`) <= nowMs;
-    if (started) {
+    if (started && !waiting) {
       const since = Math.max(c.newest_post_at ? Date.parse(c.newest_post_at) : 0, Date.parse(`${c.start_date}T00:00:00Z`));
       const gap = weekdaysSince(since, nowMs);
       if (gap >= 2) out.push(`No posts found for ${c.name} in ${gap} weekdays. Check their handles are right and the accounts are public.`);
@@ -80,11 +77,9 @@ export function healthProblems(creators: CreatorHealthInput[], proven: ProvenHea
   }
 
   for (const c of creators) {
-    const t = c.trial;
-    if (!t || t.day < t.of - TRIAL_WARN_DAYS) continue;
-    const left = t.of - t.day;
+    if (!c.trial_review_since) continue;
     out.push(
-      `${c.name} is on trial day ${t.day} of ${t.of}. They move up to the full plan (5 videos, $500/mo) automatically after ${left === 0 ? "today" : `${left} more posting day${left === 1 ? "" : "s"}`}. To stop that, end them in Creator pay.`,
+      `${c.name} finished their 20-day trial on ${c.trial_review_since} and is waiting for your decision. Open them in Creator pay and press Keep or Don't continue. They don't post until you decide.`,
     );
   }
 
@@ -118,13 +113,15 @@ export async function runCreatorHealth(opts: { db?: Firestore; dry?: boolean; no
       const p = await d.ref.collection("posts").orderBy("posted_at", "desc").limit(1).get();
       newest = (p.docs[0]?.data().posted_at as string | undefined) ?? null;
     }
-    let trial: CreatorHealthInput["trial"];
-    if (x.trial_plan === "v2" && status === "trial" && isYyyyMmDd(x.start_date) && !x.ended_on) {
-      const pd = await d.ref.collection("posting_days").get();
-      const t = trialStatus(pd.docs.map((p) => toPostingDay(p.id, p.data())), { start_date: x.start_date, trial_plan: "v2" });
-      if (t.isInTrial) trial = { day: t.postedDays, of: t.requiredDays ?? 20 };
-    }
-    creators.push({ name: String(x.name ?? d.id), status, start_date: x.start_date, post_sync: x.post_sync, newest_post_at: newest, ...(trial ? { trial } : {}) });
+    const reviewing = x.trial_plan === "v2" && status === "trial" && isYyyyMmDd(x.trial_completed_on) && !x.trial_outcome;
+    creators.push({
+      name: String(x.name ?? d.id),
+      status,
+      start_date: x.start_date,
+      post_sync: x.post_sync,
+      newest_post_at: newest,
+      ...(reviewing ? { trial_review_since: x.trial_completed_on as string } : {}),
+    });
   }
   const pv = await db
     .collection(PROVEN_COLLECTION)
