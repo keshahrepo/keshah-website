@@ -480,6 +480,8 @@ export function calendarFor(c: AdminCreator, h: CreatorHistory, month: YyyyMm): 
 
 export interface Attribution {
   trials: number;
+  /** Trials that started inside the window. */
+  trialsInWindow: number;
   purchases: number;
   /** Purchases whose conversion falls inside the selected month. */
   purchasesInWindow: number;
@@ -498,7 +500,7 @@ export interface Attribution {
  */
 export async function attributionFor(tags: string[], windowStartMs: number, windowEndMs: number = Infinity): Promise<Attribution> {
   const clean = [...new Set(tags.map((t) => t.trim()).filter(Boolean))].slice(0, 30);
-  const empty = { trials: 0, purchases: 0, purchasesInWindow: 0, recordedProceedsUsd: 0, purchasesWithProceeds: 0, proceedsInWindowUsd: 0 };
+  const empty = { trials: 0, trialsInWindow: 0, purchases: 0, purchasesInWindow: 0, recordedProceedsUsd: 0, purchasesWithProceeds: 0, proceedsInWindowUsd: 0 };
   if (!clean.length) return empty;
   const snap = await db()
     .collection("Users")
@@ -510,7 +512,11 @@ export async function attributionFor(tags: string[], windowStartMs: number, wind
   let windowMissing = 0;
   for (const doc of snap.docs) {
     const d = doc.data();
-    if (d.started_trial) out.trials++;
+    if (d.started_trial) {
+      out.trials++;
+      const st = toMs((d.started_trial as { at?: unknown })?.at);
+      if (st !== null && st >= windowStartMs && st < windowEndMs) out.trialsInWindow++;
+    }
     // First paid charge only; renewals don't count toward a creator.
     // Before first_proceeds_usd is set, the total is the first charge: every
     // tracked conversion is on a 3-month plan and too recent to have renewed.

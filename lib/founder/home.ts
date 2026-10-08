@@ -105,14 +105,13 @@ export async function founderHome(now = new Date()): Promise<FounderHome> {
   for (const d of appsSnap.docs) {
     const a = d.data();
     open++;
-    const start = Date.parse(String(a.calendly_event_start_time ?? ""));
-    const interviewed = !!a.interview_video_submitted_at || (Number.isFinite(start) && start < now.getTime());
-    if ((a.status === "booked" || a.status === "completed") && interviewed) {
+    // Only applicants who've submitted their interview video can be decided.
+    if (a.interview_video_submitted_at) {
       needs.push({
         kind: "application",
         id: d.id,
         title: String(a.full_name || "Applicant"),
-        subtitle: a.interview_video_submitted_at ? "Interview video in" : "Interview done",
+        subtitle: "Interview video in",
         at: toIso(a.interview_video_submitted_at) || toIso(a.last_updated_at),
       });
     }
