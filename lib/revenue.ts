@@ -36,7 +36,8 @@ export function flattenOverview(data: unknown): RevenueOverview {
 }
 
 export async function revenueOverview(): Promise<RevenueOverview> {
-  const apiKey = process.env.REVENUECAT_API_KEY;
+  // A v2 secret key with Charts & metrics read access; the main key may not have it.
+  const apiKey = process.env.REVENUECAT_METRICS_KEY || process.env.REVENUECAT_API_KEY;
   if (!apiKey) return { error: "RevenueCat key not set" };
   const headers = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
   const errors: string[] = [];

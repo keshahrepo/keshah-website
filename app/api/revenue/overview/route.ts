@@ -7,7 +7,8 @@ const stripUndefined = (o: object) => Object.fromEntries(Object.entries(o).filte
 // Proxy to RevenueCat REST API for subscription revenue
 export async function GET() {
   if (!(await requireDashboardSession())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const apiKey = process.env.REVENUECAT_API_KEY;
+  // A v2 secret key with Charts & metrics read access; the main key may not have it.
+  const apiKey = process.env.REVENUECAT_METRICS_KEY || process.env.REVENUECAT_API_KEY;
 
   if (!apiKey) {
     return NextResponse.json({ error: "RevenueCat API key not configured" }, { status: 500 });
