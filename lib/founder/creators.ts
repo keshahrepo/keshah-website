@@ -24,7 +24,7 @@ import {
   type AdminCreator,
 } from "@/lib/creators/admin";
 import { addMonths, bonusLinesForMonth, completeVideoCount, trialStatus } from "@/lib/creators/pay";
-import { rcRevenueByCampaign } from "@/lib/revenue";
+import { rcRevenueByCampaign, rcValuePerUser } from "@/lib/revenue";
 import { db } from "@/lib/creators/admin";
 import { CREATORS_COLLECTION } from "@/lib/creators/db";
 import type { MonthSummary } from "@/lib/creators/pay";
@@ -61,6 +61,12 @@ export interface FounderCreatorRow {
   payouts: Payout[];
   /** Cash paid out in the period: invoices whose payout month is in it (all of them for all time). */
   paidOutCents: number;
+  /** Installs from their link in the period (RevenueCat new customers on their campaigns). */
+  installs: number | null;
+  /** Revenue per install: RevenueCat proceeds in each install's first 14 days, averaged. */
+  rpiUsd: number | null;
+  /** Cost per install: their cost for the period / installs. */
+  cpiUsd: number | null;
 }
 
 export interface Payout {
@@ -184,6 +190,14 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
     })
     .sort((a, b) => b.month.localeCompare(a.month));
   const paidOutCents = payouts.filter((p) => period === "all" || p.payoutMonth === period).reduce((a, p) => a + p.totalCents, 0);
+  const startDay = new Date(from).toISOString().slice(0, 10);
+  const endDay = new Date(Math.min(to - DAY_MS, Date.now())).toISOString().slice(0, 10);
+  const value = c.campaign_tags.length
+    ? await rcValuePerUser(period === "all" ? "2020-01-01" : startDay, endDay, [{ name: "attribution_campaign", values: c.campaign_tags }]).catch((e) => {
+        console.error("creator value per install:", e instanceof Error ? e.message : e);
+        return null;
+      })
+    : null;
   const broughtIn = byCampaign === null ? null : c.campaign_tags.reduce((a, t) => a + (byCampaign.get(t.trim().toLowerCase()) ?? 0), 0);
   const [attr, postsSnap] = await Promise.all([
     attributionFor(c.campaign_tags, from, to),
@@ -233,5 +247,8 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
     topVideo: top,
     payouts,
     paidOutCents,
+    installs: value ? value.customers : null,
+    rpiUsd: value?.perUserUsd ?? null,
+    cpiUsd: value && value.customers > 0 ? payCents / 100 / value.customers : null,
   };
 }
