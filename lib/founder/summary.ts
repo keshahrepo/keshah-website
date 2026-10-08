@@ -12,7 +12,8 @@ import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { CREATORS_COLLECTION } from "@/lib/creators/db";
 import { rcRevenue, rcRevenueByCampaign } from "@/lib/revenue";
 import { cachedCohort } from "./app-cohort";
-import { founderCreators } from "./creators";
+import { founderCreators, programValue } from "./creators";
+import { cached } from "./cache";
 
 export interface FounderSummary {
   period: string;
@@ -43,7 +44,7 @@ function window(period: string): [number, number] {
   return [Date.UTC(y, m - 1, 1), Date.UTC(y, m, 1)];
 }
 
-export async function founderSummary(period: string): Promise<FounderSummary> {
+export async function founderSummary(period: string, opts: { fresh?: boolean } = {}): Promise<FounderSummary> {
   const db = getFirebaseAdmin().db;
   const [from, to] = window(period);
   const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
@@ -52,7 +53,10 @@ export async function founderSummary(period: string): Promise<FounderSummary> {
 
   const [cohortRes, creators, creatorDocs] = await Promise.all([
     cachedCohort({ period, release: "all", gender: "all", source: "all", country: "all", campaign: "all" }),
-    founderCreators(period),
+    cached(`creators_${period}`, period, async () => {
+      const rows = await founderCreators(period);
+      return { period, rows, program: await programValue(period, rows) };
+    }, opts).then((x) => x.rows),
     db.collection(CREATORS_COLLECTION).select("campaign_tags").get(),
   ]);
   const tags = new Set<string>();
