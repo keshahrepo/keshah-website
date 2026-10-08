@@ -57,6 +57,26 @@ export interface FounderCreatorRow {
   /** Views on their posts from the period (TikTok + Instagram, current counts). */
   views: number;
   topVideo: { url: string; platform: string; views: number; thumbnail: string | null } | null;
+  /** Cash: every invoice, newest first (an invoice for month M is paid early in M+1). */
+  payouts: Payout[];
+  /** Cash paid out in the period: invoices whose payout month is in it (all of them for all time). */
+  paidOutCents: number;
+}
+
+export interface Payout {
+  /** The work month the invoice covers. */
+  month: string;
+  /** The month the money goes out (month + 1). */
+  payoutMonth: string;
+  totalCents: number;
+  baseCents: number;
+  bonusCents: number;
+  trialCents: number;
+  otherCents: number;
+  status: string;
+  paidAt: string | null;
+  /** Due date (submitted + 7 days) while unpaid. */
+  dueBy: string | null;
 }
 
 const DAY_MS = 86_400_000;
@@ -141,6 +161,29 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
   const [from, to] = period === "all" ? [0, Date.now() + DAY_MS] : monthWindow(period);
   const fromDate = new Date(from).toISOString().slice(0, 10);
   const toDate = new Date(to).toISOString().slice(0, 10);
+  const payouts: Payout[] = h.invoices
+    .filter((inv) => inv.status !== "draft")
+    .map((inv) => {
+      const sum = (pred: (k: string) => boolean) => (inv.lines ?? []).filter((l) => pred(String(l.kind))).reduce((a, l) => a + l.amount_cents, 0);
+      const baseCents = sum((k) => k === "base");
+      const bonusCents = sum((k) => k.startsWith("bonus"));
+      const trialCents = sum((k) => k === "trial");
+      const submitted = inv.submitted_at ? Date.parse(inv.submitted_at) : NaN;
+      return {
+        month: inv.month,
+        payoutMonth: addMonths(inv.month, 1),
+        totalCents: inv.total_cents,
+        baseCents,
+        bonusCents,
+        trialCents,
+        otherCents: inv.total_cents - baseCents - bonusCents - trialCents,
+        status: inv.status,
+        paidAt: inv.paid_at ?? null,
+        dueBy: inv.status !== "paid" && Number.isFinite(submitted) ? new Date(submitted + 7 * DAY_MS).toISOString().slice(0, 10) : null,
+      };
+    })
+    .sort((a, b) => b.month.localeCompare(a.month));
+  const paidOutCents = payouts.filter((p) => period === "all" || p.payoutMonth === period).reduce((a, p) => a + p.totalCents, 0);
   const broughtIn = byCampaign === null ? null : c.campaign_tags.reduce((a, t) => a + (byCampaign.get(t.trim().toLowerCase()) ?? 0), 0);
   const [attr, postsSnap] = await Promise.all([
     attributionFor(c.campaign_tags, from, to),
@@ -188,5 +231,7 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
     videos,
     views,
     topVideo: top,
+    payouts,
+    paidOutCents,
   };
 }

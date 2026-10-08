@@ -26,6 +26,8 @@ export interface FounderSummary {
   /** Cost of the period's creator work (base + bonuses its videos earned), see lib/founder/creators.ts. */
   creatorCostUsd: number;
   netUsd: number;
+  /** Cash paid to creators in the period (invoices paid out in it), for reference; net uses cost. */
+  paidOutUsd: number;
   /** RevenueCat proceeds from creators' campaigns, and everything else. */
   fromCreatorsUsd: number;
   otherUsd: number;
@@ -86,6 +88,7 @@ export async function founderSummary(period: string): Promise<FounderSummary> {
     proceedsUsd: round(proceeds),
     creatorCostUsd: round(cost),
     netUsd: round(proceeds - cost),
+    paidOutUsd: round(creators.reduce((a, r) => a + r.paidOutCents, 0) / 100),
     fromCreatorsUsd: round(money?.fromCreators ?? 0),
     otherUsd: round(Math.max(0, proceeds - (money?.fromCreators ?? 0))),
     ...(revenueError ? { revenueError } : {}),
