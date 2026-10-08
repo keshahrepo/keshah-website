@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAnyDashboardSession } from "@/lib/support/auth";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 
 // GET — list all creators with weekly click counts
 export async function GET() {
+  if (!(await requireAnyDashboardSession())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const { db } = getFirebaseAdmin();
     const snap = await db.collection("Creators").orderBy("created_at", "desc").get();
@@ -41,6 +43,7 @@ export async function GET() {
 
 // POST — add a new creator
 export async function POST(req: NextRequest) {
+  if (!(await requireAnyDashboardSession())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const body = await req.json();
     const { name, slug: providedSlug, platforms, notes } = body;
@@ -112,6 +115,7 @@ export async function POST(req: NextRequest) {
 
 // PUT — update a creator
 export async function PUT(req: NextRequest) {
+  if (!(await requireAnyDashboardSession())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const body = await req.json();
     const { id, ...updates } = body;
@@ -132,6 +136,7 @@ export async function PUT(req: NextRequest) {
 
 // DELETE — deactivate a creator
 export async function DELETE(req: NextRequest) {
+  if (!(await requireAnyDashboardSession())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const { id } = await req.json();
 

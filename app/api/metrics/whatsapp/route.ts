@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireDashboardSession } from "@/lib/support/auth";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 
 export const maxDuration = 60;
@@ -24,6 +25,7 @@ function classifyGeo(tz: string): "tier_1" | "india" | "tier_2" {
 }
 
 export async function GET(request: Request) {
+  if (!(await requireDashboardSession())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { searchParams } = new URL(request.url);
   const geoFilter = searchParams.get("geo") || "all"; // all, tier_1, india, tier_2
   try {

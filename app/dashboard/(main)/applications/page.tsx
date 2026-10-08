@@ -208,7 +208,6 @@ function ApplicationsInner() {
             load();
           }}
           onStatus={async (row, status) => {
-            if (status === "accepted") openGmailAccept(row);
             await updateStatus(row.id, status);
           }}
         />
@@ -343,10 +342,7 @@ function ApplicationsInner() {
             row={row}
             expanded={expandedId === row.id}
             onToggle={() => setExpandedId((cur) => (cur === row.id ? null : row.id))}
-            onAccept={() => {
-              openGmailAccept(row);
-              updateStatus(row.id, "accepted");
-            }}
+            onAccept={() => updateStatus(row.id, "accepted")}
             onDeny={() => updateStatus(row.id, "denied")}
             onReopen={() => updateStatus(row.id, "booked")}
             hasThread={threadIds.has(row.id)}
@@ -579,9 +575,9 @@ function ApplicationRow({
                     fontWeight: 600,
                   }}
                   disabled={!row.email}
-                  title={!row.email ? "Applicant has no email yet" : "Accept and open Gmail compose"}
+                  title={!row.email ? "Applicant has no email yet" : "Accept: makes them a creator, sets up their keshah.com inbox, sends the welcome email and contract"}
                 >
-                  Accept → Gmail
+                  Accept
                 </button>
               )}
               {row.status !== "denied" && (

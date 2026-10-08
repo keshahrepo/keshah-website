@@ -29,6 +29,7 @@
  *   contracts/templates/<version>.pdf            uploaded template PDFs (write-once)
  *   creators/<id>/contract/signed-v1-<stamp>.pdf signed contract (write-once)
  */
+import { notifyFounder } from "@/lib/staff";
 import { createHash, randomUUID } from "crypto";
 import { readFileSync } from "fs";
 import path from "path";
@@ -588,6 +589,7 @@ async function emailSignedCopies(
       text: `Hey ${x.firstName || "there"},\n\nThanks for signing. Your copy of the contract is attached, and you can always download it again from the Contract tab in the portal.\n\n${facts}\n\n${CREATOR_SIGNOFF}`,
     });
   }
+  await notifyFounder({ title: "Contract signed", body: `${x.audit.signer_legal_name} signed (${x.audit.template_version}).`, data: { type: "founder_contract" } });
   const founder = process.env.KESHAH_GMAIL_USER;
   if (founder) {
     jobs.push({

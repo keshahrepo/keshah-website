@@ -1,5 +1,6 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { jwtVerify } from "jose";
+import { founderFromHeaders } from "@/lib/staff";
 
 const COOKIE_NAME = "keshah_dash";
 const secret = new TextEncoder().encode(process.env.JWT_SECRET || "dev-secret-change-me");
@@ -10,13 +11,30 @@ const secret = new TextEncoder().encode(process.env.JWT_SECRET || "dev-secret-ch
 export async function requireDashboardSession(): Promise<{ role: string } | null> {
   const c = await cookies();
   const token = c.get(COOKIE_NAME)?.value;
-  if (!token) return null;
+  // The founder in the KESHAH Creators app (mobile bearer token, staff email).
+  if (!token) return (await founderFromHeaders(await headers())) ? { role: "admin" } : null;
   try {
     const { payload } = await jwtVerify(token, secret);
     const role = (payload.role as string) ?? "admin";
     // Marketing and manager roles don't get to send support replies.
     if (role === "marketing" || role === "manager" || role === "creator") return null;
     return { role };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Any logged-in dashboard user, marketing included (the Marketing page's
+ * creator links). Founder app tokens count too.
+ */
+export async function requireAnyDashboardSession(): Promise<{ role: string } | null> {
+  const c = await cookies();
+  const token = c.get(COOKIE_NAME)?.value;
+  if (!token) return (await founderFromHeaders(await headers())) ? { role: "admin" } : null;
+  try {
+    const { payload } = await jwtVerify(token, secret);
+    return { role: (payload.role as string) ?? "admin" };
   } catch {
     return null;
   }

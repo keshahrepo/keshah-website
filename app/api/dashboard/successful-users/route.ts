@@ -7,6 +7,7 @@
 // Joined with UserCohorts (immutable signup snapshot) when available.
 
 import { NextResponse } from "next/server";
+import { requireDashboardSession } from "@/lib/support/auth";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 
 interface SuccessfulUser {
@@ -34,6 +35,7 @@ interface SuccessfulUser {
 }
 
 export async function GET(req: Request) {
+  if (!(await requireDashboardSession())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const { db } = getFirebaseAdmin();
     const url = new URL(req.url);

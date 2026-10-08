@@ -3,6 +3,7 @@
 // Supports date range filtering via ?days=7 (default 7).
 
 import { NextResponse, type NextRequest } from "next/server";
+import { requireDashboardSession } from "@/lib/support/auth";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 
 // Men's / generic-US funnel (us_weekly_trial, us_kit, us_trial). Excludes
@@ -158,6 +159,7 @@ const STEP_LABELS: Record<string, string> = {
 const FUNNEL_RESET_AT = new Date("2026-05-13T20:36:00.000Z");
 
 export async function GET(req: NextRequest) {
+  if (!(await requireDashboardSession())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const days = parseInt(req.nextUrl.searchParams.get("days") ?? "7", 10);
   const sourceFilter = req.nextUrl.searchParams.get("source") ?? "us";
   const rollingCutoff = new Date();

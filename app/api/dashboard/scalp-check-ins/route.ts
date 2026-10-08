@@ -23,6 +23,7 @@
 //     computed over mature trials so in-flight trials don't drag it down.
 
 import { NextResponse } from "next/server";
+import { requireDashboardSession } from "@/lib/support/auth";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 
 const DEFAULT_FROM = "2026-09-02"; // p18 ship window
@@ -77,6 +78,7 @@ function ts(v: unknown): number | null {
 }
 
 export async function GET(req: Request) {
+  if (!(await requireDashboardSession())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const { db } = getFirebaseAdmin();
     const url = new URL(req.url);

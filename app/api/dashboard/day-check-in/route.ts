@@ -4,6 +4,7 @@
 // client component can consume it.
 
 import { NextResponse } from "next/server";
+import { requireDashboardSession } from "@/lib/support/auth";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 
 const TEST_EMAIL_REGEX = /^test\d+@test\.com$/i;
@@ -11,6 +12,7 @@ const isTestEmail = (email: unknown): boolean =>
   typeof email === "string" && TEST_EMAIL_REGEX.test(email);
 
 export async function GET(req: Request) {
+  if (!(await requireDashboardSession())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { searchParams } = new URL(req.url);
   const dayRaw = searchParams.get("day");
   const day = dayRaw ? parseInt(dayRaw, 10) : NaN;

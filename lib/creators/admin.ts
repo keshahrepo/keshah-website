@@ -17,6 +17,8 @@
  * mapping and URL validation come from lib/creators/db.ts so portal and admin
  * always agree.
  */
+import { FieldValue } from "firebase-admin/firestore";
+import { founderFromHeaders } from "@/lib/staff";
 import { NextRequest, NextResponse } from "next/server";
 import { getStorage } from "firebase-admin/storage";
 import type { DocumentData, Firestore } from "firebase-admin/firestore";
@@ -73,10 +75,10 @@ export const CREATOR_STATUSES = ["onboarding", "trial", "active", "leaving", "en
 export async function requireAdmin(req: NextRequest): Promise<NextResponse | null> {
   const token = req.cookies.get(COOKIE_NAME)?.value;
   const payload = token ? await getPayloadFromToken(token) : null;
-  if (!payload || payload.role !== "admin") {
-    return NextResponse.json({ error: "Admin only" }, { status: 403 });
-  }
-  return null;
+  if (payload?.role === "admin") return null;
+  // The founder in the KESHAH Creators app.
+  if (!token && (await founderFromHeaders(req.headers))) return null;
+  return NextResponse.json({ error: "Admin only" }, { status: 403 });
 }
 
 export function db(): Firestore {
@@ -905,3 +907,63 @@ export function buildZip(files: { name: string; data: Uint8Array | string }[]): 
   return Buffer.concat([...local, ...central, end]);
 }
 
+
+
+// ------------------------------------------------------------------ create
+
+export interface NewCreatorFields {
+  legal_name: string;
+  email: string;
+  timezone: string;
+  name?: string;
+  keshah_email?: string;
+  start_date?: string | null;
+  starting_completed_months?: number;
+  campaign_tags?: string[];
+  tiktok_handle?: string;
+  instagram_handle?: string;
+  creator_link_id?: string | null;
+  tracking_url?: string;
+  status?: string;
+  /** careers_applications id this creator came from. */
+  application_id?: string;
+}
+
+/** Adds a ContentCreators doc (no login yet). Throws on a duplicate email. */
+export async function createCreatorRecord(u: NewCreatorFields): Promise<string> {
+  const col = db().collection(CREATORS_COLLECTION);
+  const email = u.email.trim().toLowerCase();
+  const existing = await col.where("email", "==", email).limit(1).get();
+  if (!existing.empty) throw new CreatorExistsError(existing.docs[0].id);
+  const ref = await col.add({
+    name: u.name || u.legal_name,
+    legal_name: u.legal_name,
+    email,
+    keshah_email: u.keshah_email ?? "",
+    timezone: u.timezone,
+    // Pay starts on the first posting day unless admin sets a date here.
+    start_date: u.start_date ?? null,
+    start_mode: "first_post",
+    starting_completed_months: u.starting_completed_months ?? 0,
+    campaign_tags: u.campaign_tags ?? [],
+    tiktok_handle: u.tiktok_handle ?? "",
+    instagram_handle: u.instagram_handle ?? "",
+    creator_link_id: u.creator_link_id ?? null,
+    tracking_url: u.tracking_url ?? "",
+    status: u.status || "onboarding",
+    contract: { status: "none" },
+    w9_on_file: false,
+    payout_method: "amex_ach",
+    is_active: true,
+    ...(u.application_id ? { application_id: u.application_id } : {}),
+    created_at: FieldValue.serverTimestamp(),
+    status_changed_at: FieldValue.serverTimestamp(),
+  });
+  return ref.id;
+}
+
+export class CreatorExistsError extends Error {
+  constructor(public creatorId: string) {
+    super("A creator with that email already exists");
+  }
+}

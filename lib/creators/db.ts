@@ -11,6 +11,7 @@
  * Errors meant for the user are thrown as CreatorDataError (with an HTTP
  * status); API routes should catch and return `{ error: e.message }`.
  */
+import { notifyFounder } from "@/lib/staff";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { getStorage } from "firebase-admin/storage";
 import type { DocumentData, DocumentSnapshot, Firestore } from "firebase-admin/firestore";
@@ -687,7 +688,10 @@ export async function advanceCreatorStatus(id: string, opts: { db?: Firestore; n
   const postingDays = days.docs.map((x) => toPostingDay(x.id, x.data()));
   // The 20th trial day just counted: remember it (nudges stop; the founder is asked to decide).
   const tw = trialWindow(profile, postingDays);
-  if (tw?.completedOn && !isYyyyMmDd(d.trial_completed_on)) await ref.update({ trial_completed_on: tw.completedOn });
+  if (tw?.completedOn && !isYyyyMmDd(d.trial_completed_on)) {
+    await ref.update({ trial_completed_on: tw.completedOn });
+    await notifyFounder({ title: `${d.name || "A creator"} finished their trial`, body: "All 20 days are in. Keep or don't continue?", data: { type: "founder_trial", id } });
+  }
   const to = nextAutoStatus(from, onboarded, postingDays, profile);
   if (to === from) return null;
   const nowIso = (opts.now ?? new Date()).toISOString();

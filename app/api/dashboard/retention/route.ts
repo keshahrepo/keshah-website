@@ -16,6 +16,7 @@
 // — they're created when the day screen is opened but no exercise done.
 
 import { NextResponse } from "next/server";
+import { requireDashboardSession } from "@/lib/support/auth";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 
 interface Milestone {
@@ -30,6 +31,7 @@ const DEFAULT_FROM = "2026-02-09"; // paid stoppage launch
 const MILESTONE_DAYS = [1, 2, 3, 5, 7, 10, 14, 21, 30, 45, 60, 75, 90, 120];
 
 export async function GET(req: Request) {
+  if (!(await requireDashboardSession())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const { db } = getFirebaseAdmin();
     const url = new URL(req.url);

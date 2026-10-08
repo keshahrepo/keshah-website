@@ -11,6 +11,9 @@ import {
   listCreators,
   requireAdmin,
   sanitizeProfile,
+  createCreatorRecord,
+  CreatorExistsError,
+  type NewCreatorFields,
 } from "@/lib/creators/admin";
 
 export const dynamic = "force-dynamic";
@@ -51,33 +54,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Legal name, email and timezone are required" }, { status: 400 });
   }
 
-  const col = db().collection(CREATORS_COLLECTION);
-  const existing = await col.where("email", "==", u.email).limit(1).get();
-  if (!existing.empty) return NextResponse.json({ error: "A creator with that email already exists" }, { status: 409 });
-
-  const doc = {
-    name: (u.name as string) || (u.legal_name as string),
-    legal_name: u.legal_name,
-    email: u.email,
-    keshah_email: u.keshah_email ?? "",
-    timezone: u.timezone,
-    // Pay starts on the first posting day unless admin sets a date here.
-    start_date: u.start_date ?? null,
-    start_mode: "first_post",
-    starting_completed_months: u.starting_completed_months ?? 0,
-    campaign_tags: u.campaign_tags ?? [],
-    tiktok_handle: u.tiktok_handle ?? "",
-    instagram_handle: u.instagram_handle ?? "",
-    creator_link_id: u.creator_link_id ?? null,
-    tracking_url: u.tracking_url ?? "",
-    status: (u.status as string) || "onboarding",
-    contract: { status: "none" },
-    w9_on_file: false,
-    payout_method: "amex_ach",
-    is_active: true,
-    created_at: FieldValue.serverTimestamp(),
-    status_changed_at: FieldValue.serverTimestamp(),
-  };
-  const ref = await col.add(doc);
-  return NextResponse.json({ id: ref.id });
+  try {
+    const id = await createCreatorRecord(u as unknown as NewCreatorFields);
+    return NextResponse.json({ id });
+  } catch (e) {
+    if (e instanceof CreatorExistsError) return NextResponse.json({ error: e.message }, { status: 409 });
+    throw e;
+  }
 }

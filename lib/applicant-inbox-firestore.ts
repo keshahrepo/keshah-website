@@ -7,6 +7,7 @@
 //     `at` is sent_at / received_at copied to one field so a thread sorts on it.
 //   Settings/applicant_inbox  {last_event_received_at, last_event_id}
 
+import { notifyFounder } from "@/lib/staff";
 import { FieldValue, Timestamp, type Firestore } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "./firebase-admin";
 import { emailConfigured, sendEmail } from "./email";
@@ -138,6 +139,7 @@ export function firestoreInboxStore(db: Firestore): InboxStore {
 
 /** Email contact@ about new applicant replies. No-op when email isn't set up. */
 async function emailNotify(app: AppLite, texts: Parameters<typeof notificationEmail>[1]): Promise<void> {
+  await notifyFounder({ title: app.full_name ? `Text from ${app.full_name}` : "Applicant text", body: String(texts[texts.length - 1]?.text ?? "").slice(0, 140), data: { type: "founder_applicant_text", id: app.id } });
   if (!emailConfigured()) throw new Error("email not configured");
   const to = process.env.KESHAH_GMAIL_USER!;
   await sendEmail({ to, fromName: INBOX_FROM_NAME, ...notificationEmail(app, texts) });

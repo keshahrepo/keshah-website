@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireDashboardSession } from "@/lib/support/auth";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 
 export const maxDuration = 60;
@@ -74,6 +75,7 @@ function genderBucket(g: unknown): GenderBucket {
 }
 
 export async function GET() {
+  if (!(await requireDashboardSession())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const { db } = getFirebaseAdmin();
     const today = new Date().toISOString().split("T")[0];

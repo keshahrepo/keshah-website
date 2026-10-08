@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { notifyFounder } from "@/lib/staff";
 import { CreatorDataError, disputeInvoice } from "@/lib/creators/db";
 import { disputeFounderEmail, invoiceView } from "@/lib/creators/invoice-auto";
 import { emailConfigured, sendEmail } from "@/lib/email";
@@ -18,6 +19,7 @@ export async function POST(req: NextRequest) {
     const number = String(b.number ?? "").trim();
     if (!number) throw new CreatorDataError("number is required");
     const inv = await disputeInvoice(creator.id, number, b.note);
+    await notifyFounder({ title: `${creator.name || "A creator"} disputed an invoice`, body: String(inv.dispute_note || "Open it to see why.").slice(0, 140), data: { type: "founder_dispute", id: creator.id } });
     const founder = process.env.KESHAH_GMAIL_USER;
     if (founder && emailConfigured()) {
       const site = process.env.NEXT_PUBLIC_SITE_URL || "https://www.keshah.com";
