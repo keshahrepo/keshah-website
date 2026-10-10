@@ -7,6 +7,15 @@ import {
   checkInReplyText,
   looksLikeCheckIn,
   formatShortTime,
+  formatDayAndTime,
+  bookingText,
+  bookingTextDue,
+  confirmDue,
+  confirmReplyText,
+  confirmedForBooking,
+  gotBookingText,
+  BOOKING_TEXT_DELAY_MS,
+  BOOKING_TEXT_MAX_AGE_MS,
   got1hText,
   oneHourText,
   startingNowText,
@@ -189,10 +198,25 @@ test("formatShortTime: invitee zone as CT/PT, else ET", () => {
   assert.equal(formatShortTime(START, "Not/AZone"), "2:00 PM ET");
 });
 
-test("oneHourText: intro, time, check-in ask, no link, no em dashes", () => {
-  const t = oneHourText("Sam", "5:00 PM CT");
-  assert.equal(t, "Hi Sam, this is McKenzie, creator coordinator at KESHAH.\n\nYour group interview starts in 1 hour, at 5:00 PM CT.\n\nReply with your full name to check in.");
-  assert.ok(!/https?:/.test(t) && !t.includes("\u2014"));
+test("oneHourText: link always; intro only as the first text; confirm ask only when unconfirmed", () => {
+  const link = "https://zoom.us/j/1";
+  assert.equal(
+    oneHourText("Sam", "5:00 PM CT", link),
+    `Hi Sam, this is McKenzie, creator coordinator at KESHAH. Your group interview starts in 1 hour, at 5:00 PM CT. Here's the link: ${link}\n\nReply with your full name to confirm you're coming.`,
+  );
+  assert.equal(
+    oneHourText("Sam", "5:00 PM CT", link, { introduced: true }),
+    `Hi Sam, your group interview starts in 1 hour, at 5:00 PM CT. Here's the link: ${link}\n\nReply with your full name to confirm you're coming.`,
+  );
+  assert.equal(
+    oneHourText("Sam", "5:00 PM CT", link, { introduced: true, confirmed: true }),
+    `Hi Sam, your group interview starts in 1 hour, at 5:00 PM CT. Here's the link: ${link}`,
+  );
+  assert.equal(
+    oneHourText("Sam", "5:00 PM CT", null, { confirmed: true }),
+    "Hi Sam, this is McKenzie, creator coordinator at KESHAH. Your group interview starts in 1 hour, at 5:00 PM CT. The link is in your Calendly email.",
+  );
+  for (const t of [oneHourText("Sam", "x", link), oneHourText("Sam", "x", null)]) assert.ok(!t.includes("\u2014"));
 });
 
 test("startingNowText drops McKenzie's intro only after the 1h text", () => {
@@ -262,4 +286,90 @@ test("looksLikeCheckIn: name or short yes/here counts; questions and other text 
   ]) {
     assert.equal(looksLikeCheckIn(t, name), false, t);
   }
+});
+
+// ---------------------------------------------------------------- booking text + confirmation
+
+test("formatDayAndTime: weekday + short time in the invitee zone; date added 6+ days out", () => {
+  assert.equal(formatDayAndTime(START, "America/Chicago", START - 2 * 24 * HOUR), "Thursday at 1:00 PM CT");
+  assert.equal(formatDayAndTime(START, undefined, START - 3 * HOUR), "Thursday at 2:00 PM ET");
+  assert.equal(formatDayAndTime(START, "America/Chicago", START - 8 * 24 * HOUR), "Thursday, October 8 at 1:00 PM CT");
+});
+
+test("booking + confirm copy is exact", () => {
+  assert.equal(
+    bookingText("Sam", "Thursday at 6:00 PM CT"),
+    "Hi Sam, this is McKenzie, creator coordinator at KESHAH. Thanks for applying, you're booked for the group interview on Thursday at 6:00 PM CT. Reply with your full name to confirm your spot.",
+  );
+  assert.equal(
+    confirmReplyText("Sam", "Thursday at 6:00 PM CT", "https://zoom.us/j/1"),
+    "Thanks Sam, you're confirmed. Here's the link for Thursday at 6:00 PM CT: https://zoom.us/j/1",
+  );
+  assert.equal(
+    confirmReplyText("Sam", "Thursday at 6:00 PM CT", null),
+    "Thanks Sam, you're confirmed for Thursday at 6:00 PM CT. The link is in your Calendly email.",
+  );
+});
+
+const ISO = "2026-10-08T18:00:00.000Z";
+const booked = (bookedMs: number, extra: Record<string, unknown> = {}) => ({
+  status: "booked",
+  email: "a@b.co",
+  calendly_event_start_time: ISO,
+  booked_at: { toMillis: () => bookedMs },
+  ...extra,
+});
+
+test("bookingTextDue: 3 to 30 min after booking, interview 90+ min away, once per booked start", () => {
+  const b = START - 5 * HOUR;
+  assert.equal(bookingTextDue(booked(b), b + 2 * MIN), false); // too soon
+  assert.equal(bookingTextDue(booked(b), b + BOOKING_TEXT_DELAY_MS), true);
+  assert.equal(bookingTextDue(booked(b), b + 10 * MIN), true);
+  assert.equal(bookingTextDue(booked(b), b + BOOKING_TEXT_MAX_AGE_MS), true);
+  // booked more than 30 min ago (e.g. before this shipped): never
+  assert.equal(bookingTextDue(booked(b), b + BOOKING_TEXT_MAX_AGE_MS + MIN), false);
+  assert.equal(bookingTextDue(booked(START - 30 * 24 * HOUR), START - 2 * HOUR), false);
+  // no booked_at at all: never
+  assert.equal(bookingTextDue({ ...booked(b), booked_at: undefined }, b + 5 * MIN), false);
+  // interview under 90 min away: the 1h / start texts cover it
+  const late = START - 95 * MIN;
+  assert.equal(bookingTextDue(booked(late), late + 4 * MIN), true); // 91 min away
+  assert.equal(bookingTextDue(booked(late), late + 6 * MIN), false); // 89 min away
+  // already claimed/sent for this start; a reschedule (new start) gets a fresh one
+  assert.equal(bookingTextDue(booked(b, { interview_booking_text_for: ISO }), b + 5 * MIN), false);
+  assert.equal(bookingTextDue(booked(b, { interview_booking_text_for: "2026-10-07T18:00:00.000Z" }), b + 5 * MIN), true);
+  // inactive / no email
+  assert.equal(bookingTextDue(booked(b, { status: "denied" }), b + 5 * MIN), false);
+  assert.equal(bookingTextDue(booked(b, { email: "" }), b + 5 * MIN), false);
+});
+
+test("gotBookingText / confirmedForBooking only count the current booking", () => {
+  assert.equal(gotBookingText({ interview_booking_text_for: ISO, interview_booking_text_sent_at: "x" }, ISO), true);
+  assert.equal(gotBookingText({ interview_booking_text_for: ISO }, ISO), false); // claimed, not sent
+  assert.equal(gotBookingText({ interview_booking_text_for: "2026-10-07T18:00:00.000Z", interview_booking_text_sent_at: "x" }, ISO), false);
+  assert.equal(confirmedForBooking({ interview_confirmed_at: "x", interview_confirmed_for: ISO }, ISO), true);
+  assert.equal(confirmedForBooking({ interview_confirmed_at: "x", interview_confirmed_for: "2026-10-07T18:00:00.000Z" }, ISO), false);
+});
+
+test("confirmDue: after the booking text, before the start, once, not before the text went out", () => {
+  const sentAt = START - 20 * HOUR;
+  const base = booked(sentAt - 5 * MIN, {
+    interview_booking_text_for: ISO,
+    interview_booking_text_claimed_at: { toMillis: () => sentAt },
+    interview_booking_text_sent_at: { toMillis: () => sentAt },
+  });
+  assert.equal(confirmDue(base, sentAt + MIN, sentAt + 2 * MIN), true);
+  assert.equal(confirmDue(base, START - 2 * HOUR, START - 2 * HOUR), true);
+  assert.equal(confirmDue(base, START - MIN, START - MIN), true);
+  // reply before the booking text, after the start, or processed after the start
+  assert.equal(confirmDue(base, sentAt - MIN, sentAt + MIN), false);
+  assert.equal(confirmDue(base, START + MIN, START + MIN), false);
+  assert.equal(confirmDue(base, START - MIN, START + MIN), false);
+  // no booking text, or one for an older booking
+  assert.equal(confirmDue(booked(sentAt), START - 2 * HOUR, START - 2 * HOUR), false);
+  assert.equal(confirmDue({ ...base, interview_booking_text_for: "2026-10-07T18:00:00.000Z" }, START - 2 * HOUR, START - 2 * HOUR), false);
+  // already confirmed / checked in for this booking
+  assert.equal(confirmDue({ ...base, interview_confirmed_at: "x", interview_confirmed_for: ISO }, START - 2 * HOUR, START - 2 * HOUR), false);
+  assert.equal(confirmDue({ ...base, interview_checked_in_at: "x", interview_checked_in_for: ISO }, START - 2 * HOUR, START - 2 * HOUR), false);
+  assert.equal(confirmDue({ ...base, status: "withdrawn" }, START - 2 * HOUR, START - 2 * HOUR), false);
 });

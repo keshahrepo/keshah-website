@@ -1,12 +1,33 @@
-// Admin: list + create group-interview sessions (Applications tab).
-// GET  -> { sessions: [...] }
+// Admin: list + create group-interview sessions (Applications tab, and the
+// founder app's Interviews page).
+// GET            -> { sessions: [...], live_url }
+// GET ?counts=1  -> sessions from 14 days back to 14 days ahead, each with
+//                   total / opened / submitted / checked_in, plus
+//                   current (the slug /interview/live resolves to, else the
+//                   next upcoming) and video (counts for /interview/video).
 // POST { title?, starts_at (ISO), slug? } -> { session }
+// Sessions are created automatically for every Calendly group-interview time
+// (lib/interview.ts ensureSessionForStart), so POST is optional now.
 
 import { NextResponse } from "next/server";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { requireDashboardSession } from "@/lib/support/auth";
-import { LIVE_SLUG, SESSIONS, interviewUrl, isoOrNull, sessionFromDoc } from "@/lib/interview";
+import {
+  LIVE_SLUG,
+  SESSIONS,
+  VIDEO_SLUG,
+  getSessionApplicants,
+  interviewUrl,
+  isAcceptingNow,
+  isoOrNull,
+  resolveSession,
+  sessionClosesAtMs,
+  sessionFromDoc,
+  type InterviewSession,
+} from "@/lib/interview";
+import { sameSlot } from "@/lib/interview-auto";
+import type { DocumentSnapshot } from "firebase-admin/firestore";
 
 export const dynamic = "force-dynamic";
 
@@ -20,11 +41,65 @@ function slugify(s: string): string {
     .slice(0, 60);
 }
 
-export async function GET() {
+const DAY = 24 * 60 * 60 * 1000;
+
+function countsFor(docs: DocumentSnapshot[]) {
+  let opened = 0;
+  let submitted = 0;
+  let checkedIn = 0;
+  for (const d of docs) {
+    const x = (d.data() ?? {}) as Record<string, unknown>;
+    if (x.interview_video_submitted_at) submitted++;
+    if (x.interview_opened_at) opened++;
+    if (x.interview_checked_in_for && x.interview_checked_in_for === x.calendly_event_start_time && x.interview_checked_in_at) checkedIn++;
+  }
+  return { total: docs.length, opened, submitted, checked_in: checkedIn };
+}
+
+function sessionJson(s: InterviewSession, now: number) {
+  return {
+    slug: s.slug,
+    title: s.title,
+    starts_at: s.starts_at_ms ? new Date(s.starts_at_ms).toISOString() : null,
+    closes_at: s.slug === VIDEO_SLUG ? null : new Date(sessionClosesAtMs(s)).toISOString(),
+    is_open: s.is_open,
+    accepting: isAcceptingNow(s, now),
+    url: interviewUrl(s.slug),
+  };
+}
+
+// Founder app: recent + upcoming sessions with live counts.
+async function listWithCounts() {
+  const { db } = getFirebaseAdmin();
+  const now = Date.now();
+  const snap = await db.collection(SESSIONS).orderBy("starts_at", "desc").limit(60).get();
+  const all = snap.docs
+    .map((d) => sessionFromDoc(d))
+    .filter((s): s is InterviewSession => !!s && s.starts_at_ms > now - 14 * DAY && s.starts_at_ms < now + 14 * DAY);
+  const [rows, live, videoSession] = await Promise.all([
+    Promise.all(
+      all.map(async (s) => ({ ...sessionJson(s, now), ...countsFor(await getSessionApplicants(db, s)) })),
+    ),
+    resolveSession(db, LIVE_SLUG),
+    resolveSession(db, VIDEO_SLUG),
+  ]);
+  const video = videoSession
+    ? { ...sessionJson(videoSession, now), title: "Video link", ...countsFor(await getSessionApplicants(db, videoSession)) }
+    : null;
+  // Current: what the live QR points at; else the next one coming up.
+  const upcoming = rows
+    .filter((r) => r.starts_at && Date.parse(r.starts_at) > now)
+    .sort((a, b) => (a.starts_at ?? "").localeCompare(b.starts_at ?? ""));
+  const current = live?.slug ?? upcoming[0]?.slug ?? null;
+  return NextResponse.json({ sessions: rows, current, video, live_url: interviewUrl(LIVE_SLUG) });
+}
+
+export async function GET(req: Request) {
   if (!(await requireDashboardSession())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   try {
+    if (new URL(req.url).searchParams.get("counts") === "1") return await listWithCounts();
     const { db } = getFirebaseAdmin();
     const snap = await db.collection(SESSIONS).orderBy("starts_at", "desc").limit(50).get();
     const sessions = snap.docs.map((d) => {
@@ -73,6 +148,21 @@ export async function POST(req: Request) {
     }
 
     const { db } = getFirebaseAdmin();
+    // Sessions are made automatically for every booked time; don't add a
+    // second one for the same slot.
+    const near = await db
+      .collection(SESSIONS)
+      .where("starts_at", ">=", Timestamp.fromMillis(startsMs - 30 * 60 * 1000))
+      .where("starts_at", "<=", Timestamp.fromMillis(startsMs + 30 * 60 * 1000))
+      .limit(5)
+      .get();
+    const dup = near.docs.map((d) => sessionFromDoc(d)).find((s) => s && sameSlot(s.starts_at_ms, startsMs));
+    if (dup) {
+      return NextResponse.json(
+        { error: `There's already a session at that time: ${dup.title}.`, session: { slug: dup.slug, title: dup.title, url: interviewUrl(dup.slug) } },
+        { status: 409 },
+      );
+    }
     let slug = base;
     for (let i = 2; (await db.collection(SESSIONS).doc(slug).get()).exists; i++) {
       slug = `${base}-${i}`;

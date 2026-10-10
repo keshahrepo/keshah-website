@@ -22,6 +22,7 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { ensureSessionForStart } from "@/lib/interview";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -140,10 +141,20 @@ export async function POST(req: Request) {
     }
   }
 
+  // Every group-interview time gets its interview session automatically
+  // (live QR, live counter, follow-ups), even if this booking didn't match an
+  // application. Never fails the webhook; the reminders cron retries.
+  let session: string | null = null;
+  try {
+    session = (await ensureSessionForStart(db, startTime))?.slug ?? null;
+  } catch (e) {
+    console.error("calendly webhook: ensure session failed:", e instanceof Error ? e.message : e);
+  }
+
   if (!docId) {
     // No matching application — accept the webhook but note it so we
     // don't throw a signature-looking error back at Calendly.
-    return NextResponse.json({ ok: true, matched: false });
+    return NextResponse.json({ ok: true, matched: false, session });
   }
 
   await db.collection("careers_applications").doc(docId).set(
@@ -161,5 +172,5 @@ export async function POST(req: Request) {
     { merge: true },
   );
 
-  return NextResponse.json({ ok: true, matched: true, id: docId });
+  return NextResponse.json({ ok: true, matched: true, id: docId, session });
 }

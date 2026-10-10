@@ -174,9 +174,48 @@ export const PUSH_COPY = {
   interviewNow: { title: "Group interview", body: "We're waiting for you. Tap to join.", data: { type: "interview_start" } },
   accepted: { title: "KESHAH Creators", body: "You're in. Open KESHAH Creators to get started.", data: { type: "accepted" } },
   contractSent: { title: "Your contract", body: "Your contract is ready to sign", data: { type: "contract" } },
-  bonus100k: { title: "Bonus added", body: "A video passed 100K views. Bonus added.", data: { type: "bonus" } },
-  bonus1m: { title: "Bonus added", body: "A video passed 1M views. Bonus added.", data: { type: "bonus" } },
 } satisfies Record<string, PushMessage>;
+
+export interface BonusPushInfo {
+  /** The view line the video just passed. */
+  kind: "100k" | "1m";
+  /** What this crossing adds: $15 at 100K; at 1M the line becomes $100 in all, so +$85 on top of a 100K already counted. */
+  addedCents: number;
+  /** The video's local posting date (yyyy-mm-dd): its bonus is paid two months later. */
+  postedOn: string;
+  platform: string;
+  /** creators/{id}/posts doc id ("tiktok_123"). */
+  postId: string;
+  url: string;
+}
+
+/** "yyyy-mm" moved by n months. */
+function addMonthsYm(month: string, n: number): string {
+  const [y, m] = month.split("-").map(Number);
+  const idx = y * 12 + (m - 1) + n;
+  return `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, "0")}`;
+}
+
+function monthName(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleString("en-US", { month: "long", timeZone: "UTC" });
+}
+
+/**
+ * A video passed 100K or 1M views. Bonuses for videos posted in month M are
+ * on the invoice for M+1 and paid early M+2 (an October video lands on the
+ * December payout). The data carries the post so a tap opens that video.
+ */
+export function bonusPush(i: BonusPushInfo): PushMessage {
+  const posted = i.postedOn.slice(0, 7);
+  const payout = addMonthsYm(posted, 2);
+  const dollars = `$${(i.addedCents / 100).toFixed(i.addedCents % 100 === 0 ? 0 : 2)}`;
+  return {
+    title: "Bonus added",
+    body: `Your video just passed ${i.kind === "1m" ? "1M" : "100K"} views. +${dollars} on your ${monthName(payout)} payout.`,
+    data: { type: "bonus", post_id: i.postId, platform: i.platform, url: i.url, month: posted, payout_month: payout },
+  };
+}
 
 export function dailyNudge(done: number, of = 5): PushMessage {
   return { title: "Today's videos", body: `${done} of ${of} videos so far today. Deadline 11:59 PM.`, data: { type: "daily_nudge" } };

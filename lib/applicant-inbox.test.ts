@@ -378,3 +378,105 @@ test("check-in: questions, replies outside the window, or without the 1h text ar
   assert.equal(qDoc.interview_checked_in_at, undefined);
   assert.equal(sends, 0);
 });
+
+// ------------------------------------------------------------ booking-text confirmation
+
+test("confirm: a name reply to the booking text confirms once and sends the link with day + time", async () => {
+  const START = Date.parse("2026-10-08T18:00:00.000Z");
+  const iso = "2026-10-08T18:00:00.000Z";
+  const sentAt = START - 20 * 3_600_000;
+  const doc: Record<string, unknown> = {
+    status: "booked",
+    email: "a@b.co",
+    full_name: "Jamie Rivera",
+    calendly_event_start_time: iso,
+    calendly_invitee_timezone: "America/Chicago",
+    calendly_join_url: "https://zoom.us/j/1",
+    interview_booking_text_for: iso,
+    interview_booking_text_claimed_at: sentAt,
+    interview_booking_text_sent_at: sentAt,
+  };
+  const db = fakeDb(doc);
+  const sends: Array<{ to: string; text: string; kind?: string }> = [];
+  const send = (async (o: { to: string; text: string; kind?: string }) => {
+    sends.push(o);
+    return { sent: true as const, id: "interview_x" };
+  }) as unknown as typeof sendInterviewText;
+  const a = app("app1", APPLICANT, "booked", 1);
+  const at = sentAt + 10 * 60_000;
+
+  // A question is left for a person.
+  const q = parseIncoming(nested("c0", at, APPLICANT, "can I reschedule?"))!;
+  assert.equal(await handleCheckIn(db, a, q, at, send), "skipped");
+  assert.equal(doc.interview_confirmed_at, undefined);
+
+  const reply = parseIncoming(nested("c1", at, APPLICANT, "Jamie Rivera"))!;
+  assert.equal(await handleCheckIn(db, a, reply, at, send), "confirmed");
+  assert.equal(doc.interview_confirmed_for, iso);
+  assert.equal(doc.interview_confirm_reply, "Jamie Rivera");
+  assert.ok(doc.interview_confirm_text_sent_at);
+  assert.equal(doc.interview_checked_in_at, undefined);
+  assert.equal(sends.length, 1);
+  assert.equal(sends[0].kind, "confirm_reply");
+  assert.equal(sends[0].text, "Thanks Jamie, you're confirmed. Here's the link for Thursday at 1:00 PM CT: https://zoom.us/j/1");
+
+  // Replying again before the 1h text: nothing more.
+  const again = parseIncoming(nested("c2", at + 60_000, APPLICANT, "Jamie"))!;
+  assert.equal(await handleCheckIn(db, a, again, at + 60_000, send), "skipped");
+  assert.equal(sends.length, 1);
+
+  // After the 1h text (which already had the link): checked in, no duplicate link text.
+  doc.interview_reminders_start = iso;
+  doc.interview_reminder_1h_text_sent_at = "x";
+  const after1h = parseIncoming(nested("c3", START - 50 * 60_000, APPLICANT, "Jamie Rivera"))!;
+  assert.equal(await handleCheckIn(db, a, after1h, START - 50 * 60_000, send), "checked_in");
+  assert.equal(doc.interview_checked_in_for, iso);
+  assert.equal(sends.length, 1);
+});
+
+test("confirm: no join url points to the Calendly email; no booking text means no confirmation", async () => {
+  const START = Date.parse("2026-10-08T18:00:00.000Z");
+  const iso = "2026-10-08T18:00:00.000Z";
+  const sends: string[] = [];
+  const send = (async (o: { text: string }) => {
+    sends.push(o.text);
+    return { sent: true as const, id: "x" };
+  }) as unknown as typeof sendInterviewText;
+  const a = app("app1", APPLICANT, "booked", 1);
+  const base = { status: "booked", email: "a@b.co", full_name: "Jamie Rivera", calendly_event_start_time: iso };
+  const at = START - 5 * 3_600_000;
+  const reply = parseIncoming(nested("d1", at, APPLICANT, "Jamie Rivera"))!;
+
+  // Booked before this shipped (no booking text): left for a person, as before.
+  assert.equal(await handleCheckIn(fakeDb({ ...base }), a, reply, at, send), "skipped");
+
+  const doc: Record<string, unknown> = { ...base, interview_booking_text_for: iso, interview_booking_text_sent_at: "x" };
+  assert.equal(await handleCheckIn(fakeDb(doc), a, reply, at, send), "confirmed");
+  assert.deepEqual(sends, ["Thanks Jamie, you're confirmed for Thursday at 2:00 PM ET. The link is in your Calendly email."]);
+});
+
+test("check-in after the 1h text also confirms someone who hadn't confirmed", async () => {
+  const START = Date.parse("2026-10-08T18:00:00.000Z");
+  const iso = "2026-10-08T18:00:00.000Z";
+  const doc: Record<string, unknown> = {
+    status: "booked",
+    email: "a@b.co",
+    full_name: "Jamie Rivera",
+    calendly_event_start_time: iso,
+    calendly_join_url: "https://zoom.us/j/1",
+    interview_booking_text_for: iso,
+    interview_booking_text_sent_at: "x",
+    interview_reminders_start: iso,
+    interview_reminder_1h_text_sent_at: "x",
+  };
+  let sends = 0;
+  const send = (async () => {
+    sends++;
+    return { sent: true as const, id: "x" };
+  }) as unknown as typeof sendInterviewText;
+  const reply = parseIncoming(nested("f1", START - 40 * 60_000, APPLICANT, "yes"))!;
+  assert.equal(await handleCheckIn(fakeDb(doc), app("app1", APPLICANT, "booked", 1), reply, START - 40 * 60_000, send), "checked_in");
+  assert.equal(doc.interview_checked_in_for, iso);
+  assert.equal(doc.interview_confirmed_for, iso);
+  assert.equal(sends, 1);
+});

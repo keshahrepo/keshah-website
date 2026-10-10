@@ -33,7 +33,8 @@ import type { Firestore } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { emailConfigured, sendEmail } from "@/lib/email";
 import { advanceCreatorStatus, getCreator, getOnboarding, isOnboarded, isYyyyMmDd, listCreators, toPostingDay } from "./db";
-import { BONUS_WINDOW_DAYS, TRIAL_V2_VIDEOS, VIDEOS_PER_WEEKDAY, isWeekday, localDate, trialWindow } from "./pay";
+import type { BonusPushInfo } from "@/lib/push";
+import { BONUS_100K_CENTS, BONUS_1M_TOTAL_CENTS, BONUS_WINDOW_DAYS, TRIAL_V2_VIDEOS, VIDEOS_PER_WEEKDAY, isWeekday, localDate, trialWindow } from "./pay";
 import { fetchRecentPosts, postKey, type FetchPostsResult, type ScrapedPost } from "./scrape";
 import type {
   BonusClaim,
@@ -321,12 +322,46 @@ export interface SyncDeps {
    * App push for a new auto bonus (defaults to lib/push.notify, but only when
    * no `db` was injected, so tests and emulator runs never reach FCM).
    */
-  notifyBonus?: (creator: { id: string; email: string }, kind: "100k" | "1m") => Promise<void>;
+  notifyBonus?: (creator: { id: string; email: string }, info: BonusPushInfo) => Promise<void>;
 }
 
-async function defaultNotifyBonus(creator: { id: string; email: string }, kind: "100k" | "1m"): Promise<void> {
-  const { notify, PUSH_COPY } = await import("@/lib/push");
-  await notify({ creatorId: creator.id, email: creator.email || null }, kind === "1m" ? PUSH_COPY.bonus1m : PUSH_COPY.bonus100k);
+async function defaultNotifyBonus(creator: { id: string; email: string }, info: BonusPushInfo): Promise<void> {
+  const { notify, bonusPush } = await import("@/lib/push");
+  await notify({ creatorId: creator.id, email: creator.email || null }, bonusPush(info));
+}
+
+/** What a video's approved claims pay so far: $100 once any shows 1M, $15 at 100K, else 0. */
+function claimLevelCents(claims: BonusClaim[]): number {
+  const ok = claims.filter((c) => c.status === "approved");
+  if (ok.some((c) => !!c.crossed_1m_on)) return BONUS_1M_TOTAL_CENTS;
+  if (ok.some((c) => !!c.crossed_100k_on || c.views_claimed >= 100_000)) return BONUS_100K_CENTS;
+  return 0;
+}
+
+/**
+ * The push for a new or upgraded auto claim: how much the crossing adds
+ * (the video's level after, less what its claims paid before), or null when
+ * it adds nothing (a manual claim already covered it).
+ */
+export function bonusPushInfo(
+  post: CreatorPost,
+  before: BonusClaim[],
+  after: BonusClaim,
+): BonusPushInfo | null {
+  const key = postKey(post.url, post.platform);
+  const same = (c: BonusClaim) => c.platform === post.platform && postKey(c.video_url, c.platform) === key;
+  const prior = claimLevelCents(before.filter(same));
+  const next = Math.max(prior, claimLevelCents([...before.filter(same), after]));
+  const added = next - prior;
+  if (added <= 0) return null;
+  return {
+    kind: next >= BONUS_1M_TOTAL_CENTS ? "1m" : "100k",
+    addedCents: added,
+    postedOn: after.posted_on || post.local_date,
+    platform: post.platform,
+    postId: postDocId(post.platform, post.post_id),
+    url: post.url,
+  };
 }
 
 export interface PlatformSyncResult {
@@ -481,11 +516,12 @@ export async function syncCreatorPosts(creatorOrId: string | CreatorProfile, dep
         // create() fails if the doc appeared meanwhile (concurrent sync): idempotent.
         try {
           await ref.collection("bonus_claims").doc(a.id).create(a.claim);
+          const info = bonusPushInfo(rec, claims, a.claim);
           claims.push({ ...a.claim, id: a.id });
           result.claims_created.push(a.id);
           const push = deps.notifyBonus ?? (deps.db ? null : defaultNotifyBonus);
-          if (push) {
-            await push({ id: creator.id, email: creator.email }, a.claim.crossed_1m_on ? "1m" : "100k").catch((e) =>
+          if (push && info) {
+            await push({ id: creator.id, email: creator.email }, info).catch((e) =>
               log(`[creator-posts] bonus push failed: ${errMsg(e)}`),
             );
           }
@@ -494,9 +530,12 @@ export async function syncCreatorPosts(creatorOrId: string | CreatorProfile, dep
         }
       } else if (a.op === "upgrade") {
         await ref.collection("bonus_claims").doc(a.id).update(a.patch);
+        const at = claims.findIndex((c) => c.id === a.id);
+        const info = at < 0 ? null : bonusPushInfo(rec, claims, { ...claims[at], ...a.patch });
+        if (at >= 0) claims[at] = { ...claims[at], ...a.patch };
         result.claims_upgraded.push(a.id);
         const push = deps.notifyBonus ?? (deps.db ? null : defaultNotifyBonus);
-        if (push) await push({ id: creator.id, email: creator.email }, "1m").catch((e) => log(`[creator-posts] bonus push failed: ${errMsg(e)}`));
+        if (push && info) await push({ id: creator.id, email: creator.email }, info).catch((e) => log(`[creator-posts] bonus push failed: ${errMsg(e)}`));
       }
     }
   };

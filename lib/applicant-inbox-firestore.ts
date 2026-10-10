@@ -30,9 +30,17 @@ import {
   CHECKED_IN_FOR_FIELD,
   CHECKIN_REPLY_TEXT_FIELD,
   CHECKIN_TEXT_SENT_FIELD,
+  CONFIRMED_FIELD,
+  CONFIRMED_FOR_FIELD,
+  CONFIRM_REPLY_TEXT_FIELD,
+  CONFIRM_TEXT_SENT_FIELD,
   checkInDue,
   checkInReplyText,
+  confirmDue,
+  confirmReplyText,
+  confirmedForBooking,
   firstNameOf,
+  formatDayAndTime,
   formatShortTime,
   looksLikeCheckIn,
 } from "./interview-reminders";
@@ -146,9 +154,15 @@ async function emailNotify(app: AppLite, texts: Parameters<typeof notificationEm
 }
 
 /**
- * A reply to the 1h text that looks like a check-in (their name, or a short
- * yes/here) checks the applicant in (once per booking) and gets the join link
- * back. Anything else is left unread in the inbox (and emailed) for a person. Claimed in a transaction so overlapping syncs can't
+ * A reply that looks like their name (or a short yes/here):
+ *   - after the booking text, before the 1h text: confirms them for that
+ *     booking and sends the join link ("you're confirmed").
+ *   - after the 1h text (the 70 min before the start): checks them in (and
+ *     confirms them if they weren't). Someone already confirmed got the link
+ *     in the 1h text within the last hour, so they get no second text;
+ *     otherwise they get the link back ("you're checked in").
+ * Once per booking each. Anything else is left unread in the inbox (and
+ * emailed) for a person. Claimed in a transaction so overlapping syncs can't
  * double send.
  */
 export async function handleCheckIn(
@@ -157,37 +171,52 @@ export async function handleCheckIn(
   reply: IncomingText,
   nowMs: number,
   send: typeof sendInterviewText = sendInterviewText,
-): Promise<"checked_in" | "skipped"> {
+): Promise<"checked_in" | "confirmed" | "skipped"> {
   const ref = db.collection(APPLICATIONS).doc(app.id);
   let snapshot: Record<string, unknown> = {};
+  let action = null as "checkin" | "checkin_silent" | "confirm" | null;
   const won = await claimOnce(db, ref, (cur) => {
-    if (!checkInDue(cur, reply.received_ms, nowMs)) return null;
+    const startIso = cur.calendly_event_start_time;
+    const checkIn = checkInDue(cur, reply.received_ms, nowMs);
+    const confirm = !checkIn && confirmDue(cur, reply.received_ms, nowMs);
+    if (!checkIn && !confirm) return null;
     // Questions and anything else stay in the inbox for a person to answer.
     if (!looksLikeCheckIn(reply.text, cur.full_name)) return null;
     snapshot = cur;
+    const at = Timestamp.fromMillis(reply.received_ms);
+    if (confirm) {
+      action = "confirm";
+      return { [CONFIRMED_FIELD]: at, [CONFIRMED_FOR_FIELD]: startIso, [CONFIRM_REPLY_TEXT_FIELD]: reply.text.slice(0, 500) };
+    }
+    const alreadyConfirmed = confirmedForBooking(cur, String(startIso));
+    action = alreadyConfirmed ? "checkin_silent" : "checkin";
     return {
-      [CHECKED_IN_FIELD]: Timestamp.fromMillis(reply.received_ms),
-      [CHECKED_IN_FOR_FIELD]: cur.calendly_event_start_time,
+      [CHECKED_IN_FIELD]: at,
+      [CHECKED_IN_FOR_FIELD]: startIso,
       [CHECKIN_REPLY_TEXT_FIELD]: reply.text.slice(0, 500),
+      ...(alreadyConfirmed ? {} : { [CONFIRMED_FIELD]: at, [CONFIRMED_FOR_FIELD]: startIso }),
     };
   });
-  if (!won) return "skipped";
+  if (!won || !action) return "skipped";
+  if (action === "checkin_silent") return "checked_in";
   const startMs = Date.parse(String(snapshot.calendly_event_start_time));
-  const text = checkInReplyText(
-    firstNameOf(snapshot),
-    formatShortTime(startMs, snapshot.calendly_invitee_timezone),
-    (snapshot.calendly_join_url as string) || null,
-  );
-  const r = await send({ to: reply.phone, text, ref: app.id, kind: "checkin_reply" });
+  const first = firstNameOf(snapshot);
+  const joinUrl = (snapshot.calendly_join_url as string) || null;
+  const tz = snapshot.calendly_invitee_timezone;
+  const isConfirm = action === "confirm";
+  const text = isConfirm
+    ? confirmReplyText(first, formatDayAndTime(startMs, tz, nowMs), joinUrl)
+    : checkInReplyText(first, formatShortTime(startMs, tz), joinUrl);
+  const r = await send({ to: reply.phone, text, ref: app.id, kind: isConfirm ? "confirm_reply" : "checkin_reply" });
   if (textWasSent(r)) {
-    await ref.set({ [CHECKIN_TEXT_SENT_FIELD]: Timestamp.now() }, { merge: true });
+    await ref.set({ [isConfirm ? CONFIRM_TEXT_SENT_FIELD : CHECKIN_TEXT_SENT_FIELD]: Timestamp.now() }, { merge: true });
   } else {
-    // Stay checked in; the reply won't come round again, so say why in the doc.
+    // Stay confirmed / checked in; the reply won't come round again, so say why in the doc.
     const why = "error" in r ? r.error : "skipped" in r ? r.skipped : "not sent";
-    await ref.set({ interview_checkin_text_error: why }, { merge: true });
-    throw new Error(`check-in reply not sent: ${why}`);
+    await ref.set({ [isConfirm ? "interview_confirm_text_error" : "interview_checkin_text_error"]: why }, { merge: true });
+    throw new Error(`${isConfirm ? "confirm" : "check-in"} reply not sent: ${why}`);
   }
-  return "checked_in";
+  return isConfirm ? "confirmed" : "checked_in";
 }
 
 export async function runApplicantInboxSync(db: Firestore = getFirebaseAdmin().db): Promise<SyncResult> {

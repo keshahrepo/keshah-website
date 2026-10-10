@@ -30,6 +30,8 @@ export type SessionRow = {
   noshow_text_sent_at?: string | null;
   reminder_1h_text_sent_at?: string | null;
   checked_in_at?: string | null;
+  confirmed_at?: string | null;
+  booking_text_sent_at?: string | null;
 };
 
 type SessionMeta = {
@@ -111,6 +113,8 @@ function Badge({ text, title, tone }: { text: string; title?: string; tone?: "gr
 function rowBadges(r: SessionRow): { text: string; title: string; tone?: "green" }[] {
   const out: { text: string; title: string; tone?: "green" }[] = [];
   if (r.checked_in_at) out.push({ text: "Checked in", title: `Replied to the 1h text ${fmt(r.checked_in_at)}`, tone: "green" });
+  else if (r.confirmed_at) out.push({ text: "Confirmed", title: `Replied to the booking text ${fmt(r.confirmed_at)}`, tone: "green" });
+  if (r.booking_text_sent_at) out.push({ text: "Booking text", title: `Booking text sent ${fmt(r.booking_text_sent_at)}` });
   if (r.reminder_24h_sent_at) out.push({ text: "24h reminder", title: `24h reminder sent ${fmt(r.reminder_24h_sent_at)}` });
   if (r.reminder_1h_sent_at)
     out.push({

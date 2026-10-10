@@ -9,7 +9,9 @@ import {
   SESSIONS,
   getSessionApplicants,
   interviewUrl,
+  isAcceptingNow,
   isoOrNull,
+  sessionClosesAtMs,
   resolveSession,
   sessionFromDoc,
   VIDEO_SLUG,
@@ -61,6 +63,15 @@ export async function GET(
             x.interview_checked_in_for && x.interview_checked_in_for === x.calendly_event_start_time
               ? isoOrNull(x.interview_checked_in_at)
               : null,
+          // Replied with their name to the booking text, for the booking they have now.
+          confirmed_at:
+            x.interview_confirmed_for && x.interview_confirmed_for === x.calendly_event_start_time
+              ? isoOrNull(x.interview_confirmed_at)
+              : null,
+          booking_text_sent_at:
+            x.interview_booking_text_for && x.interview_booking_text_for === x.calendly_event_start_time
+              ? isoOrNull(x.interview_booking_text_sent_at)
+              : null,
         };
       })
       // Newest submissions first, then people who opened the page, then the rest.
@@ -77,6 +88,9 @@ export async function GET(
         starts_at: new Date(s.starts_at_ms).toISOString(),
         follow_up_hours: s.follow_up_hours,
         is_open: s.is_open,
+        // Accepting videos right now, and when the link stops (null = never).
+        accepting: isAcceptingNow(s),
+        closes_at: s.slug === VIDEO_SLUG ? null : new Date(sessionClosesAtMs(s)).toISOString(),
         url: interviewUrl(s.slug),
       },
       total: rows.length,

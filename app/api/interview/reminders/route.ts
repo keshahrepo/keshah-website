@@ -1,13 +1,22 @@
 // Cron (every minute, see vercel.json): pre-interview reminders for
 // applicants with a Calendly booking coming up.
 //
-//   59 to 61 min before                 text only: "reply with your full name to check in" (no link)
+//   3 to 30 min after booking           booking text: "reply with your full name to confirm your spot"
+//                                       (only bookings recorded in the last 30 min, interview 90+ min away;
+//                                       lib/interview-booking-text.ts)
+//   59 to 61 min before                 text only, with the link (+ "reply with your full name to
+//                                       confirm" if they haven't confirmed yet)
 //   at the start time (0 to +2 min)    text only: "we're waiting for you" + join link
 //   (Calendly already emails the 24h / 1h reminders, so we don't.)
 //   Both also go as a push to the KESHAH Creators app when the applicant has
 //   it installed (once per booking, mobile_push_<kind>_for = start).
-// A reply to the 1h text checks the applicant in and gets the join link
-// back (handled by the inbox sync, lib/applicant-inbox-firestore.ts).
+// A name reply to the booking text confirms them (and gets the join link
+// back); one to the 1h text checks them in (handled by the inbox sync,
+// lib/applicant-inbox-firestore.ts).
+//
+// Every 5 minutes it also makes sure each Calendly booking in the next 48h
+// has its interview session (ensureSessionsForBookings; the webhook normally
+// already made it).
 //
 // After that it syncs applicant text replies into the dashboard inbox
 // (lib/applicant-inbox-firestore.ts). A sync failure is reported under
@@ -27,7 +36,8 @@ import { FieldValue, Timestamp, type DocumentReference, type Firestore } from "f
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { requireCronSecret } from "@/lib/support/auth";
 import { emailConfigured, sendEmail } from "@/lib/email";
-import { APPLICATIONS, claimOnce, releaseClaim } from "@/lib/interview";
+import { APPLICATIONS, claimOnce, ensureSessionsForBookings, releaseClaim } from "@/lib/interview";
+import { autoEnsureDue } from "@/lib/interview-auto";
 import {
   CREATOR_FROM_NAME,
   REMINDER_FIELDS,
@@ -39,7 +49,9 @@ import {
   REMINDER_START_FIELD,
   firstNameOf,
   formatShortTime,
+  confirmedForBooking,
   got1hText,
+  gotBookingText,
   isReminderEligible,
   oneHourText,
   pickReminder,
@@ -48,6 +60,7 @@ import {
 } from "@/lib/interview-reminders";
 import { normalizePhone, sendInterviewText, textWasSent } from "@/lib/sms";
 import { runApplicantInboxSync } from "@/lib/applicant-inbox-firestore";
+import { sendBookingTexts } from "@/lib/interview-booking-text";
 import { notify, PUSH_COPY } from "@/lib/push";
 
 export const dynamic = "force-dynamic";
@@ -146,8 +159,11 @@ export async function GET(req: Request) {
       }
       const text =
         kind === "1h"
-          ? oneHourText(first, formatShortTime(startMs, x.calendly_invitee_timezone))
-          : startingNowText(first, joinUrl, got1hText(x, startIso));
+          ? oneHourText(first, formatShortTime(startMs, x.calendly_invitee_timezone), joinUrl, {
+              confirmed: confirmedForBooking(x, startIso),
+              introduced: gotBookingText(x, startIso),
+            })
+          : startingNowText(first, joinUrl, got1hText(x, startIso) || gotBookingText(x, startIso));
       const r = await sendInterviewText({ to: phone, text, ref: d.id, kind: kind === "1h" ? "interview_1h" : "interview_start" });
       row.text = r;
       if (textWasSent(r)) {
@@ -158,6 +174,27 @@ export async function GET(req: Request) {
         await releaseClaim(d.ref, field).catch(() => {});
         row.result = "failed";
         if ("error" in r) errors.push(`${kind} text ${phone}: ${r.error}`);
+      }
+    }
+
+    // Booking confirmation texts (a few minutes after someone books).
+    try {
+      const b = await sendBookingTexts(db, now, { dry });
+      report.push(...b.report);
+      errors.push(...b.errors);
+    } catch (e) {
+      errors.push(`booking texts: ${e instanceof Error ? e.message : String(e)}`);
+    }
+
+    // Safety net for automatic interview sessions (the Calendly webhook makes
+    // them as bookings come in): every 5 minutes, or ?ensure=1. Can never
+    // fail the reminders.
+    let sessions: Record<string, unknown> | null = null;
+    if (autoEnsureDue(now) || new URL(req.url).searchParams.get("ensure") === "1") {
+      try {
+        sessions = await ensureSessionsForBookings(db, now, dry);
+      } catch (e) {
+        sessions = { error: e instanceof Error ? e.message : String(e) };
       }
     }
 
@@ -173,7 +210,7 @@ export async function GET(req: Request) {
       }
     }
 
-    return NextResponse.json({ ok: errors.length === 0, dry, email_configured: canEmail, checked: snap.size, report, errors, inbox });
+    return NextResponse.json({ ok: errors.length === 0, dry, email_configured: canEmail, checked: snap.size, report, errors, sessions, inbox });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ error: msg, report, errors }, { status: 500 });

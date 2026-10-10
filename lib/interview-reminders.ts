@@ -1,10 +1,14 @@
 // Pure helpers for group-interview reminders and no-show follow-ups.
 // No Firestore here, so it's unit tested in interview-reminders.test.ts.
 //
-// Reminders (app/api/interview/reminders, every 5 min) go to applicants with
+// Reminders (app/api/interview/reminders, every minute) go to applicants with
 // a Calendly booking in the future:
+//   booking  text 3 to 30 min after the booking is recorded (booked_at), only
+//            when the interview is 90+ min away ("reply with your full name to
+//            confirm your spot"). A name reply confirms them for that booking.
 //   24h   when 23h to 25h remain
-//   1h    text only, 59 to 61 min before ("reply with your full name to check in")
+//   1h    text only, 59 to 61 min before, with the link (+ "reply with your
+//         full name to confirm" when they haven't confirmed yet)
 //   now   from 2 min before the start to 6 min after
 // Each is sent at most once per booking. The sent markers are tied to the
 // booked start time (interview_reminders_start) so a reschedule gets a fresh
@@ -39,6 +43,19 @@ export const CHECKED_IN_FOR_FIELD = "interview_checked_in_for";
 export const CHECKIN_REPLY_TEXT_FIELD = "interview_checkin_reply";
 export const CHECKIN_TEXT_SENT_FIELD = "interview_checkin_text_sent_at";
 export const NOSHOW_EMAIL_FIELD = "interview_noshow_email_sent_at";
+
+// Booking confirmation text (sent a few minutes after the booking is recorded).
+/** Claim: the booked start the booking text is for (a reschedule gets a fresh one). */
+export const BOOKING_TEXT_FOR_FIELD = "interview_booking_text_for";
+/** When the claim was taken (the send follows straight after). */
+export const BOOKING_TEXT_CLAIMED_FIELD = "interview_booking_text_claimed_at";
+/** Set once the text actually went out. */
+export const BOOKING_TEXT_SENT_FIELD = "interview_booking_text_sent_at";
+/** A name reply to the booking text (or the 1h text) confirms them for that booking. */
+export const CONFIRMED_FIELD = "interview_confirmed_at";
+export const CONFIRMED_FOR_FIELD = "interview_confirmed_for";
+export const CONFIRM_REPLY_TEXT_FIELD = "interview_confirm_reply";
+export const CONFIRM_TEXT_SENT_FIELD = "interview_confirm_text_sent_at";
 export const NOSHOW_TEXT_FIELD = "interview_noshow_text_sent_at";
 
 /** [minRemaining, maxRemaining] in ms, inclusive. Negative = after start. */
@@ -54,6 +71,16 @@ export const REMINDER_WINDOWS: Record<ReminderKind, [number, number]> = {
 /** How far back / ahead the cron needs to look for bookings. */
 export const REMINDER_LOOKBACK_MS = 3 * MIN;
 export const REMINDER_LOOKAHEAD_MS = 25 * HOUR;
+
+/** The booking text goes out this long after booked_at at the earliest... */
+export const BOOKING_TEXT_DELAY_MS = 3 * MIN;
+/**
+ * ...and never later than this. Also what keeps bookings recorded before
+ * this shipped from all getting one at once: only fresh bookings qualify.
+ */
+export const BOOKING_TEXT_MAX_AGE_MS = 30 * MIN;
+/** Interviews starting sooner than this skip it (the 1h / start texts cover them). */
+export const BOOKING_TEXT_MIN_LEAD_MS = 90 * MIN;
 
 /** Statuses that never get reminders. */
 const INACTIVE = new Set(["denied", "rejected", "withdrawn", "accepted"]);
@@ -142,6 +169,19 @@ export function formatShortTime(startMs: number, timeZone?: unknown): string {
   return `${time} ${zone}`.replace(/\s+/g, " ").trim();
 }
 
+/**
+ * "Thursday at 6:00 PM CT" in the invitee's timezone (else ET). Six or more
+ * days out the weekday alone is ambiguous, so the date is added:
+ * "Thursday, October 15 at 6:00 PM CT".
+ */
+export function formatDayAndTime(startMs: number, timeZone?: unknown, nowMs: number = Date.now()): string {
+  const tz = validTimeZone(timeZone) ? timeZone : "America/New_York";
+  const opts: Intl.DateTimeFormatOptions =
+    startMs - nowMs >= 6 * 24 * HOUR ? { timeZone: tz, weekday: "long", month: "long", day: "numeric" } : { timeZone: tz, weekday: "long" };
+  const day = new Intl.DateTimeFormat("en-US", opts).format(new Date(startMs));
+  return `${day} at ${formatShortTime(startMs, timeZone)}`;
+}
+
 // ---------------------------------------------------------------- copy
 
 export const WHAT_TO_BRING =
@@ -197,9 +237,38 @@ export function startingNowText(first: string, joinUrl?: string | null, alreadyI
   ].join("\n\n");
 }
 
-/** 1 hour before. No link: iMessage disables links from unknown senders until they reply. */
-export function oneHourText(first: string, time: string): string {
-  return `Hi ${first || "there"}, this is McKenzie, creator coordinator at KESHAH.\n\nYour group interview starts in 1 hour, at ${time}.\n\nReply with your full name to check in.`;
+const MCKENZIE_INTRO = "this is McKenzie, creator coordinator at KESHAH.";
+
+/** Booking confirmation, a few minutes after they book. */
+export function bookingText(first: string, when: string): string {
+  return `Hi ${first || "there"}, ${MCKENZIE_INTRO} Thanks for applying, you're booked for the group interview on ${when}. Reply with your full name to confirm your spot.`;
+}
+
+/** Reply to a name reply to the booking text. */
+export function confirmReplyText(first: string, when: string, joinUrl?: string | null): string {
+  const name = first || "there";
+  return joinUrl
+    ? `Thanks ${name}, you're confirmed. Here's the link for ${when}: ${joinUrl}`
+    : `Thanks ${name}, you're confirmed for ${when}. The link is in your Calendly email.`;
+}
+
+/**
+ * 1 hour before. McKenzie introduces herself only if this is the first text
+ * for the booking; people who haven't confirmed are asked to.
+ */
+export function oneHourText(
+  first: string,
+  time: string,
+  joinUrl?: string | null,
+  o: { confirmed?: boolean; introduced?: boolean } = {},
+): string {
+  const name = first || "there";
+  const hi = o.introduced ? `Hi ${name}, ` : `Hi ${name}, ${MCKENZIE_INTRO} `;
+  const link = joinUrl ? `Here's the link: ${joinUrl}` : "The link is in your Calendly email.";
+  const ask = o.confirmed ? "" : "\n\nReply with your full name to confirm you're coming.";
+  // "Hi Sam, your group..." after a plain greeting; "...at KESHAH. Your group..." after the intro.
+  const body = `${o.introduced ? "your" : "Your"} group interview starts in 1 hour, at ${time}.`;
+  return `${hi}${body} ${link}${ask}`;
 }
 
 export function checkInReplyText(first: string, time: string, joinUrl?: string | null): string {
@@ -211,6 +280,70 @@ export function checkInReplyText(first: string, time: string, joinUrl?: string |
 /** Did the 1h text go out for THIS booking (not one before a reschedule)? */
 export function got1hText(app: Record<string, unknown>, startIso: string): boolean {
   return present(app[REMINDER_1H_TEXT_FIELD]) && app[REMINDER_START_FIELD] === startIso;
+}
+
+function msOf(v: unknown): number {
+  if (v && typeof v === "object" && "toMillis" in (v as object)) return (v as { toMillis: () => number }).toMillis();
+  if (typeof v === "string") return Date.parse(v) || 0;
+  if (typeof v === "number") return v;
+  return 0;
+}
+
+function bookedStartIso(app: Record<string, unknown>): string {
+  return typeof app.calendly_event_start_time === "string" ? app.calendly_event_start_time : "";
+}
+
+/** Did the booking text go out for THIS booking (not one before a reschedule)? */
+export function gotBookingText(app: Record<string, unknown>, startIso: string): boolean {
+  return !!startIso && present(app[BOOKING_TEXT_SENT_FIELD]) && app[BOOKING_TEXT_FOR_FIELD] === startIso;
+}
+
+/** Confirmed (a name reply) for THIS booking. */
+export function confirmedForBooking(app: Record<string, unknown>, startIso: string): boolean {
+  return !!startIso && present(app[CONFIRMED_FIELD]) && app[CONFIRMED_FOR_FIELD] === startIso;
+}
+
+/** Checked in for THIS booking. */
+export function checkedInFor(app: Record<string, unknown>, startIso: string): boolean {
+  return !!startIso && present(app[CHECKED_IN_FIELD]) && app[CHECKED_IN_FOR_FIELD] === startIso;
+}
+
+/**
+ * Should the booking text go out now? Once per booked start, 3 to 30 min
+ * after the booking was recorded, and only when the interview is still 90+
+ * min away. Bookings recorded more than 30 min ago (e.g. before this
+ * shipped) never get one.
+ */
+export function bookingTextDue(app: Record<string, unknown>, nowMs: number): boolean {
+  if (!isReminderEligible(app)) return false;
+  const startIso = bookedStartIso(app);
+  const startMs = startIso ? Date.parse(startIso) || 0 : 0;
+  if (!startMs) return false;
+  if (app[BOOKING_TEXT_FOR_FIELD] === startIso) return false; // claimed or sent for this booking
+  const bookedMs = msOf(app.booked_at);
+  if (!bookedMs) return false;
+  const age = nowMs - bookedMs;
+  if (age < BOOKING_TEXT_DELAY_MS || age > BOOKING_TEXT_MAX_AGE_MS) return false;
+  return startMs - nowMs >= BOOKING_TEXT_MIN_LEAD_MS;
+}
+
+/**
+ * Should a reply received at replyMs confirm this applicant? Only after the
+ * booking text for their current booking went out, before the interview
+ * starts, and when they aren't confirmed or checked in for it yet. (After the
+ * 1h text, checkInDue takes over.)
+ */
+export function confirmDue(app: Record<string, unknown>, replyMs: number, nowMs: number): boolean {
+  if (!isReminderEligible(app)) return false;
+  const startIso = bookedStartIso(app);
+  const startMs = startIso ? Date.parse(startIso) || 0 : 0;
+  if (!startMs) return false;
+  if (!gotBookingText(app, startIso)) return false;
+  if (confirmedForBooking(app, startIso) || checkedInFor(app, startIso)) return false;
+  // A reply sent before the booking text isn't an answer to it.
+  const claimedMs = msOf(app[BOOKING_TEXT_CLAIMED_FIELD]);
+  if (claimedMs && replyMs < claimedMs) return false;
+  return replyMs < startMs && nowMs < startMs;
 }
 
 const CHECKIN_AFFIRMATIONS = new Set([

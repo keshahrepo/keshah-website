@@ -12,8 +12,12 @@
  *     plus trial pay (the same "Next payout" the creator sees);
  *   - a past month: its invoice total, else the month's summary;
  *   - all time: every month added up (the current month as above).
- * Brought in = RevenueCat proceeds in the period from users whose attribution
- * campaign is one of the creator's campaign tags (RevenueCat's own split).
+ * Proceeds (broughtInUsd, the field keeps its old name) = RevenueCat proceeds in
+ * the period from users whose attribution campaign is one of the creator's
+ * campaign tags (RevenueCat's own split).
+ *
+ * Top videos = their 5 most-viewed videos posted in the period, a TikTok and an
+ * Instagram post of the same video counted once (see ./top-videos.ts).
  */
 import {
   attributionFor,
@@ -30,7 +34,8 @@ import { db } from "@/lib/creators/admin";
 import { CREATORS_COLLECTION } from "@/lib/creators/db";
 import type { MonthSummary } from "@/lib/creators/pay";
 import { payProfileOf } from "@/lib/creators/admin";
-import { clampStart } from "./start";
+import { ALL_TIME_START, clampStart } from "./start";
+import { bonusByPost, pairVideos, topByViews, TOP_VIDEOS, type PostLite, type TopVideo } from "./top-videos";
 
 export interface FounderCreatorRow {
   id: string;
@@ -50,7 +55,7 @@ export interface FounderCreatorRow {
   postedDays: number;
   expectedDays: number;
   missedDays: number;
-  /** RevenueCat proceeds from their campaigns in the period; null when RevenueCat didn't answer. */
+  /** Proceeds: RevenueCat proceeds from their campaigns in the period; null when RevenueCat didn't answer. */
   broughtInUsd: number | null;
   trials: number;
   paidUsers: number;
@@ -60,9 +65,14 @@ export interface FounderCreatorRow {
   videos: number;
   /** Views on their posts from the period (TikTok + Instagram, current counts). */
   views: number;
+  /** Their most-viewed video in the period (kept for older app builds; same as topVideos[0], one platform). */
   topVideo: { url: string; platform: string; views: number; thumbnail: string | null } | null;
+  /** Their 5 most-viewed videos posted in the period, TikTok + Instagram of one video counted once. */
+  topVideos: TopVideo[];
   /** Cash: every invoice, newest first (an invoice for month M is paid early in M+1). */
   payouts: Payout[];
+  /** The current month's invoice as it stands (paid early next month), split like an invoice: base / trial for this month, bonuses from last month's videos. Null once invoiced or when the period doesn't include this month. */
+  upcomingPayout: { month: string; totalCents: number; baseCents: number; bonusCents: number; trialCents: number; otherCents: number } | null;
   /** Cash paid out in the period: invoices whose payout month is in it (all of them for all time). */
   paidOutCents: number;
   /** Installs from their link in the period (RevenueCat new customers on their campaigns). */
@@ -160,6 +170,7 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
   let expected = 0;
   let missed = 0;
   let level: number | null = null;
+  let upcomingPayout: FounderCreatorRow["upcomingPayout"] = null;
   for (const m of months) {
     const s = summaryFor(c, h, m);
     if (!s) continue;
@@ -167,6 +178,16 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
     const inv = h.invoices.find((i) => i.month === m && i.status !== "draft");
     const p = monthPay(s, current);
     payoutCents += !current && inv ? inv.total_cents : p.baseCents + p.bonusCents + p.trialCents + p.adjustmentCents;
+    if (current && !inv) {
+      upcomingPayout = {
+        month: m,
+        totalCents: p.baseCents + p.bonusCents + p.trialCents + p.adjustmentCents,
+        baseCents: p.baseCents,
+        bonusCents: p.bonusCents,
+        trialCents: p.trialCents,
+        otherCents: p.adjustmentCents,
+      };
+    }
     // Bonuses earned by THIS month's videos (they're settled on next month's invoice).
     const earned = bonusLinesForMonth(h.bonusClaims, addMonths(m, 1)).reduce((a, l) => a + l.amount_cents, 0);
     const off = Number(offSystem[m] ?? 0) || 0;
@@ -187,7 +208,8 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
     if (current || m === months[months.length - 1]) level = s.levelBaseCents;
   }
   const [from, to] = period === "all" ? [0, Date.now() + DAY_MS] : monthWindow(period);
-  const fromDate = new Date(from).toISOString().slice(0, 10);
+  // All time starts at ALL_TIME_START (lib/founder/start.ts) for posts too.
+  const fromDate = clampStart(new Date(from).toISOString().slice(0, 10));
   const toDate = new Date(to).toISOString().slice(0, 10);
   const payouts: Payout[] = h.invoices
     .filter((inv) => inv.status !== "draft")
@@ -232,17 +254,19 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
       })
     : null;
   const broughtIn = byCampaign === null ? null : c.campaign_tags.reduce((a, t) => a + (byCampaign.get(t.trim().toLowerCase()) ?? 0), 0);
+  const postFields = ["platform", "url", "views", "handle", "thumbnail_url", "local_date", "posted_at", "pinned"];
   const [attr, postsSnap] = await Promise.all([
     attributionFor(c.campaign_tags, from, to),
     period === "all"
-      ? db().collection(CREATORS_COLLECTION).doc(c.id).collection("posts").select("platform", "url", "views", "handle", "thumbnail_url", "local_date", "pinned").get()
-      : db().collection(CREATORS_COLLECTION).doc(c.id).collection("posts").where("local_date", ">=", fromDate).where("local_date", "<", toDate).select("platform", "url", "views", "handle", "thumbnail_url", "local_date", "pinned").get(),
+      ? db().collection(CREATORS_COLLECTION).doc(c.id).collection("posts").where("local_date", ">=", ALL_TIME_START).select(...postFields).get()
+      : db().collection(CREATORS_COLLECTION).doc(c.id).collection("posts").where("local_date", ">=", fromDate).where("local_date", "<", toDate).select(...postFields).get(),
   ]);
   // Only posts from their current handles (an old account's posts stay stored but don't count).
   const norm = (h: unknown) => String(h ?? "").trim().replace(/^@/, "").toLowerCase();
   const handles: Record<string, string> = { tiktok: norm(c.tiktok_handle), instagram: norm(c.instagram_handle) };
   let views = 0;
   let top: FounderCreatorRow["topVideo"] = null;
+  const counted: PostLite[] = [];
   for (const d of postsSnap.docs) {
     const x = d.data();
     const want = handles[String(x.platform)];
@@ -251,7 +275,16 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
     const v = Number(x.views ?? 0) || 0;
     views += v;
     if (!top || v > top.views) top = { url: String(x.url ?? ""), platform: String(x.platform ?? ""), views: v, thumbnail: (x.thumbnail_url as string) || null };
+    counted.push({
+      platform: String(x.platform ?? ""),
+      url: String(x.url ?? ""),
+      views: v,
+      postedAt: String(x.posted_at ?? ""),
+      localDate: String(x.local_date ?? ""),
+      thumbnail: (x.thumbnail_url as string) || null,
+    });
   }
+  const topVideos = topByViews(pairVideos(counted, bonusByPost(h.bonusClaims)));
   // Videos per day: the posting log, or (days before the log existed, e.g. Isai's
   // September) the synced posts: a video = one TikTok + one Instagram post that day.
   const logged = new Map<string, number>();
@@ -298,7 +331,9 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
     videos,
     views,
     topVideo: top,
+    topVideos,
     payouts,
+    upcomingPayout,
     paidOutCents,
     installs: value ? value.customers : null,
     rpiUsd: value?.perUserUsd ?? null,
@@ -306,6 +341,16 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
     cpiUsd: value && value.customers > 0 ? payCents / 100 / value.customers : null,
     countryGroups,
   };
+}
+
+/**
+ * The program's 5 most-viewed videos in the period, across every creator. Each
+ * row already holds that creator's top 5, so the overall top 5 is among them.
+ * Rows cached before topVideos existed contribute nothing.
+ */
+export function programTopVideos(rows: FounderCreatorRow[]): TopVideo[] {
+  const all = rows.flatMap((r) => (r.topVideos ?? []).map((v) => ({ ...v, creatorId: r.id, creatorName: r.name })));
+  return topByViews(all, TOP_VIDEOS);
 }
 
 /**

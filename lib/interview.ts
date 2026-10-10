@@ -11,7 +11,17 @@
 //     opened the page yet).
 
 import type { Firestore, DocumentSnapshot, DocumentReference } from "firebase-admin/firestore";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import {
+  AUTO_LOOKAHEAD_MS,
+  AUTO_LOOKBACK_MS,
+  AUTO_SLOT_TOLERANCE_MS,
+  autoSessionSlug,
+  autoSessionSlugWithYear,
+  autoSessionTitle,
+  missingSessionStarts,
+  sameSlot,
+} from "./interview-auto";
 
 export const SESSIONS = "interview_sessions";
 export const APPLICATIONS = "careers_applications";
@@ -230,4 +240,92 @@ export async function getInterviewRecordingUrl(db: Firestore): Promise<string | 
   const snap = await db.collection(PORTAL_SETTINGS.collection).doc(PORTAL_SETTINGS.doc).get();
   const v = snap.exists ? snap.get(RECORDING_URL_FIELD) : null;
   return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
+// ---------------------------------------------------------------- automatic sessions
+
+/** Stored sessions whose start falls in [loMs, hiMs]. */
+async function sessionsBetween(db: Firestore, loMs: number, hiMs: number): Promise<InterviewSession[]> {
+  const snap = await db
+    .collection(SESSIONS)
+    .where("starts_at", ">=", Timestamp.fromMillis(loMs))
+    .where("starts_at", "<=", Timestamp.fromMillis(hiMs))
+    .get();
+  return snap.docs.map((d) => sessionFromDoc(d)).filter((s): s is InterviewSession => !!s);
+}
+
+/**
+ * Make sure a session exists for a Calendly start time, so the founder never
+ * has to create one. A session already within ±30 min (auto or made by hand)
+ * counts. Otherwise creates `oct-16-6pm` (deterministic, so the webhook and
+ * the cron can't create two). Idempotent; returns the session's slug.
+ */
+export async function ensureSessionForStart(
+  db: Firestore,
+  start: string | number | null | undefined,
+): Promise<{ slug: string; created: boolean } | null> {
+  const startMs = typeof start === "number" ? start : Date.parse(start ?? "") || 0;
+  if (!startMs) return null;
+  const near = await sessionsBetween(db, startMs - AUTO_SLOT_TOLERANCE_MS, startMs + AUTO_SLOT_TOLERANCE_MS);
+  if (near.length) {
+    near.sort((a, b) => Math.abs(a.starts_at_ms - startMs) - Math.abs(b.starts_at_ms - startMs));
+    return { slug: near[0].slug, created: false };
+  }
+  for (const slug of [autoSessionSlug(startMs), autoSessionSlugWithYear(startMs)]) {
+    if (slug === LIVE_SLUG || slug === VIDEO_SLUG) continue;
+    const ref = db.collection(SESSIONS).doc(slug);
+    try {
+      await ref.create({
+        slug,
+        title: autoSessionTitle(startMs),
+        starts_at: Timestamp.fromMillis(startMs),
+        follow_up_hours: 24,
+        is_open: true,
+        auto: true,
+        created_at: FieldValue.serverTimestamp(),
+      });
+      return { slug, created: true };
+    } catch (e) {
+      // ALREADY_EXISTS (6): someone else just made it, or the slug belongs to
+      // another year's session. Same slot is fine; otherwise try with the year.
+      if ((e as { code?: number }).code !== 6) throw e;
+      const existing = sessionFromDoc(await ref.get());
+      if (existing && sameSlot(existing.starts_at_ms, startMs)) return { slug, created: false };
+    }
+  }
+  return null;
+}
+
+/**
+ * Safety net for the reminders cron: every booking starting from 2h ago to
+ * 48h ahead has a session. One query over bookings (start time only) and one
+ * over sessions; writes only for the missing ones. `dry` reports without
+ * writing.
+ */
+export async function ensureSessionsForBookings(
+  db: Firestore,
+  nowMs: number,
+  dry = false,
+): Promise<{ checked: number; missing: string[]; created: string[] }> {
+  const lo = nowMs - AUTO_LOOKBACK_MS;
+  const hi = nowMs + AUTO_LOOKAHEAD_MS;
+  const booked = await db
+    .collection(APPLICATIONS)
+    .where("calendly_event_start_time", ">=", new Date(lo).toISOString())
+    .where("calendly_event_start_time", "<=", new Date(hi).toISOString())
+    .select("calendly_event_start_time")
+    .get();
+  const existing = await sessionsBetween(db, lo - AUTO_SLOT_TOLERANCE_MS, hi + AUTO_SLOT_TOLERANCE_MS);
+  const missing = missingSessionStarts(
+    booked.docs.map((d) => d.get("calendly_event_start_time") as string | null),
+    existing.map((s) => s.starts_at_ms),
+  );
+  const created: string[] = [];
+  if (!dry) {
+    for (const ms of missing) {
+      const r = await ensureSessionForStart(db, ms);
+      if (r?.created) created.push(r.slug);
+    }
+  }
+  return { checked: booked.size, missing: missing.map((ms) => new Date(ms).toISOString()), created };
 }

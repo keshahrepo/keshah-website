@@ -16,12 +16,14 @@ import {
   applyObservation,
   autoClaimId,
   bonusAction,
+  bonusPushInfo,
   bucketByLocalDate,
   detectDay,
   detectedDays,
   mergeAutoVideos,
 } from "./post-sync";
 import { bonusLinesForMonth, monthSummary } from "./pay";
+import { bonusPush } from "../push";
 import type { BonusClaim, CreatorPost, PostingDay } from "./types";
 
 const fixture = (name: string) => JSON.parse(readFileSync(join(__dirname, "__fixtures__", name), "utf8"));
@@ -287,6 +289,54 @@ test("bonus: manual claim for the same video -> auto claim reuses its url and pa
   assert.equal(lines.length, 1);
   assert.equal(lines[0].amount_cents, 1500);
   assert.equal(bonusAction(rec(), [{ ...manual, status: "rejected" }], bctx).op, "none");
+});
+
+test("bonus push: +$15 at 100K, +$85 more at 1M, +$100 straight to 1M, on the payout two months after posting", () => {
+  const a = bonusAction(rec(), [], bctx);
+  assert.equal(a.op, "create");
+  if (a.op !== "create") return;
+  const first = bonusPushInfo(rec(), [], a.claim)!;
+  assert.deepEqual([first.kind, first.addedCents, first.postId], ["100k", 1500, "tiktok_6000000001"]);
+  const msg = bonusPush(first);
+  assert.equal(msg.title, "Bonus added");
+  assert.equal(msg.body, "Your video just passed 100K views. +$15 on your December payout.");
+  assert.deepEqual(msg.data, {
+    type: "bonus",
+    post_id: "tiktok_6000000001",
+    platform: "tiktok",
+    url: "https://www.tiktok.com/@h/video/6000000001",
+    month: "2026-10",
+    payout_month: "2026-12",
+  });
+  // The 1M upgrade adds the rest of the $100.
+  const claims = [{ ...a.claim, id: a.id }];
+  const big = rec({ views: 1_100_000, crossed_1m_at: "2026-10-20T03:00:00Z" });
+  const up = bonusAction(big, claims, bctx);
+  assert.equal(up.op, "upgrade");
+  if (up.op !== "upgrade") return;
+  const second = bonusPushInfo(big, claims, { ...claims[0], ...up.patch })!;
+  assert.equal(bonusPush(second).body, "Your video just passed 1M views. +$85 on your December payout.");
+  // Seen first at 1M: the whole $100 at once.
+  const jump = rec({ views: 1_200_000, crossed_1m_at: "2026-10-03T18:00:00Z" });
+  const j = bonusAction(jump, [], bctx);
+  assert.equal(j.op, "create");
+  if (j.op !== "create") return;
+  assert.equal(bonusPush(bonusPushInfo(jump, [], j.claim)!).body, "Your video just passed 1M views. +$100 on your December payout.");
+  // A manual claim already paid the 100K: nothing new, no push.
+  const manual: { id: string } & BonusClaim = {
+    id: "m1",
+    video_url: "https://www.tiktok.com/@h/video/6000000001?_r=1",
+    platform: "tiktok",
+    posted_on: "2026-10-01",
+    crossed_100k_on: "2026-10-02",
+    views_claimed: 110_000,
+    status: "approved",
+  };
+  const m = bonusAction(rec(), [manual], bctx);
+  if (m.op !== "create") return assert.fail("expected create");
+  assert.equal(bonusPushInfo(rec(), [manual], m.claim), null);
+  // A December video lands on the February payout.
+  assert.match(bonusPush({ ...first, postedOn: "2026-12-30" }).body, /February payout\.$/);
 });
 
 // ---------------------------------------------------------------- double count guard

@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { requireDashboardSession } from "@/lib/support/auth";
-import { founderCreators, programValue } from "@/lib/founder/creators";
+import { founderCreators, programTopVideos, programValue } from "@/lib/founder/creators";
 import { cached } from "@/lib/founder/cache";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
-// GET /api/founder/creators?period=all|yyyy-mm: contract pay vs what each creator brought in.
+// GET /api/founder/creators?period=all|yyyy-mm: each creator's cost (contract pay) vs proceeds from their link.
 // rows[].roi is null while the month is open (monthOpen); rows[].allTimeRoi is always set when known.
+// topVideos: the program's 5 most-viewed videos posted in the period (rows[].topVideos: each creator's).
 export async function GET(req: Request) {
   if (!(await requireDashboardSession())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
@@ -36,14 +37,15 @@ export async function GET(req: Request) {
     ]);
     const all = period === "all" ? out : allOther;
     const allRoi = new Map((all?.rows ?? []).map((r) => [r.id, r.roi]));
-    // Program-wide all-time return (brought in ÷ cost, every creator).
+    // Program-wide all-time ROI (proceeds ÷ cost, every creator). Field keeps its old name.
     const allIn = (all?.rows ?? []).reduce((a, r) => a + (r.broughtInUsd ?? 0), 0);
     const allCost = (all?.rows ?? []).reduce((a, r) => a + (r.committedCents ?? r.payCents), 0) / 100;
     return NextResponse.json({
       ...out,
       monthOpen: open,
+      topVideos: programTopVideos(out.rows),
       allTimeReturn: all && allCost > 0 ? allIn / allCost : null,
-      rows: out.rows.map((r) => ({ ...r, roi: open ? null : r.roi, allTimeRoi: allRoi.get(r.id) ?? null })),
+      rows: out.rows.map((r) => ({ ...r, topVideos: r.topVideos ?? [], roi: open ? null : r.roi, allTimeRoi: allRoi.get(r.id) ?? null })),
     });
   } catch (e) {
     console.error("founder creators failed:", e);
