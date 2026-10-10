@@ -21,8 +21,8 @@
   ],
   "crons": [
     {
-      "path": "/api/support/draft",
-      "schedule": "0 */12 * * *"
+      "path": "/api/cron/support-drafts",
+      "schedule": "* * * * *"
     },
     {
       "path": "/api/support/learn",

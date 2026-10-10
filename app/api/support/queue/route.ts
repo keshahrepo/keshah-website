@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { listAwaitingConversations, getRecentMessages, getUserProfile } from "@/lib/support/repo";
 import { requireDashboardSession } from "@/lib/support/auth";
+import { draftCoversLatest, latestMessageMs } from "@/lib/support/background-drafts";
 
 export const maxDuration = 30;
 
@@ -34,6 +35,8 @@ export async function GET() {
               content: convo.draft.content,
               category: convo.draft.category,
               generatedAtMs: convo.draft.generated_at.toMillis(),
+              // false = drafted before the user's latest message (a new one is on its way).
+              current: draftCoversLatest(convo.draft, latestMessageMs(convo)),
             }
           : null,
       };

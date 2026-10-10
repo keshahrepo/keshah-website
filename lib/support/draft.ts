@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { DraftCategory, SupportMessage, UserProfile } from "./repo";
 import type { SupportPrompts } from "./prompts";
 
-const MODEL = "claude-sonnet-4-6";
+const MODEL = "claude-sonnet-5-5";
 
 // Output schema instruction stays hardcoded — it's a structural constraint,
 // not a voice/framing choice that anyone would want to tweak from the
@@ -11,7 +11,7 @@ const MODEL = "claude-sonnet-4-6";
 const OUTPUT_FORMAT = `
 Output a single JSON object, no prose, no code fence:
 {
-  "category": "answerable" | "investigation" | "account_change" | "medical" | "thanks",
+  "category": "answerable" | "investigation" | "account_change" | "medical" | "thanks" | "escalated",
   "content": "the draft reply text"
 }
 `.trim();
@@ -72,7 +72,7 @@ function parseModelOutput(raw: string): { category: DraftCategory; content: stri
     };
   }
   const obj = parsed as { category?: string; content?: string };
-  const validCategories: DraftCategory[] = ["answerable", "investigation", "account_change", "medical", "thanks"];
+  const validCategories: DraftCategory[] = ["answerable", "investigation", "account_change", "medical", "thanks", "escalated"];
   const category = (validCategories.includes(obj.category as DraftCategory) ? obj.category : "investigation") as DraftCategory;
   const content = (obj.content ?? "").trim();
   if (!content) {
@@ -124,7 +124,8 @@ export async function generateDraft(opts: {
 
   const resp = await client.messages.create({
     model: MODEL,
-    max_tokens: 800,
+    // Headroom: Sonnet 5.5 thinks adaptively by default and thinking counts toward max_tokens.
+    max_tokens: 4000,
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],
   });

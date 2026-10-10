@@ -37,9 +37,10 @@ function attachmentsOf(raw: unknown): SupportAttachment[] | undefined {
 export type DraftCategory =
   | "answerable"           // routine/navigation question — safe to draft a real answer
   | "investigation"        // bug report / account data issue — only hold/acknowledge
-  | "account_change"       // refund / plan / subscription — only hold/acknowledge
+  | "account_change"       // regrowth-kit refund / plan / email / delete — only hold/acknowledge
   | "medical"              // dosing / side-effects / "is this normal" — only hold + redirect
-  | "thanks";              // user says thanks/done — short close-out
+  | "thanks"               // user says thanks/done — short close-out
+  | "escalated";           // chargeback / legal / declined refund / "final notice" — founder must read before sending
 
 export type DraftRecord = {
   content: string;
@@ -47,6 +48,14 @@ export type DraftRecord = {
   category: DraftCategory;
   model: string;
   prompt_version?: number;
+  /** last_message timestamp (ms) the draft answers; absent on older drafts. */
+  for_message_ms?: number | null;
+};
+
+/** Background-draft lock on support/{userId} (see lib/support/background-drafts.ts). */
+export type DraftClaim = {
+  at: Timestamp;
+  for_message_ms: number | null;
 };
 
 export type AwaitingConversation = {
@@ -55,6 +64,7 @@ export type AwaitingConversation = {
   lastUpdateAt: Timestamp | null;
   draft: DraftRecord | null;
   skipUntil: Timestamp | null;
+  draftClaim: DraftClaim | null;
 };
 
 export type UserProfile = {
@@ -96,6 +106,7 @@ export async function listAwaitingConversations(opts: { limit?: number } = {}): 
       lastUpdateAt: (data.last_update_at ?? null) as Timestamp | null,
       draft: (data.last_draft ?? null) as DraftRecord | null,
       skipUntil,
+      draftClaim: (data.draft_claim ?? null) as DraftClaim | null,
     });
   }
   return out;
@@ -205,17 +216,40 @@ export async function sampleAadiVoiceExamples(count = 12): Promise<string[]> {
   return examples.slice(0, count);
 }
 
-export async function saveDraft(userId: string, draft: { content: string; category: DraftCategory; model: string; promptVersion?: number }): Promise<void> {
+export function draftRecordOf(draft: { content: string; category: DraftCategory; model: string; promptVersion?: number }, forMessageMs: number | null) {
+  return {
+    content: draft.content,
+    generated_at: Timestamp.now(),
+    category: draft.category,
+    model: draft.model,
+    prompt_version: draft.promptVersion ?? null,
+    for_message_ms: forMessageMs,
+  };
+}
+
+/** last_message timestamp in ms (falls back to last_update_at), or null. */
+export function lastMessageMsOf(data: Record<string, unknown> | undefined): number | null {
+  const lm = (data?.last_message ?? null) as Record<string, unknown> | null;
+  const ts = (lm?.timestamp ?? data?.last_update_at ?? null) as Timestamp | null;
+  return ts && typeof ts.toMillis === "function" ? ts.toMillis() : null;
+}
+
+/** Latest message time on support/{userId}, read BEFORE drafting so the saved draft records what it answered. */
+export async function getLastMessageMs(userId: string): Promise<number | null> {
   const { db } = getFirebaseAdmin();
-  await db.collection(SUPPORT_COLLECTION).doc(userId).update({
-    last_draft: {
-      content: draft.content,
-      generated_at: Timestamp.now(),
-      category: draft.category,
-      model: draft.model,
-      prompt_version: draft.promptVersion ?? null,
-    },
-  });
+  const snap = await db.collection(SUPPORT_COLLECTION).doc(userId).get();
+  return lastMessageMsOf(snap.data());
+}
+
+export async function saveDraft(
+  userId: string,
+  draft: { content: string; category: DraftCategory; model: string; promptVersion?: number },
+  forMessageMs?: number | null,
+): Promise<void> {
+  const { db } = getFirebaseAdmin();
+  const ref = db.collection(SUPPORT_COLLECTION).doc(userId);
+  const ms = forMessageMs === undefined ? lastMessageMsOf((await ref.get()).data()) : forMessageMs;
+  await ref.update({ last_draft: draftRecordOf(draft, ms) });
 }
 
 export async function clearDraft(userId: string): Promise<void> {

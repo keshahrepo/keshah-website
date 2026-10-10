@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getRecentMessages, getUserProfile, sampleAadiVoiceExamples, saveDraft } from "@/lib/support/repo";
+import { getLastMessageMs, getRecentMessages, getUserProfile, sampleAadiVoiceExamples, saveDraft } from "@/lib/support/repo";
 import { generateDraft } from "@/lib/support/draft";
 import { getActivePrompts } from "@/lib/support/prompts";
 import { requireDashboardSession } from "@/lib/support/auth";
@@ -19,7 +19,8 @@ export async function POST(req: Request) {
   }
 
   try {
-    const [profile, messages, voiceExamples, prompts] = await Promise.all([
+    const [forMessageMs, profile, messages, voiceExamples, prompts] = await Promise.all([
+      getLastMessageMs(userId),
       getUserProfile(userId),
       getRecentMessages(userId, 20),
       sampleAadiVoiceExamples(12),
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
     ]);
 
     const draft = await generateDraft({ profile, conversation: messages, voiceExamples, prompts });
-    await saveDraft(userId, draft);
+    await saveDraft(userId, draft, forMessageMs);
 
     return NextResponse.json({
       ok: true,

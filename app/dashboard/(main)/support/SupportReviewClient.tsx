@@ -26,6 +26,7 @@ const CATEGORY_COLORS: Record<string, { bg: string; fg: string; label: string }>
   account_change: { bg: "rgba(255,140,180,0.15)", fg: "#ff9ec3", label: "Account change" },
   medical:        { bg: "rgba(255,100,100,0.15)", fg: "#ff8585", label: "Medical — caution" },
   thanks:         { bg: "rgba(140,180,255,0.15)", fg: "#a8c2ff", label: "Thanks" },
+  escalated:      { bg: "rgba(255,170,0,0.18)",   fg: "#ffb732", label: "Escalated — needs you" },
 };
 
 function formatRelative(ms: number | null): string {

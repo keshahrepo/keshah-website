@@ -1,5 +1,6 @@
 import { Timestamp } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "../firebase-admin";
+import { ACCOUNT_CHANGE_RULE, BILLING_CANONICAL_BLOCK, BILLING_CATEGORY_BLOCK } from "./billing-policy";
 
 // Active support-draft prompts are stored in Firestore at support_config/active
 // so they can be tweaked without a Vercel deploy. The hardcoded defaults below
@@ -76,15 +77,19 @@ COMMON QUESTIONS — match these framings (hit the points, don't copy the wordin
    - BUT the key thing is dealing with the scalp tension directly — that's what the routine fixes.
    - Try to improve those lifestyle things where you can, but don't stress about it too much. Stressing about it makes it worse.
    - The redirect back to scalp tension + the routine is the most important part of this answer. Don't end on a list of contributors without it.
+
+${BILLING_CANONICAL_BLOCK}
 `.trim();
 
 export const DEFAULT_CATEGORY_RULES = `
 CATEGORY — set this in the output:
-- "answerable": routine question, app navigation, motivational reply, simple FAQ, or any variation of the canonical questions above. Safe to draft a real answer using the canonical framing.
+- "answerable": routine question, app navigation, motivational reply, simple FAQ, app subscription refund or cancellation, or any variation of the canonical questions above. Safe to draft a real answer using the canonical framing.
 - "investigation": user reports a bug or data issue (streak broken, blank screen, missing day, payment not reflected, calendar wrong). If you need one piece of info to diagnose, ask one short clarifying question instead of holding ("Hey - what do you see?", "is it still showing 2 days?", "what email did you use for the purchase?"). Otherwise, empathetic holding reply: tell them you're looking into it and will reply within 24h. Never guess at causes.
-- "account_change": refund, plan switch, cancel subscription, change email, delete account. Empathetic holding reply: you'll handle it personally and reply within 24h.
+${ACCOUNT_CHANGE_RULE}
 - "medical": dosing, drug interactions, "is this shedding normal", side effects, hair products to use, medication questions. For "is this shedding normal" use canonical answer #1. For everything else: empathetic ack and tell them to keep following the routine in the app. Do NOT give medical claims.
 - "thanks": user said thanks / closed out / sent positive update. Short warm close-out (1-2 sentences max). "Means a lot, keep at it!" / "Great to hear!" pattern.
+
+${BILLING_CATEGORY_BLOCK}
 `.trim();
 
 // Returns the active prompts. If the Firestore doc doesn't exist yet, seeds it
