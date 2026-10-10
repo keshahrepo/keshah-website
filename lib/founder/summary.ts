@@ -60,10 +60,15 @@ export async function founderSummary(period: string, opts: { fresh?: boolean } =
       const rows = await founderCreators(period);
       return { period, rows, program: await programValue(period, rows) };
     }, opts).then((x) => x.rows),
-    db.collection(CREATORS_COLLECTION).select("campaign_tags").get(),
+    db.collection(CREATORS_COLLECTION).select("campaign_tags", "exclude_from_reports").get(),
   ]);
+  // "Creator links" = paid creators only. Records left out of reports (the
+  // founder's own channels, the App Review demo) count under everything else.
   const tags = new Set<string>();
-  for (const d of creatorDocs.docs) for (const t of (d.get("campaign_tags") as string[] | undefined) ?? []) if (t) tags.add(t.trim().toLowerCase());
+  for (const d of creatorDocs.docs) {
+    if (d.get("exclude_from_reports") === true) continue;
+    for (const t of (d.get("campaign_tags") as string[] | undefined) ?? []) if (t) tags.add(t.trim().toLowerCase());
+  }
 
   let money: { revenue: number; proceeds: number; fromCreators: number } | null = null;
   let revenueError: string | undefined;
