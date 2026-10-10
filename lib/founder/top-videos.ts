@@ -43,6 +43,9 @@ export interface TopVideo {
 }
 
 export const TOP_VIDEOS = 5;
+export const OVER_100K_VIEWS = 100_000;
+/** Most rows stored per list (the count stays exact). */
+export const OVER_100K_CAP = 50;
 
 /** Bonus cents per post (key = postKey), from approved claims at their final level. */
 export function bonusByPost(claims: BonusClaim[]): Map<string, number> {
@@ -130,4 +133,19 @@ export function topByViews(videos: TopVideo[], n = TOP_VIDEOS): TopVideo[] {
     .filter((v) => v.views > 0)
     .sort((a, b) => b.views - a.views || b.postedOn.localeCompare(a.postedOn))
     .slice(0, n);
+}
+
+/** Newest first (posting day), then most viewed. */
+export function newestFirst(a: TopVideo, b: TopVideo): number {
+  return b.postedOn.localeCompare(a.postedOn) || b.views - a.views;
+}
+
+/**
+ * Posts at 100K+ current views, one entry per post (from postVideos, so views
+ * are never added across platforms), newest first. `list` is capped, `count`
+ * is exact.
+ */
+export function over100k(videos: TopVideo[], cap = OVER_100K_CAP): { list: TopVideo[]; count: number } {
+  const all = videos.filter((v) => v.views >= OVER_100K_VIEWS).sort(newestFirst);
+  return { list: all.slice(0, cap), count: all.length };
 }

@@ -2,7 +2,7 @@
 // Founder top videos: TikTok + Instagram pairing per day (same as the creator app), bonus from approved claims, ranking.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { bonusByPost, pairVideos, postVideos, topByViews, type PostLite } from "./top-videos";
+import { bonusByPost, over100k, pairVideos, postVideos, topByViews, OVER_100K_CAP, type PostLite } from "./top-videos";
 import type { BonusClaim } from "@/lib/creators/types";
 
 const tt = (id: string, views: number, at: string, day = at.slice(0, 10)): PostLite => ({
@@ -71,4 +71,32 @@ test("founder list ranks each post on its own: views are never added across plat
   assert.deepEqual(top.map((v) => v.views), [60_000, 50_000]);
   assert.ok(top[0].tiktok && !top[0].instagram);
   assert.ok(top[1].instagram && !top[1].tiktok);
+});
+
+test("over 100K: threshold is inclusive, newest first, then most viewed", () => {
+  const v = postVideos([
+    tt("1000000001", 99_999, "2026-10-05T10:00:00Z"),
+    tt("1000000002", 100_000, "2026-10-01T10:00:00Z"),
+    tt("1000000003", 500_000, "2026-10-03T10:00:00Z"),
+    ig("A", 200_000, "2026-10-03T11:00:00Z"),
+    ig("B", 2_000_000, "2026-10-02T11:00:00Z"),
+  ]);
+  const { list, count } = over100k(v);
+  assert.equal(count, 4);
+  assert.deepEqual(list.map((x) => [x.postedOn, x.views]), [["2026-10-03", 500_000], ["2026-10-03", 200_000], ["2026-10-02", 2_000_000], ["2026-10-01", 100_000]]);
+});
+
+test("over 100K: one entry per post, TikTok + Instagram views never added", () => {
+  const v = postVideos([tt("1000000001", 60_000, "2026-10-01T10:00:00Z"), ig("A", 60_000, "2026-10-01T10:05:00Z"), ig("B", 150_000, "2026-10-01T12:00:00Z")]);
+  const { list, count } = over100k(v);
+  assert.equal(count, 1);
+  assert.ok(list[0].instagram && !list[0].tiktok);
+  assert.equal(list[0].views, 150_000);
+});
+
+test("over 100K: list is capped, count stays exact", () => {
+  const v = postVideos(Array.from({ length: 60 }, (_, k) => tt(`20000000${String(k).padStart(2, "0")}`, 100_000 + k, "2026-10-01T10:00:00Z")));
+  const { list, count } = over100k(v);
+  assert.equal(count, 60);
+  assert.equal(list.length, OVER_100K_CAP);
 });

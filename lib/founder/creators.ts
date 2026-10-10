@@ -39,7 +39,7 @@ import { CREATORS_COLLECTION } from "@/lib/creators/db";
 import type { MonthSummary } from "@/lib/creators/pay";
 import { payProfileOf } from "@/lib/creators/admin";
 import { ALL_TIME_START, clampStart } from "./start";
-import { bonusByPost, postVideos, topByViews, TOP_VIDEOS, type PostLite, type TopVideo } from "./top-videos";
+import { bonusByPost, newestFirst, over100k, postVideos, topByViews, OVER_100K_CAP, TOP_VIDEOS, type PostLite, type TopVideo } from "./top-videos";
 
 export interface FounderCreatorRow {
   id: string;
@@ -73,6 +73,10 @@ export interface FounderCreatorRow {
   topVideo: { url: string; platform: string; views: number; thumbnail: string | null } | null;
   /** Their 5 most-viewed videos posted in the period, TikTok + Instagram of one video counted once. */
   topVideos: TopVideo[];
+  /** Posts from the period at 100K+ current views, one per post/platform, newest first (at most 50 stored). */
+  over100k: TopVideo[];
+  /** Exact number of those posts (not capped). */
+  over100kCount: number;
   /** Cash: every invoice, newest first (an invoice for month M is paid early in M+1). */
   payouts: Payout[];
   /** The current month's invoice as it stands (paid early next month), split like an invoice: base / trial for this month, bonuses on this month's invoice. Null once invoiced or when the period doesn't include this month. */
@@ -299,7 +303,9 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
       thumbnail: (x.thumbnail_url as string) || null,
     });
   }
-  const topVideos = topByViews(postVideos(counted, bonusByPost(h.bonusClaims)));
+  const perPost = postVideos(counted, bonusByPost(h.bonusClaims));
+  const topVideos = topByViews(perPost);
+  const big = over100k(perPost);
   // Videos per day: the posting log, or (days before the log existed, e.g. Isai's
   // September) the synced posts: a video = one TikTok + one Instagram post that day.
   const logged = new Map<string, number>();
@@ -340,13 +346,17 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
     broughtInUsd: broughtIn === null ? null : Math.round(broughtIn * 100) / 100,
     trials: attr.trialsInWindow,
     paidUsers: attr.purchasesInWindow,
-    // All time counts this month's whole committed pay (same cost the app shows); a month's own ROI uses its cost.
-    roi: (period === "all" ? committedCents : payCents) > 0 && broughtIn !== null ? broughtIn / ((period === "all" ? committedCents : payCents) / 100) : null,
+    // Proceeds ÷ committed cost (the cost the app shows): the open month counts its whole
+    // month's base, so its ROI is "so far" and climbs as proceeds come in. Closed months:
+    // committedCents equals payCents. All time: includes this month's committed pay.
+    roi: committedCents > 0 && broughtIn !== null ? broughtIn / (committedCents / 100) : null,
     onboarding: h.onboarding ? { done: h.onboarding.done, total: h.onboarding.total } : undefined,
     videos,
     views,
     topVideo: top,
     topVideos,
+    over100k: big.list,
+    over100kCount: big.count,
     payouts,
     upcomingPayout,
     paidOutCents,
@@ -366,6 +376,15 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
 export function programTopVideos(rows: FounderCreatorRow[]): TopVideo[] {
   const all = rows.flatMap((r) => (r.topVideos ?? []).map((v) => ({ ...v, creatorId: r.id, creatorName: r.name })));
   return topByViews(all, TOP_VIDEOS);
+}
+
+/**
+ * Every creator's 100K+ posts merged, newest first, capped at 50, plus the
+ * exact total. Rows cached before over100k existed contribute nothing.
+ */
+export function programOver100k(rows: FounderCreatorRow[]): { list: TopVideo[]; count: number } {
+  const all = rows.flatMap((r) => (r.over100k ?? []).map((v) => ({ ...v, creatorId: r.id, creatorName: r.name })));
+  return { list: all.sort(newestFirst).slice(0, OVER_100K_CAP), count: rows.reduce((a, r) => a + (r.over100kCount ?? 0), 0) };
 }
 
 /**

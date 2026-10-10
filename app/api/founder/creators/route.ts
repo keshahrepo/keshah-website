@@ -1,14 +1,17 @@
 import { NextResponse } from "next/server";
 import { requireDashboardSession } from "@/lib/support/auth";
-import { founderCreators, programTopVideos, programValue } from "@/lib/founder/creators";
+import { founderCreators, programOver100k, programTopVideos, programValue } from "@/lib/founder/creators";
 import { cached } from "@/lib/founder/cache";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 // GET /api/founder/creators?period=all|yyyy-mm: each creator's cost (contract pay) vs proceeds from their link.
-// rows[].roi is null while the month is open (monthOpen); rows[].allTimeRoi is always set when known.
+// rows[].roi follows the period (the open month's is "so far": proceeds ÷ whole-month committed cost).
+// monthOpen, rows[].allTimeRoi and allTimeReturn are kept for older app builds.
 // topVideos: the program's 5 most-viewed videos posted in the period (rows[].topVideos: each creator's).
+// over100k: posts from the period at 100K+ views, one per post/platform, newest first, capped at 50,
+// with creatorId/creatorName; over100kCount is the exact total (rows[].over100k / over100kCount: each creator's).
 export async function GET(req: Request) {
   if (!(await requireDashboardSession())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
@@ -21,9 +24,6 @@ export async function GET(req: Request) {
         const rows = await founderCreators(pd);
         return { period: pd, rows, program: await programValue(pd, rows) };
       }, { fresh: f });
-    // A month still running has ROI that's always too high (a few days of
-    // cost against money from last month's trials converting), so it's
-    // hidden until the month ends. Every row carries all-time ROI instead.
     const thisMonth = `${n.getUTCFullYear()}-${String(n.getUTCMonth() + 1).padStart(2, "0")}`;
     const open = period === thisMonth;
     const [out, allOther] = await Promise.all([
@@ -40,12 +40,15 @@ export async function GET(req: Request) {
     // Program-wide all-time ROI (proceeds ÷ cost, every creator). Field keeps its old name.
     const allIn = (all?.rows ?? []).reduce((a, r) => a + (r.broughtInUsd ?? 0), 0);
     const allCost = (all?.rows ?? []).reduce((a, r) => a + (r.committedCents ?? r.payCents), 0) / 100;
+    const big = programOver100k(out.rows);
     return NextResponse.json({
       ...out,
       monthOpen: open,
       topVideos: programTopVideos(out.rows),
+      over100k: big.list,
+      over100kCount: big.count,
       allTimeReturn: all && allCost > 0 ? allIn / allCost : null,
-      rows: out.rows.map((r) => ({ ...r, topVideos: r.topVideos ?? [], roi: open ? null : r.roi, allTimeRoi: allRoi.get(r.id) ?? null })),
+      rows: out.rows.map((r) => ({ ...r, topVideos: r.topVideos ?? [], over100k: r.over100k ?? [], over100kCount: r.over100kCount ?? 0, allTimeRoi: allRoi.get(r.id) ?? null })),
     });
   } catch (e) {
     console.error("founder creators failed:", e);
