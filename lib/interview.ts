@@ -298,7 +298,7 @@ export async function ensureSessionForStart(
 
 /**
  * Safety net for the reminders cron: every booking starting from 2h ago to
- * 48h ahead has a session. One query over bookings (start time only) and one
+ * 60 days ahead has a session. One query over bookings (start time only) and one
  * over sessions; writes only for the missing ones. `dry` reports without
  * writing.
  */

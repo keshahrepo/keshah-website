@@ -15,7 +15,7 @@ export const AUTO_SLOT_TOLERANCE_MS = 30 * MIN;
 
 /** The cron makes sure sessions exist for bookings in this window. */
 export const AUTO_LOOKBACK_MS = 2 * HOUR;
-export const AUTO_LOOKAHEAD_MS = 48 * HOUR;
+export const AUTO_LOOKAHEAD_MS = 60 * 24 * HOUR; // every booked slot in the next 60 days gets its session (so Coming up shows it)
 
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 

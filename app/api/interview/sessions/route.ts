@@ -1,7 +1,7 @@
 // Admin: list + create group-interview sessions (Applications tab, and the
 // founder app's Interviews page).
 // GET            -> { sessions: [...], live_url }
-// GET ?counts=1  -> sessions from 14 days back to 14 days ahead, each with
+// GET ?counts=1  -> sessions from 14 days back to 60 days ahead, each with
 //                   total / opened / submitted / checked_in, plus
 //                   current (the slug /interview/live resolves to, else the
 //                   next upcoming) and video (counts for /interview/video).
@@ -75,7 +75,7 @@ async function listWithCounts() {
   const snap = await db.collection(SESSIONS).orderBy("starts_at", "desc").limit(60).get();
   const all = snap.docs
     .map((d) => sessionFromDoc(d))
-    .filter((s): s is InterviewSession => !!s && s.starts_at_ms > now - 14 * DAY && s.starts_at_ms < now + 14 * DAY);
+    .filter((s): s is InterviewSession => !!s && s.starts_at_ms > now - 14 * DAY && s.starts_at_ms < now + 60 * DAY);
   const [rows, live, videoSession] = await Promise.all([
     Promise.all(
       all.map(async (s) => ({ ...sessionJson(s, now), ...countsFor(await getSessionApplicants(db, s)) })),
