@@ -38,6 +38,7 @@ export async function GET() {
         graduation_year: x.graduation_year ?? null,
         can_commit: x.can_commit ?? null,
         comfortable_on_camera: x.comfortable_on_camera ?? null,
+        has_iphone: x.has_iphone ?? null,
         wants_virality: x.wants_virality ?? null,
         posted_before: x.posted_before ?? null,
         social_handle: x.social_handle ?? null,

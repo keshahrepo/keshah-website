@@ -396,7 +396,7 @@ export async function getHistory(id: string): Promise<CreatorHistory> {
   };
 }
 
-/** One month's records. Bonus claims are included if posted or crossed in the month, or posted the month before (paid this month). */
+/** One month's records. Bonus claims are included if posted or crossed in the month, or posted the month before (old-rule videos, paid this month). */
 export async function getMonthData(id: string, month: YyyyMm): Promise<CreatorHistory> {
   const h = await getHistory(id);
   const prev = addMonths(month, -1);
@@ -431,7 +431,7 @@ export async function getMonthOverview(
   const today = creatorToday(creator, opts.now);
   if (!hasStarted(creator)) {
     // Not started: no weekday is >= this sentinel, so everything is zero.
-    const summary = monthSummary({ ...creator, start_date: NOT_STARTED_SENTINEL }, month, [], [], h.bonusClaims, h.adjustments);
+    const summary = monthSummary({ ...creator, start_date: NOT_STARTED_SENTINEL }, month, [], [], h.bonusClaims, h.adjustments, { invoices: h.invoices });
     return {
       summary,
       lines: draftInvoiceLines(summary),
@@ -441,6 +441,7 @@ export async function getMonthOverview(
   }
   const summary = monthSummary(creator, month, h.postingDays, h.daysOff, h.bonusClaims, h.adjustments, {
     ...(month >= monthOf(today) ? { today } : {}),
+    invoices: h.invoices,
   });
   return {
     summary,

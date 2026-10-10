@@ -81,8 +81,8 @@ export default function BonusTab({ today }: { today: string }) {
         </P>
         <P style={{ marginBottom: 0 }}>
           Bonuses are now added for you automatically. We check your videos every few hours, and when one passes 100K or 1M views within
-          30 days it shows up here. Bonuses are paid the month after the video was posted, once its 30 days are up. So a video
-          you post in October is paid with your November invoice. You only need to send a claim if one is missing.
+          30 days it shows up here. A bonus comes on the payday right after the month it was hit: hit 100K in October, get paid Nov 1.
+          If the same video hits 1M in November, the other $85 comes on Dec 1. You only need to send a claim if one is missing.
         </P>
       </Card>
 

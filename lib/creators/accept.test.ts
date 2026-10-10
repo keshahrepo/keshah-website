@@ -171,9 +171,10 @@ test("welcome email sends people to the app when CREATOR_APP_URL is set", () => 
   const prev = process.env.CREATOR_APP_URL;
   process.env.CREATOR_APP_URL = "https://testflight.apple.com/join/abc";
   try {
-    const m = welcomeEmail({ firstName: "Jen", link: "https://x/l", contractReady: true });
+    const m = welcomeEmail({ firstName: "Jen", link: "https://x/l", signInEmail: "jen@gmail.com", contractReady: true });
     assert.ok(m.text.includes("https://testflight.apple.com/join/abc"));
-    assert.ok(m.text.includes("Download KESHAH Creators"));
+    assert.ok(m.text.includes("install TestFlight if it asks"));
+    assert.ok(m.text.includes("sign in with jen@gmail.com"));
     assert.ok(m.text.includes("first step in the app"));
   } finally {
     if (prev === undefined) delete process.env.CREATOR_APP_URL;

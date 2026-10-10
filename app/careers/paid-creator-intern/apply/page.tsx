@@ -43,6 +43,7 @@ type Form = {
   college: string;
   graduation_year: string;
   can_commit: "" | YesNo;
+  has_iphone: "" | YesNo;
   comfortable_on_camera: "" | YesNo;
   wants_virality: "" | YesNo;
   posted_before: "" | YesNo;
@@ -57,6 +58,7 @@ const EMPTY: Form = {
   college: "",
   graduation_year: "",
   can_commit: "",
+  has_iphone: "",
   comfortable_on_camera: "",
   wants_virality: "",
   posted_before: "",
@@ -85,6 +87,8 @@ const STEPS: Step[] = [
     { value: "2028", label: "2028" }, { value: "2029", label: "2029" },
   ] },
   { kind: "yesno", key: "can_commit", title: "Can you commit ~1 hr/day, Mon–Fri?", yesLabel: "Yes, I can", noLabel: "No, I can't", noSub: "This role may not be the right fit" },
+  // Hard filter: the KESHAH Creators app is iPhone only (TestFlight).
+  { kind: "yesno", key: "has_iphone", title: "Do you have an iPhone?", subtitle: "You'll film, post and get paid through our creator app, which is iPhone only for now.", yesLabel: "Yes, I do", noLabel: "No, I don't", noSub: "You'll need an iPhone for this role" },
   { kind: "yesno", key: "comfortable_on_camera", title: "Are you comfortable on camera?", subtitle: "This role is on-camera. Short-form videos filmed on your phone.", yesLabel: "Yes, I am", noLabel: "No, I'm not", noSub: "This role may not be the right fit" },
   { kind: "yesno", key: "wants_virality", title: "Do you want to learn how to go viral with short-form content?", subtitle: "Selected interns learn the same system which has helped us generate 80M+ views in the last 6 months.", yesLabel: "Yes, I do", noLabel: "Not particularly" },
   { kind: "yesno", key: "posted_before", title: "Have you ever posted on TikTok or Instagram before?", subtitle: "Either answer is fine. This just helps us know where to start.", yesLabel: "Yes, I have", noLabel: "No, I haven't" },
@@ -157,6 +161,7 @@ export default function ApplyQuiz() {
           college: merged.college,
           graduation_year: merged.graduation_year,
           can_commit: merged.can_commit,
+          has_iphone: merged.has_iphone,
           comfortable_on_camera: merged.comfortable_on_camera,
           wants_virality: merged.wants_virality,
           posted_before: merged.posted_before,
@@ -271,6 +276,7 @@ export default function ApplyQuiz() {
     if (!form.college.trim()) missing.push("college");
     if (!form.graduation_year) missing.push("graduation year");
     if (!form.can_commit) missing.push("commitment");
+    if (form.has_iphone !== "yes") missing.push("iPhone");
     if (missing.length > 0) {
       setError(`Missing: ${missing.join(", ")}. Tap back to fill them in.`);
       submittedRef.current = false; // allow retry
@@ -291,6 +297,7 @@ export default function ApplyQuiz() {
           college: form.college,
           graduation_year: form.graduation_year,
           can_commit: form.can_commit,
+          has_iphone: form.has_iphone,
           comfortable_on_camera: form.comfortable_on_camera,
           wants_virality: form.wants_virality,
           posted_before: form.posted_before,

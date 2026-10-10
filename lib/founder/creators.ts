@@ -2,13 +2,17 @@
  * The founder app's Creators list for a period (a month or all time).
  *
  * Cost (what ROI and net profit use) is what the period's WORK costs: that
- * period's base / trial pay / adjustments plus the bonuses its videos earned,
- * even though bonuses are paid the month after. So a 100K video posted in
- * October counts against October, not November.
+ * period's base / trial pay / adjustments plus the bonuses it earned under the
+ * rule that pays them (lib/creators/pay.ts bonusCostForMonth): a video posted
+ * from October 2026 on counts each milestone in the month it was hit (the
+ * invoice it's on); a video posted before that counts in its posting month
+ * (its bonuses are on the next month's invoice, e.g. Isai's September videos).
  *
  * Payout (shown on the creator page) is the cash for the period:
  *   - the current month: the month's base (prorated to their start date),
- *     less days already missed, plus that month's bonuses and adjustments,
+ *     less days already missed, plus the bonuses on that month's invoice
+ *     (milestones hit this month, plus last month's videos under the old
+ *     rule) and adjustments,
  *     plus trial pay (the same "Next payout" the creator sees);
  *   - a past month: its invoice total, else the month's summary;
  *   - all time: every month added up (the current month as above).
@@ -17,7 +21,7 @@
  * campaign tags (RevenueCat's own split).
  *
  * Top videos = their 5 most-viewed videos posted in the period, a TikTok and an
- * Instagram post of the same video counted once (see ./top-videos.ts).
+ * Instagram post ranked separately (see ./top-videos.ts postVideos).
  */
 import {
   attributionFor,
@@ -27,7 +31,7 @@ import {
   todayIn,
   type AdminCreator,
 } from "@/lib/creators/admin";
-import { addMonths, bonusLinesForMonth, completeVideoCount, trialStatus } from "@/lib/creators/pay";
+import { addMonths, bonusCostForMonth, completeVideoCount, trialStatus } from "@/lib/creators/pay";
 import { rcRevenueByCampaign, rcValuePerUser } from "@/lib/revenue";
 import { countryStats, groupCountries, type CountryGroup } from "./countries";
 import { db } from "@/lib/creators/admin";
@@ -35,7 +39,7 @@ import { CREATORS_COLLECTION } from "@/lib/creators/db";
 import type { MonthSummary } from "@/lib/creators/pay";
 import { payProfileOf } from "@/lib/creators/admin";
 import { ALL_TIME_START, clampStart } from "./start";
-import { bonusByPost, pairVideos, topByViews, TOP_VIDEOS, type PostLite, type TopVideo } from "./top-videos";
+import { bonusByPost, postVideos, topByViews, TOP_VIDEOS, type PostLite, type TopVideo } from "./top-videos";
 
 export interface FounderCreatorRow {
   id: string;
@@ -45,11 +49,11 @@ export interface FounderCreatorRow {
   campaignTags: string[];
   trial: { day: number; of: number; reviewing: boolean; ended: boolean; promotedOn: string | null } | null;
   levelBaseCents: number | null;
-  /** Cost of the period's work: base + trial + adjustments + bonuses its videos earned (see header). */
+  /** Cost of the period's work: base + trial + adjustments + bonuses it earned (see header). */
   payCents: number;
   /** payCents with the open month's base projected to month end (if they keep posting); equals payCents for closed months. */
   committedCents: number;
-  /** Cash paid / payable for the period's invoice (bonuses here are last month's videos). */
+  /** Cash paid / payable for the period's invoice (its bonus lines: milestones hit that month, plus old-rule videos from the month before). */
   payoutCents: number;
   pay: { baseCents: number; bonusCents: number; trialCents: number; adjustmentCents: number; missedDays: number; missedCents: number };
   postedDays: number;
@@ -71,8 +75,8 @@ export interface FounderCreatorRow {
   topVideos: TopVideo[];
   /** Cash: every invoice, newest first (an invoice for month M is paid early in M+1). */
   payouts: Payout[];
-  /** The current month's invoice as it stands (paid early next month), split like an invoice: base / trial for this month, bonuses from last month's videos. Null once invoiced or when the period doesn't include this month. */
-  upcomingPayout: { month: string; totalCents: number; baseCents: number; bonusCents: number; trialCents: number; otherCents: number } | null;
+  /** The current month's invoice as it stands (paid early next month), split like an invoice: base / trial for this month, bonuses on this month's invoice. Null once invoiced or when the period doesn't include this month. */
+  upcomingPayout: { month: string; totalCents: number; baseCents: number; bonusCents: number; oldRuleBonusCents: number; trialCents: number; otherCents: number } | null;
   /** Cash paid out in the period: invoices whose payout month is in it (all of them for all time). */
   paidOutCents: number;
   /** Installs from their link in the period (RevenueCat new customers on their campaigns). */
@@ -95,6 +99,12 @@ export interface Payout {
   totalCents: number;
   baseCents: number;
   bonusCents: number;
+  /**
+   * The part of bonusCents under the old timing (videos posted before the
+   * cutover, paid the month after posting: on the October 2026 invoice these
+   * are September's videos). The rest are milestones hit in the invoice's month.
+   */
+  oldRuleBonusCents: number;
   trialCents: number;
   otherCents: number;
   status: string;
@@ -184,12 +194,14 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
         totalCents: p.baseCents + p.bonusCents + p.trialCents + p.adjustmentCents,
         baseCents: p.baseCents,
         bonusCents: p.bonusCents,
+        oldRuleBonusCents: s.bonusLines.filter((l) => l.rule !== "new").reduce((a, l) => a + l.amount_cents, 0),
         trialCents: p.trialCents,
         otherCents: p.adjustmentCents,
       };
     }
-    // Bonuses earned by THIS month's videos (they're settled on next month's invoice).
-    const earned = bonusLinesForMonth(h.bonusClaims, addMonths(m, 1)).reduce((a, l) => a + l.amount_cents, 0);
+    // Bonuses this month's work earned: milestones hit this month (new rule),
+    // or old-rule videos posted this month (settled on next month's invoice).
+    const earned = bonusCostForMonth(h.bonusClaims, m);
     const off = Number(offSystem[m] ?? 0) || 0;
     // Cost = what the work has earned so far (this month: base up to today, like
     // the money it's compared with); the payout above stays the full-month projection.
@@ -217,6 +229,8 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
       const sum = (pred: (k: string) => boolean) => (inv.lines ?? []).filter((l) => pred(String(l.kind))).reduce((a, l) => a + l.amount_cents, 0);
       const baseCents = sum((k) => k === "base");
       const bonusCents = sum((k) => k.startsWith("bonus"));
+      // Lines from before the hit-month rule carry no `rule`: all old timing.
+      const oldRuleBonusCents = (inv.lines ?? []).filter((l) => String(l.kind).startsWith("bonus") && l.rule !== "new").reduce((a, l) => a + l.amount_cents, 0);
       const trialCents = sum((k) => k === "trial");
       const submitted = inv.submitted_at ? Date.parse(inv.submitted_at) : NaN;
       return {
@@ -225,6 +239,7 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
         totalCents: inv.total_cents,
         baseCents,
         bonusCents,
+        oldRuleBonusCents,
         trialCents,
         otherCents: inv.total_cents - baseCents - bonusCents - trialCents,
         status: inv.status,
@@ -284,7 +299,7 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
       thumbnail: (x.thumbnail_url as string) || null,
     });
   }
-  const topVideos = topByViews(pairVideos(counted, bonusByPost(h.bonusClaims)));
+  const topVideos = topByViews(postVideos(counted, bonusByPost(h.bonusClaims)));
   // Videos per day: the posting log, or (days before the log existed, e.g. Isai's
   // September) the synced posts: a video = one TikTok + one Instagram post that day.
   const logged = new Map<string, number>();

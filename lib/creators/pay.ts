@@ -19,6 +19,7 @@ import type {
   BonusClaim,
   Cents,
   DayOff,
+  Invoice,
   InvoiceLine,
   PayProfile,
   Platform,
@@ -426,16 +427,58 @@ function addAttendance(x: MonthAttendance, y: MonthAttendance): MonthAttendance 
 // ---------------------------------------------------------------- bonuses
 
 /**
- * Bonus lines payable in `month`. Per (video_url, platform); only APPROVED
- * claims. A threshold counts only if crossed within 30 days of posted_on
- * (day 30 inclusive). Paid in the month it was crossed.
+ * The bonus timing cutover. Videos first posted ON or AFTER this date follow
+ * the hit-month rule: each milestone is paid on the invoice for the month it
+ * was hit (100K hit in October: October invoice, paid early November; the
+ * same video's 1M hit in November: the other $85 on the November invoice).
+ * Videos posted BEFORE it keep the old rule: one line at the video's final
+ * level on the invoice for the month after posting (Isai's September videos:
+ * the October invoice, paid early November).
  */
-export function bonusLinesForMonth(claims: BonusClaim[], month: YyyyMm): InvoiceLine[] {
+export const BONUS_HIT_MONTH_RULE_FROM: YyyyMmDd = "2026-10-01";
+const BONUS_RULE_CUTOVER_MONTH: YyyyMm = monthOf(BONUS_HIT_MONTH_RULE_FROM);
+
+export type BonusRule = "old" | "new";
+
+/** Which timing rule a video follows, by its posting date. */
+export function bonusRuleFor(postedOn: YyyyMmDd): BonusRule {
+  return postedOn < BONUS_HIT_MONTH_RULE_FROM ? "old" : "new";
+}
+
+/** One video on one platform, merged from its approved claims. */
+export interface BonusVideo {
+  /** "platform|url": the same key invoice lines are matched on. */
+  key: string;
+  platform: Platform;
+  url: string;
+  posted: YyyyMmDd;
+  /** 100K / 1M dates, only when hit inside the 30-day window. */
+  c100?: YyyyMmDd;
+  c1m?: YyyyMmDd;
+}
+
+/** One payable step of a video's bonus: what it pays and the invoice month it belongs to. */
+export interface BonusItem {
+  month: YyyyMm;
+  cents: Cents;
+  milestone: "100k" | "1m" | "1m_rest";
+  hitOn?: YyyyMmDd;
+  rule: BonusRule;
+}
+
+const bonusKey = (platform: string, url: string) => `${platform}|${url.trim()}`;
+
+/**
+ * Approved claims grouped per (video_url, platform). A threshold counts only
+ * if crossed within 30 days of posted_on (day 30 inclusive); hitting 1M
+ * implies 100K no later than that.
+ */
+export function bonusVideos(claims: BonusClaim[]): BonusVideo[] {
   const groups = new Map<string, { platform: Platform; url: string; posted: YyyyMmDd; c100?: YyyyMmDd; c1m?: YyyyMmDd }>();
   const minDate = (a?: YyyyMmDd, b?: YyyyMmDd) => (!a ? b : !b ? a : a < b ? a : b);
   for (const c of claims) {
     if (c.status !== "approved") continue;
-    const key = `${c.platform}|${c.video_url.trim()}`;
+    const key = bonusKey(c.platform, c.video_url);
     const g = groups.get(key) ?? { platform: c.platform, url: c.video_url.trim(), posted: c.posted_on };
     g.posted = minDate(g.posted, c.posted_on)!;
     g.c100 = minDate(g.c100, c.crossed_100k_on);
@@ -443,29 +486,158 @@ export function bonusLinesForMonth(claims: BonusClaim[], month: YyyyMm): Invoice
     groups.set(key, g);
   }
   const within = (posted: YyyyMmDd, crossed?: YyyyMmDd) => {
-    if (!crossed) return false;
+    if (!crossed) return undefined;
     const d = daysBetween(posted, crossed);
-    return d >= 0 && d <= BONUS_WINDOW_DAYS;
+    return d >= 0 && d <= BONUS_WINDOW_DAYS ? crossed : undefined;
   };
-  const platformName = (p: Platform) => (p === "tiktok" ? "TikTok" : "Instagram");
-  // Bonuses are paid one month after posting: videos first posted in month M
-  // are settled on the invoice for M+1, once every one of their 30-day
-  // windows has closed. One line per video and platform, at its final level.
-  const lines: InvoiceLine[] = [];
-  for (const g of groups.values()) {
-    if (addMonths(monthOf(g.posted), 1) !== month) continue;
-    // Hitting 1M implies having hit 100K no later than that.
-    const c100 = minDate(g.c100, g.c1m);
-    const q100 = within(g.posted, c100);
-    const q1m = within(g.posted, g.c1m);
-    const what = `${platformName(g.platform)} video posted ${g.posted} (${g.url})`;
-    if (q1m) {
-      lines.push({ kind: "bonus_1m", label: `1M views bonus: ${what}`, amount_cents: BONUS_1M_TOTAL_CENTS });
-    } else if (q100) {
-      lines.push({ kind: "bonus_100k", label: `100K views bonus: ${what}`, amount_cents: BONUS_100K_CENTS });
+  const out: BonusVideo[] = [];
+  for (const [key, g] of groups) {
+    const c1m = within(g.posted, g.c1m);
+    const c100 = within(g.posted, minDate(g.c100, g.c1m));
+    out.push({ key, platform: g.platform, url: g.url, posted: g.posted, ...(c100 ? { c100 } : {}), ...(c1m ? { c1m } : {}) });
+  }
+  return out;
+}
+
+/**
+ * What a video pays and on which invoice month.
+ * Old rule: one item at its final level, on the month after posting.
+ * New rule: each milestone on the month it was hit; both in the same month
+ * is one $100 item, otherwise $15 then $85.
+ */
+export function bonusItems(v: BonusVideo): BonusItem[] {
+  if (bonusRuleFor(v.posted) === "old") {
+    const month = addMonths(monthOf(v.posted), 1);
+    if (v.c1m) return [{ month, cents: BONUS_1M_TOTAL_CENTS, milestone: "1m", hitOn: v.c1m, rule: "old" }];
+    if (v.c100) return [{ month, cents: BONUS_100K_CENTS, milestone: "100k", hitOn: v.c100, rule: "old" }];
+    return [];
+  }
+  if (v.c1m && (!v.c100 || monthOf(v.c100) === monthOf(v.c1m))) {
+    return [{ month: monthOf(v.c1m), cents: BONUS_1M_TOTAL_CENTS, milestone: "1m", hitOn: v.c1m, rule: "new" }];
+  }
+  const items: BonusItem[] = [];
+  if (v.c100) items.push({ month: monthOf(v.c100), cents: BONUS_100K_CENTS, milestone: "100k", hitOn: v.c100, rule: "new" });
+  if (v.c1m) items.push({ month: monthOf(v.c1m), cents: BONUS_1M_TOTAL_CENTS - BONUS_100K_CENTS, milestone: "1m_rest", hitOn: v.c1m, rule: "new" });
+  return items;
+}
+
+const BONUS_LABEL = /^(1M|100K) views bonus: (TikTok|Instagram) video posted (\d{4}-\d{2}-\d{2}) \((.+)\)$/;
+
+/** The video a bonus invoice line pays for ("platform|url"), from its fields or, on older lines, its label. */
+export function bonusLineKey(l: InvoiceLine): string | null {
+  if (!String(l.kind).startsWith("bonus")) return null;
+  if (l.platform && l.video_url) return bonusKey(l.platform, l.video_url);
+  const m = BONUS_LABEL.exec(l.label);
+  return m ? bonusKey(m[2] === "TikTok" ? "tiktok" : "instagram", m[4]) : null;
+}
+
+/** An invoice as far as the bonus rule needs it. */
+export type FrozenInvoice = Pick<Invoice, "month" | "status" | "lines">;
+
+/**
+ * Bonus lines payable on the invoice for `month`. Only APPROVED claims; per
+ * (video_url, platform); the 30-day window applies (see bonusItems for which
+ * month each step lands on).
+ *
+ * `invoices` (the creator's invoices, optional): a submitted, approved or
+ * paid invoice never changes, so from the cutover month on, an item whose
+ * month's invoice was already frozen without it (a claim approved late) moves
+ * to the next invoice that is still open, and whatever a frozen invoice
+ * already paid for a video is never paid again. Months before the cutover
+ * are left exactly as they were.
+ */
+export function bonusLinesForMonth(claims: BonusClaim[], month: YyyyMm, invoices: FrozenInvoice[] = []): InvoiceLine[] {
+  const frozen = invoices.filter((i) => i.status !== "draft" && i.month !== month && i.month >= BONUS_RULE_CUTOVER_MONTH && i.month < month);
+  const frozenMonths = new Set(frozen.map((i) => i.month));
+  // video key -> month -> cents a frozen invoice paid for it
+  const paid = new Map<string, Map<YyyyMm, Cents>>();
+  for (const inv of frozen) {
+    for (const l of inv.lines ?? []) {
+      const k = bonusLineKey(l);
+      if (!k) continue;
+      const byMonth = paid.get(k) ?? new Map<YyyyMm, Cents>();
+      byMonth.set(inv.month, (byMonth.get(inv.month) ?? 0) + l.amount_cents);
+      paid.set(k, byMonth);
     }
   }
+  const platformName = (p: Platform) => (p === "tiktok" ? "TikTok" : "Instagram");
+  const lines: InvoiceLine[] = [];
+  for (const v of bonusVideos(claims)) {
+    const items = bonusItems(v);
+    if (!items.length) continue;
+    let cents: Cents;
+    if (month < BONUS_RULE_CUTOVER_MONTH) {
+      // Before the cutover: exactly the old rule, never re-examined.
+      cents = items.filter((x) => x.month === month).reduce((a, x) => a + x.cents, 0);
+    } else {
+      // Walk the months from the cutover to `month`: a frozen month pays what
+      // its invoice holds; anything due there but missing carries forward to
+      // the next open invoice, and an overpayment carries forward as a credit.
+      const counted = items.filter((x) => x.month >= BONUS_RULE_CUTOVER_MONTH);
+      const firstItem = counted.map((x) => x.month).sort()[0];
+      const firstPaid = [...(paid.get(v.key)?.keys() ?? [])].sort()[0];
+      const from = [firstItem, firstPaid].filter(Boolean).sort()[0];
+      cents = 0;
+      if (from && from <= month) {
+        let carry = 0;
+        for (let m = from; m <= month; m = addMonths(m, 1)) {
+          const due = counted.filter((x) => x.month === m).reduce((a, x) => a + x.cents, 0);
+          if (m === month) {
+            cents = Math.max(0, carry + due);
+          } else if (frozenMonths.has(m)) {
+            carry += due - (paid.get(v.key)?.get(m) ?? 0);
+          } else {
+            // Still open: that month's own invoice pays it.
+            carry = Math.min(0, carry + due);
+          }
+        }
+      }
+    }
+    if (cents <= 0) continue;
+    // Describe the latest step this line pays.
+    const step = items.filter((x) => x.month <= month).sort((a, b) => a.month.localeCompare(b.month)).pop() ?? items[0];
+    // A $85 step that also carries its late $15 is the whole $100.
+    const milestone: BonusItem["milestone"] = step.milestone === "1m_rest" && cents >= BONUS_1M_TOTAL_CENTS ? "1m" : step.milestone;
+    const what = `${platformName(v.platform)} video posted ${v.posted} (${v.url})`;
+    lines.push({
+      kind: milestone === "100k" ? "bonus_100k" : milestone === "1m_rest" ? "bonus_1m_topup" : "bonus_1m",
+      label: `${milestone === "100k" ? "100K" : "1M"} views bonus: ${what}`,
+      amount_cents: cents,
+      video_url: v.url,
+      platform: v.platform,
+      posted_on: v.posted,
+      milestone,
+      ...(step.hitOn ? { hit_on: step.hitOn } : {}),
+      rule: step.rule,
+    });
+  }
   return lines.sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/**
+ * Bonus cost of a WORK month (founder reports): what the month's work earned
+ * under the rule that pays it. New-rule milestones count in the month they
+ * were hit (= the invoice they're on); old-rule videos count in their posting
+ * month (their invoice is the month after).
+ */
+export function bonusCostForMonth(claims: BonusClaim[], month: YyyyMm): Cents {
+  let cents = 0;
+  for (const v of bonusVideos(claims)) {
+    for (const x of bonusItems(v)) {
+      const workMonth = x.rule === "old" ? addMonths(x.month, -1) : x.month;
+      if (workMonth === month) cents += x.cents;
+    }
+  }
+  return cents;
+}
+
+/**
+ * When a milestone's bonus is paid: the first of the month after its invoice
+ * month ("2026-11" for a 100K hit in October on a new-rule video; for an
+ * old-rule video, two months after posting).
+ */
+export function bonusPayoutMonth(postedOn: YyyyMmDd, hitOn: YyyyMmDd): YyyyMm {
+  return bonusRuleFor(postedOn) === "old" ? addMonths(monthOf(postedOn), 2) : addMonths(monthOf(hitOn), 1);
 }
 
 // ---------------------------------------------------------------- month
@@ -499,6 +671,8 @@ export interface MonthSummary {
  * `postingDays` / `daysOff` should be the creator's FULL history (used for
  * the ladder too). Pass `opts.today` for an in-progress month so future
  * weekdays count as pending instead of missed; baseDue is then "earned so far".
+ * Pass `opts.invoices` (the creator's invoices) so bonuses respect invoices
+ * that are already frozen (see bonusLinesForMonth).
  */
 export function monthSummary(
   profile: PayProfile,
@@ -507,7 +681,7 @@ export function monthSummary(
   daysOff: DayOff[],
   bonusClaims: BonusClaim[],
   adjustments: Adjustment[],
-  opts: { today?: YyyyMmDd } = {},
+  opts: { today?: YyyyMmDd; invoices?: FrozenInvoice[] } = {},
 ): MonthSummary {
   const posted = postedWeekdaySet(postingDays, profile);
   const off = approvedOffSet(daysOff);
@@ -524,7 +698,7 @@ export function monthSummary(
   const credited = b.postedDays + b.approvedOffDays;
   const baseDueCents = b.calendarWeekdays ? Math.round((levelBaseCents * credited) / b.calendarWeekdays) : 0;
   const claims = tw ? (tw.promotedOn ? bonusClaims.filter((c) => c.posted_on >= tw.promotedOn!) : []) : bonusClaims;
-  const bonusLines = bonusLinesForMonth(claims, month);
+  const bonusLines = bonusLinesForMonth(claims, month, opts.invoices);
   const adjustmentLines: InvoiceLine[] = adjustments
     .filter((x) => x.month === month)
     .map((x) => ({ kind: "adjustment", label: x.note || "Adjustment", amount_cents: Math.round(x.amount_cents) }));

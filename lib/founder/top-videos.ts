@@ -1,7 +1,7 @@
 /**
- * Top videos for the founder app: a creator's synced posts turned into videos
- * (a TikTok and an Instagram post of the same video count once, views added),
- * ranked by current views.
+ * Top videos for the founder app: a creator's synced posts ranked by current
+ * views, one entry per post (see postVideos). pairVideos (TikTok + Instagram of
+ * the same video counted once) is kept for reference but not used for ranking.
  *
  * Pairing is the same as the creator app's Videos tab (pairPosts in
  * keshah-creators-app lib/screens/creator/videos_tab.dart): per posting day,
@@ -102,6 +102,26 @@ export function pairVideos(posts: PostLite[], bonus: Map<string, number> = new M
     }
   }
   return out;
+}
+
+/**
+ * One entry per post (TikTok and Instagram ranked separately). Bonuses are per
+ * platform, so adding a video's views together would make e.g. 60K + 50K look
+ * like it should have earned the 100K bonus. This is what the founder app shows.
+ */
+export function postVideos(posts: PostLite[], bonus: Map<string, number> = new Map()): TopVideo[] {
+  return posts.map((p) => {
+    const tiktok = p.platform === "tiktok";
+    const side = { url: p.url, views: p.views };
+    return {
+      postedOn: p.localDate || p.postedAt.slice(0, 10),
+      views: p.views,
+      tiktok: tiktok ? side : null,
+      instagram: tiktok ? null : side,
+      thumbnail: p.thumbnail,
+      bonusCents: bonus.get(postKey(p.url, tiktok ? "tiktok" : "instagram")) ?? 0,
+    };
+  });
 }
 
 /** The n most-viewed (ties: newest first). */

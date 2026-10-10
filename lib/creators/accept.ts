@@ -131,6 +131,7 @@ export async function acceptCreator(id: string, opts: AcceptOptions): Promise<Ac
               firstName: String(d.name || d.legal_name || "").trim().split(/\s+/)[0] ?? "",
               link: inviteLink,
               keshahEmail: groupDone ? String(d.keshah_email || "") : undefined,
+              signInEmail: personal,
               contractReady: ready,
               // Already working with us (migrated): portal intro, not an offer email.
               existing: d.status === "active" || d.status === "leaving",

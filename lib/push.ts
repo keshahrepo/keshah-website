@@ -14,6 +14,7 @@
  * messaging client, see lib/creators/mobile.test.ts).
  */
 import type { Firestore, QuerySnapshot } from "firebase-admin/firestore";
+import { bonusPayoutMonth } from "./creators/pay";
 
 export const PUSH_TOKENS = "push_tokens";
 
@@ -181,38 +182,38 @@ export interface BonusPushInfo {
   kind: "100k" | "1m";
   /** What this crossing adds: $15 at 100K; at 1M the line becomes $100 in all, so +$85 on top of a 100K already counted. */
   addedCents: number;
-  /** The video's local posting date (yyyy-mm-dd): its bonus is paid two months later. */
+  /** The video's local posting date (yyyy-mm-dd). */
   postedOn: string;
+  /** The creator-local date the line was passed (yyyy-mm-dd); falls back to postedOn. */
+  hitOn?: string;
   platform: string;
   /** creators/{id}/posts doc id ("tiktok_123"). */
   postId: string;
   url: string;
 }
 
-/** "yyyy-mm" moved by n months. */
-function addMonthsYm(month: string, n: number): string {
-  const [y, m] = month.split("-").map(Number);
-  const idx = y * 12 + (m - 1) + n;
-  return `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, "0")}`;
-}
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-function monthName(month: string): string {
-  const [y, m] = month.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, 1)).toLocaleString("en-US", { month: "long", timeZone: "UTC" });
+/** "Nov 1": the payday that starts a "yyyy-mm" payout month. */
+export function paydayLabel(payoutMonth: string): string {
+  const m = Number(payoutMonth.slice(5, 7));
+  return `${MONTHS_SHORT[m - 1] ?? ""} 1`;
 }
 
 /**
- * A video passed 100K or 1M views. Bonuses for videos posted in month M are
- * on the invoice for M+1 and paid early M+2 (an October video lands on the
- * December payout). The data carries the post so a tap opens that video.
+ * A video passed 100K or 1M views. The bonus is paid on the payday after
+ * the month it was hit (a 100K in October is on the Nov 1 payout); videos
+ * posted before the cutover keep the old timing, two months after posting
+ * (lib/creators/pay.ts bonusPayoutMonth). The data carries the post so a tap
+ * opens that video; `month` is the video's posting month (Videos opens on it).
  */
 export function bonusPush(i: BonusPushInfo): PushMessage {
   const posted = i.postedOn.slice(0, 7);
-  const payout = addMonthsYm(posted, 2);
+  const payout = bonusPayoutMonth(i.postedOn, i.hitOn || i.postedOn);
   const dollars = `$${(i.addedCents / 100).toFixed(i.addedCents % 100 === 0 ? 0 : 2)}`;
   return {
     title: "Bonus added",
-    body: `Your video just passed ${i.kind === "1m" ? "1M" : "100K"} views. +${dollars} on your ${monthName(payout)} payout.`,
+    body: `Your video just passed ${i.kind === "1m" ? "1M" : "100K"} views. +${dollars} on your ${paydayLabel(payout)} payout.`,
     data: { type: "bonus", post_id: i.postId, platform: i.platform, url: i.url, month: posted, payout_month: payout },
   };
 }

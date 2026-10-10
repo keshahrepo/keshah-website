@@ -358,6 +358,8 @@ export function bonusPushInfo(
     kind: next >= BONUS_1M_TOTAL_CENTS ? "1m" : "100k",
     addedCents: added,
     postedOn: after.posted_on || post.local_date,
+    // The day this crossing was recorded: it decides the payout month (new rule).
+    hitOn: (next >= BONUS_1M_TOTAL_CENTS ? after.crossed_1m_on : after.crossed_100k_on) || after.crossed_100k_on || after.posted_on || post.local_date,
     platform: post.platform,
     postId: postDocId(post.platform, post.post_id),
     url: post.url,

@@ -48,7 +48,7 @@ export const LISTINGS: Listing[] = [
       {
         heading: "What you'll do",
         bullets: [
-          "Film 4 talking-head videos per day (~60 seconds each), Mon–Fri, using scripts and references provided",
+          "Film 3 talking-head videos per day during your trial, then 5 (~60 seconds each), Mon–Fri, using scripts and references provided",
           "Complete basic edits in the TikTok app (training provided; no prior editing experience required)",
           "Post to TikTok and Instagram accounts created for you by KESHAH, separate from your personal accounts",
         ],
@@ -68,16 +68,17 @@ export const LISTINGS: Listing[] = [
         bullets: [
           "Currently enrolled in a US college (juniors and seniors preferred)",
           "Comfortable speaking on camera",
+          "An iPhone (our creator app is iPhone only for now)",
           "No personal experience with hair loss or prior posting experience required",
         ],
       },
     ],
     compensation:
-      "Base $400/mo + $15 bonus per video over 100K views, following a paid two-week trial.",
+      "$300 paid trial (20 posting days), then $500/mo base growing to $1,100, plus $15 per video over 100K views and $100 over 1M.",
     applicationProcess: [
       "Apply",
       "If deemed a fit, select a time for a 30-min group interview with Aadi, our founder",
-      "Selected applicants begin a paid two-week trial",
+      "Selected applicants begin a paid 20-day trial",
       "Following a successful trial, you officially join the KESHAH creator team",
     ],
     closingNote:

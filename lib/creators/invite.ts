@@ -71,6 +71,8 @@ export function welcomeEmail(input: {
   firstName: string;
   link: string;
   keshahEmail?: string;
+  /** The personal address the email goes to, which is the one they sign in to the app with. */
+  signInEmail?: string;
   contractReady: boolean;
   /** Already working with us (e.g. moved over from the old setup): portal intro, not an offer. */
   existing?: boolean;
@@ -124,8 +126,9 @@ export function welcomeEmail(input: {
     "",
     ...(app
       ? [
-          "Everything happens in the KESHAH Creators app. Download it here and sign in with this email address:",
+          "Everything happens in the KESHAH Creators app. It's in early access, so it's on TestFlight, Apple's app for new apps. Tap the link, install TestFlight if it asks, then tap Install:",
           app,
+          input.signInEmail ? `Then sign in with ${input.signInEmail}, the email this message was sent to.` : "Then sign in with the email this message was sent to.",
           "",
         ]
       : ["Everything happens in your creator portal. First, set your password (this link works once and expires in 7 days):", input.link, ""]),
@@ -137,7 +140,7 @@ export function welcomeEmail(input: {
       : []),
     "Next steps:",
     "",
-    app ? "1. Download KESHAH Creators and sign in with this email." : "1. Set your password and log in to the portal.",
+    app ? `1. Install KESHAH Creators from the TestFlight link above and sign in with ${input.signInEmail || "this email address"}.` : "1. Set your password and log in to the portal.",
     `2. ${contractStep}`,
     "3. Go through the Getting started steps. They cover Slack, setting up your accounts and your first 3 days.",
     "",

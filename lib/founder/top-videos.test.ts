@@ -2,7 +2,7 @@
 // Founder top videos: TikTok + Instagram pairing per day (same as the creator app), bonus from approved claims, ranking.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { bonusByPost, pairVideos, topByViews, type PostLite } from "./top-videos";
+import { bonusByPost, pairVideos, postVideos, topByViews, type PostLite } from "./top-videos";
 import type { BonusClaim } from "@/lib/creators/types";
 
 const tt = (id: string, views: number, at: string, day = at.slice(0, 10)): PostLite => ({
@@ -59,4 +59,16 @@ test("top 5 by views, zero-view videos left out", () => {
   ]);
   const top = topByViews(v);
   assert.deepEqual(top.map((x) => x.views), [60, 50, 40, 30, 20]);
+});
+
+test("founder list ranks each post on its own: views are never added across platforms", () => {
+  const posts = [
+    { platform: "tiktok", url: "https://www.tiktok.com/@a/video/1", views: 60_000, postedAt: "2026-10-01T10:00:00Z", localDate: "2026-10-01", thumbnail: null },
+    { platform: "instagram", url: "https://www.instagram.com/reel/AAA/", views: 50_000, postedAt: "2026-10-01T10:05:00Z", localDate: "2026-10-01", thumbnail: null },
+  ];
+  const top = topByViews(postVideos(posts));
+  assert.equal(top.length, 2);
+  assert.deepEqual(top.map((v) => v.views), [60_000, 50_000]);
+  assert.ok(top[0].tiktok && !top[0].instagram);
+  assert.ok(top[1].instagram && !top[1].tiktok);
 });

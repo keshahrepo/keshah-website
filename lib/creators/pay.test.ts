@@ -5,6 +5,10 @@ import {
   baseForCompletedMonths,
   completeVideoCount,
   bonusLinesForMonth,
+  bonusCostForMonth,
+  bonusPayoutMonth,
+  bonusRuleFor,
+  BONUS_HIT_MONTH_RULE_FROM,
   completedMonthsAsOf,
   creatorPrefix,
   dayComplete,
@@ -197,52 +201,178 @@ const claim = (o: Partial<BonusClaim>): BonusClaim => ({
 });
 const total = (lines: { amount_cents: number }[]) => lines.reduce((s, l) => s + l.amount_cents, 0);
 
-test("bonus: paid on the invoice for the month after posting, not before", () => {
-  const c = [claim({ crossed_100k_on: "2026-10-20" })]; // posted 2026-10-05
-  assert.equal(total(bonusLinesForMonth(c, "2026-10")), 0);
-  assert.equal(total(bonusLinesForMonth(c, "2026-11")), 1500);
-  assert.equal(total(bonusLinesForMonth(c, "2026-12")), 0);
+// ---- old rule: videos posted before BONUS_HIT_MONTH_RULE_FROM (2026-10-01)
+
+test("bonus (old rule, posted before Oct 2026): paid on the invoice for the month after posting, not before", () => {
+  const c = [claim({ posted_on: "2026-09-05", crossed_100k_on: "2026-09-20" })];
+  assert.equal(total(bonusLinesForMonth(c, "2026-09")), 0);
+  assert.equal(total(bonusLinesForMonth(c, "2026-10")), 1500);
+  assert.equal(total(bonusLinesForMonth(c, "2026-11")), 0);
+  assert.equal(bonusLinesForMonth(c, "2026-10")[0].rule, "old");
 });
 
-test("bonus: 1M -> one $100 line", () => {
-  const c = [claim({ crossed_100k_on: "2026-10-08", crossed_1m_on: "2026-10-20" })];
-  const lines = bonusLinesForMonth(c, "2026-11");
+test("bonus (old rule): 1M -> one $100 line", () => {
+  const c = [claim({ posted_on: "2026-09-05", crossed_100k_on: "2026-09-08", crossed_1m_on: "2026-09-20" })];
+  const lines = bonusLinesForMonth(c, "2026-10");
   assert.equal(lines.length, 1);
   assert.equal(lines[0].kind, "bonus_1m");
   assert.equal(total(lines), 10000);
   // 1M with no 100K date recorded -> also $100
-  assert.equal(total(bonusLinesForMonth([claim({ crossed_1m_on: "2026-10-20" })], "2026-11")), 10000);
+  assert.equal(total(bonusLinesForMonth([claim({ posted_on: "2026-09-05", crossed_1m_on: "2026-09-20" })], "2026-10")), 10000);
 });
 
-test("bonus: 100K in posting month, 1M the next month -> one $100 line, no split", () => {
-  const c = [claim({ posted_on: "2026-10-25", crossed_100k_on: "2026-10-28", crossed_1m_on: "2026-11-10" })];
-  assert.equal(total(bonusLinesForMonth(c, "2026-10")), 0);
-  const nov = bonusLinesForMonth(c, "2026-11");
-  assert.equal(nov.length, 1);
-  assert.equal(nov[0].kind, "bonus_1m");
-  assert.equal(total(nov), 10000);
+test("bonus (old rule): 100K in posting month, 1M the next month -> one $100 line, no split", () => {
+  const c = [claim({ posted_on: "2026-09-25", crossed_100k_on: "2026-09-28", crossed_1m_on: "2026-10-10" })];
+  assert.equal(total(bonusLinesForMonth(c, "2026-09")), 0);
+  const oct = bonusLinesForMonth(c, "2026-10");
+  assert.equal(oct.length, 1);
+  assert.equal(oct[0].kind, "bonus_1m");
+  assert.equal(total(oct), 10000);
+  assert.equal(total(bonusLinesForMonth(c, "2026-11")), 0);
 });
 
 test("bonus: per platform (1M on TikTok and Instagram = $200)", () => {
   const c = [
+    claim({ posted_on: "2026-09-05", crossed_1m_on: "2026-09-20" }),
+    claim({ posted_on: "2026-09-05", platform: "instagram", video_url: "https://www.instagram.com/reel/abc", crossed_1m_on: "2026-09-22" }),
+  ];
+  assert.equal(total(bonusLinesForMonth(c, "2026-10")), 20000);
+  const n = [
     claim({ crossed_1m_on: "2026-10-20" }),
     claim({ platform: "instagram", video_url: "https://www.instagram.com/reel/abc", crossed_1m_on: "2026-10-22" }),
   ];
-  assert.equal(total(bonusLinesForMonth(c, "2026-11")), 20000);
+  assert.equal(total(bonusLinesForMonth(n, "2026-10")), 20000);
 });
 
 test("bonus: crossing after 30 days = nothing; day 30 counts", () => {
+  // old rule
+  assert.equal(total(bonusLinesForMonth([claim({ posted_on: "2026-09-01", crossed_100k_on: "2026-10-02" })], "2026-10")), 0); // 31 days
+  assert.equal(total(bonusLinesForMonth([claim({ posted_on: "2026-09-01", crossed_100k_on: "2026-10-01" })], "2026-10")), 1500); // 30 days
+  // new rule
   assert.equal(total(bonusLinesForMonth([claim({ posted_on: "2026-10-01", crossed_100k_on: "2026-11-01" })], "2026-11")), 0); // 31 days
-  assert.equal(total(bonusLinesForMonth([claim({ posted_on: "2026-10-01", crossed_100k_on: "2026-10-31" })], "2026-11")), 1500); // 30 days
+  assert.equal(total(bonusLinesForMonth([claim({ posted_on: "2026-10-01", crossed_100k_on: "2026-10-31" })], "2026-10")), 1500); // 30 days
   // 100K in time, 1M late -> only the $15
   const c = [claim({ posted_on: "2026-10-01", crossed_100k_on: "2026-10-10", crossed_1m_on: "2026-11-15" })];
-  assert.equal(total(bonusLinesForMonth(c, "2026-11")), 1500);
+  assert.equal(total(bonusLinesForMonth(c, "2026-10")), 1500);
+  assert.equal(total(bonusLinesForMonth(c, "2026-11")), 0);
 });
 
 test("bonus: rejected / unapproved claims excluded; duplicate approved claims not double-paid", () => {
-  assert.equal(total(bonusLinesForMonth([claim({ status: "rejected", crossed_1m_on: "2026-10-20" })], "2026-11")), 0);
-  assert.equal(total(bonusLinesForMonth([claim({ status: "claimed", crossed_1m_on: "2026-10-20" })], "2026-11")), 0);
-  assert.equal(total(bonusLinesForMonth([claim({ crossed_100k_on: "2026-10-20" }), claim({ crossed_100k_on: "2026-10-21" })], "2026-11")), 1500);
+  assert.equal(total(bonusLinesForMonth([claim({ status: "rejected", crossed_1m_on: "2026-10-20" })], "2026-10")), 0);
+  assert.equal(total(bonusLinesForMonth([claim({ status: "claimed", crossed_1m_on: "2026-10-20" })], "2026-10")), 0);
+  assert.equal(total(bonusLinesForMonth([claim({ crossed_100k_on: "2026-10-20" }), claim({ crossed_100k_on: "2026-10-21" })], "2026-10")), 1500);
+});
+
+// ---- new rule: videos posted on/after 2026-10-01, paid for the month the milestone was hit
+
+test("bonus (new rule): 100K is paid on the invoice for the month it was hit", () => {
+  const c = [claim({ crossed_100k_on: "2026-10-20" })]; // posted 2026-10-05
+  assert.equal(total(bonusLinesForMonth(c, "2026-10")), 1500);
+  assert.equal(total(bonusLinesForMonth(c, "2026-11")), 0);
+  const l = bonusLinesForMonth(c, "2026-10")[0];
+  assert.equal(l.kind, "bonus_100k");
+  assert.equal(l.label, "100K views bonus: TikTok video posted 2026-10-05 (https://www.tiktok.com/@isai/video/1)");
+  assert.deepEqual([l.milestone, l.hit_on, l.rule, l.posted_on, l.platform], ["100k", "2026-10-20", "new", "2026-10-05", "tiktok"]);
+  // Posted late in a month, hit early the next: that next month's invoice.
+  const late = [claim({ posted_on: "2026-10-28", crossed_100k_on: "2026-11-02" })];
+  assert.equal(total(bonusLinesForMonth(late, "2026-10")), 0);
+  assert.equal(total(bonusLinesForMonth(late, "2026-11")), 1500);
+});
+
+test("bonus (new rule): 100K in October, 1M in November -> $15 on October, $85 on November", () => {
+  const c = [claim({ posted_on: "2026-10-15", crossed_100k_on: "2026-10-20", crossed_1m_on: "2026-11-05" })];
+  const oct = bonusLinesForMonth(c, "2026-10");
+  const nov = bonusLinesForMonth(c, "2026-11");
+  assert.deepEqual(oct.map((l) => [l.kind, l.amount_cents, l.milestone]), [["bonus_100k", 1500, "100k"]]);
+  assert.deepEqual(nov.map((l) => [l.kind, l.amount_cents, l.milestone, l.hit_on]), [["bonus_1m_topup", 8500, "1m_rest", "2026-11-05"]]);
+  assert.match(nov[0].label, /^1M views bonus: TikTok video posted 2026-10-15/);
+  assert.equal(total(bonusLinesForMonth(c, "2026-12")), 0);
+});
+
+test("bonus (new rule): 100K and 1M in the same month -> one $100 line", () => {
+  const c = [claim({ crossed_100k_on: "2026-10-08", crossed_1m_on: "2026-10-20" })];
+  const lines = bonusLinesForMonth(c, "2026-10");
+  assert.deepEqual(lines.map((l) => [l.kind, l.amount_cents, l.milestone]), [["bonus_1m", 10000, "1m"]]);
+  assert.equal(total(bonusLinesForMonth(c, "2026-11")), 0);
+  // 1M seen first (no 100K date): the whole $100 in the month of the 1M.
+  assert.equal(total(bonusLinesForMonth([claim({ posted_on: "2026-10-25", crossed_1m_on: "2026-11-03" })], "2026-11")), 10000);
+});
+
+test("bonus cutover: the posting date decides the rule; nothing paid twice or dropped", () => {
+  const sep = claim({ video_url: "https://www.tiktok.com/@isai/video/9", posted_on: "2026-09-30", crossed_100k_on: "2026-10-02" });
+  const oct = claim({ video_url: "https://www.tiktok.com/@isai/video/10", posted_on: "2026-10-01", crossed_100k_on: "2026-10-02" });
+  const later = claim({ video_url: "https://www.tiktok.com/@isai/video/11", posted_on: "2026-10-20", crossed_100k_on: "2026-10-25", crossed_1m_on: "2026-11-02" });
+  const all = [sep, oct, later];
+  const months = ["2026-09", "2026-10", "2026-11", "2026-12"];
+  const paid = months.map((m) => total(bonusLinesForMonth(all, m)));
+  assert.deepEqual(paid, [0, 1500 + 1500 + 1500, 8500, 0]);
+  assert.equal(paid.reduce((a, b) => a + b, 0), 1500 + 1500 + 10000);
+  assert.deepEqual(bonusLinesForMonth(all, "2026-10").map((l) => l.rule), ["old", "new", "new"]);
+});
+
+test("bonus: Isai's September bonuses ($740) stay on the October invoice exactly once", () => {
+  // 5 x 1M ($500) + 16 x 100K ($240) on September videos. One passes 1M on
+  // Oct 15 and some pass 100K in early October: still the old rule.
+  const sep: BonusClaim[] = [];
+  for (let k = 0; k < 4; k++) sep.push(claim({ video_url: `https://www.tiktok.com/@isai/video/m${k}`, posted_on: "2026-09-10", crossed_100k_on: "2026-09-12", crossed_1m_on: "2026-09-20" }));
+  sep.push(claim({ video_url: "https://www.instagram.com/reel/sep", platform: "instagram", posted_on: "2026-09-20", crossed_100k_on: "2026-09-25", crossed_1m_on: "2026-10-15" }));
+  for (let k = 0; k < 16; k++) sep.push(claim({ video_url: `https://www.tiktok.com/@isai/video/k${k}`, posted_on: "2026-09-22", crossed_100k_on: k < 8 ? "2026-09-28" : "2026-10-03" }));
+  // An October video hitting 100K on Oct 20 and 1M on Nov 5 (new rule).
+  const octVideo = claim({ video_url: "https://www.tiktok.com/@isai/video/oct", posted_on: "2026-10-12", crossed_100k_on: "2026-10-20", crossed_1m_on: "2026-11-05" });
+  const all = [...sep, octVideo];
+  const oct = bonusLinesForMonth(all, "2026-10");
+  assert.equal(total(oct.filter((l) => l.rule === "old")), 74000);
+  assert.equal(total(oct.filter((l) => l.rule === "new")), 1500);
+  assert.equal(total(oct), 75500); // October invoice, paid Nov 1
+  // Once October is frozen, November carries only the October video's $85.
+  const octInv = { month: "2026-10", status: "submitted" as const, lines: oct };
+  const nov = bonusLinesForMonth(all, "2026-11", [octInv]);
+  assert.deepEqual(nov.map((l) => [l.amount_cents, l.milestone, l.rule]), [[8500, "1m_rest", "new"]]); // paid Dec 1
+  assert.equal(total(bonusLinesForMonth(all, "2026-12", [octInv, { month: "2026-11", status: "paid" as const, lines: nov }])), 0);
+  assert.equal(total(bonusLinesForMonth(all, "2026-09")), 0);
+});
+
+test("bonus: a frozen invoice is never re-paid; a milestone it missed moves to the next open invoice", () => {
+  const c100 = claim({ posted_on: "2026-10-15", crossed_100k_on: "2026-10-20", crossed_1m_on: "2026-11-05" });
+  const octLines = bonusLinesForMonth([c100], "2026-10");
+  const octInv = { month: "2026-10", status: "submitted" as const, lines: octLines };
+  // November: just the $85.
+  assert.equal(total(bonusLinesForMonth([c100], "2026-11", [octInv])), 8500);
+  // October was submitted before the claim was approved: the $15 comes on November with the $85.
+  const emptyOct = { month: "2026-10", status: "paid" as const, lines: [] };
+  const nov = bonusLinesForMonth([c100], "2026-11", [emptyOct]);
+  assert.deepEqual(nov.map((l) => [l.kind, l.amount_cents, l.milestone]), [["bonus_1m", 10000, "1m"]]);
+  // October still a draft: it pays its own $15, November only the $85.
+  assert.equal(total(bonusLinesForMonth([c100], "2026-11", [{ ...emptyOct, status: "draft" as const }])), 8500);
+  // A late approval of a September (old-rule) video after October was frozen: November, once.
+  const sepLate = claim({ video_url: "https://www.tiktok.com/@isai/video/late", posted_on: "2026-09-20", crossed_100k_on: "2026-09-25" });
+  assert.equal(total(bonusLinesForMonth([sepLate], "2026-11", [emptyOct])), 1500);
+  // ...but not when the frozen October invoice already paid it (older line without fields: matched by its label).
+  const legacy = { month: "2026-10", status: "paid" as const, lines: [{ kind: "bonus_100k" as const, label: "100K views bonus: TikTok video posted 2026-09-20 (https://www.tiktok.com/@isai/video/late)", amount_cents: 1500 }] };
+  assert.equal(total(bonusLinesForMonth([sepLate], "2026-11", [legacy])), 0);
+  assert.equal(total(bonusLinesForMonth([sepLate], "2026-12", [legacy, { month: "2026-11", status: "paid" as const, lines: [] }])), 0);
+  // Invoices before the cutover month are never re-examined (old behaviour).
+  const aug = claim({ video_url: "https://www.tiktok.com/@isai/video/aug", posted_on: "2026-08-20", crossed_100k_on: "2026-08-25" });
+  assert.equal(total(bonusLinesForMonth([aug], "2026-10", [{ month: "2026-09", status: "paid" as const, lines: [] }])), 0);
+});
+
+test("bonusCostForMonth: new rule counts the month hit, old rule the posting month", () => {
+  const c = [
+    claim({ video_url: "https://www.tiktok.com/@isai/video/s", posted_on: "2026-09-20", crossed_100k_on: "2026-10-05" }),
+    claim({ video_url: "https://www.tiktok.com/@isai/video/o", posted_on: "2026-10-15", crossed_100k_on: "2026-10-20", crossed_1m_on: "2026-11-05" }),
+  ];
+  assert.equal(bonusCostForMonth(c, "2026-09"), 1500);
+  assert.equal(bonusCostForMonth(c, "2026-10"), 1500);
+  assert.equal(bonusCostForMonth(c, "2026-11"), 8500);
+  assert.equal(bonusCostForMonth(c, "2026-12"), 0);
+});
+
+test("bonusPayoutMonth: the month after the hit (new), two after posting (old)", () => {
+  assert.equal(bonusRuleFor("2026-09-30"), "old");
+  assert.equal(bonusRuleFor(BONUS_HIT_MONTH_RULE_FROM), "new");
+  assert.equal(bonusPayoutMonth("2026-10-15", "2026-10-20"), "2026-11");
+  assert.equal(bonusPayoutMonth("2026-10-15", "2026-11-05"), "2026-12");
+  assert.equal(bonusPayoutMonth("2026-09-20", "2026-10-05"), "2026-11");
 });
 
 test("adjustments +/- are added as lines for their month only", () => {
@@ -470,7 +600,8 @@ test("v2: ladder counts from promotion; bonuses only for videos posted after it"
     crossed_100k_on: posted_on,
     status: "approved",
   } as BonusClaim);
-  const s = monthSummary(p, "2026-11", pd, [], [claim("2026-10-20"), claim("2026-10-29")], []);
+  // Hit the day they were posted, so paid on October's invoice (the 20th was a trial video).
+  const s = monthSummary(p, "2026-10", pd, [], [claim("2026-10-20"), claim("2026-10-29")], []);
   assert.equal(s.bonusLines.length, 1);
   assert.match(s.bonusLines[0].label, /2026-10-29/);
 });

@@ -1163,7 +1163,9 @@ function BonusClaims({ d, reload }: { d: Detail; reload: () => void }) {
     <div style={card}>
       <h3 style={h3}>Bonus claims</h3>
       <p style={{ ...muted, marginTop: -6, marginBottom: 10 }}>
-        $15 at 100K, $100 total at 1M, if crossed within 30 days of posting. Paid in the month crossed. Auto claims are added and approved by the post sync.
+        $15 at 100K, $100 total at 1M, if crossed within 30 days of posting. Each milestone goes on the invoice for the month it was crossed
+        ($15 then $85 if 1M comes a month later). Videos posted before Oct 1, 2026 keep the old timing: the invoice for the month after
+        posting. Auto claims are added and approved by the post sync.
       </p>
       {!d.bonusClaims.length && <p style={muted}>No claims.</p>}
       {d.bonusClaims.length > 0 && (

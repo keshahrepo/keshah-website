@@ -354,6 +354,19 @@ export interface InvoiceLine {
   kind: InvoiceLineKind;
   label: string;
   amount_cents: Cents;
+  /**
+   * Bonus lines only (absent on lines written before the hit-month rule):
+   * which video and platform, when it went up, which milestone this line
+   * pays ("100k" $15, "1m" $100 in one go, "1m_rest" the $85 after a 100K
+   * paid earlier), the day it was hit, and the timing rule it follows
+   * ("old": paid the month after posting; "new": paid for the month it was hit).
+   */
+  video_url?: string;
+  platform?: Platform;
+  posted_on?: YyyyMmDd;
+  milestone?: "100k" | "1m" | "1m_rest";
+  hit_on?: YyyyMmDd;
+  rule?: "old" | "new";
 }
 
 export type InvoiceStatus = "draft" | "submitted" | "approved" | "paid";

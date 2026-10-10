@@ -251,8 +251,9 @@ test("bonus: 100K inside 30 days creates one approved auto claim; re-run is a no
   assert.equal(up.patch.crossed_1m_on, "2026-10-19"); // 03:00Z = Oct 19 in Chicago
   const upgraded = [{ ...claims[0], ...up.patch }];
   assert.equal(bonusAction(rec({ views: 1_500_000, crossed_1m_at: "2026-10-20T03:00:00Z" }), upgraded, bctx).op, "none");
-  // posted Oct 1, 100K Oct 3 + 1M Oct 19 -> one $100 line on the November invoice
-  assert.deepEqual(bonusLinesForMonth(upgraded, "2026-11").map((l) => [l.kind, l.amount_cents]), [["bonus_1m", 10000]]);
+  // posted Oct 1, 100K Oct 3 + 1M Oct 19 -> one $100 line on the October invoice (both hit in October)
+  assert.deepEqual(bonusLinesForMonth(upgraded, "2026-10").map((l) => [l.kind, l.amount_cents]), [["bonus_1m", 10000]]);
+  assert.equal(bonusLinesForMonth(upgraded, "2026-11").length, 0);
 });
 
 test("bonus: 30-day window is day 30 inclusive, judged by first-observed local date", () => {
@@ -285,13 +286,13 @@ test("bonus: manual claim for the same video -> auto claim reuses its url and pa
   assert.equal(a.op, "create");
   if (a.op !== "create") return;
   assert.equal(a.claim.video_url, manual.video_url);
-  const lines = bonusLinesForMonth([manual, { ...a.claim, id: a.id }], "2026-11");
+  const lines = bonusLinesForMonth([manual, { ...a.claim, id: a.id }], "2026-10");
   assert.equal(lines.length, 1);
   assert.equal(lines[0].amount_cents, 1500);
   assert.equal(bonusAction(rec(), [{ ...manual, status: "rejected" }], bctx).op, "none");
 });
 
-test("bonus push: +$15 at 100K, +$85 more at 1M, +$100 straight to 1M, on the payout two months after posting", () => {
+test("bonus push: +$15 at 100K, +$85 more at 1M, +$100 straight to 1M, on the payday after the month it was hit", () => {
   const a = bonusAction(rec(), [], bctx);
   assert.equal(a.op, "create");
   if (a.op !== "create") return;
@@ -299,14 +300,14 @@ test("bonus push: +$15 at 100K, +$85 more at 1M, +$100 straight to 1M, on the pa
   assert.deepEqual([first.kind, first.addedCents, first.postId], ["100k", 1500, "tiktok_6000000001"]);
   const msg = bonusPush(first);
   assert.equal(msg.title, "Bonus added");
-  assert.equal(msg.body, "Your video just passed 100K views. +$15 on your December payout.");
+  assert.equal(msg.body, "Your video just passed 100K views. +$15 on your Nov 1 payout.");
   assert.deepEqual(msg.data, {
     type: "bonus",
     post_id: "tiktok_6000000001",
     platform: "tiktok",
     url: "https://www.tiktok.com/@h/video/6000000001",
     month: "2026-10",
-    payout_month: "2026-12",
+    payout_month: "2026-11",
   });
   // The 1M upgrade adds the rest of the $100.
   const claims = [{ ...a.claim, id: a.id }];
@@ -315,13 +316,20 @@ test("bonus push: +$15 at 100K, +$85 more at 1M, +$100 straight to 1M, on the pa
   assert.equal(up.op, "upgrade");
   if (up.op !== "upgrade") return;
   const second = bonusPushInfo(big, claims, { ...claims[0], ...up.patch })!;
-  assert.equal(bonusPush(second).body, "Your video just passed 1M views. +$85 on your December payout.");
+  assert.equal(bonusPush(second).body, "Your video just passed 1M views. +$85 on your Nov 1 payout.");
+  // 1M passed in November (still inside the 30 days): the $85 is on the Dec 1 payout.
+  const nov = rec({ views: 1_100_000, crossed_1m_at: "2026-10-31T20:00:00Z" });
+  const upNov = bonusAction(nov, claims, bctx);
+  if (upNov.op !== "upgrade") return assert.fail("expected upgrade");
+  const novInfo = bonusPushInfo(nov, claims, { ...claims[0], ...upNov.patch, crossed_1m_on: "2026-11-02" })!;
+  assert.equal(bonusPush(novInfo).body, "Your video just passed 1M views. +$85 on your Dec 1 payout.");
+  assert.equal(bonusPush(novInfo).data?.payout_month, "2026-12");
   // Seen first at 1M: the whole $100 at once.
   const jump = rec({ views: 1_200_000, crossed_1m_at: "2026-10-03T18:00:00Z" });
   const j = bonusAction(jump, [], bctx);
   assert.equal(j.op, "create");
   if (j.op !== "create") return;
-  assert.equal(bonusPush(bonusPushInfo(jump, [], j.claim)!).body, "Your video just passed 1M views. +$100 on your December payout.");
+  assert.equal(bonusPush(bonusPushInfo(jump, [], j.claim)!).body, "Your video just passed 1M views. +$100 on your Nov 1 payout.");
   // A manual claim already paid the 100K: nothing new, no push.
   const manual: { id: string } & BonusClaim = {
     id: "m1",
@@ -335,8 +343,11 @@ test("bonus push: +$15 at 100K, +$85 more at 1M, +$100 straight to 1M, on the pa
   const m = bonusAction(rec(), [manual], bctx);
   if (m.op !== "create") return assert.fail("expected create");
   assert.equal(bonusPushInfo(rec(), [manual], m.claim), null);
-  // A December video lands on the February payout.
-  assert.match(bonusPush({ ...first, postedOn: "2026-12-30" }).body, /February payout\.$/);
+  // A December video hitting 100K in January lands on the Feb 1 payout.
+  assert.match(bonusPush({ ...first, postedOn: "2026-12-30", hitOn: "2027-01-02" }).body, /Feb 1 payout\.$/);
+  // Old rule (posted before Oct 2026): two months after posting, whenever it was hit.
+  assert.match(bonusPush({ ...first, postedOn: "2026-09-28", hitOn: "2026-10-02" }).body, /\+\$15 on your Nov 1 payout\.$/);
+  assert.equal(bonusPush({ ...first, postedOn: "2026-09-28", hitOn: "2026-10-02" }).data?.payout_month, "2026-11");
 });
 
 // ---------------------------------------------------------------- double count guard

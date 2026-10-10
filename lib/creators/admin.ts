@@ -428,6 +428,7 @@ export function summaryFor(c: AdminCreator, h: CreatorHistory, month: YyyyMm): M
   const today = todayIn(c.timezone);
   return monthSummary(payProfileOf(c), month, h.postingDays, h.daysOff, h.bonusClaims, h.adjustments, {
     today: month >= today.slice(0, 7) ? today : undefined,
+    invoices: h.invoices,
   });
 }
 
@@ -609,8 +610,6 @@ export async function buildRow(c: AdminCreator, month: YyyyMm): Promise<CreatorR
     next = { nextBaseCents: n.nextBaseCents, earliestMonth: n.earliestMonth };
   }
 
-  const approved = h.bonusClaims.filter((b) => b.status === "approved");
-  const inMonth = (d?: string) => !!d && d.slice(0, 7) === month;
   const estProceedsWindowUsd = attribution.proceedsInWindowUsd;
   const payWindowCents = s?.totalCents ?? 0;
   const roiRatio = payWindowCents > 0 ? estProceedsWindowUsd / (payWindowCents / 100) : null;
@@ -629,9 +628,10 @@ export async function buildRow(c: AdminCreator, month: YyyyMm): Promise<CreatorR
     missedDays: s?.missedDays ?? 0,
     missedDaysPrev: sPrev?.missedDays ?? 0,
     pendingDays: s?.pendingDays ?? 0,
-    // Counted on the invoice month they're paid in: videos posted the month before.
-    claims100k: approved.filter((b) => addMonths(b.posted_on.slice(0, 7), 1) === month && !!(b.crossed_100k_on || b.crossed_1m_on)).length,
-    claims1m: approved.filter((b) => addMonths(b.posted_on.slice(0, 7), 1) === month && !!b.crossed_1m_on).length,
+    // Counted on the invoice month they're paid in (the month's bonus lines):
+    // lines that include a 100K / lines that include a 1M.
+    claims100k: (s?.bonusLines ?? []).filter((l) => l.kind !== "bonus_1m_topup").length,
+    claims1m: (s?.bonusLines ?? []).filter((l) => l.kind === "bonus_1m" || l.kind === "bonus_1m_topup").length,
     pendingClaims: h.bonusClaims.filter((b) => b.status === "claimed").length,
     pendingDaysOff: h.daysOff.filter((d) => d.status === "requested").length,
     bonusCents: s ? s.bonusLines.reduce((a, l) => a + l.amount_cents, 0) : 0,
