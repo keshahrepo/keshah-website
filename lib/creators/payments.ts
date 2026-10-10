@@ -422,7 +422,7 @@ export interface AdminActor {
   user_agent: string;
 }
 
-async function logReveal(id: string, action: string, actor: AdminActor, extra: Record<string, unknown> = {}) {
+export async function logReveal(id: string, action: string, actor: AdminActor, extra: Record<string, unknown> = {}) {
   // Logged BEFORE the data is returned: if the log write fails, nothing is revealed.
   await privateRef(id)
     .collection("reveal_log")

@@ -81,12 +81,14 @@ function StepCard({
   link,
   keshahEmail,
   handle,
+  passwords,
 }: {
   step: GuideStep;
   n: number;
   link?: string;
   keshahEmail?: string;
   handle?: string;
+  passwords?: { tiktok: string; instagram: string };
 }) {
   return (
     <div
@@ -159,6 +161,8 @@ function StepCard({
 
       {step.slot === "email" && keshahEmail && <CopyBlock label="Your KESHAH email" value={keshahEmail} />}
       {step.slot === "handle" && handle && <CopyBlock label="Your username" value={handle} />}
+      {step.slot === "tiktok_password" && passwords?.tiktok && <CopyBlock label="Your TikTok password" value={passwords.tiktok} />}
+      {step.slot === "instagram_password" && passwords?.instagram && <CopyBlock label="Your Instagram password" value={passwords.instagram} />}
       {step.slot === "link" &&
         (link ? (
           <CopyBlock label="Your AppStack link" value={link} />
@@ -212,6 +216,7 @@ export default function StepGuide({
   link,
   keshahEmail,
   handle,
+  passwords,
   showSectionTitles = true,
   collapsible = false,
   toggleLabel,
@@ -225,6 +230,8 @@ export default function StepGuide({
   keshahEmail?: string;
   /** Suggested username (e.g. jen.keshah), shown on username steps. */
   handle?: string;
+  /** The creator's generated TikTok / Instagram passwords, shown on the password steps. */
+  passwords?: { tiktok: string; instagram: string };
   showSectionTitles?: boolean;
   /** Each section starts closed behind a tap-to-open row (keeps long picture guides out of the way). */
   collapsible?: boolean;
@@ -233,7 +240,7 @@ export default function StepGuide({
 }) {
   const sections = sectionIds ? guide.sections.filter((s) => sectionIds.includes(s.id)) : guide.sections;
   const steps = (section: (typeof sections)[number]) =>
-    section.steps.map((step, i) => <StepCard key={i} step={step} n={i + 1} link={link} keshahEmail={keshahEmail} handle={handle} />);
+    section.steps.map((step, i) => <StepCard key={i} step={step} n={i + 1} link={link} keshahEmail={keshahEmail} handle={handle} passwords={passwords} />);
   return (
     <div style={{ fontFamily: C.font, color: C.text }}>
       {sections.map((section) =>

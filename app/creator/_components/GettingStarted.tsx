@@ -95,6 +95,38 @@ function Callout({ children }: { children: ReactNode }) {
 }
 
 /** One warm-up day, as a row in a profile-style group. */
+/** Their generated TikTok / Instagram passwords, fetched when the accounts step opens (made on first fetch). */
+function useAccountPasswords() {
+  const [pw, setPw] = useState<{ tiktok: string; instagram: string } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    api<{ passwords: { tiktok: string; instagram: string } }>("/api/creator/account-passwords")
+      .then((r) => live && setPw(r.passwords))
+      .catch((e: Error) => live && setErr(e.message));
+    return () => {
+      live = false;
+    };
+  }, []);
+  return { pw, err };
+}
+
+function AccountPasswordGuide({ keshahEmail, handle }: { keshahEmail?: string; handle: string }) {
+  const { pw, err } = useAccountPasswords();
+  return (
+    <>
+      {err && <Msg error={`Couldn't get your passwords. ${err}`} />}
+      {pw && <CopyBlock label="Your TikTok password" value={pw.tiktok} />}
+      {pw && <CopyBlock label="Your Instagram password" value={pw.instagram} />}
+      <P style={{ marginTop: 10 }}>
+        Sign up with your KESHAH email and these exact passwords. Don&apos;t add your phone number or turn on two-factor login. These accounts
+        belong to KESHAH, and we need to be able to get in with the email alone. If Instagram asks for a phone number, stop and message us.
+      </P>
+      <StepGuide collapsible guide={ACCOUNT_SETUP_GUIDE} sectionIds={["tiktok", "instagram"]} keshahEmail={keshahEmail} handle={handle} passwords={pw ?? undefined} />
+    </>
+  );
+}
+
 function WarmupDay({ n, done, sub, today, isLast }: { n: number; done: boolean; sub: string; today?: boolean; isLast?: boolean }) {
   return (
     <div
@@ -385,13 +417,7 @@ export default function GettingStarted({ data, onDone, onProfile }: { data: Port
         <P style={{ marginTop: 10 }}>{cfg.handle_taken_text}</P>
         <P>Set your display name to your first name, {firstName}.</P>
         <div style={{ height: 4 }} />
-        <StepGuide
-          collapsible
-          guide={ACCOUNT_SETUP_GUIDE}
-          sectionIds={["tiktok", "instagram"]}
-          keshahEmail={data.creator.keshah_email || undefined}
-          handle={cfg.suggested_handle}
-        />
+        <AccountPasswordGuide keshahEmail={data.creator.keshah_email || undefined} handle={cfg.suggested_handle} />
         <P style={{ marginTop: 6 }}>Once both accounts are set up, add your handles here.</P>
         <Field label="TikTok handle">
           <input style={inputStyle} value={tt} onChange={(e) => setTt(e.target.value)} placeholder={`@${cfg.suggested_handle}`} autoCapitalize="none" />

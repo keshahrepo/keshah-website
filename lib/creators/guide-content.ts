@@ -2,7 +2,8 @@
 // /public/creator-guide and have the tap target already highlighted.
 //
 // Creators sign up on both apps with their name@keshah.com email. Codes
-// arrive by email and they choose their own password.
+// arrive by email. The password is one we generate and save for them
+// (lib/creators/account-passwords.ts), so KESHAH can always get back in.
 
 export type GuideStep = {
   /** Path under /public. Omit for a text-only step. */
@@ -15,7 +16,7 @@ export type GuideStep = {
   /** Text the creator can copy with one tap (e.g. the bio). */
   copy?: string;
   /** Where to show creator-specific data passed to StepGuide. */
-  slot?: "email" | "link" | "handle";
+  slot?: "email" | "link" | "handle" | "tiktok_password" | "instagram_password";
 };
 
 export type GuideSection = {
@@ -45,8 +46,12 @@ export const ACCOUNT_SETUP_GUIDE: Guide = {
         {
           image: `${IMG}/tiktok-1-signup.webp`,
           alt: "TikTok sign up screen with Use phone or email highlighted",
-          text: "Open TikTok and tap Use phone or email. Pick Email and sign up with your KESHAH email. TikTok sends a code to that email, and it arrives in your personal inbox too, so check there. Then you choose your own password.",
+          text: "Open TikTok and tap Use phone or email. Pick Email and sign up with your KESHAH email. TikTok sends a code to that email, and it arrives in your personal inbox too, so check there. Then it asks for a password. Use your TikTok password below, exactly as it's written.",
           slot: "email",
+        },
+        {
+          text: "Don't add your phone number or turn on two-factor login. These accounts belong to KESHAH, and we need to be able to get in with the email alone.",
+          slot: "tiktok_password",
         },
         {
           image: `${IMG}/tiktok-2-edit.webp`,
@@ -85,7 +90,8 @@ export const ACCOUNT_SETUP_GUIDE: Guide = {
         {
           image: `${IMG}/instagram-3-password.webp`,
           alt: "Instagram Create a password screen with the password field highlighted",
-          text: "Pick a password you'll remember.",
+          text: "Use your Instagram password below, exactly as it's written. Don't add your phone number or turn on two-factor login. These accounts belong to KESHAH, and we need to be able to get in with the email alone. If Instagram asks for a phone number, stop and message us.",
+          slot: "instagram_password",
         },
         {
           image: `${IMG}/instagram-4-photo.webp`,
