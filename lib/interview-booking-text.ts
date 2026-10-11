@@ -28,7 +28,7 @@ import {
   bookingText,
   bookingTextDue,
   firstNameOf,
-  formatDayAndTime,
+  formatDayAndTime, formatLocalDayAndTime,
 } from "./interview-reminders";
 import { normalizePhone, sendInterviewText, textWasSent } from "./sms";
 
@@ -78,7 +78,7 @@ export async function sendBookingTexts(
       row.result = "already claimed";
       continue;
     }
-    const text = bookingText(firstNameOf(x), formatDayAndTime(startMs, x.calendly_invitee_timezone, nowMs));
+    const text = bookingText(firstNameOf(x), formatLocalDayAndTime(startMs, x.calendly_invitee_timezone, nowMs));
     const r = await send({ to: phone, text, ref: d.id, kind: "interview_booking" });
     row.text = r;
     if (textWasSent(r)) {

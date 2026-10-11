@@ -202,11 +202,11 @@ test("oneHourText: link always; intro only as the first text; confirm ask only w
   const link = "https://zoom.us/j/1";
   assert.equal(
     oneHourText("Sam", "5:00 PM CT", link),
-    `Hi Sam, this is McKenzie, creator coordinator at KESHAH. Just a reminder your interview with KESHAH is in an hour, at 5:00 PM CT. Here's the link:\n${link}\n\nReply with your full name to confirm you're coming.`,
+    `Hi Sam, this is McKenzie, creator coordinator at KESHAH. Just a reminder your interview with KESHAH is in an hour, at 5:00 PM CT. Here's the link:\n${link}\n\nPlease reply with your full name to confirm you're coming.`,
   );
   assert.equal(
     oneHourText("Sam", "5:00 PM CT", link, { introduced: true }),
-    `Hi Sam, just a reminder your interview with KESHAH is in an hour, at 5:00 PM CT. Here's the link:\n${link}\n\nReply with your full name to confirm you're coming.`,
+    `Hi Sam, just a reminder your interview with KESHAH is in an hour, at 5:00 PM CT. Here's the link:\n${link}\n\nPlease reply with your full name to confirm you're coming.`,
   );
   assert.equal(
     oneHourText("Sam", "5:00 PM CT", link, { introduced: true, confirmed: true }),
@@ -299,7 +299,7 @@ test("formatDayAndTime: weekday + short time in the invitee zone; date added 6+ 
 test("booking + confirm copy is exact", () => {
   assert.equal(
     bookingText("Sam", "Thursday at 6:00 PM CT"),
-    "Hi Sam, this is McKenzie, creator coordinator at KESHAH. Thanks for applying, you're booked for the group interview on Thursday at 6:00 PM CT. Reply with your full name to confirm your spot.",
+    "Hi Sam, this is McKenzie, creator coordinator at KESHAH. Thanks for applying, you're booked for the group interview on Thursday at 6:00 PM CT. Please reply with your full name to confirm your spot.",
   );
   assert.equal(
     confirmReplyText("Sam", "Thursday at 6:00 PM CT", "https://zoom.us/j/1"),

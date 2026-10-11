@@ -255,7 +255,7 @@ const MCKENZIE_INTRO = "this is McKenzie, creator coordinator at KESHAH.";
 
 /** Booking confirmation, a few minutes after they book. */
 export function bookingText(first: string, when: string): string {
-  return `Hi ${first || "there"}, ${MCKENZIE_INTRO} Thanks for applying, you're booked for the group interview on ${when}. Reply with your full name to confirm your spot.`;
+  return `Hi ${first || "there"}, ${MCKENZIE_INTRO} Thanks for applying, you're booked for the group interview on ${when}. Please reply with your full name to confirm your spot.`;
 }
 
 /** Reply to a name reply to the booking text. */
@@ -278,7 +278,7 @@ export function oneHourText(
 ): string {
   const name = first || "there";
   const link = joinUrl ? `Here's the link:\n${joinUrl}` : "The link is in your Calendly email.";
-  const ask = o.confirmed ? "" : "\n\nReply with your full name to confirm you're coming.";
+  const ask = o.confirmed ? "" : "\n\nPlease reply with your full name to confirm you're coming.";
   // "Hi Sam, just a reminder..." after an earlier text; McKenzie introduces herself otherwise.
   const hi = o.introduced ? `Hi ${name}, just a reminder` : `Hi ${name}, ${MCKENZIE_INTRO} Just a reminder`;
   return `${hi} your interview with KESHAH is in an hour, at ${time}. ${link}${ask}`;
