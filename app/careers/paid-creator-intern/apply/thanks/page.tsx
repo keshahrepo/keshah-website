@@ -19,8 +19,6 @@ import { Suspense, useEffect } from "react";
 const DRAFT_STORAGE_KEY = "keshah_careers_draft_id_v1";
 
 const APP_STORE_URL = "https://apps.apple.com/us/app/keshah/id6450676544";
-const PLAY_STORE_URL =
-  "https://play.google.com/store/apps/details?id=com.keshahapp.hair";
 
 // Calendly sends event_start_time as an ISO 8601 string in the invitee's
 // local time (e.g. "2026-10-07T15:00:00-07:00").
@@ -43,9 +41,29 @@ function formatBookingTime(iso: string | null): string | null {
   }
 }
 
+/** "Add to calendar" (Google Calendar; on iPhone it opens in the browser and offers the Calendar app). */
+function googleCalendarUrl(startIso: string | null, endIso: string | null): string | null {
+  if (!startIso) return null;
+  const start = new Date(startIso);
+  if (Number.isNaN(start.getTime())) return null;
+  const endParsed = endIso ? new Date(endIso) : null;
+  const end = endParsed && !Number.isNaN(endParsed.getTime()) ? endParsed : new Date(start.getTime() + 30 * 60_000);
+  const z = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const q = new URLSearchParams({
+    action: "TEMPLATE",
+    text: "KESHAH group interview",
+    dates: `${z(start)}/${z(end)}`,
+    details: "30-minute group call with Aadi. We'll text you the link to join. Have your phone charged: you'll film a short video near the end.",
+  });
+  return `https://calendar.google.com/calendar/render?${q.toString()}`;
+}
+
 function ThanksInner() {
   const params = useSearchParams();
-  const bookingTime = formatBookingTime(params.get("event_start_time"));
+  const startIso = params.get("event_start_time");
+  const endIso = params.get("event_end_time");
+  const bookingTime = formatBookingTime(startIso);
+  const calendarUrl = googleCalendarUrl(startIso, endIso);
 
   useEffect(() => {
     try {
@@ -79,35 +97,50 @@ function ThanksInner() {
           <li className="thanks-step">
             <span className="thanks-step-num">1</span>
             <div className="thanks-step-body">
-              <div className="thanks-step-head">Save your interview time.</div>
+              <div className="thanks-step-head">Reply to our text.</div>
               <div className="thanks-step-sub">
-                {bookingTime ? (
-                  <>
-                    Your group interview is confirmed for{" "}
-                    <span style={{ color: "#fff", fontWeight: 600 }}>
-                      {bookingTime}
-                    </span>
-                    . Check your email for the Google Meet link.
-                  </>
-                ) : (
-                  <>
-                    Your group interview is confirmed. Check your email for
-                    the Google Meet link.
-                  </>
-                )}
+                In a couple of minutes you&apos;ll get a text from McKenzie at KESHAH. Reply with your full name to
+                confirm your spot, and we&apos;ll send you the link to join.
               </div>
             </div>
           </li>
           <li className="thanks-step">
             <span className="thanks-step-num">2</span>
             <div className="thanks-step-body">
-              <div className="thanks-step-head">
-                Download KESHAH and go through onboarding + the quiz.
-              </div>
+              <div className="thanks-step-head">Download KESHAH and go through the onboarding and quiz.</div>
               <div className="thanks-step-sub">
-                KESHAH is the product you&apos;ll be creating content around.
-                We may ask about your experience on the call, so you want
-                hands-on context before you join.
+                It&apos;s the app you&apos;ll be making videos about, and we&apos;ll ask about it on the call. It&apos;s
+                free to try. You don&apos;t need to start a trial, just go through the onboarding and quiz.
+              </div>
+            </div>
+          </li>
+          <li className="thanks-step">
+            <span className="thanks-step-num">3</span>
+            <div className="thanks-step-body">
+              <div className="thanks-step-head">Save your interview time.</div>
+              <div className="thanks-step-sub">
+                {bookingTime ? (
+                  <>
+                    Your group interview is on{" "}
+                    <span style={{ color: "#fff", fontWeight: 600 }}>{bookingTime}</span> (your time). It&apos;s a
+                    30-minute call with Aadi, our founder, and a few other applicants. Near the end you&apos;ll film a
+                    short video on your phone, so join from somewhere quiet with good light and your phone charged.
+                  </>
+                ) : (
+                  <>
+                    It&apos;s a 30-minute call with Aadi, our founder, and a few other applicants. Near the end
+                    you&apos;ll film a short video on your phone, so join from somewhere quiet with good light and your
+                    phone charged.
+                  </>
+                )}
+                {calendarUrl && (
+                  <>
+                    {" "}
+                    <a href={calendarUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#fff", textDecoration: "underline" }}>
+                      Add to calendar
+                    </a>
+                  </>
+                )}
               </div>
             </div>
           </li>
@@ -126,7 +159,7 @@ function ThanksInner() {
           <div className="thanks-qr-label">
             <div className="thanks-qr-title">Scan to download</div>
             <div className="thanks-qr-sub">
-              Opens KESHAH in the App Store or Google Play.
+              Opens KESHAH in the App Store.
             </div>
           </div>
         </div>
@@ -143,17 +176,6 @@ function ThanksInner() {
               <path d="M17.05 20.28c-.98.95-2.05.88-3.08.41-1.09-.47-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.41C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.19 2.31-.89 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.53 4.08zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
             </svg>
             App Store
-          </a>
-          <a
-            href={PLAY_STORE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="thanks-store-btn-secondary"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-              <path d="M3.6 20.5V3.5c0-.3.1-.6.3-.8L13 12l-9.1 9.3c-.2-.2-.3-.5-.3-.8zm10.5-7.5l2.5 2.5L5.4 21.6l8.7-8.6zm0-2L5.4 2.4l11.2 6.1-2.5 2.5zM20.4 10.6l-2.9 1.4 2.9 1.4c.6.3 1 .9 1 1.4 0 .6-.4 1.1-1 1.4l-2.9 1.4-2.6-2.6 2.6-2.6 2.9 1.4z" />
-            </svg>
-            Google Play
           </a>
         </div>
 
