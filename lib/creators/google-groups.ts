@@ -306,6 +306,16 @@ export async function provisionCreatorGroup(
       body: JSON.stringify({ email: m.email, role: m.role }),
     });
     if (r.ok) continue;
+    // Google rejects a Gmail "+tag" address ("Resource Not Found") because it
+    // isn't its own account. Mail to the plain address reaches the same inbox.
+    const plain = gmailWithoutTag(m.email);
+    if (r.status === 404 && plain && plain !== m.email) {
+      const r2 = await client.fetch(`${DIRECTORY}/${encodeURIComponent(chosen)}/members`, {
+        method: "POST",
+        body: JSON.stringify({ email: plain, role: m.role }),
+      });
+      if (r2.ok || r2.status === 409) continue;
+    }
     if (r.status === 409) {
       // Already a member. Make sure the admin is an OWNER.
       if (m.role === "OWNER") {
@@ -334,6 +344,20 @@ export async function removeCreatorFromGroup(client: GroupsClient, input: { grou
   if (!member) throw new Error("No personal email to remove.");
   const r = await client.fetch(`${DIRECTORY}/${encodeURIComponent(group)}/members/${encodeURIComponent(member)}`, { method: "DELETE" });
   if (r.ok) return { removed: true };
-  if (r.status === 404) return { removed: false };
+  if (r.status === 404) {
+    // They may have been added under the plain Gmail address (see provisioning).
+    const plain = gmailWithoutTag(member);
+    if (plain && plain !== member) {
+      const r2 = await client.fetch(`${DIRECTORY}/${encodeURIComponent(group)}/members/${encodeURIComponent(plain)}`, { method: "DELETE" });
+      if (r2.ok) return { removed: true };
+    }
+    return { removed: false };
+  }
   throw new Error(`Removing ${member} from ${group} failed: ${await errText(r)}`);
+}
+
+/** "name+tag@gmail.com" → "name@gmail.com" (also googlemail.com); null for anything else. */
+export function gmailWithoutTag(email: string): string | null {
+  const m = /^([^+@]+)\+[^@]*@(gmail\.com|googlemail\.com)$/i.exec(email.trim());
+  return m ? `${m[1]}@${m[2]}`.toLowerCase() : null;
 }
