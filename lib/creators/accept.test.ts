@@ -177,7 +177,12 @@ test("welcome email sends people to the app when CREATOR_APP_URL is set", () => 
   try {
     const m = welcomeEmail({ firstName: "Jen", link: "https://x/l", signInEmail: "jen@gmail.com", contractReady: true });
     assert.ok(m.text.includes("https://testflight.apple.com/join/abc"));
-    assert.ok(m.text.includes("Install TestFlight if it asks"));
+    assert.ok(m.text.includes("install TestFlight first if it asks"));
+    assert.ok(m.text.includes("Apple's app for early access"));
+    // HTML: the link is text, the deadline/section titles are bold, no images.
+    assert.ok(m.html.includes('<a href="https://testflight.apple.com/join/abc">KESHAH Creators app</a>'));
+    assert.ok(!m.html.includes("<img"));
+    assert.ok(!m.text.includes("$15 for each full day"));
     assert.ok(m.text.includes("Sign in with jen@gmail.com"));
     assert.ok(m.text.includes("first step in the app"));
   } finally {

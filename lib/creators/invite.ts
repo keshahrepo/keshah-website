@@ -116,36 +116,71 @@ export function welcomeEmail(input: {
   const app = creatorAppUrl();
   // The @keshah.com address isn't in this email on purpose: the app's Accounts
   // step shows it when they need it, with how to use it.
+  //
+  // Light HTML (bold + one text link) with a plain-text copy alongside. No
+  // images, tracking or footer, so it still reads like a personal email and
+  // lands in Primary.
+  const opener =
+    "Congratulations! We've decided to move forward with you for the content creator role at KESHAH. We've reviewed over 250 applications and yours stood out. Fewer than 6% of applicants get into our creator program, so we're excited to have you on board.";
+  const deadline = input.deadlineText ? `Please sign your agreement by ${input.deadlineText} to confirm your spot.` : null;
+  const signIn = input.signInEmail || "the email this message was sent to";
+  const step3 = input.contractReady
+    ? "Sign your agreement. It's the first step in the app, and the app walks you through the rest."
+    : "Sign your agreement. It'll be the first step in the app shortly, and the app walks you through the rest.";
+  const trial = "20 posting days, 3 videos a weekday, $300 total";
+  const after = "5 videos a weekday, $500/month to start, growing to $1,100, plus bonuses ($15 when a video hits 100K views, $100 total at 1M)";
+  const closing = "We are excited to have you on the team. If you have any questions, feel free to reply to this email.";
+
   const text = [
     `Hi ${first},`,
     "",
-    "Congratulations! We've decided to move forward with you for the content creator role at KESHAH. We've reviewed over 250 applications and yours stood out. Fewer than 6% of applicants get into our creator program, so we're excited to have you on board.",
+    opener,
     "",
-    ...(input.deadlineText ? [`Please sign your agreement by ${input.deadlineText} to confirm your spot.`, ""] : []),
+    ...(deadline ? [deadline, ""] : []),
     "How to get started",
     "",
     ...(app
       ? [
-          `1. Install the KESHAH Creators app: ${app}`,
-          "   (It's on TestFlight, Apple's app for new apps. Install TestFlight if it asks, then tap Install.)",
-          `2. Sign in with ${input.signInEmail || "the email this message was sent to"}`,
+          `1. Download the KESHAH Creators app: ${app}`,
+          "   It's in early access through TestFlight, Apple's app for early access, so install TestFlight first if it asks.",
+          `2. Sign in with ${signIn}`,
         ]
       : [`1. Set your password (this link works once and expires in 7 days): ${input.link}`, "2. Sign in with this email address"]),
-    input.contractReady
-      ? "3. Sign your agreement. It's the first step in the app, and the app walks you through the rest."
-      : "3. Sign your agreement. It'll be the first step in the app shortly, and the app walks you through the rest.",
+    `3. ${step3}`,
     "",
     "The role",
     "",
-    "• 1-month paid trial: 20 posting days, 3 videos a weekday, $300 total ($15 for each full day)",
-    "• If you pass your trial: 5 videos a weekday, $500/month to start, growing to $1,100, plus bonuses ($15 when a video hits 100K views, $100 total at 1M)",
+    `• 1-month paid trial: ${trial}`,
+    `• If you pass your trial: ${after}`,
     "",
-    "Any questions, just reply to this email.",
+    closing,
     "",
     CREATOR_SIGNOFF,
   ].join("\n");
-  // Kept for callers that expect html; sent as plain text so it reads like a
-  // personal email and lands in Primary.
-  const html = `<pre style="font-family:inherit;white-space:pre-wrap">${esc(text)}</pre>`;
+
+  const p = (inner: string) => `<p style="margin:0 0 16px">${inner}</p>`;
+  const step1 = app
+    ? `Download the <a href="${esc(app)}">KESHAH Creators app</a>. It's in early access through TestFlight, Apple's app for early access, so install TestFlight first if it asks.`
+    : `Set your password (this link works once and expires in 7 days): <a href="${esc(input.link)}">set your password</a>.`;
+  const html = [
+    `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#222">`,
+    p(`Hi ${esc(first)},`),
+    p(esc(opener)),
+    deadline ? p(`<b>${esc(deadline)}</b>`) : "",
+    `<p style="margin:0 0 6px"><b>How to get started</b></p>`,
+    `<ol style="margin:0 0 16px;padding-left:20px">`,
+    `<li style="margin-bottom:6px">${step1}</li>`,
+    `<li style="margin-bottom:6px">Sign in with ${esc(signIn)}</li>`,
+    `<li>${esc(step3)}</li>`,
+    `</ol>`,
+    `<p style="margin:0 0 6px"><b>The role</b></p>`,
+    `<ul style="margin:0 0 16px;padding-left:20px">`,
+    `<li style="margin-bottom:6px"><b>1-month paid trial:</b> ${esc(trial)}</li>`,
+    `<li><b>If you pass your trial:</b> ${esc(after)}</li>`,
+    `</ul>`,
+    p(esc(closing)),
+    `<p style="margin:0">${esc(CREATOR_SIGNOFF).replace(/\n/g, "<br>")}</p>`,
+    `</div>`,
+  ].join("");
   return { subject: "Your offer from KESHAH", text, html };
 }

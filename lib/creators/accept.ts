@@ -155,7 +155,8 @@ export async function acceptCreator(id: string, opts: AcceptOptions): Promise<Ac
             });
             // Plain text only: reads like a personal Gmail message, which
             // keeps it in Primary instead of Promotions.
-            await sendEmail({ to: personal, subject: mail.subject, text: mail.text, fromName: CREATOR_FROM_NAME });
+            // New offers send the light HTML version (with the plain text alongside); the existing-creator note stays plain.
+            await sendEmail({ to: personal, subject: mail.subject, text: mail.text, html: d.status === "active" || d.status === "leaving" ? undefined : mail.html, fromName: CREATOR_FROM_NAME });
             inviteEmailedNow = true;
             await record("invite", "done", `Emailed ${personal}. Link expires ${invite.expires_at.slice(0, 10)}.`);
           } catch (e) {
