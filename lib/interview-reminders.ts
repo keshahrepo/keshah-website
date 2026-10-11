@@ -73,7 +73,7 @@ export const REMINDER_LOOKBACK_MS = 3 * MIN;
 export const REMINDER_LOOKAHEAD_MS = 25 * HOUR;
 
 /** The booking text goes out this long after booked_at at the earliest... */
-export const BOOKING_TEXT_DELAY_MS = 3 * MIN;
+export const BOOKING_TEXT_DELAY_MS = 100 * 1000; // 100 seconds (sent on the next minute check after that)
 /**
  * ...and never later than this. Also what keeps bookings recorded before
  * this shipped from all getting one at once: only fresh bookings qualify.
