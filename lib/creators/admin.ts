@@ -39,6 +39,7 @@ import {
 } from "./pay";
 import { acceptCreator, acceptOf, type AcceptOptions, type AcceptResult } from "./accept";
 import { candidateAddresses } from "./google-groups";
+import { creatorProgress, type CreatorProgress } from "./progress";
 import { paymentDetailsOf, taxFormOf, type PaymentDetailsSummary, type TaxFormSummary } from "./payments";
 import type {
   AcceptRecord,
@@ -206,6 +207,9 @@ export interface AdminCreator {
   /** "Accept creator" step log. */
   accept: AcceptRecord;
   accepted_at: string | null;
+  /** First / latest time the creator opened the KESHAH Creators app (GET /api/mobile/me stamps them). */
+  app_first_signed_in_at: string | null;
+  app_last_seen_at: string | null;
   /** Set-password invite (never the token hash). */
   invite: { created_at: string; expires_at: string; used_at: string | null } | null;
   has_password: boolean;
@@ -253,6 +257,8 @@ export function toAdminCreator(id: string, d: DocumentData): AdminCreator {
       return a;
     })(),
     accepted_at: toIso(d.accepted_at),
+    app_first_signed_in_at: toIso(d.app_first_signed_in_at),
+    app_last_seen_at: toIso(d.app_last_seen_at),
     invite:
       d.invite && typeof d.invite === "object"
         ? {
@@ -280,6 +286,25 @@ export function payProfileOf(c: AdminCreator): PayProfile {
     legal_name: c.legal_name,
     timezone: c.timezone || "UTC",
   };
+}
+
+/** The founder's Progress timeline for this creator (lib/creators/progress.ts). */
+export function progressFor(c: AdminCreator, h: CreatorHistory, now: Date = new Date()): CreatorProgress {
+  return creatorProgress(
+    {
+      status: c.status_display,
+      acceptedAt: c.accepted_at,
+      accept: c.accept,
+      appFirstSignedInAt: c.app_first_signed_in_at,
+      contract: c.contract,
+      onboarding: h.onboarding.raw,
+      trackingUrl: c.tracking_url,
+      startDate: c.start_date,
+      trialPlan: c.trial_plan ?? null,
+      trial: c.pay_ready ? trialStatus(h.postingDays, payProfileOf(c)) : null,
+    },
+    now,
+  );
 }
 
 // ------------------------------------------------------------------ history

@@ -37,7 +37,8 @@ import { countryStats, groupCountries, type CountryGroup } from "./countries";
 import { db } from "@/lib/creators/admin";
 import { CREATORS_COLLECTION } from "@/lib/creators/db";
 import type { MonthSummary } from "@/lib/creators/pay";
-import { payProfileOf } from "@/lib/creators/admin";
+import { payProfileOf, progressFor } from "@/lib/creators/admin";
+import { progressStepSummary, type ProgressStepSummary } from "@/lib/creators/progress";
 import { ALL_TIME_START, clampStart } from "./start";
 import { bonusByPost, newestFirst, over100k, postVideos, topByViews, OVER_100K_CAP, TOP_VIDEOS, type PostLite, type TopVideo } from "./top-videos";
 
@@ -65,6 +66,8 @@ export interface FounderCreatorRow {
   paidUsers: number;
   roi: number | null;
   onboarding?: { done: number; total: number };
+  /** Current Progress step (lib/creators/progress.ts), e.g. "Warm-up day 2 of 3", with days on it and stuck. */
+  progressStep?: ProgressStepSummary;
   /** Videos posted in the period (each on both apps counts once). */
   videos: number;
   /** Views on their posts from the period (TikTok + Instagram, current counts). */
@@ -351,6 +354,7 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
     // committedCents equals payCents. All time: includes this month's committed pay.
     roi: committedCents > 0 && broughtIn !== null ? broughtIn / (committedCents / 100) : null,
     onboarding: h.onboarding ? { done: h.onboarding.done, total: h.onboarding.total } : undefined,
+    progressStep: progressStepSummary(progressFor(c, h)),
     videos,
     views,
     topVideo: top,

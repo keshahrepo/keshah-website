@@ -9,6 +9,7 @@ import {
   isMonth,
   loadHistory,
   payProfileOf,
+  progressFor,
   requireAdmin,
   sanitizeProfile,
   summaryFor,
@@ -58,6 +59,8 @@ export async function GET(req: NextRequest, { params }: Ctx) {
     adjustments: [...h.adjustments].sort((a, b) => b.month.localeCompare(a.month)),
     invoices: h.invoices,
     onboarding: h.onboarding,
+    // Founder app Progress timeline: Accepted -> ... -> Trial / Promoted / Ended.
+    progress: progressFor(creator, h),
     contractEvents,
     attribution,
   });

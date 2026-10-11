@@ -3,7 +3,9 @@
  * three business numbers. Reads the same collections the web dashboard does.
  */
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
-import { CREATORS_COLLECTION } from "@/lib/creators/db";
+import { CREATORS_COLLECTION, mapCreatorStatus } from "@/lib/creators/db";
+import { toAdminCreator } from "@/lib/creators/admin";
+import { creatorProgress, progressStepSummary } from "@/lib/creators/progress";
 import { listAwaitingConversations } from "@/lib/support/repo";
 import { groupConversations } from "@/lib/applicant-inbox";
 import { listInboxMessages } from "@/lib/applicant-inbox-firestore";
@@ -11,6 +13,7 @@ import { revenueOverview, type RevenueOverview } from "@/lib/revenue";
 
 export type NeedKind =
   | "trial_decision"
+  | "stuck"
   | "application"
   | "invoice_approve"
   | "invoice_pay"
@@ -69,11 +72,42 @@ export async function founderHome(now = new Date()): Promise<FounderHome> {
       if (c.trial_plan === "v2" && c.status === "trial" && c.trial_completed_on && !c.trial_outcome) {
         needs.push({ kind: "trial_decision", id: doc.id, title: name, subtitle: "Finished the 20-day trial", at: String(c.trial_completed_on) });
       }
-      const [invs, claims, offs] = await Promise.all([
+      const settingUp = ["onboarding", "trial"].includes(mapCreatorStatus(c.status));
+      const [invs, claims, offs, onb] = await Promise.all([
         doc.ref.collection("invoices").where("status", "in", ["submitted", "approved"]).get(),
         doc.ref.collection("bonus_claims").where("status", "==", "claimed").get(),
         doc.ref.collection("days_off").where("status", "==", "requested").get(),
+        settingUp ? doc.ref.collection("onboarding").doc("state").get() : null,
       ]);
+      // Stuck on a Progress step that's on them (lib/creators/progress.ts) for 2+ days.
+      // The trial step is never stuck, so posting days aren't needed here.
+      if (settingUp) {
+        const a = toAdminCreator(doc.id, c);
+        const p = creatorProgress(
+          {
+            status: a.status_display,
+            acceptedAt: a.accepted_at,
+            accept: a.accept,
+            appFirstSignedInAt: a.app_first_signed_in_at,
+            contract: a.contract,
+            onboarding: onb?.exists ? onb.data()! : null,
+            trackingUrl: a.tracking_url,
+            startDate: a.start_date,
+            trialPlan: a.trial_plan ?? null,
+          },
+          now,
+        );
+        if (p.stuck && p.days !== null) {
+          const step = progressStepSummary(p).label.replace(/ day \d+ of \d+$/, "");
+          needs.push({
+            kind: "stuck",
+            id: doc.id,
+            title: name,
+            subtitle: `Stuck on ${step} for ${p.days} day${p.days === 1 ? "" : "s"}`,
+            at: p.currentSince ?? "",
+          });
+        }
+      }
       for (const i of invs.docs) {
         const v = i.data();
         if (!Number(v.total_cents ?? 0)) continue; // a $0 invoice needs nothing from you
@@ -127,7 +161,7 @@ export async function founderHome(now = new Date()): Promise<FounderHome> {
     needs.push({ kind: "applicant_text", id: c.application_id, title: "Applicant text", subtitle: c.last_text.slice(0, 80), at: c.last_at_ms > 0 ? new Date(c.last_at_ms).toISOString() : "" });
   }
 
-  const order: NeedKind[] = ["trial_decision", "dispute", "application", "invoice_approve", "invoice_pay", "day_off", "bonus_claim", "applicant_text", "support"];
+  const order: NeedKind[] = ["trial_decision", "dispute", "application", "stuck", "invoice_approve", "invoice_pay", "day_off", "bonus_claim", "applicant_text", "support"];
   needs.sort((x, y) => order.indexOf(x.kind) - order.indexOf(y.kind) || x.at.localeCompare(y.at));
   return { needs, revenue, counts: { creators_active: active, creators_trial: trial, applications_open: open } };
 }
