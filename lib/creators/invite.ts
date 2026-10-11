@@ -114,50 +114,34 @@ export function welcomeEmail(input: {
     return { subject: "Your KESHAH Creators app", text, html: `<pre style="font-family:inherit;white-space:pre-wrap">${esc(text)}</pre>` };
   }
   const app = creatorAppUrl();
-  const contractStep = input.contractReady
-    ? "Sign the agreement. It's the first step in the app, and it takes a couple of minutes."
-    : "Sign the agreement. It'll be the first step in the app shortly, and you'll sign it right there.";
+  // The @keshah.com address isn't in this email on purpose: the app's Accounts
+  // step shows it when they need it, with how to use it.
   const text = [
     `Hi ${first},`,
     "",
-    "Congratulations! We've decided to move forward with you for the content creator role at KESHAH. Your application stood out, and with a 5.7% acceptance rate for our creator program, we're excited to have you on board.",
+    "Congratulations! We've decided to move forward with you for the content creator role at KESHAH. We've reviewed over 250 applications and yours stood out. Fewer than 6% of applicants get into our creator program, so we're excited to have you on board.",
     "",
-    "Quick recap of the role:",
-    "",
-    "• On-camera content creator. You'll film and post short videos every weekday to KESHAH-owned TikTok and Instagram accounts.",
-    "• Weekdays only (Mon to Fri), and you choose your own filming hours.",
-    "• You start with a paid trial: your first 20 posting days, 3 videos a day. You get $15 for every day you post all 3, so $300 for the full trial.",
-    "• After your 20th day, we look at your trial. If you pass, you move up to 5 videos a day and $500 a month to start, growing to $1,100 the longer you're with us. Plus view bonuses on each video: $15 at 100K views, $100 total at 1M, within 30 days of posting.",
-    "• We give you proven videos to remake, scripts and direction. You bring the energy.",
-    "",
-    "Our best creators can also be invited to become Format Creators, inventing the new formats everyone else uses.",
+    ...(input.deadlineText ? [`Please sign your agreement by ${input.deadlineText} to confirm your spot.`, ""] : []),
+    "How to get started",
     "",
     ...(app
       ? [
-          "Everything happens in the KESHAH Creators app. It's in early access, so it's on TestFlight, Apple's app for new apps. Tap the link, install TestFlight if it asks, then tap Install:",
-          app,
-          input.signInEmail ? `Then sign in with ${input.signInEmail}, the email this message was sent to.` : "Then sign in with the email this message was sent to.",
-          "",
+          `1. Install the KESHAH Creators app: ${app}`,
+          "   (It's on TestFlight, Apple's app for new apps. Install TestFlight if it asks, then tap Install.)",
+          `2. Sign in with ${input.signInEmail || "the email this message was sent to"}`,
         ]
-      : ["Everything happens in your KESHAH Creators account. First, set your password (this link works once and expires in 7 days):", input.link, ""]),
-    ...(input.keshahEmail
-      ? [
-          `We've also set up ${input.keshahEmail} for you. You'll use it to create your KESHAH TikTok and Instagram accounts, and anything sent to it, like verification codes, also lands in this inbox.`,
-          "",
-        ]
-      : []),
-    ...(input.deadlineText ? [`Please sign your agreement in the app by ${input.deadlineText} to confirm your spot.`, ""] : []),
-    "Next steps:",
+      : [`1. Set your password (this link works once and expires in 7 days): ${input.link}`, "2. Sign in with this email address"]),
+    input.contractReady
+      ? "3. Sign your agreement. It's the first step in the app, and the app walks you through the rest."
+      : "3. Sign your agreement. It'll be the first step in the app shortly, and the app walks you through the rest.",
     "",
-    app ? `1. Install KESHAH Creators from the TestFlight link above and sign in with ${input.signInEmail || "this email address"}.` : "1. Set your password and sign in.",
-    `2. ${contractStep}`,
-    "3. Go through the Getting started steps. They cover Slack, setting up your accounts and your first 3 days.",
+    "The role",
     "",
-    "Let me know if anything is unclear. Just reply to this email.",
+    "• 1-month paid trial: 20 posting days, 3 videos a weekday, $300 total ($15 for each full day)",
+    "• If you pass your trial: 5 videos a weekday, $500/month to start, growing to $1,100, plus bonuses ($15 when a video hits 100K views, $100 total at 1M)",
     "",
-    "Looking forward to having you on the KESHAH team!",
+    "Any questions, just reply to this email.",
     "",
-    "Best,",
     CREATOR_SIGNOFF,
   ].join("\n");
   // Kept for callers that expect html; sent as plain text so it reads like a
