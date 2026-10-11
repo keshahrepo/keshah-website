@@ -184,3 +184,18 @@ export function welcomeEmail(input: {
   ].join("");
   return { subject: "Your offer from KESHAH", text, html };
 }
+
+/**
+ * Light HTML for creator emails (same look as the offer email): paragraphs,
+ * optional bold, McKenzie's sign-off. No images or tracking. Send the plain
+ * text alongside.
+ */
+export function lightEmailHtml(paragraphs: { text: string; bold?: boolean }[]): string {
+  const p = (inner: string) => `<p style="margin:0 0 16px">${inner}</p>`;
+  return [
+    `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#222">`,
+    ...paragraphs.map((x) => p(x.bold ? `<b>${esc(x.text)}</b>` : esc(x.text))),
+    `<p style="margin:0">${esc(CREATOR_SIGNOFF).replace(/\n/g, "<br>")}</p>`,
+    `</div>`,
+  ].join("");
+}

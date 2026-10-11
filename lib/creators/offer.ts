@@ -82,7 +82,7 @@ export async function sendContractReminders(now: Date = new Date(), opts: { dry?
     if (email && emailConfigured()) {
       try {
         const m = reminderEmail({ firstName: firstNameOf(d), deadlineIso: deadline });
-        await sendEmail({ to: email, subject: m.subject, text: m.text, fromName: CREATOR_FROM_NAME });
+        await sendEmail({ to: email, subject: m.subject, text: m.text, html: m.html, fromName: CREATOR_FROM_NAME });
         mailed = true;
       } catch (e) {
         mailErr = errMsg(e);
@@ -172,7 +172,7 @@ export async function withdrawOffer(id: string, now: Date = new Date()): Promise
   else if (!emailConfigured()) out.email_detail = "Email isn't set up on the server";
   else {
     try {
-      await sendEmail({ to: plan.email.to, subject: plan.email.subject, text: plan.email.text, fromName: CREATOR_FROM_NAME });
+      await sendEmail({ to: plan.email.to, subject: plan.email.subject, text: plan.email.text, html: plan.email.html, fromName: CREATOR_FROM_NAME });
       out.email = "sent";
     } catch (e) {
       out.email_detail = errMsg(e);

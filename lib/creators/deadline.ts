@@ -12,7 +12,7 @@
  * Nothing here ever withdraws an offer on its own: a missed deadline only
  * shows up on the founder's Home ("deadline" need).
  */
-import { CREATOR_SIGNOFF } from "./invite";
+import { CREATOR_SIGNOFF, lightEmailHtml } from "./invite";
 
 export const DEADLINE_TZ = "America/New_York";
 /** Days after the acceptance date (in ET) the deadline falls on. */
@@ -178,35 +178,27 @@ export function reminderPush(deadlineIso: string, now: Date): { title: string; b
   };
 }
 
-export function reminderEmail(input: { firstName: string; deadlineIso: string }): { subject: string; text: string } {
-  const text = [
-    `Hi ${input.firstName || "there"},`,
-    "",
-    `Just a quick reminder that your agreement still needs your signature. Please sign it in the KESHAH Creators app by ${deadlineLong(input.deadlineIso)} to keep your spot.`,
-    "",
-    "It's the first step when you open the app, and it only takes a couple of minutes.",
-    "",
-    "If anything is holding you up, just reply to this email and I'll help.",
-    "",
-    "Best,",
-    CREATOR_SIGNOFF,
-  ].join("\n");
-  return { subject: "Your KESHAH offer is waiting", text };
+export function reminderEmail(input: { firstName: string; deadlineIso: string }): { subject: string; text: string; html: string } {
+  const paras = [
+    { text: `Hi ${input.firstName || "there"},` },
+    { text: "Just a quick reminder that your agreement still needs your signature." },
+    { text: `Please sign it in the KESHAH Creators app by ${deadlineLong(input.deadlineIso)} to keep your spot.`, bold: true },
+    { text: "It's the first step when you open the app, and it only takes a couple of minutes." },
+    { text: "If anything is holding you up, just reply to this email and I'll help." },
+  ];
+  const text = [...paras.flatMap((x) => [x.text, ""]), CREATOR_SIGNOFF].join("\n");
+  return { subject: "Your KESHAH offer is waiting", text, html: lightEmailHtml(paras) };
 }
 
-export function withdrawEmail(input: { firstName: string; deadlineIso: string | null }): { subject: string; text: string } {
+export function withdrawEmail(input: { firstName: string; deadlineIso: string | null }): { subject: string; text: string; html: string } {
   const by = input.deadlineIso ? ` by ${deadlineLong(input.deadlineIso)}` : "";
-  const text = [
-    `Hi ${input.firstName || "there"},`,
-    "",
-    `We weren't able to confirm your spot, because your agreement wasn't signed${by}. So we've withdrawn the offer for the content creator role.`,
-    "",
-    "Thank you for your time and for your interest in KESHAH. We wish you all the best.",
-    "",
-    "Best,",
-    CREATOR_SIGNOFF,
-  ].join("\n");
-  return { subject: "Your KESHAH offer", text };
+  const paras = [
+    { text: `Hi ${input.firstName || "there"},` },
+    { text: `We weren't able to confirm your spot, because your agreement wasn't signed${by}. So we've withdrawn the offer for the content creator role.` },
+    { text: "Thank you for your time and for your interest in KESHAH. We wish you all the best." },
+  ];
+  const text = [...paras.flatMap((x) => [x.text, ""]), CREATOR_SIGNOFF].join("\n");
+  return { subject: "Your KESHAH offer", text, html: lightEmailHtml(paras) };
 }
 
 // ---------------------------------------------------------------- plans
@@ -242,7 +234,7 @@ export function planWithdraw(
   d: OfferDoc,
   now: Date,
   timezone: string,
-): { updates: Record<string, unknown>; email: { to: string; subject: string; text: string } | null; groupEmail: string | null } {
+): { updates: Record<string, unknown>; email: { to: string; subject: string; text: string; html: string } | null; groupEmail: string | null } {
   if (str(d.contract?.status) === "signed") throw new OfferError("They've already signed, so the offer can't be withdrawn here.", 409);
   if (d.withdrawn_at) throw new OfferError("This offer was already withdrawn.", 409);
   const status = str(d.status) || "onboarding";
