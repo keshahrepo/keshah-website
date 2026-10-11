@@ -176,3 +176,34 @@ test("app open stamps first sign-in once and last seen hourly", () => {
   assert.equal(appSeenUpdate(seen, t), null);
   assert.deepEqual(appSeenUpdate({ ...seen, app_last_seen_at: "2026-10-14T10:00:00Z" }, t), { app_last_seen_at: t.toISOString() });
 });
+
+test("contract deadline: 'Due Oct 14' while pending, then 'Past due · 1 day' and stuck", () => {
+  const base: ProgressInput = {
+    ...accepted,
+    acceptedAt: "2026-10-11T19:00:00Z",
+    appFirstSignedInAt: "2026-10-11T20:00:00Z",
+    contract: { status: "sent", sent_at: "2026-10-11T19:00:05Z" },
+    contractDeadlineAt: "2026-10-15T03:59:59.000Z",
+  };
+  const before = creatorProgress(base, new Date("2026-10-12T15:00:00Z"));
+  const c1 = before.steps.find((s) => s.key === "contract")!;
+  assert.equal(before.current, "contract");
+  assert.equal(c1.detail, "Due Oct 14");
+  assert.equal(c1.overdue, undefined);
+  assert.equal(before.stuck, false);
+
+  const after = creatorProgress(base, new Date("2026-10-15T14:00:00Z"));
+  const c2 = after.steps.find((s) => s.key === "contract")!;
+  assert.equal(c2.detail, "Past due · 1 day");
+  assert.equal(c2.overdue, true);
+  assert.equal(after.stuck, true);
+  assert.equal(creatorProgress(base, new Date("2026-10-17T14:00:00Z")).steps.find((s) => s.key === "contract")!.detail, "Past due · 3 days");
+
+  // Signed, withdrawn, or not sent yet: no deadline text.
+  const signed = creatorProgress({ ...base, contract: { status: "signed", signed_at: "2026-10-16T10:00:00Z" } }, new Date("2026-10-17T14:00:00Z"));
+  assert.equal(signed.steps.find((s) => s.key === "contract")!.detail, undefined);
+  const withdrawn = creatorProgress({ ...base, withdrawnAt: "2026-10-16T10:00:00Z" }, new Date("2026-10-17T14:00:00Z"));
+  assert.equal(withdrawn.steps.find((s) => s.key === "contract")!.overdue, undefined);
+  const unsent = creatorProgress({ ...base, contract: { status: "none" } }, new Date("2026-10-17T14:00:00Z"));
+  assert.equal(unsent.steps.find((s) => s.key === "contract")!.detail, "Contract not sent yet");
+});

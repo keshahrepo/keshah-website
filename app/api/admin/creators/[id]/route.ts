@@ -18,6 +18,7 @@ import {
 import { addMonths, completedMonthsAsOf, draftInvoiceLines, nextLevel, trialStatus } from "@/lib/creators/pay";
 import { listContractEvents } from "@/lib/creators/contract";
 import { markContractStepDone } from "@/lib/creators/db";
+import { offerSummary } from "@/lib/creators/deadline";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +62,11 @@ export async function GET(req: NextRequest, { params }: Ctx) {
     onboarding: h.onboarding,
     // Founder app Progress timeline: Accepted -> ... -> Trial / Promoted / Ended.
     progress: progressFor(creator, h),
+    // 72-hour contract deadline (null for creators without one): drives "Give 48 more hours" / "Withdraw offer".
+    offer: offerSummary(
+      { status: creator.status, contract: creator.contract, contract_deadline_at: creator.contract_deadline_at, contract_reminder_sent_at: creator.contract_reminder_sent_at, withdrawn_at: creator.withdrawn_at },
+      new Date(),
+    ),
     contractEvents,
     attribution,
   });

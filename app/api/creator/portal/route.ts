@@ -19,6 +19,7 @@ import {
 } from "@/lib/creators/onboarding-content";
 import { isWeekday, monthOf, videosRequiredOn } from "@/lib/creators/pay";
 import { msUntilLocalDeadline } from "@/lib/creators/time";
+import { creatorDeadline } from "@/lib/creators/deadline";
 import { errorResponse, publicCreator, requireCreator } from "../_auth";
 import { monthPayload } from "../_payload";
 
@@ -41,7 +42,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       creator: publicCreator(creator),
       onboarding: { ...onboarding, complete: isOnboardingComplete(onboarding, { contractSigned: creator.contract.status === "signed" }) },
-      contract: { status: creator.contract.status, signed_at: creator.contract.signed_at ?? null },
+      // deadline_at / deadline_date (ET): the 72-hour signing deadline, while it's unsigned (null otherwise).
+      contract: { status: creator.contract.status, signed_at: creator.contract.signed_at ?? null, ...(creatorDeadline(creator) ?? { deadline_at: null, deadline_date: null }) },
       tracking_url: creator.tracking_url || null,
       config: {
         slack_invite_url: settings.slack_invite_url,

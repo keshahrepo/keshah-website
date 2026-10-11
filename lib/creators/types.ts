@@ -136,7 +136,8 @@ export interface ContractTemplate {
 
 /** ContentCreators/{id}/contract_events/{auto}: written once, never updated. */
 export interface ContractEvent {
-  type: "sent" | "viewed" | "signed" | "emailed" | "email_failed";
+  /** deadline_extended / reminder_sent / offer_withdrawn: the 72-hour deadline (lib/creators/offer.ts). */
+  type: "sent" | "viewed" | "signed" | "emailed" | "email_failed" | "deadline_extended" | "reminder_sent" | "offer_withdrawn";
   at: IsoInstant;
   actor: "admin" | "creator" | "system";
   template_version?: string;
@@ -208,6 +209,10 @@ export interface CreatorPortalFields {
    * Display only; pay is unchanged (their extra is an adjustment / contract matter).
    */
   format_creator: boolean;
+  /** 72-hour contract deadline for a new offer (lib/creators/deadline.ts). */
+  contract_deadline_at?: IsoInstant;
+  /** The founder withdrew the offer. */
+  withdrawn_at?: IsoInstant;
 }
 
 /** Existing ContentCreators fields the pay system reads (never rewrites). */

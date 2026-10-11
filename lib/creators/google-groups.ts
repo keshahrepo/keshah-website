@@ -321,3 +321,19 @@ export async function provisionCreatorGroup(
   }
   return { email: chosen, created, tried };
 }
+
+/**
+ * Take the creator's personal address off their inbox group (offer withdrawn).
+ * The group itself stays, so nothing tied to the address breaks and it can be
+ * reused. Already gone (404) counts as removed.
+ */
+export async function removeCreatorFromGroup(client: GroupsClient, input: { groupEmail: string; personalEmail: string }): Promise<{ removed: boolean }> {
+  const group = input.groupEmail.trim().toLowerCase();
+  const member = input.personalEmail.trim().toLowerCase();
+  if (!isKeshahAddress(group)) throw new Error(`${group || "(none)"} isn't a @${KESHAH_DOMAIN} group.`);
+  if (!member) throw new Error("No personal email to remove.");
+  const r = await client.fetch(`${DIRECTORY}/${encodeURIComponent(group)}/members/${encodeURIComponent(member)}`, { method: "DELETE" });
+  if (r.ok) return { removed: true };
+  if (r.status === 404) return { removed: false };
+  throw new Error(`Removing ${member} from ${group} failed: ${await errText(r)}`);
+}

@@ -215,7 +215,7 @@ function clean<T>(v: T): T {
   return JSON.parse(JSON.stringify(v)) as T;
 }
 
-async function logEvent(id: string, ev: ContractEvent): Promise<void> {
+export async function logEvent(id: string, ev: ContractEvent): Promise<void> {
   await creatorRef(id).collection("contract_events").doc().create(clean(ev));
 }
 
@@ -436,6 +436,7 @@ export async function signContract(
   const d = snap.data()!;
   const contract = contractOf(d);
   if (contract.status === "signed") throw new CreatorDataError("Your contract is already signed.", 409);
+  if (d.withdrawn_at) throw new CreatorDataError("This offer was withdrawn, so the contract can't be signed. Reply to McKenzie's email if you have questions.", 409);
   if (contract.status !== "sent" || !contract.template_version || !contract.template_sha256) {
     throw new CreatorDataError("Your contract isn't ready to sign yet.", 409);
   }

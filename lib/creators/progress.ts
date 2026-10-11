@@ -7,7 +7,8 @@
  *   welcome_email   ContentCreators.accept.steps.invite ({status, at})
  *   app_signed_in   ContentCreators.app_first_signed_in_at (stamped by GET /api/mobile/me)
  *   contract        ContentCreators.contract.signed_at / onboarding/state.contract_signed_at;
- *                   contract.status "sent" means it's on the creator, "none" means it's on the founder
+ *                   contract.status "sent" means it's on the creator, "none" means it's on the founder;
+ *                   contract_deadline_at adds "Due Oct 14", then "Past due · 1 day" (stuck) once it's missed
  *   slack .. rules  onboarding/state *_at fields (videos: the last of videos_watched, once all are watched)
  *   warmup          onboarding/state.warmup_days (done at WARMUP_DAYS ticks)
  *   first_post      ContentCreators.start_date (set by the first posting day)
@@ -16,6 +17,7 @@
  * Never invents a date: a step known to be done without a timestamp is done with at = null.
  */
 import { FOUNDER_VIDEOS, WARMUP_DAYS } from "./onboarding-content";
+import { daysPastDue, deadlineShort } from "./deadline";
 import type { AcceptRecord } from "./types";
 
 export type ProgressKey =
@@ -44,6 +46,8 @@ export interface ProgressStep {
   detail?: string;
   /** Current step only: who has to act next. */
   waitingOn?: "creator" | "you";
+  /** Contract step only: its deadline passed unsigned. */
+  overdue?: boolean;
 }
 
 export interface CreatorProgress {
@@ -78,6 +82,10 @@ export interface ProgressInput {
   accept?: AcceptRecord | null;
   appFirstSignedInAt?: string | null;
   contract?: { status?: string; sent_at?: string; signed_at?: string } | null;
+  /** ContentCreators.contract_deadline_at (new offers only). */
+  contractDeadlineAt?: string | null;
+  /** ContentCreators.withdrawn_at: the offer was withdrawn, so no deadline shows. */
+  withdrawnAt?: string | null;
   /** Raw onboarding/state (fields read defensively). */
   onboarding?: Record<string, unknown> | null;
   trackingUrl?: string;
@@ -153,7 +161,7 @@ export function creatorProgress(input: ProgressInput, now: Date = new Date()): C
   const anyOnboarding = videosDone || warmupDays.length > 0 || Object.values(onb).some(Boolean) || allOnboarded;
   const laterThanSignIn = contractSigned || anyOnboarding || started || finished;
 
-  type Draft = Omit<ProgressStep, "state"> & { done: boolean; skipped?: boolean; waitingOn?: "creator" | "you" };
+  type Draft = Omit<ProgressStep, "state"> & { done: boolean; skipped?: boolean; waitingOn?: "creator" | "you"; overdue?: boolean };
   const d: Draft[] = [];
 
   // Accepted
@@ -194,13 +202,20 @@ export function creatorProgress(input: ProgressInput, now: Date = new Date()): C
 
   // Contract
   const sent = contract.status === "sent";
+  const contractDone = contractSigned || allOnboarded || started || finished;
+  // Only once it's on the creator: an unsent contract is on the founder, not a missed deadline.
+  const deadline = sent && !contractDone && !input.withdrawnAt && input.contractDeadlineAt && Number.isFinite(Date.parse(input.contractDeadlineAt)) ? input.contractDeadlineAt : null;
+  const pastDue = deadline ? daysPastDue(deadline, now) : 0;
+  const contractDetail =
+    !contractSigned && !sent ? "Contract not sent yet" : deadline ? (pastDue ? `Past due · ${pastDue} day${pastDue === 1 ? "" : "s"}` : `Due ${deadlineShort(deadline)}`) : null;
   d.push({
     key: "contract",
     label: "Contract signed",
     at: contractSigned ? contractSignedAt : null,
-    done: contractSigned || allOnboarded || started || finished,
+    done: contractDone,
     waitingOn: contractSigned || sent ? "creator" : "you",
-    ...(!contractSigned && !sent ? { detail: "Contract not sent yet" } : {}),
+    ...(contractDetail ? { detail: contractDetail } : {}),
+    ...(pastDue ? { overdue: true } : {}),
   });
 
   const onbDone = (k: keyof typeof onb) => !!onb[k] || allOnboarded || started || finished;
@@ -259,6 +274,7 @@ export function creatorProgress(input: ProgressInput, now: Date = new Date()): C
     const state: ProgressState = s.done ? "done" : s.skipped ? "skipped" : i === currentIdx ? "current" : "todo";
     const step: ProgressStep = { key: s.key, label: s.label, state, at: s.done ? s.at : null };
     if (s.detail) step.detail = s.detail;
+    if (s.overdue) step.overdue = true;
     if (state === "current" && s.waitingOn) step.waitingOn = s.waitingOn;
     return step;
   });
@@ -279,6 +295,8 @@ export function creatorProgress(input: ProgressInput, now: Date = new Date()): C
     // Nobody posts on weekends, so the first posting day counts weekdays.
     stuck = cur.key === "first_post" ? weekdaysBetween(sinceMs, now.getTime()) >= STUCK_DAYS : days >= STUCK_DAYS;
   }
+  // A missed contract deadline is stuck whatever the day count.
+  if (cur.key === "contract" && cur.overdue) stuck = true;
   return { steps: out, current: cur.key, currentSince: since, days, stuck };
 }
 

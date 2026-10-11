@@ -207,6 +207,10 @@ export interface AdminCreator {
   /** "Accept creator" step log. */
   accept: AcceptRecord;
   accepted_at: string | null;
+  /** 72-hour contract deadline (lib/creators/deadline.ts); null for anyone accepted before it existed, Isai, etc. */
+  contract_deadline_at: string | null;
+  contract_reminder_sent_at: string | null;
+  withdrawn_at: string | null;
   /** First / latest time the creator opened the KESHAH Creators app (GET /api/mobile/me stamps them). */
   app_first_signed_in_at: string | null;
   app_last_seen_at: string | null;
@@ -257,6 +261,9 @@ export function toAdminCreator(id: string, d: DocumentData): AdminCreator {
       return a;
     })(),
     accepted_at: toIso(d.accepted_at),
+    contract_deadline_at: toIso(d.contract_deadline_at),
+    contract_reminder_sent_at: toIso(d.contract_reminder_sent_at),
+    withdrawn_at: toIso(d.withdrawn_at),
     app_first_signed_in_at: toIso(d.app_first_signed_in_at),
     app_last_seen_at: toIso(d.app_last_seen_at),
     invite:
@@ -297,6 +304,8 @@ export function progressFor(c: AdminCreator, h: CreatorHistory, now: Date = new 
       accept: c.accept,
       appFirstSignedInAt: c.app_first_signed_in_at,
       contract: c.contract,
+      contractDeadlineAt: c.contract_deadline_at,
+      withdrawnAt: c.withdrawn_at,
       onboarding: h.onboarding.raw,
       trackingUrl: c.tracking_url,
       startDate: c.start_date,

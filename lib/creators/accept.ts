@@ -3,7 +3,8 @@
  *   1. group     creates <name>@keshah.com (Google Group) and saves keshah_email
  *   2. invite    emails a single-use set-password link for the portal
  *   3. contract  sends the contract for e-signature (if template + signature exist)
- * and sets status "onboarding" + accepted_at the first time.
+ * and sets status "onboarding" + accepted_at the first time. A new offer also
+ * gets contract_deadline_at (lib/creators/deadline.ts), named in the welcome email.
  *
  * Each step's outcome is written to ContentCreators/{id}.accept.steps.<step>
  * as soon as it finishes. Re-running retries only steps that aren't "done"
@@ -16,6 +17,7 @@ import { CREATORS_COLLECTION, CreatorDataError, mapCreatorStatus } from "./db";
 import { contractSetupProblem, getContractSettings, getTemplate, sendContract } from "./contract";
 import { groupsClientFromEnv, groupsConfigured, provisionCreatorGroup } from "./google-groups";
 import { CREATOR_FROM_NAME, newInvite, setPasswordUrl, welcomeEmail } from "./invite";
+import { contractDeadlineFor, deadlineLong, deadlineOf, getsDeadline } from "./deadline";
 import type { AcceptRecord, AcceptStepKey, AcceptStepRecord } from "./types";
 
 export const ACCEPT_STEPS: AcceptStepKey[] = ["group", "invite", "contract"];
@@ -109,6 +111,15 @@ export async function acceptCreator(id: string, opts: AcceptOptions): Promise<Ac
       }
     }
 
+    // 72-hour contract deadline: set once, the first time a new offer is accepted
+    // (never for Isai / anyone already working with us). A re-run keeps the stored one.
+    // Saved right away so the welcome email and the stored deadline always agree.
+    let deadline = deadlineOf(d);
+    if (!deadline && !d.accepted_at && ["onboarding", "trial"].includes(mapCreatorStatus(d.status)) && getsDeadline(d)) {
+      deadline = contractDeadlineFor(new Date());
+      await r.update({ contract_deadline_at: deadline });
+      d = { ...d, contract_deadline_at: deadline };
+    }
     const notReady = await contractNotReadyReason(d).catch(() => "Couldn't check the contract settings. Send it from the creator page.");
     const ready = !notReady;
 
@@ -135,6 +146,7 @@ export async function acceptCreator(id: string, opts: AcceptOptions): Promise<Ac
               contractReady: ready,
               // Already working with us (migrated): portal intro, not an offer email.
               existing: d.status === "active" || d.status === "leaving",
+              ...(deadline && d.contract?.status !== "signed" ? { deadlineText: deadlineLong(deadline) } : {}),
             });
             // Plain text only: reads like a personal Gmail message, which
             // keeps it in Primary instead of Promotions.

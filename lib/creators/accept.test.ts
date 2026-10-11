@@ -13,6 +13,7 @@ import {
 } from "./google-groups";
 import { hashInviteToken, inviteProblem, newInvite, passwordProblem, setPasswordUrl, welcomeEmail } from "./invite";
 import { hashPassword, verifyPassword } from "../password";
+import { contractDeadlineFor, deadlineLong } from "./deadline";
 
 type Call = { method: string; url: string; body?: unknown };
 
@@ -180,6 +181,19 @@ test("welcome email sends people to the app when CREATOR_APP_URL is set", () => 
     if (prev === undefined) delete process.env.CREATOR_APP_URL;
     else process.env.CREATOR_APP_URL = prev;
   }
+});
+
+test("welcome email names the contract deadline right before Next steps (new offers only)", () => {
+  const m = welcomeEmail({ firstName: "Jen", link: "https://x/l", contractReady: true, deadlineText: deadlineLong(contractDeadlineFor(new Date("2025-10-11T19:00:00Z"))) });
+  const line = "Please sign your agreement in the app by Tuesday, October 14 at 11:59 PM ET to confirm your spot.";
+  assert.ok(m.text.includes(`${line}\n\nNext steps:`));
+  assert.ok(!m.text.includes("—"));
+  // No deadline (e.g. accepted before deadlines existed): no line.
+  const none = welcomeEmail({ firstName: "Jen", link: "https://x/l", contractReady: true });
+  assert.ok(!none.text.includes("Please sign your agreement"));
+  // Existing creators never get it, even if one were passed.
+  const isai = welcomeEmail({ firstName: "Isai", link: "https://x/l", contractReady: true, existing: true, deadlineText: "Tuesday, October 14 at 11:59 PM ET" });
+  assert.ok(!isai.text.includes("Please sign your agreement"));
 });
 
 test("welcome email for an existing creator is a portal intro, not an offer", () => {

@@ -6,6 +6,7 @@ import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { CREATORS_COLLECTION, mapCreatorStatus } from "@/lib/creators/db";
 import { toAdminCreator } from "@/lib/creators/admin";
 import { creatorProgress, progressStepSummary } from "@/lib/creators/progress";
+import { deadlineOf, deadlineShort, isPastDue } from "@/lib/creators/deadline";
 import { listAwaitingConversations } from "@/lib/support/repo";
 import { groupConversations } from "@/lib/applicant-inbox";
 import { listInboxMessages } from "@/lib/applicant-inbox-firestore";
@@ -13,6 +14,7 @@ import { revenueOverview, type RevenueOverview } from "@/lib/revenue";
 
 export type NeedKind =
   | "trial_decision"
+  | "deadline"
   | "stuck"
   | "application"
   | "invoice_approve"
@@ -79,9 +81,16 @@ export async function founderHome(now = new Date()): Promise<FounderHome> {
         doc.ref.collection("days_off").where("status", "==", "requested").get(),
         settingUp ? doc.ref.collection("onboarding").doc("state").get() : null,
       ]);
+      // Missed the 72-hour contract deadline (lib/creators/deadline.ts): never withdrawn
+      // automatically; the creator page has "Give 48 more hours" and "Withdraw offer".
+      const missed = settingUp && isPastDue(c, now);
+      if (missed) {
+        const dl = deadlineOf(c)!;
+        needs.push({ kind: "deadline", id: doc.id, title: name, subtitle: `Didn't sign by ${deadlineShort(dl)}`, at: dl });
+      }
       // Stuck on a Progress step that's on them (lib/creators/progress.ts) for 2+ days.
       // The trial step is never stuck, so posting days aren't needed here.
-      if (settingUp) {
+      if (settingUp && !missed) {
         const a = toAdminCreator(doc.id, c);
         const p = creatorProgress(
           {
@@ -90,6 +99,8 @@ export async function founderHome(now = new Date()): Promise<FounderHome> {
             accept: a.accept,
             appFirstSignedInAt: a.app_first_signed_in_at,
             contract: a.contract,
+            contractDeadlineAt: a.contract_deadline_at,
+            withdrawnAt: a.withdrawn_at,
             onboarding: onb?.exists ? onb.data()! : null,
             trackingUrl: a.tracking_url,
             startDate: a.start_date,
@@ -161,7 +172,7 @@ export async function founderHome(now = new Date()): Promise<FounderHome> {
     needs.push({ kind: "applicant_text", id: c.application_id, title: "Applicant text", subtitle: c.last_text.slice(0, 80), at: c.last_at_ms > 0 ? new Date(c.last_at_ms).toISOString() : "" });
   }
 
-  const order: NeedKind[] = ["trial_decision", "dispute", "application", "stuck", "invoice_approve", "invoice_pay", "day_off", "bonus_claim", "applicant_text", "support"];
+  const order: NeedKind[] = ["trial_decision", "deadline", "dispute", "application", "stuck", "invoice_approve", "invoice_pay", "day_off", "bonus_claim", "applicant_text", "support"];
   needs.sort((x, y) => order.indexOf(x.kind) - order.indexOf(y.kind) || x.at.localeCompare(y.at));
   return { needs, revenue, counts: { creators_active: active, creators_trial: trial, applications_open: open } };
 }

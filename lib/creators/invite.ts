@@ -76,6 +76,8 @@ export function welcomeEmail(input: {
   contractReady: boolean;
   /** Already working with us (e.g. moved over from the old setup): portal intro, not an offer. */
   existing?: boolean;
+  /** The contract deadline as text, e.g. "Tuesday, October 14 at 11:59 PM ET" (lib/creators/deadline.ts deadlineLong). New offers only. */
+  deadlineText?: string;
 }): {
   subject: string;
   text: string;
@@ -138,6 +140,7 @@ export function welcomeEmail(input: {
           "",
         ]
       : []),
+    ...(input.deadlineText ? [`Please sign your agreement in the app by ${input.deadlineText} to confirm your spot.`, ""] : []),
     "Next steps:",
     "",
     app ? `1. Install KESHAH Creators from the TestFlight link above and sign in with ${input.signInEmail || "this email address"}.` : "1. Set your password and log in to the portal.",

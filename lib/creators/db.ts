@@ -189,6 +189,8 @@ function toProfile(id: string, d: DocumentData, legacyStart: boolean): CreatorPr
     tracking_url: typeof d.tracking_url === "string" ? d.tracking_url : "",
     invoice_seq: Number(d.invoice_seq ?? 0),
     format_creator: d.format_creator === true,
+    ...(typeof d.contract_deadline_at === "string" && d.contract_deadline_at ? { contract_deadline_at: d.contract_deadline_at } : {}),
+    ...(d.withdrawn_at ? { withdrawn_at: toIso(d.withdrawn_at) ?? String(d.withdrawn_at) } : {}),
     ...(typeof d.bonus_start_date === "string" && d.bonus_start_date ? { bonus_start_date: d.bonus_start_date } : {}),
   };
 }

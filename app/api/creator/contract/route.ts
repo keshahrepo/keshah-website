@@ -8,6 +8,7 @@ import {
   getSigningInfo,
 } from "@/lib/creators/contract";
 import { signedReadUrl } from "@/lib/creators/db";
+import { creatorDeadline } from "@/lib/creators/deadline";
 import { errorResponse, requireCreator } from "../_auth";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +22,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       status: info.status,
       signed_at: info.signed_at,
+      // 72-hour signing deadline while unsigned (null otherwise).
+      ...(creatorDeadline({ ...creator, contract: { status: info.status } }) ?? { deadline_at: null, deadline_date: null }),
       signed_sha256: info.signed_sha256,
       document_id: info.document_id,
       emailed_copy: info.emailed_copy,
