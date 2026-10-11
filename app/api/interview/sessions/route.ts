@@ -47,13 +47,17 @@ function countsFor(docs: DocumentSnapshot[]) {
   let opened = 0;
   let submitted = 0;
   let checkedIn = 0;
+  let confirmed = 0;
   for (const d of docs) {
     const x = (d.data() ?? {}) as Record<string, unknown>;
     if (x.interview_video_submitted_at) submitted++;
     if (x.interview_opened_at) opened++;
     if (x.interview_checked_in_for && x.interview_checked_in_for === x.calendly_event_start_time && x.interview_checked_in_at) checkedIn++;
+    // Confirmed: replied with their name to the booking text (or checked in), for this booking.
+    const forThis = (k: string) => !!x[k] && x[`${k.replace(/_at$/, "")}_for`] === x.calendly_event_start_time;
+    if (forThis("interview_confirmed_at") || forThis("interview_checked_in_at")) confirmed++;
   }
-  return { total: docs.length, opened, submitted, checked_in: checkedIn };
+  return { total: docs.length, opened, submitted, checked_in: checkedIn, confirmed };
 }
 
 function sessionJson(s: InterviewSession, now: number) {
