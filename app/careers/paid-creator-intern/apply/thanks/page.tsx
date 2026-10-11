@@ -97,16 +97,6 @@ function ThanksInner() {
           <li className="thanks-step">
             <span className="thanks-step-num">1</span>
             <div className="thanks-step-body">
-              <div className="thanks-step-head">Reply to our text.</div>
-              <div className="thanks-step-sub">
-                In a couple of minutes you&apos;ll get a text from McKenzie at KESHAH. Reply with your full name to
-                confirm your spot, and we&apos;ll send you the link to join.
-              </div>
-            </div>
-          </li>
-          <li className="thanks-step">
-            <span className="thanks-step-num">2</span>
-            <div className="thanks-step-body">
               <div className="thanks-step-head">Download KESHAH and go through the onboarding and quiz.</div>
               <div className="thanks-step-sub">
                 It&apos;s the app you&apos;ll be making videos about, and we&apos;ll ask about it on the call. It&apos;s
@@ -115,7 +105,7 @@ function ThanksInner() {
             </div>
           </li>
           <li className="thanks-step">
-            <span className="thanks-step-num">3</span>
+            <span className="thanks-step-num">2</span>
             <div className="thanks-step-body">
               <div className="thanks-step-head">Save your interview time.</div>
               <div className="thanks-step-sub">

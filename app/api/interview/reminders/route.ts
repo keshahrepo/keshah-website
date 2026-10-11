@@ -51,6 +51,7 @@ import {
   REMINDER_START_FIELD,
   firstNameOf,
   formatShortTime,
+  formatLocalTime,
   checkedInFor,
   confirmedForBooking,
   got1hText,
@@ -168,7 +169,7 @@ export async function GET(req: Request) {
       }
       const text =
         kind === "1h"
-          ? oneHourText(first, formatShortTime(startMs, x.calendly_invitee_timezone), joinUrl, {
+          ? oneHourText(first, formatLocalTime(startMs, x.calendly_invitee_timezone), joinUrl, {
               confirmed: confirmedForBooking(x, startIso),
               introduced: gotBookingText(x, startIso),
             })

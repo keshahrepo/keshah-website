@@ -182,6 +182,20 @@ export function formatDayAndTime(startMs: number, timeZone?: unknown, nowMs: num
   return `${day} at ${formatShortTime(startMs, timeZone)}`;
 }
 
+/** "6:30 AM" in the invitee's timezone, no zone label (texts read like a person wrote them). */
+export function formatLocalTime(startMs: number, timeZone?: unknown): string {
+  const tz = validTimeZone(timeZone) ? timeZone : "America/New_York";
+  return new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" }).format(new Date(startMs));
+}
+
+/** "Friday at 6:30 AM" (or "Friday, Oct 16 at 6:30 AM" six or more days out), no zone label. */
+export function formatLocalDayAndTime(startMs: number, timeZone?: unknown, nowMs: number = Date.now()): string {
+  const tz = validTimeZone(timeZone) ? timeZone : "America/New_York";
+  const opts: Intl.DateTimeFormatOptions =
+    startMs - nowMs >= 6 * 24 * HOUR ? { timeZone: tz, weekday: "long", month: "short", day: "numeric" } : { timeZone: tz, weekday: "long" };
+  return `${new Intl.DateTimeFormat("en-US", opts).format(new Date(startMs))} at ${formatLocalTime(startMs, timeZone)}`;
+}
+
 // ---------------------------------------------------------------- copy
 
 export const WHAT_TO_BRING =
@@ -248,8 +262,8 @@ export function bookingText(first: string, when: string): string {
 export function confirmReplyText(first: string, when: string, joinUrl?: string | null): string {
   const name = first || "there";
   return joinUrl
-    ? `Thanks ${name}, you're confirmed. Here's the link for ${when}: ${joinUrl}`
-    : `Thanks ${name}, you're confirmed for ${when}. The link is in your Calendly email.`;
+    ? `Thanks ${name}, we look forward to seeing you on ${when}. Here's the link for the interview:\n${joinUrl}`
+    : `Thanks ${name}, we look forward to seeing you on ${when}. The link is in your Calendly email.`;
 }
 
 /**
@@ -263,12 +277,11 @@ export function oneHourText(
   o: { confirmed?: boolean; introduced?: boolean } = {},
 ): string {
   const name = first || "there";
-  const hi = o.introduced ? `Hi ${name}, ` : `Hi ${name}, ${MCKENZIE_INTRO} `;
-  const link = joinUrl ? `Here's the link: ${joinUrl}` : "The link is in your Calendly email.";
+  const link = joinUrl ? `Here's the link:\n${joinUrl}` : "The link is in your Calendly email.";
   const ask = o.confirmed ? "" : "\n\nReply with your full name to confirm you're coming.";
-  // "Hi Sam, your group..." after a plain greeting; "...at KESHAH. Your group..." after the intro.
-  const body = `${o.introduced ? "your" : "Your"} group interview starts in 1 hour, at ${time}.`;
-  return `${hi}${body} ${link}${ask}`;
+  // "Hi Sam, just a reminder..." after an earlier text; McKenzie introduces herself otherwise.
+  const hi = o.introduced ? `Hi ${name}, just a reminder` : `Hi ${name}, ${MCKENZIE_INTRO} Just a reminder`;
+  return `${hi} your interview with KESHAH is in an hour, at ${time}. ${link}${ask}`;
 }
 
 export function checkInReplyText(first: string, time: string, joinUrl?: string | null): string {

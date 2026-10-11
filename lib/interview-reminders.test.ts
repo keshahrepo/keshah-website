@@ -202,19 +202,19 @@ test("oneHourText: link always; intro only as the first text; confirm ask only w
   const link = "https://zoom.us/j/1";
   assert.equal(
     oneHourText("Sam", "5:00 PM CT", link),
-    `Hi Sam, this is McKenzie, creator coordinator at KESHAH. Your group interview starts in 1 hour, at 5:00 PM CT. Here's the link: ${link}\n\nReply with your full name to confirm you're coming.`,
+    `Hi Sam, this is McKenzie, creator coordinator at KESHAH. Just a reminder your interview with KESHAH is in an hour, at 5:00 PM CT. Here's the link:\n${link}\n\nReply with your full name to confirm you're coming.`,
   );
   assert.equal(
     oneHourText("Sam", "5:00 PM CT", link, { introduced: true }),
-    `Hi Sam, your group interview starts in 1 hour, at 5:00 PM CT. Here's the link: ${link}\n\nReply with your full name to confirm you're coming.`,
+    `Hi Sam, just a reminder your interview with KESHAH is in an hour, at 5:00 PM CT. Here's the link:\n${link}\n\nReply with your full name to confirm you're coming.`,
   );
   assert.equal(
     oneHourText("Sam", "5:00 PM CT", link, { introduced: true, confirmed: true }),
-    `Hi Sam, your group interview starts in 1 hour, at 5:00 PM CT. Here's the link: ${link}`,
+    `Hi Sam, just a reminder your interview with KESHAH is in an hour, at 5:00 PM CT. Here's the link:\n${link}`,
   );
   assert.equal(
     oneHourText("Sam", "5:00 PM CT", null, { confirmed: true }),
-    "Hi Sam, this is McKenzie, creator coordinator at KESHAH. Your group interview starts in 1 hour, at 5:00 PM CT. The link is in your Calendly email.",
+    "Hi Sam, this is McKenzie, creator coordinator at KESHAH. Just a reminder your interview with KESHAH is in an hour, at 5:00 PM CT. The link is in your Calendly email.",
   );
   for (const t of [oneHourText("Sam", "x", link), oneHourText("Sam", "x", null)]) assert.ok(!t.includes("\u2014"));
 });
@@ -303,11 +303,11 @@ test("booking + confirm copy is exact", () => {
   );
   assert.equal(
     confirmReplyText("Sam", "Thursday at 6:00 PM CT", "https://zoom.us/j/1"),
-    "Thanks Sam, you're confirmed. Here's the link for Thursday at 6:00 PM CT: https://zoom.us/j/1",
+    "Thanks Sam, we look forward to seeing you on Thursday at 6:00 PM CT. Here's the link for the interview:\nhttps://zoom.us/j/1",
   );
   assert.equal(
     confirmReplyText("Sam", "Thursday at 6:00 PM CT", null),
-    "Thanks Sam, you're confirmed for Thursday at 6:00 PM CT. The link is in your Calendly email.",
+    "Thanks Sam, we look forward to seeing you on Thursday at 6:00 PM CT. The link is in your Calendly email.",
   );
 });
 

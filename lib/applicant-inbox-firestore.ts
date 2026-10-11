@@ -42,6 +42,7 @@ import {
   confirmedForBooking,
   firstNameOf,
   formatDayAndTime,
+  formatLocalDayAndTime,
   formatShortTime,
   looksLikeCheckIn,
 } from "./interview-reminders";
@@ -206,7 +207,7 @@ export async function handleCheckIn(
   const tz = snapshot.calendly_invitee_timezone;
   const isConfirm = action === "confirm";
   const text = isConfirm
-    ? confirmReplyText(first, formatDayAndTime(startMs, tz, nowMs), joinUrl)
+    ? confirmReplyText(first, formatLocalDayAndTime(startMs, tz, nowMs), joinUrl)
     : checkInReplyText(first, formatShortTime(startMs, tz), joinUrl);
   const r = await send({ to: reply.phone, text, ref: app.id, kind: isConfirm ? "confirm_reply" : "checkin_reply" });
   if (textWasSent(r)) {

@@ -419,7 +419,7 @@ test("confirm: a name reply to the booking text confirms once and sends the link
   assert.equal(doc.interview_checked_in_at, undefined);
   assert.equal(sends.length, 1);
   assert.equal(sends[0].kind, "confirm_reply");
-  assert.equal(sends[0].text, "Thanks Jamie, you're confirmed. Here's the link for Thursday at 1:00 PM CT: https://zoom.us/j/1");
+  assert.equal(sends[0].text, "Thanks Jamie, we look forward to seeing you on Thursday at 1:00 PM. Here's the link for the interview:\nhttps://zoom.us/j/1");
 
   // Replying again before the 1h text: nothing more.
   const again = parseIncoming(nested("c2", at + 60_000, APPLICANT, "Jamie"))!;
@@ -453,7 +453,7 @@ test("confirm: no join url points to the Calendly email; no booking text means n
 
   const doc: Record<string, unknown> = { ...base, interview_booking_text_for: iso, interview_booking_text_sent_at: "x" };
   assert.equal(await handleCheckIn(fakeDb(doc), a, reply, at, send), "confirmed");
-  assert.deepEqual(sends, ["Thanks Jamie, you're confirmed for Thursday at 2:00 PM ET. The link is in your Calendly email."]);
+  assert.deepEqual(sends, ["Thanks Jamie, we look forward to seeing you on Thursday at 2:00 PM. The link is in your Calendly email."]);
 });
 
 test("check-in after the 1h text also confirms someone who hadn't confirmed", async () => {
