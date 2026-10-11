@@ -51,6 +51,9 @@ export async function GET(
           followup_1_sent_at: isoOrNull(x.interview_followup_1_sent_at),
           followup_2_sent_at: isoOrNull(x.interview_followup_2_sent_at),
           link_closed_at: isoOrNull(x.interview_link_closed_at),
+          // Probably joined under a mistyped email (see /api/interview/start).
+          possible_duplicate: !!x.interview_possible_duplicate_id || Array.isArray(x.interview_possible_duplicate_of),
+          denied_reason: (x.denied_reason as string) ?? null,
           reminder_24h_sent_at: isoOrNull(x.interview_reminder_24h_sent_at),
           reminder_1h_sent_at: isoOrNull(x.interview_reminder_1h_sent_at),
           reminder_now_sent_at: isoOrNull(x.interview_reminder_now_sent_at),

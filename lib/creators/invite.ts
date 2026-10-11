@@ -85,19 +85,25 @@ export function welcomeEmail(input: {
 } {
   const first = input.firstName || "there";
   if (input.existing) {
+    const existingApp = creatorAppUrl();
     const text = [
       `Hi ${first},`,
       "",
-      "We've built a creator portal, and your account is ready. It's where you'll see your videos, your pay for the month, your bonuses and your invoices, all in one place.",
+      "We've built the KESHAH Creators app, and your account is ready. It's where you'll see your videos, your pay for the month, your bonuses and your invoices, all in one place.",
       "",
-      "First, set your password (this link works once and expires in 7 days):",
-      input.link,
+      ...(existingApp
+        ? [
+            "It's in early access, so it's on TestFlight, Apple's app for new apps. Tap the link, install TestFlight if it asks, then tap Install:",
+            existingApp,
+            input.signInEmail ? `Then sign in with ${input.signInEmail}, the email this message was sent to.` : "Then sign in with the email this message was sent to.",
+          ]
+        : ["First, set your password (this link works once and expires in 7 days):", input.link]),
       "",
       "A few things to know:",
       "",
-      "• Your videos show up in the portal on their own within a few hours of posting. If one is missing near the deadline, you can paste its link.",
-      "• Bonuses are added automatically when a video passes 100K or 1M views.",
-      `• ${input.contractReady ? "Your new agreement is waiting in the portal for you to sign." : "Your new agreement will be in the portal shortly for you to sign."}`,
+      "• Your videos show up in the app on their own within a few hours of posting. If one is missing near the deadline, you can paste its link.",
+      "• Bonuses are added automatically when a video passes 100K views ($15) or 1M views ($100 total), within 30 days of posting.",
+      `• ${input.contractReady ? "Your new agreement is waiting in the app for you to sign." : "Your new agreement will be in the app shortly for you to sign."}`,
       "• You'll also be asked to add your payment details and tax form so we can pay you.",
       "",
       "Let me know if anything is unclear. Just reply to this email.",
@@ -105,7 +111,7 @@ export function welcomeEmail(input: {
       "Best,",
       CREATOR_SIGNOFF,
     ].join("\n");
-    return { subject: "Your KESHAH creator portal", text, html: `<pre style="font-family:inherit;white-space:pre-wrap">${esc(text)}</pre>` };
+    return { subject: "Your KESHAH Creators app", text, html: `<pre style="font-family:inherit;white-space:pre-wrap">${esc(text)}</pre>` };
   }
   const app = creatorAppUrl();
   const contractStep = input.contractReady
@@ -121,7 +127,7 @@ export function welcomeEmail(input: {
     "• On-camera content creator. You'll film and post short videos every weekday to KESHAH-owned TikTok and Instagram accounts.",
     "• Weekdays only (Mon to Fri), and you choose your own filming hours.",
     "• You start with a paid trial: your first 20 posting days, 3 videos a day. You get $15 for every day you post all 3, so $300 for the full trial.",
-    "• After your 20th day, we look at your trial. If you pass, you move up to 5 videos a day and $500 a month to start, growing to $1,100 the longer you're with us. Plus view bonuses: $15 when a video passes 100K views and $100 when it passes 1M.",
+    "• After your 20th day, we look at your trial. If you pass, you move up to 5 videos a day and $500 a month to start, growing to $1,100 the longer you're with us. Plus view bonuses on each video: $15 at 100K views, $100 total at 1M, within 30 days of posting.",
     "• We give you proven videos to remake, scripts and direction. You bring the energy.",
     "",
     "Our best creators can also be invited to become Format Creators, inventing the new formats everyone else uses.",
@@ -133,7 +139,7 @@ export function welcomeEmail(input: {
           input.signInEmail ? `Then sign in with ${input.signInEmail}, the email this message was sent to.` : "Then sign in with the email this message was sent to.",
           "",
         ]
-      : ["Everything happens in your creator portal. First, set your password (this link works once and expires in 7 days):", input.link, ""]),
+      : ["Everything happens in your KESHAH Creators account. First, set your password (this link works once and expires in 7 days):", input.link, ""]),
     ...(input.keshahEmail
       ? [
           `We've also set up ${input.keshahEmail} for you. You'll use it to create your KESHAH TikTok and Instagram accounts, and anything sent to it, like verification codes, also lands in this inbox.`,
@@ -143,7 +149,7 @@ export function welcomeEmail(input: {
     ...(input.deadlineText ? [`Please sign your agreement in the app by ${input.deadlineText} to confirm your spot.`, ""] : []),
     "Next steps:",
     "",
-    app ? `1. Install KESHAH Creators from the TestFlight link above and sign in with ${input.signInEmail || "this email address"}.` : "1. Set your password and log in to the portal.",
+    app ? `1. Install KESHAH Creators from the TestFlight link above and sign in with ${input.signInEmail || "this email address"}.` : "1. Set your password and sign in.",
     `2. ${contractStep}`,
     "3. Go through the Getting started steps. They cover Slack, setting up your accounts and your first 3 days.",
     "",

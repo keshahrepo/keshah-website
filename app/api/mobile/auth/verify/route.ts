@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     const demo = await demoLogin(db);
     if (demo && email === demo.email && code.replace(/\D/g, "") === demo.code) {
       const id = await resolveIdentity(db, email);
-      return Response.json({ token: await signMobileToken(claimsFor(id)), ...id });
+      return Response.json({ token: await signMobileToken({ ...claimsFor(id), amr: "demo" }), ...id });
     }
     const r = await verifyCode(firestoreCodeStore(db), { email, code, secret: process.env.MOBILE_JWT_SECRET!.trim() });
     if (r.result !== "ok") {
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
       return jsonError(e.error, e.status);
     }
     const id = await resolveIdentity(db, email);
-    const token = await signMobileToken(claimsFor(id));
+    const token = await signMobileToken({ ...claimsFor(id), amr: "email_code" });
     return Response.json({ token, ...id });
   } catch (e) {
     return serverError(e, "auth/verify");

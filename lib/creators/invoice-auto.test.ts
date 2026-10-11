@@ -134,7 +134,10 @@ test("which month is due: creator-local month, pay started, not ended before it"
   assert.equal(invoiceMonthDue(creator({ start_date: "2026-11-01" }), NOV1), null);
   assert.equal(invoiceMonthDue(creator({ start_date: "2026-10-31" }), NOV1), "2026-10");
   assert.equal(invoiceMonthDue(creator({ ended_on: "2026-10-12" }), NOV1), "2026-10");
-  assert.equal(invoiceMonthDue(creator({ ended_on: "2026-09-30" }), NOV1), null);
+  // After the end, invoices keep coming through the month the 30-day bonus window closes in (§6.5).
+  assert.equal(invoiceMonthDue(creator({ ended_on: "2026-09-30" }), NOV1), "2026-10"); // window ends Oct 30
+  assert.equal(invoiceMonthDue(creator({ ended_on: "2026-09-01" }), NOV1), "2026-10"); // Oct 1
+  assert.equal(invoiceMonthDue(creator({ ended_on: "2026-08-31" }), NOV1), null); // Sep 30: October isn't invoiced
 });
 
 const submitted = (over: Partial<Invoice> = {}): Invoice => ({
@@ -188,4 +191,34 @@ test("creator email copy", () => {
   assert.equal(m.subject, "Your October invoice is in: $650.00");
   assert.match(m.text, /Your October invoice is in: \$650\.00\. It'll be paid by bank transfer by Nov 7\./);
   assert.match(m.text, /tap "Something's off\?" in the app by Nov 3\./);
+});
+
+test("cron: an older month sent back to draft is re-submitted, then last month", async () => {
+  const f = fakeDeps([creator()]);
+  // September was returned to draft for a fix after it went in.
+  f.invoices.set("c1/2026-09", { number: "JS-090", month: "2026-09", lines: [], total_cents: 41000, status: "draft", locked: false });
+  f.deps.staleDrafts = async (id, before) => [...f.invoices.entries()].filter(([k, v]) => k.startsWith(`${id}/`) && v.status === "draft" && v.month < before).map(([, v]) => v);
+  const r = await runInvoiceAutoSubmit(f.deps, { now: NOV1 });
+  assert.deepEqual(r.map((x) => [x.month, x.result.split(",")[0]]), [["2026-09", "submitted"], ["2026-10", "submitted"]]);
+  assert.equal(f.invoices.get("c1/2026-09")!.status, "submitted");
+  assert.equal(f.emails.length, 2);
+  // Next day nothing is stale any more.
+  const r2 = await runInvoiceAutoSubmit(f.deps, { now: new Date("2026-11-02T09:00:00Z") });
+  assert.deepEqual(r2.map((x) => x.result), ["already submitted"]);
+});
+
+test("cron: no bank details on file -> the email asks for them instead of promising a transfer", async () => {
+  const f = fakeDeps([creator()]);
+  f.deps.bankOnFile = async () => false;
+  const r = await runInvoiceAutoSubmit(f.deps, { now: NOV1 });
+  assert.match(r[0].result, /no bank details/);
+  assert.equal(f.emails.length, 1);
+  assert.doesNotMatch(f.emails[0].text, /paid by bank transfer/);
+  assert.match(f.emails[0].text, /Add your bank details in the app so we can pay you/);
+  assert.match(f.emails[0].subject, /Add your bank details/);
+  // With bank details (Isai's US bank, or anyone's): the usual line.
+  const g = fakeDeps([creator()]);
+  g.deps.bankOnFile = async () => true;
+  await runInvoiceAutoSubmit(g.deps, { now: NOV1 });
+  assert.match(g.emails[0].text, /It'll be paid by bank transfer by/);
 });

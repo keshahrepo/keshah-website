@@ -44,9 +44,11 @@ import {
   type W8benInput,
   type W9Input,
 } from "./payment-validate";
+import type { SignerAuth } from "./signer-auth";
 import { buildW8benPdf, buildW9Pdf, mmddyyyy, w8benTemplate, w9Template, type TaxSignatureRecord } from "./tax-forms";
 import { adoptedSignatureText } from "./signature";
 import { isValidTimezone } from "./time";
+import { bankLabel } from "./lifecycle";
 
 export type TaxFormType = "w9" | "w8ben";
 
@@ -190,6 +192,16 @@ export function creatorPaymentView(d: DocumentData | undefined, stripe?: StripeS
   };
 }
 
+/**
+ * Can we pay them? Bank details from the manual form or a ready Stripe
+ * account, with the last 4 when known. "Bank ••1234" / "No bank details".
+ */
+export function bankOnFile(d: DocumentData | undefined): { on_file: boolean; last4: string | null; label: string } {
+  const pd = creatorPaymentView(d).payment_details;
+  const on = pd.status !== "missing";
+  return { on_file: on, last4: pd.last4 ?? null, label: bankLabel({ status: pd.status, last4: pd.last4 ?? null }) };
+}
+
 export async function getCreatorPaymentView(id: string, opts: { fresh?: boolean } = {}) {
   const snap = await creatorRef(id).get();
   if (!snap.exists) throw new CreatorDataError("Creator not found", 404);
@@ -206,6 +218,8 @@ export async function getCreatorPaymentView(id: string, opts: { fresh?: boolean 
 export interface RequestMeta {
   ip: string;
   user_agent: string;
+  /** How the signer was signed in (lib/creators/signer-auth.ts); recorded on tax-form signatures. */
+  auth?: SignerAuth;
   now?: Date;
 }
 
@@ -307,6 +321,7 @@ export async function signTaxForm(id: string, input: TaxSignInput, meta: Request
     signer_user_id: id,
     signer_ip: meta.ip || "unknown",
     signer_user_agent: (meta.user_agent || "unknown").slice(0, 500),
+    ...(meta.auth ? { signer_auth: meta.auth } : {}),
     signed_at_utc: signedAt,
     signed_at_local: localTime(now, tz),
     signer_timezone: tz,

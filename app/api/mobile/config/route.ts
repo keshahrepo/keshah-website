@@ -1,7 +1,8 @@
 // KESHAH Creators app: public config read on launch (no auth).
 // GET -> { min_version, app_store_url?, support_email, support_url, apply_url }
 // min_version: Settings/mobile.min_version (raise it to force everyone onto a new build),
-// else env MOBILE_MIN_VERSION, else 1.0.0.
+// else env MOBILE_MIN_VERSION, else 1.0.0. It may name a build ("1.0.0+5"): the app
+// compares its build number too, so a forced update can target one TestFlight build.
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { mobileSettings } from "@/lib/mobile/demo";
 

@@ -14,7 +14,7 @@
  * Everything external is injected; unit tested in lib/creators/mobile.test.ts.
  */
 import { claimsFor, pickRole, type Identity, type IdentityLookup } from "./identity";
-import { signLinkToken, signMobileToken } from "./token";
+import { signLinkToken, signMobileToken, type SignInMethod } from "./token";
 
 export const LINKS_COLLECTION = "mobile_identity_links";
 export const APPLE_RELAY_DOMAIN = "privaterelay.appleid.com";
@@ -23,6 +23,14 @@ export interface DecodedIdToken {
   uid: string;
   email?: string;
   email_verified?: boolean;
+  /** "google.com" / "apple.com" (firebase-admin's decoded token carries it). */
+  firebase?: { sign_in_provider?: string };
+}
+
+/** The token's sign-in method for a Firebase (Google / Apple) sign-in. */
+export function socialMethod(decoded: DecodedIdToken): SignInMethod {
+  const p = decoded.firebase?.sign_in_provider;
+  return p === "google.com" ? "google" : p === "apple.com" ? "apple" : "social";
 }
 
 export interface LinkStore {
@@ -48,9 +56,13 @@ export function isAppleRelay(email: string): boolean {
   return email.toLowerCase().endsWith(`@${APPLE_RELAY_DOMAIN}`);
 }
 
-export async function sessionFor(identity: IdentityLookup, email: string, opts: { secret?: string; now?: Date } = {}): Promise<SessionBody> {
+export async function sessionFor(
+  identity: IdentityLookup,
+  email: string,
+  opts: { secret?: string; now?: Date; amr?: SignInMethod } = {},
+): Promise<SessionBody> {
   const id = await pickRole(identity, email);
-  const token = await signMobileToken(claimsFor(id), opts);
+  const token = await signMobileToken({ ...claimsFor(id), ...(opts.amr ? { amr: opts.amr } : {}) }, { secret: opts.secret, now: opts.now });
   return { token, ...id };
 }
 
@@ -70,13 +82,13 @@ export async function firebaseSignIn(deps: FirebaseSignInDeps, idToken: unknown)
   });
 
   const link = await deps.links.get(decoded.uid);
-  if (link?.email) return { ok: true, body: await sessionFor(deps.identity, link.email.toLowerCase(), opts) };
+  if (link?.email) return { ok: true, body: await sessionFor(deps.identity, link.email.toLowerCase(), { ...opts, amr: socialMethod(decoded) }) };
 
   const email = (decoded.email ?? "").trim().toLowerCase();
   if (!email || decoded.email_verified === false || isAppleRelay(email)) return needsLink();
   const id = await pickRole(deps.identity, email);
   if (id.role === "none") return needsLink();
-  return { ok: true, body: { token: await signMobileToken(claimsFor(id), opts), ...id } };
+  return { ok: true, body: { token: await signMobileToken({ ...claimsFor(id), amr: socialMethod(decoded) }, opts), ...id } };
 }
 
 /** After the emailed code checks out: store the link and sign in as that email. */
@@ -86,5 +98,6 @@ export async function completeLink(
   email: string,
 ): Promise<SessionBody> {
   await deps.links.set(uid, { email, linked_at: (deps.now ?? new Date()).toISOString() });
-  return sessionFor(deps.identity, email, { secret: deps.secret, now: deps.now });
+  // They just typed the code emailed to this address.
+  return sessionFor(deps.identity, email, { secret: deps.secret, now: deps.now, amr: "email_code" });
 }

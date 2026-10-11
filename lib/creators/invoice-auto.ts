@@ -16,6 +16,7 @@
  * Nothing here imports Firestore.
  */
 import { addMonths, monthOf } from "./pay";
+import { lastInvoiceMonth } from "./lifecycle";
 import { fmtUsd, localDateIn } from "./time";
 import type { CreatorProfile, Invoice, IsoInstant, YyyyMm, YyyyMmDd } from "./types";
 import type { PushMessage } from "../push";
@@ -86,9 +87,9 @@ export function disputeUpdate(inv: Invoice, rawNote: unknown, now: Date = new Da
   const note = String(rawNote ?? "").trim().slice(0, 2000);
   if (!note) throw new InvoiceRuleError("Tell us what looks wrong.", 400);
   if (inv.status !== "submitted" || inv.locked) throw new InvoiceRuleError(`This invoice is already ${inv.status}.`);
-  if (!inv.dispute_until) throw new InvoiceRuleError("This invoice can't be flagged here. Message your manager on Slack.");
+  if (!inv.dispute_until) throw new InvoiceRuleError("This invoice can't be flagged here. Message us on Slack.");
   if (now.getTime() >= Date.parse(inv.dispute_until)) {
-    throw new InvoiceRuleError("The review window for this invoice has closed. Message your manager on Slack.");
+    throw new InvoiceRuleError("The review window for this invoice has closed. Message us on Slack.");
   }
   if (hasOpenDispute(inv)) throw new InvoiceRuleError("You already flagged this invoice. We'll get back to you.");
   const iso = now.toISOString();
@@ -129,8 +130,10 @@ export function invoiceView(inv: Invoice, timezone?: string, now: Date = new Dat
 
 /**
  * The month the cron should invoice for this creator today, or null:
- * last month (creator-local), only once pay started on/before its last day
- * and it didn't end before it began.
+ * last month (creator-local), only once pay started on/before its last day.
+ * After an agreement ends, invoices keep coming through the month the 30-day
+ * bonus window closes in (contract §6.5, lifecycle.ts lastInvoiceMonth), so
+ * milestones hit after the end are still paid.
  */
 export function invoiceMonthDue(
   c: Pick<CreatorProfile, "start_date" | "ended_on" | "timezone">,
@@ -139,21 +142,33 @@ export function invoiceMonthDue(
   if (!/^\d{4}-\d{2}-\d{2}$/.test(c.start_date ?? "")) return null;
   const last = addMonths(monthOf(safeLocalDate(now, c.timezone)), -1);
   if (c.start_date > `${last}-31`) return null;
-  if (c.ended_on && c.ended_on < `${last}-01`) return null;
+  if (c.ended_on && lastInvoiceMonth(c.ended_on) < last) return null;
   return last;
 }
 
-export function invoiceReadyEmail(inv: Invoice, firstName: string, timezone?: string): { subject: string; text: string } {
+export function invoiceReadyEmail(
+  inv: Invoice,
+  firstName: string,
+  timezone?: string,
+  opts: { bankOnFile?: boolean } = {},
+): { subject: string; text: string } {
   const month = fmtMonthName(inv.month);
   const paidBy = fmtDayMonth(deadlineDate(paidByFor(inv.submitted_at!), timezone));
   const disputeBy = fmtDayMonth(deadlineDate(inv.dispute_until!, timezone));
   const total = fmtUsd(inv.total_cents);
+  // Only promise a bank transfer when we have somewhere to send it.
+  const noBank = opts.bankOnFile === false;
   return {
-    subject: `Your ${month} invoice is in: ${total}`,
+    subject: noBank ? `Your ${month} invoice is in: ${total}. Add your bank details` : `Your ${month} invoice is in: ${total}`,
     text: [
       `Hi ${firstName || "there"},`,
       "",
-      `Your ${month} invoice is in: ${total}. It'll be paid by bank transfer by ${paidBy}.`,
+      noBank
+        ? `Your ${month} invoice is in: ${total}. We don't have your bank details yet, so we can't send it.`
+        : `Your ${month} invoice is in: ${total}. It'll be paid by bank transfer by ${paidBy}.`,
+      ...(noBank
+        ? ["", "Add your bank details in the app so we can pay you. Open the app and tap Set up your payments on the Today tab. It takes a minute, and we pay within 7 days of the invoice."]
+        : []),
       "",
       `If anything looks wrong, tap "Something's off?" in the app by ${disputeBy}.`,
       "",
@@ -195,6 +210,13 @@ export function disputeFounderEmail(
 
 export interface AutoSubmitDeps {
   listCreators(): Promise<CreatorProfile[]>;
+  /**
+   * Drafts for months before `beforeMonth` (an old month the founder sent back
+   * to draft for a fix). The cron re-submits them so they're never stuck.
+   */
+  staleDrafts?(creatorId: string, beforeMonth: YyyyMm): Promise<Invoice[]>;
+  /** Bank details on file (manual form or Stripe)? Unset = assume yes. */
+  bankOnFile?(creatorId: string): Promise<boolean>;
   /** draftOrGetInvoice: creates/recalculates a draft, returns non-drafts untouched. */
   draftOrGet(creatorId: string, month: YyyyMm, now: Date): Promise<Invoice>;
   /** Transactional draft -> submitted. Returns null when it was no longer a draft. */
@@ -222,45 +244,56 @@ export async function runInvoiceAutoSubmit(
   for (const c of creators) {
     const month = invoiceMonthDue(c, now);
     if (!month) continue;
-    const row: AutoSubmitRow = { id: c.id, name: c.name, month, result: "" };
-    rows.push(row);
-    try {
-      if (opts.dry) {
-        row.result = "would check";
-        continue;
-      }
-      const draft = await deps.draftOrGet(c.id, month, now);
-      row.number = draft.number;
-      row.total_cents = draft.total_cents;
-      if (draft.status !== "draft") {
-        row.result = `already ${draft.status}`;
-        continue;
-      }
-      const inv = await deps.autoSubmit(c.id, draft.number, now);
-      if (!inv) {
-        row.result = "already submitted";
-        continue;
-      }
-      row.total_cents = inv.total_cents;
-      row.result = "submitted";
-      if (inv.total_cents === 0) {
-        row.result = "submitted (zero, no email)";
-        continue;
-      }
-      const to = c.email || c.keshah_email;
-      if (to) {
-        const mail = invoiceReadyEmail(inv, (c.name || "").trim().split(/\s+/)[0], c.timezone);
-        try {
-          await deps.sendEmail(to, mail.subject, mail.text);
-          row.result += ", emailed";
-        } catch (e) {
-          row.result += `, email failed: ${e instanceof Error ? e.message : e}`;
-        }
-      }
-      await deps.push({ creatorId: c.id, email: c.email || null }, invoiceReadyPush(inv));
-    } catch (e) {
-      row.result = `error: ${e instanceof Error ? e.message : e}`;
+    // An older month sent back to draft (a correction) goes in again first, then last month.
+    const stale = opts.dry || !deps.staleDrafts ? [] : await deps.staleDrafts(c.id, month).catch(() => [] as Invoice[]);
+    for (const m of [...new Set(stale.map((i) => i.month))].sort()) {
+      rows.push(await submitOne(deps, c, m, now, false));
     }
+    rows.push(await submitOne(deps, c, month, now, !!opts.dry));
   }
   return rows;
+}
+
+async function submitOne(deps: AutoSubmitDeps, c: CreatorProfile, month: YyyyMm, now: Date, dry: boolean): Promise<AutoSubmitRow> {
+  const row: AutoSubmitRow = { id: c.id, name: c.name, month, result: "" };
+  try {
+    if (dry) {
+      row.result = "would check";
+      return row;
+    }
+    const draft = await deps.draftOrGet(c.id, month, now);
+    row.number = draft.number;
+    row.total_cents = draft.total_cents;
+    if (draft.status !== "draft") {
+      row.result = `already ${draft.status}`;
+      return row;
+    }
+    const inv = await deps.autoSubmit(c.id, draft.number, now);
+    if (!inv) {
+      row.result = "already submitted";
+      return row;
+    }
+    row.total_cents = inv.total_cents;
+    row.result = "submitted";
+    if (inv.total_cents === 0) {
+      row.result = "submitted (zero, no email)";
+      return row;
+    }
+    const bank = deps.bankOnFile ? await deps.bankOnFile(c.id).catch(() => true) : true;
+    if (!bank) row.result += ", no bank details";
+    const to = c.email || c.keshah_email;
+    if (to) {
+      const mail = invoiceReadyEmail(inv, (c.name || "").trim().split(/\s+/)[0], c.timezone, { bankOnFile: bank });
+      try {
+        await deps.sendEmail(to, mail.subject, mail.text);
+        row.result += ", emailed";
+      } catch (e) {
+        row.result += `, email failed: ${e instanceof Error ? e.message : e}`;
+      }
+    }
+    await deps.push({ creatorId: c.id, email: c.email || null }, invoiceReadyPush(inv));
+  } catch (e) {
+    row.result = `error: ${e instanceof Error ? e.message : e}`;
+  }
+  return row;
 }

@@ -36,6 +36,7 @@ import { advanceCreatorStatus, getCreator, getOnboarding, isOnboarded, isYyyyMmD
 import type { BonusPushInfo } from "@/lib/push";
 import { BONUS_100K_CENTS, BONUS_1M_TOTAL_CENTS, BONUS_WINDOW_DAYS, TRIAL_V2_VIDEOS, VIDEOS_PER_WEEKDAY, isWeekday, localDate, trialWindow } from "./pay";
 import { fetchRecentPosts, postKey, type FetchPostsResult, type ScrapedPost } from "./scrape";
+import { firstPostingDay, inPostEndWindow } from "./lifecycle";
 import type {
   BonusClaim,
   CreatorPost,
@@ -227,9 +228,11 @@ export type BonusAction =
 export function bonusAction(
   post: CreatorPost,
   claims: ({ id: string } & BonusClaim)[],
-  ctx: { startDate: YyyyMmDd; timezone: string; nowIso: string; bonusStartDate?: YyyyMmDd; trialUntil?: YyyyMmDd },
+  ctx: { startDate: YyyyMmDd; timezone: string; nowIso: string; bonusStartDate?: YyyyMmDd; trialUntil?: YyyyMmDd; endedOn?: YyyyMmDd },
 ): BonusAction {
   if (!isYyyyMmDd(ctx.startDate)) return { op: "none", reason: "not started" };
+  // Only videos posted on or before their last working day earn (contract §6.5).
+  if (ctx.endedOn && post.local_date > ctx.endedOn) return { op: "none", reason: "posted after the agreement ended" };
   // v2 trial videos earn no bonuses: only videos from the promotion date on.
   if (ctx.trialUntil && post.local_date < ctx.trialUntil) return { op: "none", reason: "trial video" };
   // A creator who worked before pay started in the system (Isai: September) can have
@@ -513,7 +516,7 @@ export async function syncCreatorPosts(creatorOrId: string | CreatorProfile, dep
       trialUntil = tw?.promotedOn ?? "9999-12-31";
     }
     for (const rec of cands) {
-      const a = bonusAction(rec, claims, { startDate, timezone: tz, nowIso, bonusStartDate: creatorRaw.bonus_start_date, trialUntil });
+      const a = bonusAction(rec, claims, { startDate, timezone: tz, nowIso, bonusStartDate: creatorRaw.bonus_start_date, trialUntil, ...(creator.ended_on ? { endedOn: creator.ended_on } : {}) });
       if (a.op === "create") {
         // create() fails if the doc appeared meanwhile (concurrent sync): idempotent.
         try {
@@ -568,9 +571,11 @@ export async function syncCreatorPosts(creatorOrId: string | CreatorProfile, dep
     if (!isYyyyMmDd(startDate)) {
       const onb = await getOnboarding(creator.id);
       if (isOnboarded(onb, { contractSigned: creator.contract.status === "signed" })) {
+        // Pay starts on the first posting day: the next weekday after Getting started was
+        // finished (warm-up and link both done). Posts from the warm-up's last day never count.
         const doneIso = toIsoLoose(onb.completed_at) ?? toIsoLoose(onb.ready_at);
-        const doneDate = doneIso ? localDate(doneIso, tz) : "0000-00-00";
-        const first = result.posted_days_detected.find((d) => d >= doneDate);
+        const firstDay = firstPostingDay(doneIso, tz) ?? "0000-00-00";
+        const first = result.posted_days_detected.find((d) => d >= firstDay);
         if (first) {
           const set = await db.runTransaction(async (tx) => {
             const snap = await tx.get(ref);
@@ -650,6 +655,20 @@ export async function syncCreatorPosts(creatorOrId: string | CreatorProfile, dep
   return result;
 }
 
+/**
+ * Who the cron syncs: working creators, plus ended ones (even cut) for 30 days
+ * after ended_on, so videos posted before the end that pass 100K / 1M in that
+ * window still earn their bonus (contract §6.5, lib/creators/lifecycle.ts).
+ */
+export function shouldSync(
+  c: Pick<CreatorProfile, "status" | "is_active" | "ended_on" | "start_date" | "timezone"> & { legacy_start?: boolean },
+  now: Date,
+): boolean {
+  if (c.is_active && SYNC_STATUSES.has(c.status)) return true;
+  if (c.status !== "ended" || !c.ended_on || !isYyyyMmDd(c.start_date) || c.legacy_start) return false;
+  return inPostEndWindow(c.ended_on, localDate(now.toISOString(), c.timezone || "UTC"));
+}
+
 export interface SyncAllResult {
   ran_at: string;
   results: CreatorSyncResult[];
@@ -664,9 +683,9 @@ export async function syncAllCreatorPosts(deps: SyncDeps & { onlyIds?: string[];
   const db = firestore(deps);
   const log = deps.log ?? ((m: string) => console.log(m));
   const now = deps.now ?? new Date();
-  const creators = (await listCreators()).filter(
+  const creators = (await listCreators({ includeInactive: true })).filter(
     (c) =>
-      SYNC_STATUSES.has(c.status) &&
+      shouldSync(c, now) &&
       (c.tiktok_handle?.trim() || c.instagram_handle?.trim()) &&
       (!deps.onlyIds || deps.onlyIds.includes(c.id)),
   );

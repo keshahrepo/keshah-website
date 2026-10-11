@@ -42,6 +42,8 @@ export interface PushTokenRecord {
 
 export interface PushStore {
   upsert(token: string, rec: PushTokenRecord): Promise<void>;
+  /** The email a token is filed under, or null when there's no such token. */
+  ownerOf(token: string): Promise<string | null>;
   tokensFor(target: PushTarget): Promise<string[]>;
   remove(tokens: string[]): Promise<void>;
 }
@@ -78,6 +80,11 @@ export function firestorePushStore(db: Firestore): PushStore {
   return {
     async upsert(token, rec) {
       await col.doc(token).set(rec);
+    },
+    async ownerOf(token) {
+      const d = await col.doc(token).get();
+      const email = d.exists ? d.get("email") : null;
+      return typeof email === "string" ? email : null;
     },
     async tokensFor(target) {
       const queries: Promise<QuerySnapshot>[] = [];
@@ -120,6 +127,19 @@ export async function registerPushToken(
     platform: rec.platform,
     updated_at: (deps.now ?? new Date()).toISOString(),
   });
+}
+
+/**
+ * Sign-out: delete a token, but only when it's filed under the signed-in
+ * email (a token re-registered by someone else since stays theirs).
+ * Returns whether a token was removed.
+ */
+export async function unregisterPushToken(token: string, email: string, deps: PushDeps = {}): Promise<boolean> {
+  const store = deps.store ?? (await defaults(deps)).store;
+  const owner = await store.ownerOf(token);
+  if (!owner || owner !== email.trim().toLowerCase()) return false;
+  await store.remove([token]);
+  return true;
 }
 
 export interface PushResult {

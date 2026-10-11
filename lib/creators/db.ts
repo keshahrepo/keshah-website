@@ -38,6 +38,7 @@ import { FOUNDER_VIDEOS, QUIZ, WARMUP_DAYS } from "./onboarding-content";
 import { handleExists, postKey } from "./scrape";
 import { isValidTimezone } from "./time";
 import { autoSubmitFields, disputeUpdate, InvoiceRuleError } from "./invoice-auto";
+import { adjustmentTarget, approvedClaimDates, carriedNote, firstPostingDay, fmtWeekdayLong } from "./lifecycle";
 import type {
   Adjustment,
   BonusClaim,
@@ -561,6 +562,14 @@ export async function savePostingDay(
   }
   if (!Array.isArray(videos)) throw new CreatorDataError("videos must be a list");
   if (videos.length > MAX_VIDEO_ROWS) throw new CreatorDataError("Too many videos in one day");
+  // Before the first posting day (the next weekday after Getting started is finished) nothing counts.
+  if (!hasStarted(creator) && !opts.skipDeadline) {
+    const onb = await getOnboarding(id);
+    const first = firstPostingDay(onb.completed_at ?? onb.ready_at ?? null, creator.timezone);
+    if (first && date < first) {
+      throw new CreatorDataError(`Your first posting day is ${fmtWeekdayLong(first)}. Nothing to post before then.`, 409);
+    }
+  }
   // Remake attribution: row i remakes the day's pick in slot i (by the row's position on Today, before empty rows drop out).
   const picksSnap = await creatorRef(id).collection("daily_picks").doc(date).get();
   const pickIds: (string | undefined)[] = [];
@@ -826,20 +835,40 @@ export async function reviewBonusClaim(
     out[k] = patch[k] || null;
   }
   if (patch.admin_note !== undefined) out.admin_note = patch.admin_note;
-  await creatorRef(id).collection("bonus_claims").doc(claimId).update(out);
+  const ref = creatorRef(id).collection("bonus_claims").doc(claimId);
+  if (out.status === "approved") {
+    // Same rule as the admin route: an approval always carries the milestone date pay needs.
+    const [snap, creator] = await Promise.all([ref.get(), getCreator(id)]);
+    if (snap.exists) Object.assign(out, approvedClaimDates({ ...(snap.data() as BonusClaim), ...out } as BonusClaim, creator?.timezone ?? DEFAULT_TIMEZONE));
+  }
+  await ref.update(out);
 }
 
 // ---------------------------------------------------------------- adjustments
 
+/**
+ * Adds an adjustment. A month whose invoice is already submitted, approved or
+ * paid never recalculates, so the adjustment lands on the next open month
+ * instead, its note saying where it came from (lib/creators/lifecycle.ts
+ * adjustmentTarget). `carried_from` records the month asked for.
+ */
 export async function addAdjustment(
   id: string,
   input: { month: YyyyMm; amount_cents: number; note: string },
-): Promise<WithId<Adjustment>> {
+): Promise<WithId<Adjustment> & { carried_from?: YyyyMm }> {
   if (!isYyyyMm(input.month)) throw new CreatorDataError("month must be yyyy-mm");
   const amount = Math.round(Number(input.amount_cents));
   if (!Number.isFinite(amount) || amount === 0) throw new CreatorDataError("Amount must be a non-zero number of cents");
-  await assertMonthOpen(id, input.month);
-  const doc: Adjustment = { month: input.month, amount_cents: amount, note: String(input.note ?? "").trim(), created_at: new Date().toISOString() };
+  const inv = await creatorRef(id).collection("invoices").get();
+  const target = adjustmentTarget(input.month, inv.docs.map((d) => toInvoice(d.id, d.data())));
+  const note = String(input.note ?? "").trim().slice(0, 500);
+  const doc: Adjustment & { carried_from?: YyyyMm } = {
+    month: target.month,
+    amount_cents: amount,
+    note: target.carriedFrom ? carriedNote(note, target.carriedFrom) : note,
+    created_at: new Date().toISOString(),
+    ...(target.carriedFrom ? { carried_from: target.carriedFrom } : {}),
+  };
   const ref = await creatorRef(id).collection("adjustments").add(doc);
   return { ...doc, id: ref.id };
 }
@@ -1005,9 +1034,10 @@ export async function setOnboardingStep(
       state.slack_joined_at = now;
       break;
     case "warmup": {
-      // Warm-up uses the new accounts, so they (and the bio and link) must exist first.
-      if (!state.accounts_done_at || !state.link_seen_at) {
-        throw new CreatorDataError("Set up your accounts and add your bio and link first. The warm-up starts after that.", 409);
+      // Warm-up uses the new accounts, so they must exist first. The link isn't
+      // needed yet: it only has to be in their bio by the first posting day.
+      if (!state.accounts_done_at) {
+        throw new CreatorDataError("Set up your accounts first. The warm-up starts after that.", 409);
       }
       const today = creatorToday(creator, nowDate);
       const days = state.warmup_days ?? [];

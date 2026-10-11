@@ -7,6 +7,8 @@
 //   59 to 61 min before                 text only, with the link (+ "reply with your full name to
 //                                       confirm" if they haven't confirmed yet)
 //   at the start time (0 to +2 min)    text only: "we're waiting for you" + join link
+//                                       (skipped for anyone confirmed or checked in for this
+//                                       booking: they already have the link)
 //   (Calendly already emails the 24h / 1h reminders, so we don't.)
 //   Both also go as a push to the KESHAH Creators app when the applicant has
 //   it installed (once per booking, mobile_push_<kind>_for = start).
@@ -49,6 +51,7 @@ import {
   REMINDER_START_FIELD,
   firstNameOf,
   formatShortTime,
+  checkedInFor,
   confirmedForBooking,
   got1hText,
   gotBookingText,
@@ -137,6 +140,12 @@ export async function GET(req: Request) {
       if (!dry) row.push = await pushReminder(db, d.ref, d.id, email, kind, startIso);
       if (!phone) {
         row.result = "no phone number";
+        continue;
+      }
+      // Confirmed or checked in for this booking: they already have the link
+      // (confirm / check-in reply, or the 1h text), so no "we're waiting" text.
+      if (kind === "now" && (checkedInFor(x, startIso) || confirmedForBooking(x, startIso))) {
+        row.result = "skipped: already confirmed or checked in";
         continue;
       }
       if (dry) continue;

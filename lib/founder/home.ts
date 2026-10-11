@@ -3,7 +3,11 @@
  * three business numbers. Reads the same collections the web dashboard does.
  */
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
-import { CREATORS_COLLECTION, mapCreatorStatus } from "@/lib/creators/db";
+import { CREATORS_COLLECTION, DEFAULT_TIMEZONE, mapCreatorStatus } from "@/lib/creators/db";
+import { passwordsResetPending } from "@/lib/creators/offboard";
+import { bankOnFile } from "@/lib/creators/payments";
+import { localDateIn } from "@/lib/creators/time";
+import { fmtMonthName } from "@/lib/creators/invoice-auto";
 import { toAdminCreator } from "@/lib/creators/admin";
 import { creatorProgress, progressStepSummary } from "@/lib/creators/progress";
 import { deadlineOf, deadlineShort, isPastDue } from "@/lib/creators/deadline";
@@ -22,6 +26,9 @@ export type NeedKind =
   | "dispute"
   | "bonus_claim"
   | "day_off"
+  | "tracking_link"
+  | "bank_details"
+  | "offboard_passwords"
   | "support"
   | "applicant_text";
 
@@ -35,6 +42,8 @@ export interface Need {
   at: string;
   /** invoice number / claim id / day-off date when the action needs it. */
   ref?: string;
+  /** The creator's name when the title is a task ("Add Jen's tracking link"), for the page it opens. */
+  name?: string;
 }
 
 export interface FounderHome {
@@ -49,13 +58,24 @@ const toIso = (v: unknown): string => {
   return "";
 };
 
+const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
+
+/** yyyy-mm-dd in the creator's timezone (falls back to New York). */
+function localToday(tz: unknown, now: Date): string {
+  try {
+    return localDateIn(now, typeof tz === "string" && tz ? tz : DEFAULT_TIMEZONE);
+  } catch {
+    return localDateIn(now, DEFAULT_TIMEZONE);
+  }
+}
+
 export async function founderHome(now = new Date()): Promise<FounderHome> {
   const { db } = getFirebaseAdmin();
   const needs: Need[] = [];
-  const today = now.toISOString().slice(0, 10);
 
-  const [creatorsSnap, appsSnap, support, revenue, inbox] = await Promise.all([
+  const [creatorsSnap, offboardedSnap, appsSnap, support, revenue, inbox] = await Promise.all([
     db.collection(CREATORS_COLLECTION).where("is_active", "==", true).get(),
+    db.collection(CREATORS_COLLECTION).where("offboard.passwords_reset_at", "==", null).get(),
     db.collection("careers_applications").where("status", "in", ["booked", "completed", "awaiting_booking", "pending"]).get(),
     listAwaitingConversations({ limit: 1000 }).catch(() => []),
     revenueOverview(),
@@ -65,10 +85,26 @@ export async function founderHome(now = new Date()): Promise<FounderHome> {
   // ---- creators: trial decisions, invoices, disputes, claims, days off
   let active = 0;
   let trial = 0;
+  // Ended creators: the founder's "reset their passwords" task (they're often inactive after a Manage cut).
+  for (const doc of offboardedSnap.docs) {
+    const c = doc.data();
+    if (!passwordsResetPending(c)) continue;
+    const name = String(c.name || c.legal_name || "Creator");
+    needs.push({
+      kind: "offboard_passwords",
+      id: doc.id,
+      name,
+      title: `Reset ${firstName(name)}'s TikTok and Instagram passwords`,
+      subtitle: "And remove any phone number or two-factor",
+      at: toIso(c.offboarded_at),
+    });
+  }
   await Promise.all(
     creatorsSnap.docs.map(async (doc) => {
       const c = doc.data();
       const name = String(c.name || c.legal_name || "Creator");
+      // Day-off requests are dated in the creator's timezone.
+      const today = localToday(c.timezone, now);
       if (c.status === "active") active++;
       if (c.status === "trial" || c.status === "onboarding") trial++;
       if (c.trial_plan === "v2" && c.status === "trial" && c.trial_completed_on && !c.trial_outcome) {
@@ -103,6 +139,7 @@ export async function founderHome(now = new Date()): Promise<FounderHome> {
             withdrawnAt: a.withdrawn_at,
             onboarding: onb?.exists ? onb.data()! : null,
             trackingUrl: a.tracking_url,
+            campaignTags: a.campaign_tags,
             startDate: a.start_date,
             trialPlan: a.trial_plan ?? null,
           },
@@ -118,6 +155,34 @@ export async function founderHome(now = new Date()): Promise<FounderHome> {
             at: p.currentSince ?? "",
           });
         }
+      }
+      // Accepted, still setting up, and no tracking link (or no campaign tag): their
+      // posting can't start until the link is in their bio, and proceeds can't count.
+      if (settingUp && c.accepted_at && !c.withdrawn_at) {
+        const url = String(c.tracking_url ?? "").trim();
+        const tags = Array.isArray(c.campaign_tags) ? c.campaign_tags.filter((t: unknown) => String(t ?? "").trim()) : [];
+        if (!url || !tags.length) {
+          needs.push({
+            kind: "tracking_link",
+            id: doc.id,
+            name,
+            title: !url ? `Add ${firstName(name)}'s tracking link` : `Add ${firstName(name)}'s campaign tag`,
+            subtitle: !url ? "They can't start posting until it's in their bio" : "Their installs and proceeds won't count until it's set",
+            at: toIso(c.accepted_at),
+          });
+        }
+      }
+      // An invoice is in but there's nowhere to send the money.
+      const unpaid = invs.docs.filter((i) => Number(i.data().total_cents ?? 0) > 0);
+      if (unpaid.length && !bankOnFile(c).on_file) {
+        needs.push({
+          kind: "bank_details",
+          id: doc.id,
+          name,
+          title: `${firstName(name)} has no bank details`,
+          subtitle: `Their ${fmtMonthName(String(unpaid[0].data().month ?? ""))} invoice is in, but there's nowhere to send it`,
+          at: toIso(unpaid[0].data().submitted_at),
+        });
       }
       for (const i of invs.docs) {
         const v = i.data();
@@ -172,7 +237,22 @@ export async function founderHome(now = new Date()): Promise<FounderHome> {
     needs.push({ kind: "applicant_text", id: c.application_id, title: "Applicant text", subtitle: c.last_text.slice(0, 80), at: c.last_at_ms > 0 ? new Date(c.last_at_ms).toISOString() : "" });
   }
 
-  const order: NeedKind[] = ["trial_decision", "deadline", "dispute", "application", "stuck", "invoice_approve", "invoice_pay", "day_off", "bonus_claim", "applicant_text", "support"];
+  const order: NeedKind[] = [
+    "trial_decision",
+    "deadline",
+    "dispute",
+    "application",
+    "tracking_link",
+    "stuck",
+    "invoice_approve",
+    "bank_details",
+    "invoice_pay",
+    "day_off",
+    "bonus_claim",
+    "offboard_passwords",
+    "applicant_text",
+    "support",
+  ];
   needs.sort((x, y) => order.indexOf(x.kind) - order.indexOf(y.kind) || x.at.localeCompare(y.at));
   return { needs, revenue, counts: { creators_active: active, creators_trial: trial, applications_open: open } };
 }

@@ -91,6 +91,21 @@ export function inboundDocId(m: IncomingText): string {
   return `in_${key.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 300)}`;
 }
 
+const STOP_WORDS = new Set(["stop", "stopall", "unsubscribe", "end", "quit"]);
+const START_WORDS = new Set(["start", "unstop"]);
+
+/**
+ * A carrier-style opt-out / opt-in keyword, when that is the whole reply
+ * ("STOP", "Unsubscribe.", "start"). Anything longer ("stop texting me
+ * please?") is left for a person, so a real question never gets eaten.
+ */
+export function smsKeyword(text: string): "stop" | "start" | null {
+  const w = String(text ?? "").trim().toLowerCase().replace(/[^a-z]/g, "");
+  if (STOP_WORDS.has(w)) return "stop";
+  if (START_WORDS.has(w)) return "start";
+  return null;
+}
+
 /** Phone (E.164) -> the application a reply from that phone belongs to. */
 export function buildPhoneIndex(apps: AppLite[]): Map<string, AppLite> {
   const byPhone = new Map<string, AppLite[]>();

@@ -10,6 +10,15 @@ import { SignJWT, jwtVerify } from "jose";
 
 export type MobileRole = "creator" | "applicant" | "none";
 
+/**
+ * How the person proved who they are when this token was issued (recorded on
+ * e-signature audit trails): an emailed 6-digit code, Google / Apple sign-in
+ * (social: provider unknown), or the App Review demo account's fixed code.
+ * Tokens issued before this existed have none.
+ */
+export type SignInMethod = "email_code" | "google" | "apple" | "social" | "demo";
+const SIGN_IN_METHODS: readonly string[] = ["email_code", "google", "apple", "social", "demo"];
+
 export interface MobileClaims {
   /** Lowercased email the code was sent to. */
   sub: string;
@@ -18,6 +27,8 @@ export interface MobileClaims {
   cid?: string;
   /** careers_applications doc id (role applicant). */
   aid?: string;
+  /** How they signed in (see SignInMethod). */
+  amr?: SignInMethod;
 }
 
 const ISSUER = "keshah-creators";
@@ -45,6 +56,7 @@ export async function signMobileToken(claims: MobileClaims, opts: { secret?: str
   const body: Record<string, unknown> = { role: claims.role };
   if (claims.cid) body.cid = claims.cid;
   if (claims.aid) body.aid = claims.aid;
+  if (claims.amr) body.amr = claims.amr;
   const iat = Math.floor((opts.now ?? new Date()).getTime() / 1000);
   return new SignJWT(body)
     .setProtectedHeader({ alg: "HS256" })
@@ -73,6 +85,7 @@ export async function verifyMobileToken(token: string, opts: { secret?: string; 
       role,
       ...(typeof payload.cid === "string" && payload.cid ? { cid: payload.cid } : {}),
       ...(typeof payload.aid === "string" && payload.aid ? { aid: payload.aid } : {}),
+      ...(typeof payload.amr === "string" && SIGN_IN_METHODS.includes(payload.amr) ? { amr: payload.amr as SignInMethod } : {}),
     };
   } catch {
     return null;

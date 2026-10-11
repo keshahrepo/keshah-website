@@ -30,6 +30,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const result = await sendInterviewText({ to: phone, text, ref: id, kind: "reply" });
     if (!textWasSent(result)) {
       const why = "error" in result ? result.error : "skipped" in result ? result.skipped : "not sent";
+      if (why === "opted out") {
+        return NextResponse.json({ ok: false, error: "They replied STOP, so we can't text them.", result }, { status: 409 });
+      }
       return NextResponse.json({ ok: false, error: `Text not sent: ${why}`, result }, { status: 502 });
     }
     return NextResponse.json({ ok: true, result });

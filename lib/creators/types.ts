@@ -64,6 +64,8 @@ export interface ContractAudit {
   signer_user_id: string;
   signer_ip: string;
   signer_user_agent: string;
+  /** How the signer was signed in (lib/creators/signer-auth.ts). Absent on contracts signed before it was recorded. */
+  signer_auth?: string;
   signed_at_utc: IsoInstant;
   /** Human-readable time in the creator's timezone, e.g. "October 6, 2026 at 3:04:05 PM CDT". */
   signed_at_local: string;
@@ -213,6 +215,14 @@ export interface CreatorPortalFields {
   contract_deadline_at?: IsoInstant;
   /** The founder withdrew the offer. */
   withdrawn_at?: IsoInstant;
+  /**
+   * The agreement ended and they were offboarded (lib/creators/offboard.ts):
+   * off their @keshah.com group, account passwords hidden, founder task to
+   * reset them (offboard.passwords_reset_at once done).
+   */
+  offboarded_at?: IsoInstant;
+  /** An ended / cut creator accepted again: this doc was reset for a fresh offer (old run in previous_runs). */
+  reactivated_at?: IsoInstant;
 }
 
 /** Existing ContentCreators fields the pay system reads (never rewrites). */
@@ -345,6 +355,8 @@ export interface Adjustment {
   amount_cents: Cents;
   note: string;
   created_at?: IsoInstant;
+  /** Asked for a month whose invoice had already gone in, so it moved to `month` (lib/creators/lifecycle.ts). */
+  carried_from?: YyyyMm;
 }
 
 export type InvoiceLineKind =

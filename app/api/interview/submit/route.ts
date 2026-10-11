@@ -6,7 +6,7 @@
 import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
-import { findApplicationByEmail, isAcceptingNow, resolveSession } from "@/lib/interview";
+import { findApplicationByEmail, isAcceptingNow, notifyFounderVideoSent, resolveSession } from "@/lib/interview";
 
 type Body = {
   slug?: string;
@@ -52,6 +52,8 @@ export async function POST(req: Request) {
       },
       { merge: true },
     );
+    // First video only (a re-upload doesn't push again).
+    if (!doc.get("interview_video_submitted_at")) await notifyFounderVideoSent(doc.id, doc.get("full_name"));
     return NextResponse.json({ ok: true });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

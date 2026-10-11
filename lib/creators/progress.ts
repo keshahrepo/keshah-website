@@ -10,7 +10,9 @@
  *                   contract.status "sent" means it's on the creator, "none" means it's on the founder;
  *                   contract_deadline_at adds "Due Oct 14", then "Past due · 1 day" (stuck) once it's missed
  *   slack .. rules  onboarding/state *_at fields (videos: the last of videos_watched, once all are watched)
- *   warmup          onboarding/state.warmup_days (done at WARMUP_DAYS ticks)
+ *   warmup          onboarding/state.warmup_days (done at WARMUP_DAYS ticks); opens once accounts are set up
+ *   link            onboarding/state.link_seen_at; on the founder until the tracking link + a campaign tag are set.
+ *                   After the warm-up: it only holds up the first posting day
  *   first_post      ContentCreators.start_date (set by the first posting day)
  *   trial           lib/creators/pay.ts trialStatus (day n of 20, promoted, ended)
  *
@@ -89,6 +91,8 @@ export interface ProgressInput {
   /** Raw onboarding/state (fields read defensively). */
   onboarding?: Record<string, unknown> | null;
   trackingUrl?: string;
+  /** Campaign tags (attribution). Omitted = not checked. */
+  campaignTags?: string[];
   /** "" until the first posting day. */
   startDate?: string;
   /** Legacy start date (old program fallback): not a real first posting day. */
@@ -223,15 +227,6 @@ export function creatorProgress(input: ProgressInput, now: Date = new Date()): C
   d.push({ key: "videos", label: "Videos", at: videosAt, done: videosDone || allOnboarded || started || finished, waitingOn: "creator" });
   d.push({ key: "quiz", label: "Quiz", at: onb.quiz, done: onbDone("quiz"), waitingOn: "creator" });
   d.push({ key: "accounts", label: "Accounts created", at: onb.accounts, done: onbDone("accounts"), waitingOn: "creator" });
-  const linkReady = !!(input.trackingUrl ?? "").trim();
-  d.push({
-    key: "link",
-    label: "Link in bio",
-    at: onb.link,
-    done: onbDone("link"),
-    waitingOn: linkReady || onb.link ? "creator" : "you",
-    ...(!onb.link && !linkReady ? { detail: "Their link isn't set up yet" } : {}),
-  });
   d.push({ key: "rules", label: "Rules", at: onb.rules, done: onbDone("rules"), waitingOn: "creator" });
   const warmDone = warmupDone || allOnboarded || started || finished;
   d.push({
@@ -241,6 +236,19 @@ export function creatorProgress(input: ProgressInput, now: Date = new Date()): C
     done: warmDone,
     waitingOn: "creator",
     ...(warmDone && !warmupDays.length ? {} : { detail: `${Math.min(warmupDays.length, WARMUP_DAYS)} of ${WARMUP_DAYS} days` }),
+  });
+  // The link doesn't hold up the warm-up, only the first posting day. A link
+  // without a campaign tag isn't ready either: nothing they bring in would count.
+  const hasUrl = !!(input.trackingUrl ?? "").trim();
+  const hasTag = (input.campaignTags ?? []).some((t) => String(t ?? "").trim());
+  const linkReady = hasUrl && (input.campaignTags === undefined || hasTag);
+  d.push({
+    key: "link",
+    label: "Link in bio",
+    at: onb.link,
+    done: onbDone("link"),
+    waitingOn: linkReady || onb.link ? "creator" : "you",
+    ...(!onb.link && !hasUrl ? { detail: "Their link isn't set up yet" } : !onb.link && !linkReady ? { detail: "Their link has no campaign tag yet" } : {}),
   });
 
   // First posting day

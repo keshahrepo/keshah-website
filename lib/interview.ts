@@ -165,7 +165,9 @@ export async function findApplicationByEmail(
     if (ai !== bi) return ai - bi;
     const am = tsToMs(a.get("last_updated_at"));
     const bm = tsToMs(b.get("last_updated_at"));
-    return bm - am;
+    if (bm !== am) return bm - am;
+    // Same timestamp (or none): fixed order, so every caller picks the same doc.
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   });
   return docs[0];
 }
@@ -328,4 +330,24 @@ export async function ensureSessionsForBookings(
     }
   }
   return { checked: booked.size, missing: missing.map((ms) => new Date(ms).toISOString()), created };
+}
+
+// ---------------------------------------------------------------- founder push
+
+/**
+ * Founder app push when an applicant sends their video test. Tapping it opens
+ * the applicant (type founder_applicant). Never throws.
+ */
+export async function notifyFounderVideoSent(applicationId: string, fullName: unknown): Promise<void> {
+  try {
+    const { notifyFounder } = await import("@/lib/staff");
+    const name = String(fullName ?? "").trim() || "An applicant";
+    await notifyFounder({
+      title: `${name} sent their video test`,
+      body: "Tap to watch it and decide.",
+      data: { type: "founder_applicant", id: applicationId },
+    });
+  } catch (e) {
+    console.error("founder video push failed:", e instanceof Error ? e.message : e);
+  }
 }

@@ -11,6 +11,7 @@ import {
 import { CreatorDataError, draftOrGetInvoice, returnInvoiceToDraft } from "@/lib/creators/db";
 import type { Invoice } from "@/lib/creators/types";
 import { transferInvoice } from "@/lib/creators/stripe-connect";
+import { notifyDisputeResolved, notifyInvoicePaid } from "@/lib/creators/lifecycle-notify";
 
 export const dynamic = "force-dynamic";
 
@@ -75,7 +76,8 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
         locked: true,
         updated_at: now,
       });
-      return NextResponse.json({ ok: true, transfer_id: transferId });
+      const told = await notifyInvoicePaid(id, { number, month: String(inv.month ?? ""), total_cents: Number(inv.total_cents ?? 0) });
+      return NextResponse.json({ ok: true, transfer_id: transferId, told });
     }
     if (body.action === "return_to_draft") {
       try {
@@ -104,7 +106,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
       const c = await getCreator(id);
       payeeName = c?.legal_name || c?.name || "";
     }
-    await db().runTransaction(async (tx) => {
+    const done = await db().runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) throw new HttpError(404, "Invoice not found");
       const inv = snap.data()!;
@@ -147,12 +149,17 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
       } else {
         throw new HttpError(400, "Unknown action");
       }
+      return { month: String(inv.month ?? ""), total_cents: Number(inv.total_cents ?? 0) };
     });
+    // The creator hears about it (push is new to them, so paid also emails). Never fails the action.
+    let told: string | undefined;
+    if (body.action === "mark_paid") told = await notifyInvoicePaid(id, { number, ...done });
+    else if (body.action === "resolve_dispute") told = await notifyDisputeResolved(id, { number, month: done.month });
+    return NextResponse.json({ ok: true, ...(told ? { told } : {}) });
   } catch (e) {
     if (e instanceof HttpError) return NextResponse.json({ error: e.message }, { status: e.status });
     throw e;
   }
-  return NextResponse.json({ ok: true });
 }
 
 class HttpError extends Error {

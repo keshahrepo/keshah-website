@@ -72,18 +72,33 @@ test("uses the creator's own step timestamps; unknown sign-in time is done witho
   assert.equal(p.stuck, true);
 });
 
-test("link waits on the founder until the tracking link exists", () => {
+test("the link doesn't hold up the warm-up; after it, the link waits on the founder (URL and campaign tag)", () => {
   const onboarding = {
     contract_signed_at: "2026-10-03T00:00:00Z",
     slack_joined_at: "2026-10-04T00:00:00Z",
     videos_watched: { "reversed-hair-loss": "2026-10-05T00:00:00Z", "science-of-hair-loss": "2026-10-05T01:00:00Z" },
     quiz_passed_at: "2026-10-05T02:00:00Z",
     accounts_done_at: "2026-10-06T00:00:00Z",
+    rules_ack_at: "2026-10-06T02:00:00Z",
   };
   const p = creatorProgress({ ...accepted, contract: { status: "signed" }, trackingUrl: "", onboarding }, NOW);
-  assert.equal(p.current, "link");
-  assert.equal(p.stuck, false);
+  assert.equal(p.current, "warmup");
   assert.equal(p.steps.find((s) => s.key === "videos")!.at, "2026-10-05T01:00:00Z");
+
+  const warmed = { ...onboarding, warmup_days: ["2026-10-07", "2026-10-08", "2026-10-09"] };
+  const noLink = creatorProgress({ ...accepted, contract: { status: "signed" }, trackingUrl: "", campaignTags: [], onboarding: warmed }, NOW);
+  assert.equal(noLink.current, "link");
+  assert.equal(noLink.stuck, false);
+  const linkStep = noLink.steps.find((s) => s.key === "link")!;
+  assert.equal(linkStep.waitingOn, "you");
+  assert.equal(linkStep.detail, "Their link isn't set up yet");
+
+  const noTag = creatorProgress({ ...accepted, contract: { status: "signed" }, trackingUrl: "https://x.example/l", campaignTags: [], onboarding: warmed }, NOW);
+  assert.equal(noTag.steps.find((s) => s.key === "link")!.waitingOn, "you");
+  assert.equal(noTag.steps.find((s) => s.key === "link")!.detail, "Their link has no campaign tag yet");
+
+  const ready = creatorProgress({ ...accepted, contract: { status: "signed" }, trackingUrl: "https://x.example/l", campaignTags: ["Jen TikTok"], onboarding: warmed }, NOW);
+  assert.equal(ready.steps.find((s) => s.key === "link")!.waitingOn, "creator");
 });
 
 test("warm-up: day count, clock from the last tick", () => {

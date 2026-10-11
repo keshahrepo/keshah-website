@@ -272,6 +272,7 @@ test("sendInterviewText logs the outbound text and keeps its return contract (fe
       ref: "app1",
       kind: "reply",
       fetchImpl,
+      isOptedOut: async () => false,
       logOutbound: async (rec) => {
         logged.push(rec);
       },
@@ -286,12 +287,12 @@ test("sendInterviewText logs the outbound text and keeps its return contract (fe
     assert.match(String(logged[0].message_id), /^interview_app1_/);
 
     // A failing log doesn't change the result.
-    const r2 = await sendInterviewText({ to: APPLICANT, text: "x", ref: "app1", fetchImpl, logOutbound: async () => { throw new Error("db down"); } });
+    const r2 = await sendInterviewText({ to: APPLICANT, text: "x", ref: "app1", fetchImpl, isOptedOut: async () => false, logOutbound: async () => { throw new Error("db down"); } });
     assert.ok("sent" in r2 && r2.sent);
 
     // Not sent: nothing logged.
     const failFetch = (async () => new Response("nope", { status: 500 })) as unknown as typeof fetch;
-    const r3 = await sendInterviewText({ to: APPLICANT, text: "x", ref: "app1", fetchImpl: failFetch, logOutbound: async (rec) => { logged.push(rec); } });
+    const r3 = await sendInterviewText({ to: APPLICANT, text: "x", ref: "app1", fetchImpl: failFetch, isOptedOut: async () => false, logOutbound: async (rec) => { logged.push(rec); } });
     assert.ok("error" in r3);
     assert.equal(logged.length, 1);
   } finally {
@@ -479,4 +480,36 @@ test("check-in after the 1h text also confirms someone who hadn't confirmed", as
   assert.equal(doc.interview_checked_in_for, iso);
   assert.equal(doc.interview_confirmed_for, iso);
   assert.equal(sends, 1);
+});
+
+test("sendInterviewText never texts a number that replied STOP (and fails closed)", async () => {
+  const saved = process.env.HIUBLUE_API_KEY;
+  process.env.HIUBLUE_API_KEY = "test-key";
+  try {
+    let calls = 0;
+    const fetchImpl = (async () => {
+      calls++;
+      return new Response("{}", { status: 200 });
+    }) as unknown as typeof fetch;
+    const seen: string[] = [];
+    const r = await sendInterviewText({
+      to: "(212) 555-0101",
+      text: "x",
+      ref: "app1",
+      fetchImpl,
+      logOutbound: async () => {},
+      isOptedOut: async (p) => {
+        seen.push(p);
+        return true;
+      },
+    });
+    assert.deepEqual(r, { skipped: "opted out" });
+    assert.deepEqual(seen, ["+12125550101"]);
+    const r2 = await sendInterviewText({ to: "(212) 555-0101", text: "x", fetchImpl, logOutbound: async () => {}, isOptedOut: async () => { throw new Error("db down"); } });
+    assert.ok("error" in r2);
+    assert.equal(calls, 0);
+  } finally {
+    if (saved === undefined) delete process.env.HIUBLUE_API_KEY;
+    else process.env.HIUBLUE_API_KEY = saved;
+  }
 });

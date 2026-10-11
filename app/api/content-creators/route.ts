@@ -3,6 +3,7 @@ import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { getPayloadFromToken, COOKIE_NAME } from "@/lib/auth";
 import { generateToken, hashPassword } from "@/lib/password";
 import { FieldValue } from "firebase-admin/firestore";
+import { offboardCreator } from "@/lib/creators/offboard";
 
 async function getAuth(req: NextRequest) {
   const token = req.cookies.get(COOKIE_NAME)?.value;
@@ -135,7 +136,11 @@ export async function PUT(req: NextRequest) {
   if (updates.email !== undefined) safeUpdates.email = updates.email.toLowerCase().trim();
   if (updates.pay_tier !== undefined) safeUpdates.pay_tier = updates.pay_tier;
 
-  await db.collection("ContentCreators").doc(id).update(safeUpdates);
+  const ending = safeUpdates.status === "cut" || safeUpdates.status === "ended";
+  if (ending) delete safeUpdates.status;
+  if (Object.keys(safeUpdates).length) await db.collection("ContentCreators").doc(id).update(safeUpdates);
+  // Cut / ended here goes through the shared offboarding too.
+  if (ending) await offboardCreator(id, "status");
 
   return NextResponse.json({ ok: true });
 }
@@ -161,9 +166,12 @@ export async function DELETE(req: NextRequest) {
 
   await db.collection("ContentCreators").doc(id).update({
     is_active: false,
-    status: "cut",
     status_changed_at: FieldValue.serverTimestamp(),
   });
+  // Ends the agreement the one shared way (lib/creators/offboard.ts): status ended,
+  // ended_on today (so the final invoice still goes out), off their @keshah.com
+  // group, and the founder's "reset their passwords" task.
+  const off = await offboardCreator(id, "removed");
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, ended_on: off.ended_on, group: off.group.result });
 }

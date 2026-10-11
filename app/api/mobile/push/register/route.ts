@@ -5,6 +5,7 @@ import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { resolveIdentity } from "@/lib/mobile/firestore";
 import { jsonError, readJson, requireMobile, serverError } from "@/lib/mobile/http";
 import { firestorePushStore, registerPushToken, validPushToken } from "@/lib/push";
+import { isStaffEmail } from "@/lib/staff";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +18,13 @@ export async function POST(req: Request) {
   try {
     const { db } = getFirebaseAdmin();
     // Fresh lookup, so a device re-registering after acceptance is filed under the creator.
-    const id = await resolveIdentity(db, claims.sub);
+    const [id, staff] = await Promise.all([resolveIdentity(db, claims.sub), isStaffEmail(claims.sub)]);
+    // Founders usually have no creator / application: file them as "staff".
+    // notifyFounder (lib/staff.ts) finds their devices by email either way.
+    const role = id.role === "none" && staff ? "staff" : id.role;
     await registerPushToken(
       body.token,
-      { email: id.email, role: id.role, creator_id: id.creator_id ?? null, application_id: id.application_id ?? null, platform: body.platform },
+      { email: id.email, role, creator_id: id.creator_id ?? null, application_id: id.application_id ?? null, platform: body.platform },
       { store: firestorePushStore(db) },
     );
     return Response.json({ ok: true });

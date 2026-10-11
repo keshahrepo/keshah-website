@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { signContract } from "@/lib/creators/contract";
-import { errorResponse, requestMeta, requireCreator } from "../../_auth";
+import { errorResponse, requestMeta, requireCreator, signerAuthFromRequest } from "../../_auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
         typed_name: String(b.typed_name ?? ""),
         address: String(b.address ?? ""),
       },
-      requestMeta(req),
+      { ...requestMeta(req), auth: await signerAuthFromRequest(req) },
     );
     return NextResponse.json({ ok: true, signed_at: r.signed_at, document_id: r.document_id, signed_sha256: r.signed_sha256, emailed: r.emailed.creator });
   } catch (e) {

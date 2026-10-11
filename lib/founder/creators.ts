@@ -60,8 +60,12 @@ export interface FounderCreatorRow {
   postedDays: number;
   expectedDays: number;
   missedDays: number;
-  /** Proceeds: RevenueCat proceeds from their campaigns in the period; null when RevenueCat didn't answer. */
+  /** Proceeds: RevenueCat proceeds from their campaigns in the period; null when RevenueCat didn't answer or they have no campaign tag. */
   broughtInUsd: number | null;
+  /** No campaign tag yet: proceeds / ROI can't be counted (shown as "–" with "No campaign tag"). */
+  noCampaignTag: boolean;
+  /** No tracking link yet. */
+  noTrackingLink: boolean;
   trials: number;
   paidUsers: number;
   roi: number | null;
@@ -275,7 +279,9 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
         return null;
       })
     : null;
-  const broughtIn = byCampaign === null ? null : c.campaign_tags.reduce((a, t) => a + (byCampaign.get(t.trim().toLowerCase()) ?? 0), 0);
+  // No campaign tag: nothing can be attributed to them, so proceeds and ROI are unknown ("–"), never $0 / 0x.
+  const tags = c.campaign_tags.map((t) => t.trim()).filter(Boolean);
+  const broughtIn = byCampaign === null || !tags.length ? null : tags.reduce((a, t) => a + (byCampaign.get(t.toLowerCase()) ?? 0), 0);
   const postFields = ["platform", "url", "views", "handle", "thumbnail_url", "local_date", "posted_at", "pinned"];
   const [attr, postsSnap] = await Promise.all([
     attributionFor(c.campaign_tags, from, to),
@@ -337,6 +343,8 @@ async function row(c: AdminCreator, period: string, byCampaign: Map<string, numb
     status: c.status_display,
     email: c.email,
     campaignTags: c.campaign_tags,
+    noCampaignTag: !tags.length,
+    noTrackingLink: !c.tracking_url.trim(),
     trial: ts ? { day: ts.postedDays, of: ts.requiredDays ?? 20, reviewing: !!ts.reviewing, ended: !!ts.ended, promotedOn: ts.promotedOn ?? null } : null,
     levelBaseCents: c.pay_ready ? level : null,
     payCents,

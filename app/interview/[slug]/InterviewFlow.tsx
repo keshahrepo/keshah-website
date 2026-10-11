@@ -539,9 +539,9 @@ export default function InterviewFlow({
       break;
 
     case "details":
-      title = needName ? "We couldn't find that email." : "One quick thing.";
+      title = needName ? "Is this the email you applied with?" : "One quick thing.";
       subtitle = needName
-        ? "No problem. Tell us your name and we'll get you set up."
+        ? `We couldn't find an application for ${email.trim()}. If that's the right email, tell us your name and we'll get you set up.`
         : "Which example video should we show you?";
       body = (
         <>
@@ -579,7 +579,7 @@ export default function InterviewFlow({
           </div>
           {needName && (
             <button type="button" className={ui.linkBtn} onClick={() => go("email")}>
-              Try a different email
+              No, use a different email
             </button>
           )}
         </>

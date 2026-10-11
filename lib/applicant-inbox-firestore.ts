@@ -16,6 +16,7 @@ import {
   HIBLUE_EVENTS,
   INBOX_SETTINGS_DOC,
   notificationEmail,
+  smsKeyword,
   syncApplicantInbox,
   type AppLite,
   type InboxMessage,
@@ -219,10 +220,49 @@ export async function handleCheckIn(
   return isConfirm ? "confirmed" : "checked_in";
 }
 
+// ------------------------------------------------------------ SMS opt-out
+
+/** sms_opt_outs/{E.164}: they replied STOP. sendInterviewText checks it before every applicant text. */
+export const SMS_OPT_OUTS = "sms_opt_outs";
+
+export async function isSmsOptedOut(phone: string, db: Firestore = getFirebaseAdmin().db): Promise<boolean> {
+  const snap = await db.collection(SMS_OPT_OUTS).doc(phone).get();
+  return snap.exists;
+}
+
+/**
+ * A STOP reply: no more applicant texts to this number (sms_opt_outs), and
+ * sms_opt_out_at on their application(s) so the dashboard shows it. START /
+ * UNSTOP undoes it.
+ */
+export async function applySmsKeyword(db: Firestore, app: AppLite, reply: IncomingText): Promise<"opted_out" | "opted_in" | null> {
+  const kw = smsKeyword(reply.text);
+  if (!kw) return null;
+  const refs = new Map<string, FirebaseFirestore.DocumentReference>();
+  refs.set(app.id, db.collection(APPLICATIONS).doc(app.id));
+  const same = await db.collection(APPLICATIONS).where("phone_e164", "==", reply.phone).get();
+  for (const d of same.docs) refs.set(d.id, d.ref);
+  const optRef = db.collection(SMS_OPT_OUTS).doc(reply.phone);
+  const batch = db.batch();
+  if (kw === "stop") {
+    const at = Timestamp.fromMillis(reply.received_ms);
+    batch.set(optRef, { phone: reply.phone, opted_out_at: at, application_id: app.id, text: reply.text.slice(0, 200) });
+    for (const r of refs.values()) batch.set(r, { sms_opt_out_at: at }, { merge: true });
+  } else {
+    batch.delete(optRef);
+    for (const r of refs.values()) batch.set(r, { sms_opt_out_at: FieldValue.delete() }, { merge: true });
+  }
+  await batch.commit();
+  console.log(`applicant sms ${kw}: ${reply.phone} (application ${app.id})`);
+  return kw === "stop" ? "opted_out" : "opted_in";
+}
+
 export async function runApplicantInboxSync(db: Firestore = getFirebaseAdmin().db): Promise<SyncResult> {
   return syncApplicantInbox(firestoreInboxStore(db), {
     notify: emailNotify,
     onNewReply: async (app, reply, nowMs) => {
+      // STOP / START are handled here and never count as a check-in.
+      if (await applySmsKeyword(db, app, reply)) return;
       await handleCheckIn(db, app, reply, nowMs);
     },
   });

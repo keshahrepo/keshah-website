@@ -15,7 +15,7 @@ import { claimOnce } from "@/lib/interview";
 import { CREATORS_COLLECTION, CreatorDataError } from "./db";
 import { logEvent } from "./contract";
 import { CREATOR_FROM_NAME } from "./invite";
-import { groupsClientFromEnv, groupsConfigured, removeCreatorFromGroup } from "./google-groups";
+import { offboardCreator } from "./offboard";
 import {
   OfferError,
   deadlineLong,
@@ -152,7 +152,7 @@ export async function withdrawOffer(id: string, now: Date = new Date()): Promise
   const r = ref(id);
   const db = getFirebaseAdmin().db;
   // Status first (in a transaction), so a double tap can't send two emails.
-  const { plan, d } = await db.runTransaction(async (tx) => {
+  const { plan } = await db.runTransaction(async (tx) => {
     const snap = await tx.get(r);
     if (!snap.exists) throw new CreatorDataError("Creator not found", 404);
     const data = snap.data()!;
@@ -163,7 +163,7 @@ export async function withdrawOffer(id: string, now: Date = new Date()): Promise
       asDataError(e);
     }
     tx.update(r, p.updates);
-    return { plan: p, d: data };
+    return { plan: p };
   });
   const at = now.toISOString();
   const out: WithdrawResult = { withdrawn_at: at, email: "not sent", group: "skipped" };
@@ -179,18 +179,15 @@ export async function withdrawOffer(id: string, now: Date = new Date()): Promise
     }
   }
 
-  const personal = String(d.email ?? "").trim();
-  if (!plan.groupEmail) out.group_detail = "No KESHAH email";
-  else if (!personal) out.group_detail = "No personal email to remove";
-  else if (!groupsConfigured()) out.group_detail = "Google Workspace not connected";
-  else {
-    try {
-      const g = await removeCreatorFromGroup(await groupsClientFromEnv(), { groupEmail: plan.groupEmail, personalEmail: personal });
-      out.group = g.removed ? "removed" : "not a member";
-    } catch (e) {
-      out.group = "error";
-      out.group_detail = errMsg(e);
-    }
+  // The shared offboarding (lib/creators/offboard.ts): off their @keshah.com group, offboarded_at,
+  // and the founder's password task when they'd already made accounts.
+  try {
+    const off = await offboardCreator(id, "withdrawn", { now });
+    out.group = off.group.result;
+    if (off.group.detail) out.group_detail = off.group.detail;
+  } catch (e) {
+    out.group = "error";
+    out.group_detail = errMsg(e);
   }
 
   const detail = [

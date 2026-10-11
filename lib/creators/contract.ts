@@ -43,6 +43,7 @@ import { CREATOR_FROM_NAME, CREATOR_SIGNOFF } from "./invite";
 import { CREATORS_COLLECTION, CreatorDataError, DEFAULT_TIMEZONE, STORAGE_BUCKET, markContractStepDone } from "./db";
 import { adoptedSignatureText } from "./signature";
 import { isValidTimezone } from "./time";
+import { signerAuthText, type SignerAuth } from "./signer-auth";
 import { notify, PUSH_COPY } from "@/lib/push";
 import type { ContractAudit, ContractEvent, ContractSettings, ContractTemplate, CreatorContract } from "./types";
 
@@ -107,7 +108,7 @@ export async function templateBytes(version: string): Promise<{ template: Contra
   }
   if (sha256Hex(buf) !== template.sha256) {
     templateCache.delete(version);
-    throw new CreatorDataError("The contract file failed its integrity check. Ask your manager to send it again.", 409);
+    throw new CreatorDataError("The contract file failed its integrity check. Message us on Slack and we'll send it again.", 409);
   }
   return { template, bytes: buf };
 }
@@ -408,6 +409,8 @@ export interface SignInput {
 export interface SignMeta {
   ip: string;
   user_agent: string;
+  /** How the signer was signed in (lib/creators/signer-auth.ts), printed on the audit certificate. */
+  auth?: SignerAuth;
   now?: Date;
 }
 
@@ -449,14 +452,14 @@ export async function signContract(
   const { template: tpl, bytes: template } = await templateBytes(contract.template_version);
   const templateSha = sha256Hex(template);
   if (templateSha !== contract.template_sha256 || tpl.sha256 !== contract.template_sha256) {
-    throw new CreatorDataError("The contract changed after it was sent to you. Ask your manager to send it again.", 409);
+    throw new CreatorDataError("The contract changed after it was sent to you. Message us on Slack and we'll send it again.", 409);
   }
 
   const typed = squash(input.typed_name);
   if (typed.length < 2 || typed.length > 120) throw new CreatorDataError("Type your full legal name.");
   const onFile = squash(d.legal_name);
   if (onFile && onFile.toLowerCase() !== typed.toLowerCase()) {
-    throw new CreatorDataError(`Type your full legal name exactly as we have it: ${onFile}. If that's wrong, message your manager.`);
+    throw new CreatorDataError(`Type your full legal name exactly as we have it: ${onFile}. If that's wrong, message us on Slack.`);
   }
   const legalName = onFile || typed;
   const address = squash(input.address);
@@ -464,7 +467,7 @@ export async function signContract(
 
   const settings = await getContractSettings();
   if (!contractSettingsReady(settings)) {
-    throw new CreatorDataError("Your contract can't be signed right now. Message your manager on Slack.", 503);
+    throw new CreatorDataError("Your contract can't be signed right now. Message us on Slack.", 503);
   }
   let founder: FounderSignature;
   if (founderSignatureMode(settings) === "drawn") {
@@ -472,7 +475,7 @@ export async function signContract(
       const [png] = await bucket().file(settings.signature_path!).download();
       founder = { kind: "drawn", png };
     } catch {
-      throw new CreatorDataError("Your contract can't be signed right now. Message your manager on Slack.", 503);
+      throw new CreatorDataError("Your contract can't be signed right now. Message us on Slack.", 503);
     }
   } else {
     founder = { kind: "typed", text: settings.founder_signature_adopted_text!, adopted_at: settings.founder_signature_adopted_at! };
@@ -493,6 +496,7 @@ export async function signContract(
     signer_user_id: id,
     signer_ip: meta.ip || "unknown",
     signer_user_agent: (meta.user_agent || "unknown").slice(0, 500),
+    ...(meta.auth ? { signer_auth: meta.auth } : {}),
     signed_at_utc: signedAt,
     signed_at_local: localTime(now, tz),
     signer_timezone: tz,
@@ -587,7 +591,7 @@ async function emailSignedCopies(
       who: "creator",
       to: x.audit.signer_email,
       subject: "Your signed KESHAH contract",
-      text: `Hey ${x.firstName || "there"},\n\nThanks for signing. Your copy of the contract is attached, and you can always download it again from the Contract tab in the portal.\n\n${facts}\n\n${CREATOR_SIGNOFF}`,
+      text: `Hey ${x.firstName || "there"},\n\nThanks for signing. Your copy of the contract is attached, and you can always download it again from Profile, then Contract, in the KESHAH Creators app.\n\n${facts}\n\n${CREATOR_SIGNOFF}`,
     });
   }
   await notifyFounder({ title: "Contract signed", body: `${x.audit.signer_legal_name} signed (${x.audit.template_version}).`, data: { type: "founder_contract" } });
@@ -882,7 +886,7 @@ async function buildSignedPdf(template: Buffer, title: string, a: ContractAudit,
     ["Signer account ID", a.signer_user_id, true],
     ["Signer IP address", a.signer_ip],
     ["Signer device (user agent)", a.signer_user_agent],
-    ["Authentication", "Signed in to the KESHAH creator portal with the signer's email and password."],
+    ["Authentication", signerAuthText(a.signer_auth)],
     ["Consent to e-records", `Ticked "${CONSENT_CHECKBOX_LABEL}" (consent text ${a.consent_text_version}).`],
     ["Consent text SHA-256", a.consent_text_sha256, true],
     ["Intent to sign", 'Typed full legal name to adopt a signature and pressed "Adopt and sign".'],

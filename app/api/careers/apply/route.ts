@@ -6,7 +6,7 @@
 // If the client sends no draft_id (e.g. a script bypassing the form),
 // we create a fresh doc so the submission still lands somewhere.
 
-import { normalizePhone } from "@/lib/sms";
+import { normalizePhone, PHONE_HINT, SMS_CONSENT_LINE } from "@/lib/phone";
 import { NextResponse } from "next/server";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
@@ -24,6 +24,7 @@ type Payload = {
   can_commit?: string;
   comfortable_on_camera?: string;
   has_iphone?: string;
+  has_us_bank?: string;
   wants_virality?: string;
   posted_before?: string;
   social_handle?: string;
@@ -67,6 +68,12 @@ export async function POST(req: Request) {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email!)) {
       return NextResponse.json({ error: "Invalid email." }, { status: 400 });
     }
+    // Interview texts only go to numbers we can turn into E.164; the form
+    // checks the same rule, so this only catches stale tabs and scripts.
+    const phoneE164 = normalizePhone(p.phone);
+    if (!phoneE164) {
+      return NextResponse.json({ error: `That phone number won't work for texts. ${PHONE_HINT}.`, fields: ["phone"] }, { status: 400 });
+    }
     if (!/^20\d{2}$/.test(p.graduation_year!)) {
       return NextResponse.json(
         { error: "Invalid graduation year." },
@@ -83,13 +90,16 @@ export async function POST(req: Request) {
       phone: p.phone!.trim(),
       // Standard +1... form; the HiBlue paywall outreach skips creator
       // applicants by matching on this.
-      phone_e164: normalizePhone(p.phone),
+      phone_e164: phoneE164,
+      // The consent line shown under the phone field when they applied.
+      sms_consent_text: SMS_CONSENT_LINE,
       gender: p.gender!.trim(),
       college: p.college!.trim(),
       graduation_year: p.graduation_year!.trim(),
       can_commit: p.can_commit!.trim(),
       comfortable_on_camera: (p.comfortable_on_camera ?? "").trim() || null,
       has_iphone: (p.has_iphone ?? "").trim() || null,
+      has_us_bank: (p.has_us_bank ?? "").trim() || null,
       wants_virality: (p.wants_virality ?? "").trim() || null,
       posted_before: (p.posted_before ?? "").trim() || null,
       social_handle: (p.social_handle ?? "").trim() || null,

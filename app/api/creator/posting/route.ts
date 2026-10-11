@@ -5,7 +5,7 @@ import type { PostedVideo } from "@/lib/creators/types";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { CREATORS_COLLECTION } from "@/lib/creators/db";
 
-import { errorResponse, requireCreator, requireOnboarded } from "../_auth";
+import { errorResponse, requireCreator, requireNotEnded, requireOnboarded } from "../_auth";
 
 // POST { videos: [{ tiktok_url, instagram_url }], date? } — date defaults to
 // the creator's today; savePostingDay rejects anything past 11:59 pm their time.
@@ -15,6 +15,8 @@ import { errorResponse, requireCreator, requireOnboarded } from "../_auth";
 export async function POST(req: NextRequest) {
   const creator = await requireCreator(req);
   if (creator instanceof NextResponse) return creator;
+  const ended = requireNotEnded(creator);
+  if (ended) return ended;
   const gated = await requireOnboarded(creator);
   if (gated) return gated;
   try {

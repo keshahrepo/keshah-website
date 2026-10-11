@@ -17,6 +17,28 @@ import Image from "next/image";
 import Link from "next/link";
 import Script from "next/script";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { normalizePhone, SMS_CONSENT_LINE } from "@/lib/phone";
+import { getCountries, getCountryCallingCode, parsePhoneNumberFromString, type CountryCode } from "libphonenumber-js";
+
+// Country picker for the phone step: US first (we recruit US students), then A–Z.
+const regionName = (() => {
+  try {
+    const dn = new Intl.DisplayNames(["en"], { type: "region" });
+    return (c: string) => dn.of(c) ?? c;
+  } catch {
+    return (c: string) => c;
+  }
+})();
+const flagOf = (c: string) => String.fromCodePoint(...[...c.toUpperCase()].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65));
+const PHONE_COUNTRIES: { code: CountryCode; label: string }[] = getCountries()
+  .map((c) => ({ code: c, label: `${flagOf(c)} ${regionName(c)} +${getCountryCallingCode(c)}` }))
+  .sort((a, b) => (a.code === "US" ? -1 : b.code === "US" ? 1 : regionName(a.code).localeCompare(regionName(b.code))));
+
+/** Full +E.164 number from the picked country and what they typed; "" until it's a valid number there. */
+function toE164(local: string, country: CountryCode): string {
+  const p = parsePhoneNumberFromString(local, country);
+  return p?.isValid() ? p.number : "";
+}
 import styles from "../../careers.module.css";
 import apply from "./apply.module.css";
 
@@ -44,6 +66,7 @@ type Form = {
   graduation_year: string;
   can_commit: "" | YesNo;
   has_iphone: "" | YesNo;
+  has_us_bank: "" | YesNo;
   comfortable_on_camera: "" | YesNo;
   wants_virality: "" | YesNo;
   posted_before: "" | YesNo;
@@ -59,6 +82,7 @@ const EMPTY: Form = {
   graduation_year: "",
   can_commit: "",
   has_iphone: "",
+  has_us_bank: "",
   comfortable_on_camera: "",
   wants_virality: "",
   posted_before: "",
@@ -69,7 +93,7 @@ const EMPTY: Form = {
 // Each step is one screen. Order = order shown. Add/remove entries to
 // re-shape the flow — nothing else needs to change.
 type Step =
-  | { kind: "text"; key: keyof Form; title: string; subtitle?: string; placeholder?: string; type?: "text" | "email" | "tel"; autoComplete?: string; optional?: boolean }
+  | { kind: "text"; key: keyof Form; title: string; subtitle?: string; placeholder?: string; type?: "text" | "email" | "tel"; autoComplete?: string; optional?: boolean; note?: string }
   | { kind: "select"; key: keyof Form; title: string; subtitle?: string; options: { value: string; label: string }[] }
   | { kind: "yesno"; key: keyof Form; title: string; subtitle?: string; yesLabel?: string; noLabel?: string; noSub?: string }
   | { kind: "analysis"; title: string; subtitle?: string }
@@ -79,7 +103,7 @@ type Step =
 const STEPS: Step[] = [
   { kind: "text", key: "full_name", title: "What's your full name?", placeholder: "First and last", autoComplete: "name" },
   { kind: "text", key: "email", title: "What's the best email for you?", placeholder: "you@example.com", type: "email", autoComplete: "email" },
-  { kind: "text", key: "phone", title: "And your phone number?", placeholder: "e.g. (555) 555-5555", type: "tel", autoComplete: "tel" },
+  { kind: "text", key: "phone", title: "And your phone number?", placeholder: "e.g. (555) 555-5555", type: "tel", autoComplete: "tel", note: SMS_CONSENT_LINE },
   { kind: "select", key: "gender", title: "What's your gender?", options: [{ value: "male", label: "Male" }, { value: "female", label: "Female" }] },
   { kind: "text", key: "college", title: "Which college or university?", placeholder: "e.g. UC Berkeley", autoComplete: "organization" },
   { kind: "select", key: "graduation_year", title: "When do you graduate?", options: [
@@ -89,6 +113,8 @@ const STEPS: Step[] = [
   { kind: "yesno", key: "can_commit", title: "Can you commit ~1 hr/day, Mon–Fri?", yesLabel: "Yes, I can", noLabel: "No, I can't", noSub: "This role may not be the right fit" },
   // Hard filter: the KESHAH Creators app is iPhone only (TestFlight).
   { kind: "yesno", key: "has_iphone", title: "Do you have an iPhone?", subtitle: "You'll film, post and get paid through our creator app, which is iPhone only for now.", yesLabel: "Yes, I do", noLabel: "No, I don't", noSub: "You'll need an iPhone for this role" },
+  // Hard filter: creators are paid by bank transfer to a US account.
+  { kind: "yesno", key: "has_us_bank", title: "Do you have a US bank account?", subtitle: "Creators are paid by bank transfer to a US account.", yesLabel: "Yes, I do", noLabel: "No, I don't", noSub: "You'll need a US bank account for this role" },
   { kind: "yesno", key: "comfortable_on_camera", title: "Are you comfortable on camera?", subtitle: "This role is on-camera. Short-form videos filmed on your phone.", yesLabel: "Yes, I am", noLabel: "No, I'm not", noSub: "This role may not be the right fit" },
   { kind: "yesno", key: "wants_virality", title: "Do you want to learn how to go viral with short-form content?", subtitle: "Selected interns learn the same system which has helped us generate 80M+ views in the last 6 months.", yesLabel: "Yes, I do", noLabel: "Not particularly" },
   { kind: "yesno", key: "posted_before", title: "Have you ever posted on TikTok or Instagram before?", subtitle: "Either answer is fine. This just helps us know where to start.", yesLabel: "Yes, I have", noLabel: "No, I haven't" },
@@ -118,6 +144,20 @@ const ANALYSIS_HOLD_MS = 900;
 export default function ApplyQuiz() {
   const [stepIdx, setStepIdx] = useState(0);
   const [form, setForm] = useState<Form>(EMPTY);
+  const [phoneCountry, setPhoneCountry] = useState<CountryCode>("US");
+  const [phoneLocal, setPhoneLocal] = useState("");
+  // A restored draft keeps the full number: show it back as country + local number.
+  useEffect(() => {
+    if (phoneLocal || !form.phone) return;
+    const p = parsePhoneNumberFromString(form.phone);
+    if (p?.country) {
+      setPhoneCountry(p.country);
+      setPhoneLocal(p.formatNational());
+    } else {
+      setPhoneLocal(form.phone);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.phone]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   // How many of the analysis checklist items have "completed". Advances
@@ -162,6 +202,7 @@ export default function ApplyQuiz() {
           graduation_year: merged.graduation_year,
           can_commit: merged.can_commit,
           has_iphone: merged.has_iphone,
+          has_us_bank: merged.has_us_bank,
           comfortable_on_camera: merged.comfortable_on_camera,
           wants_virality: merged.wants_virality,
           posted_before: merged.posted_before,
@@ -233,6 +274,8 @@ export default function ApplyQuiz() {
       case "text": {
         const v = form[step.key];
         if (step.optional) return true;
+        // Texts only reach numbers we can read: US 10-digit or +country code.
+        if (step.key === "phone") return normalizePhone(v) !== null;
         return typeof v === "string" && v.trim().length > 0;
       }
       case "select": {
@@ -271,12 +314,13 @@ export default function ApplyQuiz() {
     const missing: string[] = [];
     if (!form.full_name.trim()) missing.push("full name");
     if (!form.email.trim()) missing.push("email");
-    if (!form.phone.trim()) missing.push("phone");
+    if (!normalizePhone(form.phone)) missing.push("phone (with country code)");
     if (!form.gender) missing.push("gender");
     if (!form.college.trim()) missing.push("college");
     if (!form.graduation_year) missing.push("graduation year");
     if (!form.can_commit) missing.push("commitment");
     if (form.has_iphone !== "yes") missing.push("iPhone");
+    if (form.has_us_bank !== "yes") missing.push("US bank account");
     if (missing.length > 0) {
       setError(`Missing: ${missing.join(", ")}. Tap back to fill them in.`);
       submittedRef.current = false; // allow retry
@@ -298,6 +342,7 @@ export default function ApplyQuiz() {
           graduation_year: form.graduation_year,
           can_commit: form.can_commit,
           has_iphone: form.has_iphone,
+          has_us_bank: form.has_us_bank,
           comfortable_on_camera: form.comfortable_on_camera,
           wants_virality: form.wants_virality,
           posted_before: form.posted_before,
@@ -465,7 +510,49 @@ export default function ApplyQuiz() {
           )}
 
           <div className={styles.fadeOptions} style={{ display: "contents" }}>
-            {step.kind === "text" && (
+            {step.kind === "text" && step.key === "phone" && (
+              <div className={apply.field}>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <select
+                    aria-label="Country"
+                    className={apply.input}
+                    style={{ flex: "0 0 auto", width: 112, paddingRight: 8 }}
+                    value={phoneCountry}
+                    onChange={(e) => {
+                      const c = e.target.value as CountryCode;
+                      setPhoneCountry(c);
+                      set("phone", toE164(phoneLocal, c) as never);
+                    }}
+                  >
+                    {PHONE_COUNTRIES.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.code === phoneCountry ? `${flagOf(c.code)} +${getCountryCallingCode(c.code)}` : c.label}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="tel"
+                    autoComplete="tel-national"
+                    className={apply.input}
+                    style={{ flex: 1, minWidth: 0 }}
+                    placeholder={phoneCountry === "US" ? "(555) 555-5555" : "Phone number"}
+                    value={phoneLocal}
+                    onChange={(e) => {
+                      setPhoneLocal(e.target.value);
+                      set("phone", toE164(e.target.value, phoneCountry) as never);
+                    }}
+                    autoFocus
+                    inputMode="tel"
+                  />
+                </div>
+                {phoneLocal.replace(/\D/g, "").length >= 7 && !normalizePhone(form.phone) && (
+                  <div className={apply.fieldHint} role="alert">That number doesn&apos;t look right for {regionName(phoneCountry)}.</div>
+                )}
+                {step.note && <div className={apply.fieldNote}>{step.note}</div>}
+              </div>
+            )}
+
+            {step.kind === "text" && step.key !== "phone" && (
               <div className={apply.field}>
                 <input
                   type={step.type ?? "text"}
@@ -477,6 +564,7 @@ export default function ApplyQuiz() {
                   autoFocus
                   inputMode={step.type === "email" ? "email" : step.type === "tel" ? "tel" : undefined}
                 />
+                {step.note && <div className={apply.fieldNote}>{step.note}</div>}
               </div>
             )}
 

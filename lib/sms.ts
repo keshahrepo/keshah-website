@@ -26,23 +26,8 @@ export function textWasSent(r: SendTextResult): r is { sent: true; id: string | 
   return "sent" in r && r.sent === true;
 }
 
-/**
- * E.164 for a phone number typed on the apply form, or null when we can't be
- * sure. Accepts "+<country><number>" (8 to 15 digits) or a US number with 10
- * digits (optionally a leading 1).
- */
-export function normalizePhone(raw: unknown): string | null {
-  if (typeof raw !== "string") return null;
-  const s = raw.trim();
-  if (!s) return null;
-  const digits = s.replace(/\D/g, "");
-  if (s.startsWith("+")) {
-    return digits.length >= 8 && digits.length <= 15 && digits[0] !== "0" ? `+${digits}` : null;
-  }
-  if (digits.length === 10 && /^[2-9]/.test(digits)) return `+1${digits}`;
-  if (digits.length === 11 && digits.startsWith("1") && /^[2-9]/.test(digits.slice(1))) return `+${digits}`;
-  return null;
-}
+export { normalizePhone } from "./phone";
+import { normalizePhone } from "./phone";
 
 /** What the HiBlue send call will receive once it's implemented. */
 export type HiBlueSendRequest = {
@@ -86,6 +71,12 @@ export type OutboundTextRecord = {
   kind: string;
 };
 
+async function defaultIsOptedOut(phone: string): Promise<boolean> {
+  // Lazy so this module stays importable without Firestore (unit tests).
+  const { isSmsOptedOut } = await import("./applicant-inbox-firestore");
+  return isSmsOptedOut(phone);
+}
+
 async function defaultLogOutbound(rec: OutboundTextRecord): Promise<void> {
   // Lazy so this module stays importable without Firestore (unit tests).
   const { logOutboundText } = await import("./applicant-inbox-firestore");
@@ -102,10 +93,20 @@ export async function sendInterviewText(opts: {
   /** Test hooks. Defaults: global fetch, and a write to applicant_messages. */
   fetchImpl?: typeof fetch;
   logOutbound?: (rec: OutboundTextRecord) => Promise<void>;
+  /** Test hook. Default: the sms_opt_outs doc for the number (a STOP reply). */
+  isOptedOut?: (phone: string) => Promise<boolean>;
 }): Promise<SendTextResult> {
   if (!smsConfigured()) return { skipped: "not configured" };
   const to = normalizePhone(opts.to);
   if (!to) return { skipped: "invalid phone number" };
+  // They replied STOP: no applicant texts to this number, ever (until START).
+  // A failed lookup doesn't send: better a missed reminder than texting
+  // someone who opted out.
+  try {
+    if (await (opts.isOptedOut ?? defaultIsOptedOut)(to)) return { skipped: "opted out" };
+  } catch (e) {
+    return { error: `opt-out check failed: ${e instanceof Error ? e.message : String(e)}` };
+  }
   let result: SendTextResult;
   try {
     result = await hiBlueSend(

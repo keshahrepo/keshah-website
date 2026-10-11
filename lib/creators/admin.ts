@@ -40,7 +40,8 @@ import {
 import { acceptCreator, acceptOf, type AcceptOptions, type AcceptResult } from "./accept";
 import { candidateAddresses } from "./google-groups";
 import { creatorProgress, type CreatorProgress } from "./progress";
-import { paymentDetailsOf, taxFormOf, type PaymentDetailsSummary, type TaxFormSummary } from "./payments";
+import { bankOnFile, paymentDetailsOf, taxFormOf, type PaymentDetailsSummary, type TaxFormSummary } from "./payments";
+import { passwordsResetPending, reactivateCreator, shouldReactivate, type OffboardRecord } from "./offboard";
 import type {
   AcceptRecord,
   Adjustment,
@@ -179,6 +180,8 @@ export interface AdminCreator {
   email: string;
   keshah_email: string;
   timezone: string;
+  /** Where timezone came from: calendly | device | founder ("" = the default). */
+  timezone_source: string;
   start_date: string;
   starting_completed_months: number;
   /** "v2": 20-day trial at 3 videos / $15 a day before the full plan. */
@@ -225,6 +228,14 @@ export interface AdminCreator {
   payment_details: PaymentDetailsSummary;
   /** W-9 / W-8BEN summary (no TIN beyond W-9 last 4). */
   tax_form: TaxFormSummary;
+  /** Bank details on file for paying them (manual bank form or Stripe), with the last 4 when known. */
+  bank: { on_file: boolean; last4: string | null; label: string };
+  /** Set when the agreement ended (lib/creators/offboard.ts). */
+  offboarded_at: string | null;
+  offboard: OffboardRecord | null;
+  /** The founder still has to reset their TikTok / Instagram passwords and remove phone / two-factor. */
+  passwords_reset_pending: boolean;
+  reactivated_at: string | null;
 }
 
 export function toAdminCreator(id: string, d: DocumentData): AdminCreator {
@@ -236,6 +247,7 @@ export function toAdminCreator(id: string, d: DocumentData): AdminCreator {
     email: String(d.email ?? ""),
     keshah_email: String(d.keshah_email ?? ""),
     timezone: String(d.timezone ?? ""),
+    timezone_source: typeof d.timezone_source === "string" ? d.timezone_source : "",
     start_date: isDate(d.start_date) ? d.start_date : "",
     starting_completed_months: Number(d.starting_completed_months ?? 0) || 0,
     ...(d.trial_plan === "v2" ? { trial_plan: "v2" as const } : {}),
@@ -279,6 +291,11 @@ export function toAdminCreator(id: string, d: DocumentData): AdminCreator {
     post_sync: d.post_sync && typeof d.post_sync === "object" ? (plain(d.post_sync) as PostSyncState) : null,
     payment_details: paymentDetailsOf(d),
     tax_form: taxFormOf(d),
+    bank: bankOnFile(d),
+    offboarded_at: toIso(d.offboarded_at),
+    offboard: d.offboard && typeof d.offboard === "object" ? (plain(d.offboard) as OffboardRecord) : null,
+    passwords_reset_pending: passwordsResetPending(d),
+    reactivated_at: toIso(d.reactivated_at),
   };
 }
 
@@ -308,6 +325,7 @@ export function progressFor(c: AdminCreator, h: CreatorHistory, now: Date = new 
       withdrawnAt: c.withdrawn_at,
       onboarding: h.onboarding.raw,
       trackingUrl: c.tracking_url,
+      campaignTags: c.campaign_tags,
       startDate: c.start_date,
       trialPlan: c.trial_plan ?? null,
       trial: c.pay_ready ? trialStatus(h.postingDays, payProfileOf(c)) : null,
@@ -758,7 +776,12 @@ export function sanitizeProfile(
     } catch {
       return { error: "Unknown timezone" };
     }
+    // Set by the founder: the app's phone zone never overrides it.
+    u.timezone_source = "founder";
+  } else if (u.timezone === "") {
+    delete u.timezone;
   }
+  if (body.legal_name !== undefined && !String(body.legal_name ?? "").trim()) return { error: "Legal name can't be empty" };
   if (body.contract !== undefined && body.contract && typeof body.contract === "object") {
     const c = body.contract as Record<string, unknown>;
     if (c.status !== undefined) {
@@ -971,20 +994,34 @@ export interface NewCreatorFields {
   status?: string;
   /** careers_applications id this creator came from. */
   application_id?: string;
+  /** Where timezone came from (lib/mobile/app-seen.ts): unset = the default, the app may replace it. */
+  timezone_source?: "calendly" | "device" | "founder";
 }
 
-/** Adds a ContentCreators doc (no login yet). Throws on a duplicate email. */
+/**
+ * Adds a ContentCreators doc (no login yet). Throws CreatorExistsError on a
+ * duplicate email, except when that creator ended or was cut: then their doc
+ * is reset for a fresh offer (reactivateCreator) and its id returned.
+ */
 export async function createCreatorRecord(u: NewCreatorFields): Promise<string> {
   const col = db().collection(CREATORS_COLLECTION);
   const email = u.email.trim().toLowerCase();
   const existing = await col.where("email", "==", email).limit(1).get();
-  if (!existing.empty) throw new CreatorExistsError(existing.docs[0].id);
+  if (!existing.empty) {
+    const doc = existing.docs[0];
+    // Ended / cut before: a fresh offer on the same doc (lib/creators/offboard.ts explains why not a new doc).
+    if (shouldReactivate(doc.data())) {
+      return reactivateCreator(doc.id, { legal_name: u.legal_name, timezone: u.timezone, application_id: u.application_id });
+    }
+    throw new CreatorExistsError(doc.id);
+  }
   const ref = await col.add({
     name: u.name || u.legal_name,
     legal_name: u.legal_name,
     email,
     keshah_email: u.keshah_email ?? "",
     timezone: u.timezone,
+    ...(u.timezone_source ? { timezone_source: u.timezone_source } : {}),
     // Pay starts on the first posting day unless admin sets a date here.
     start_date: u.start_date ?? null,
     start_mode: "first_post",

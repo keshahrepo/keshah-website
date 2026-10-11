@@ -43,6 +43,8 @@ export interface AcceptOptions {
   keshahEmail?: string;
   /** Re-run these even if already "done". Only "invite" is meaningful today. */
   force?: AcceptStepKey[];
+  /** Run only these steps (the founder's "Retry" on one failed step). Default: all. */
+  only?: AcceptStepKey[];
 }
 
 export interface AcceptResult {
@@ -80,7 +82,10 @@ export async function acceptCreator(id: string, opts: AcceptOptions): Promise<Ac
   let d = start;
   const accept = acceptOf(d);
   const force = new Set(opts.force ?? []);
-  const shouldRun = (k: AcceptStepKey) => force.has(k) || accept.steps[k]?.status !== "done";
+  // A fresh offer on a reused (ended) doc always sends the welcome email, even with an old password.
+  if (d.reactivated_at && !accept.steps.invite) force.add("invite");
+  const only = opts.only?.length ? new Set(opts.only) : null;
+  const shouldRun = (k: AcceptStepKey) => (!only || only.has(k)) && (force.has(k) || accept.steps[k]?.status !== "done");
   const record = async (k: AcceptStepKey, status: AcceptStepRecord["status"], detail: string, extra: Record<string, unknown> = {}) => {
     const rec: AcceptStepRecord = { status, at: now(), detail };
     accept.steps[k] = rec;

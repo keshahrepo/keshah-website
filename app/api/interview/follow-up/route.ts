@@ -16,6 +16,13 @@
 //   - ≥ follow_up_hours (24h) after start:       link closed for them
 // Once a session is past its close time it is flipped to is_open: false.
 //
+// Auto-deny (silent): once the video deadline (11:59 PM ET the day after the
+// session, sessionClosesAtMs) has passed, everyone in the session still in the
+// interview stage without a video is set to denied with denied_reason
+// "no_video" and auto_denied_at. No email, no text. Decided applications,
+// canceled bookings and anyone booked into a later call (rescheduled) are
+// left alone (lib/interview-decisions.ts autoDenyDue).
+//
 // Auth: Vercel cron sends Authorization: Bearer ${CRON_SECRET}.
 // GET ?dry=1 reports what would happen without sending or writing.
 
@@ -51,6 +58,7 @@ import {
   formatDeadline,
 } from "@/lib/interview-reminders";
 import { normalizePhone, sendInterviewText, textWasSent } from "@/lib/sms";
+import { AUTO_DENY_REASON, autoDenyDue } from "@/lib/interview-decisions";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -117,7 +125,7 @@ export async function GET(req: Request) {
 
       const closesAt = sessionClosesAtMs(s);
       const reminderAt = closesAt - REMINDER_BEFORE_CLOSE_MS;
-      const counts = { first: 0, reminder: 0, closed: 0, skipped: 0, no_show: 0, no_show_text: 0 };
+      const counts = { first: 0, reminder: 0, closed: 0, skipped: 0, no_show: 0, no_show_text: 0, auto_denied: 0 };
 
       const applicants = await getSessionApplicants(db, s);
       for (const a of applicants) {
@@ -132,6 +140,29 @@ export async function GET(req: Request) {
         const base: Record<string, unknown> = { interview_session: s.slug };
 
         if (now >= closesAt) {
+          // Deadline passed without a video: silently denied. Re-checked in a
+          // transaction so a video or a founder decision that just landed wins.
+          const sess = { starts_at_ms: s.starts_at_ms, closes_at_ms: closesAt };
+          if (autoDenyDue(x, sess, now)) {
+            const won = dry
+              ? true
+              : await claimOnce(db, a.ref, (cur) =>
+                  autoDenyDue(cur, sess, now)
+                    ? {
+                        status: "denied",
+                        denied_reason: AUTO_DENY_REASON,
+                        auto_denied_at: Timestamp.now(),
+                        decided_at: Timestamp.now(),
+                        auto_denied_session: s.slug,
+                        last_updated_at: FieldValue.serverTimestamp(),
+                      }
+                    : null,
+                );
+            if (won) {
+              counts.auto_denied++;
+              continue;
+            }
+          }
           // No-shows were sent the always-open video link, which never closes.
           if (!x.interview_link_closed_at && classifyAttendance(x, s) !== "no_show") {
             counts.closed++;
@@ -151,6 +182,12 @@ export async function GET(req: Request) {
         }
 
         if (classifyAttendance(x, s) === "no_show") {
+          // They probably joined under a mistyped email (see /api/interview/start):
+          // don't tell them they missed it. The founder sorts it out.
+          if (x.interview_possible_duplicate_id) {
+            counts.skipped++;
+            continue;
+          }
           if (!noShowEmailDue(x, { starts_at_ms: s.starts_at_ms, closes_at_ms: closesAt }, now)) continue;
           counts.no_show++;
           const phone = normalizePhone(x.phone);

@@ -73,7 +73,7 @@ function ThanksInner() {
 
       {/* Right column — booking confirmation + numbered next steps. */}
       <div className="thanks-copy">
-        <h1 className="thanks-title">You&apos;re in. Here&apos;s what to do next.</h1>
+        <h1 className="thanks-title">You&apos;re booked. Here&apos;s what to do next.</h1>
 
         <ol className="thanks-steps">
           <li className="thanks-step">
@@ -92,7 +92,7 @@ function ThanksInner() {
                 ) : (
                   <>
                     Your group interview is confirmed. Check your email for
-                    the Zoom link.
+                    the Google Meet link.
                   </>
                 )}
               </div>

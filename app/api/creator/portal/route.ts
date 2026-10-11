@@ -1,5 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { creatorToday, getHistory, getOnboarding, getPortalSettings, isOnboardingComplete, markContractStepDone } from "@/lib/creators/db";
+import {
+  creatorToday,
+  getHistory,
+  getMonthOverview,
+  getOnboarding,
+  getPortalSettings,
+  hasStarted,
+  isOnboardingComplete,
+  markContractStepDone,
+  type CreatorHistory,
+} from "@/lib/creators/db";
+import { finalPayFor, firstPostingDay } from "@/lib/creators/lifecycle";
+import { LINK_WAIT_TEXT, agreementEndedText } from "@/lib/creators/notices";
+import type { CreatorProfile } from "@/lib/creators/types";
 import {
   ACCOUNTS_GUIDE_URL,
   ACCOUNTS_STEP_TEXT,
@@ -39,9 +52,26 @@ export async function GET(req: NextRequest) {
         ? await markContractStepDone(creator.id, creator.contract.signed_at || now.toISOString())
         : onb;
     const todayLog = history.postingDays.find((p) => p.date === today) ?? null;
+    const complete = isOnboardingComplete(onboarding, { contractSigned: creator.contract.status === "signed" });
+    const started = hasStarted(creator);
+    // Warm-up done but their link isn't in yet: posting waits for it (LINK_WAIT_TEXT).
+    const warmupDone = (onboarding.warmup_days ?? []).length >= WARMUP_DAYS;
+    const waitingForLink = !started && warmupDone && !onboarding.link_seen_at && !creator.tracking_url;
+    // The next weekday after Getting started is finished; null until then or once started.
+    const firstDay = !started && onboarding.completed_at ? firstPostingDay(onboarding.completed_at, creator.timezone) : null;
     return NextResponse.json({
       creator: publicCreator(creator),
-      onboarding: { ...onboarding, complete: isOnboardingComplete(onboarding, { contractSigned: creator.contract.status === "signed" }) },
+      // onboarding / trial / active / leaving / ended. Ended: the app shows the agreement card, no posting prompts.
+      status: creator.status,
+      // Only for someone who had an agreement (signed); a withdrawn offer never did.
+      agreement: creator.status === "ended" && creator.ended_on && creator.contract.status === "signed" ? await agreementSummary(creator, history, now) : null,
+      onboarding: {
+        ...onboarding,
+        complete,
+        waiting_for_link: waitingForLink,
+        link_wait_text: waitingForLink ? LINK_WAIT_TEXT : null,
+        first_posting_day: firstDay,
+      },
       // deadline_at / deadline_date (ET): the 72-hour signing deadline, while it's unsigned (null otherwise).
       contract: { status: creator.contract.status, signed_at: creator.contract.signed_at ?? null, ...(creatorDeadline(creator) ?? { deadline_at: null, deadline_date: null }) },
       tracking_url: creator.tracking_url || null,
@@ -60,6 +90,7 @@ export async function GET(req: NextRequest) {
         warmup_text: WARMUP_TEXT,
         warmup_done_text: WARMUP_DONE_TEXT,
         first_posting_day_text: FIRST_POSTING_DAY_TEXT,
+        link_wait_text: LINK_WAIT_TEXT,
         posting_guide_url: POSTING_GUIDE_URL || null,
         posting_rules: POSTING_RULES,
         // 3 during a v2 trial, 5 after (and always 5 on the original plan).
@@ -76,4 +107,24 @@ export async function GET(req: NextRequest) {
   } catch (e) {
     return errorResponse(e, "portal");
   }
+}
+
+/**
+ * The ended card: "Your agreement ended on Oct 14. Final pay $300 arrives by
+ * Nov 8." Final pay = unpaid invoices through the last invoice month, plus the
+ * end month while it has no invoice yet.
+ */
+async function agreementSummary(creator: CreatorProfile, history: CreatorHistory, now: Date) {
+  const endedOn = creator.ended_on!;
+  const endMonth = monthOf(endedOn);
+  const open = history.invoices.some((i) => i.month === endMonth && i.status !== "draft")
+    ? 0
+    : (await getMonthOverview(creator, endMonth, { now, history }).catch(() => null))?.lines.reduce((a, l) => a + l.amount_cents, 0) ?? 0;
+  const pay = finalPayFor(endedOn, history.invoices, open);
+  return {
+    ended_on: endedOn,
+    final_pay_cents: pay.cents,
+    final_pay_by: pay.payBy,
+    text: agreementEndedText(endedOn, pay.cents, pay.payBy),
+  };
 }

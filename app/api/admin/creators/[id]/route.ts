@@ -17,7 +17,9 @@ import {
 } from "@/lib/creators/admin";
 import { addMonths, completedMonthsAsOf, draftInvoiceLines, nextLevel, trialStatus } from "@/lib/creators/pay";
 import { listContractEvents } from "@/lib/creators/contract";
-import { markContractStepDone } from "@/lib/creators/db";
+import { mapCreatorStatus, markContractStepDone } from "@/lib/creators/db";
+import { offboardCreator } from "@/lib/creators/offboard";
+import { notifyLinkReady } from "@/lib/creators/lifecycle-notify";
 import { offerSummary } from "@/lib/creators/deadline";
 
 export const dynamic = "force-dynamic";
@@ -95,6 +97,10 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
       return NextResponse.json({ error: "Another creator already uses that email" }, { status: 409 });
     }
   }
+  // The contract's name match (B9) uses the legal name, so it's fixed once they've signed.
+  if (typeof updates.legal_name === "string" && updates.legal_name !== snap.data()?.legal_name && snap.data()?.contract?.status === "signed") {
+    return NextResponse.json({ error: "They've signed their contract, so their legal name can't change here." }, { status: 409 });
+  }
   // A portal e-signed contract is final: no manual edits over it.
   const existingContract = (snap.data()?.contract ?? {}) as { signed_sha256?: string };
   if (existingContract.signed_sha256 && Object.keys(updates).some((k) => k.startsWith("contract."))) {
@@ -104,12 +110,21 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   if (updates["contract.status"] === "signed" && body.contract && !(body.contract as Record<string, unknown>).signed_at) {
     if (!snap.data()?.contract?.signed_at) updates["contract.signed_at"] = new Date().toISOString();
   }
+  // Ending them goes through offboarding (group removal, founder password task, final invoice).
+  const ending = updates.status === "ended" && mapCreatorStatus(snap.data()?.status) !== "ended";
+  if (ending) delete updates.status;
   await ref.update(updates);
+  let offboard: Awaited<ReturnType<typeof offboardCreator>> | null = null;
+  if (ending) offboard = await offboardCreator(id, "status", typeof updates.ended_on === "string" ? { endedOn: updates.ended_on } : {});
+  // First tracking link while they're setting up: tell them it's there to add to their bio.
+  if (typeof updates.tracking_url === "string" && updates.tracking_url && !String(snap.data()?.tracking_url ?? "") && mapCreatorStatus(snap.data()?.status) === "onboarding") {
+    await notifyLinkReady(id);
+  }
   if (updates["contract.status"] === "signed") {
     // Paper contract recorded by admin: tick the portal's "Sign your contract" step too.
     await markContractStepDone(id, String(updates["contract.signed_at"] ?? snap.data()?.contract?.signed_at ?? new Date().toISOString())).catch((e) =>
       console.error("contract step update failed:", e),
     );
   }
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, ...(offboard ? { offboard } : {}) });
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCreatorPaymentView, signTaxForm, type TaxFormType } from "@/lib/creators/payments";
-import { errorResponse, requestMeta, requireCreator } from "../../../_auth";
+import { errorResponse, requestMeta, requireCreator, signerAuthFromRequest } from "../../../_auth";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
         certify: body.certify === true,
         cert_version: String(body.cert_version ?? ""),
       },
-      requestMeta(req),
+      { ...requestMeta(req), auth: await signerAuthFromRequest(req) },
     );
     return NextResponse.json(await getCreatorPaymentView(creator.id));
   } catch (e) {

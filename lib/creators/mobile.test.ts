@@ -18,7 +18,7 @@ import {
 import { signMobileToken, verifyMobileToken, bearerToken, normalizeEmail } from "../mobile/token";
 import { claimsFor, creatorIdForClaims, pickRole, type IdentityLookup } from "../mobile/identity";
 import { applicantStatus, checkInWindow, interviewCard, videoDeadlineMs, videoProblem } from "../mobile/applicant";
-import { dailyNudge, registerPushToken, sendPush, validPushToken, type PushMessenger, type PushStore, type PushTokenRecord } from "../push";
+import { dailyNudge, registerPushToken, sendPush, unregisterPushToken, validPushToken, type PushMessenger, type PushStore, type PushTokenRecord } from "../push";
 import { nudgeDateDue, nudgeNeeded } from "../mobile/nudge";
 import { creatorIdFromRequest } from "../../app/api/creator/_auth";
 import { completeLink, firebaseSignIn, type DecodedIdToken, type LinkStore } from "../mobile/firebase-signin";
@@ -199,7 +199,9 @@ test("status mapping", () => {
   assert.equal(applicantStatus({ status: "booked", calendly_event_start_time: START }, ctx(startMs - 3600_000)), "interview_booked");
   // After the call, still booked while the video can be sent (11:59 PM ET the day after).
   assert.equal(applicantStatus({ status: "booked", calendly_event_start_time: START }, ctx(startMs + 5 * 3600_000)), "interview_booked");
-  assert.equal(applicantStatus({ status: "booked", calendly_event_start_time: START }, ctx(startMs + 3 * 86400_000)), "applied");
+  // Video deadline passed with no video: one clear state (the cron auto-denies them).
+  assert.equal(applicantStatus({ status: "booked", calendly_event_start_time: START }, ctx(startMs + 3 * 86400_000)), "not_moving_forward");
+  assert.equal(interviewCard({ status: "booked", calendly_event_start_time: START }, ctx(startMs + 3 * 86400_000)), null);
   assert.equal(applicantStatus({ status: "booked", calendly_event_start_time: START, interview_video_submitted_at: "x" }, ctx(startMs)), "in_review");
   assert.equal(applicantStatus({ status: "completed", interview_passed_at: "x" }, ctx(T0)), "in_review");
   assert.equal(applicantStatus({ status: "denied", interview_video_submitted_at: "x" }, ctx(T0)), "not_moving_forward");
@@ -262,6 +264,9 @@ function memPush() {
     async upsert(t, rec) {
       docs.set(t, rec);
     },
+    async ownerOf(t) {
+      return docs.get(t)?.email ?? null;
+    },
     async tokensFor(target) {
       return [...docs.entries()]
         .filter(([, r]) =>
@@ -297,6 +302,19 @@ test("push: register stores the token record; re-register updates it", async () 
   assert.equal(docs.size, 1);
   assert.ok(validPushToken(TOK_A));
   assert.ok(!validPushToken("a/b"));
+});
+
+test("push: unregister removes only the signed-in person's token; staff tokens are found by email", async () => {
+  const { docs, store } = memPush();
+  await registerPushToken(TOK_A, { email: "founder@x.com", role: "staff", platform: "ios" }, { store });
+  await registerPushToken(TOK_B, { email: "b@x.com", role: "creator", creator_id: "C2", platform: "ios" }, { store });
+  // notifyFounder targets staff by email.
+  assert.deepEqual(await store.tokensFor({ email: "Founder@x.com" }), [TOK_A]);
+  assert.equal(await unregisterPushToken(TOK_B, "founder@x.com", { store }), false);
+  assert.ok(docs.has(TOK_B));
+  assert.equal(await unregisterPushToken(TOK_A, "Founder@X.com", { store }), true);
+  assert.ok(!docs.has(TOK_A));
+  assert.equal(await unregisterPushToken(TOK_A, "founder@x.com", { store }), false);
 });
 
 test("push: multicasts to all of a person's devices and deletes unregistered tokens", async () => {
@@ -381,14 +399,14 @@ function firebaseDeps(tokens: Record<string, DecodedIdToken>) {
 }
 
 test("firebase: a verified Google email resolves the role and gets a session", async () => {
-  const { deps } = firebaseDeps({ g: { uid: "u1", email: "A@X.com", email_verified: true } });
+  const { deps } = firebaseDeps({ g: { uid: "u1", email: "A@X.com", email_verified: true, firebase: { sign_in_provider: "google.com" } } });
   const r = await firebaseSignIn(deps, "g");
   assert.ok(r.ok && "token" in r.body);
   if (r.ok && "token" in r.body) {
     assert.equal(r.body.role, "applicant");
     assert.equal(r.body.email, "a@x.com");
     assert.equal(r.body.application_id, "A1");
-    assert.deepEqual(await verifyMobileToken(r.body.token, { secret: SECRET }), { sub: "a@x.com", role: "applicant", aid: "A1" });
+    assert.deepEqual(await verifyMobileToken(r.body.token, { secret: SECRET }), { sub: "a@x.com", role: "applicant", aid: "A1", amr: "google" });
   }
 });
 

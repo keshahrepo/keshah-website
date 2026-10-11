@@ -107,7 +107,11 @@ export function applicantStatus(
     // Booked counts while the call is ahead, and afterwards for as long as
     // they can still send their video (so the app keeps showing that step).
     const deadline = videoDeadlineMs(app, ctx.sessionClosesAtMs);
-    if (ctx.nowMs < start || (deadline !== null && ctx.nowMs < deadline)) return "interview_booked";
+    if (ctx.nowMs < start || deadline === null || ctx.nowMs < deadline) return "interview_booked";
+    // Booked, the call is over and the video deadline passed with no video:
+    // the follow-up cron auto-denies them (they were told so). Show that one
+    // state now, not "book a group interview" next to a past booking.
+    return "not_moving_forward";
   }
   return "applied";
 }
@@ -134,6 +138,8 @@ export function interviewCard(
   const start = bookedStartMs(app);
   if (!start || isClosedOut(app)) return null;
   const deadline = videoDeadlineMs(app, ctx.sessionClosesAtMs);
+  // Missed the video deadline: no interview card (status is not_moving_forward).
+  if (deadline !== null && ctx.nowMs >= deadline && ctx.nowMs >= start && !videoSubmitted(app)) return null;
   return {
     starts_at: new Date(start).toISOString(),
     join_url: (app.calendly_join_url as string) || null,

@@ -116,6 +116,22 @@
   border-color: #373737;
 }
 
+/* Phone field: format hint (when the number can't be texted) and SMS consent. */
+.fieldHint {
+  margin-top: -6px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: #F26B4C;
+}
+
+.fieldNote {
+  margin-top: -6px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.45);
+}
+
 /* Yes/No pill row — mobile uses vertically stacked, not side-by-side. */
 .yesNoStack {
   display: flex;

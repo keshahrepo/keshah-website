@@ -196,9 +196,10 @@ test("welcome email names the contract deadline right before Next steps (new off
   assert.ok(!isai.text.includes("Please sign your agreement"));
 });
 
-test("welcome email for an existing creator is a portal intro, not an offer", () => {
+test("welcome email for an existing creator is an app intro, not an offer", () => {
   const m = welcomeEmail({ firstName: "Isai", link: "https://x/l", contractReady: false, existing: true });
-  assert.equal(m.subject, "Your KESHAH creator portal");
+  assert.equal(m.subject, "Your KESHAH Creators app");
+  assert.ok(!/portal/i.test(m.text));
   assert.ok(!m.text.includes("Congratulations"));
   assert.ok(m.text.includes("https://x/l"));
   for (const s of [m.subject, m.text]) assert.ok(!s.includes("—"), "no em dash");

@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server";
 import { requireDashboardSession } from "@/lib/support/auth";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
+import { denialEmailDue } from "@/lib/interview-decisions";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,7 @@ export async function GET() {
         can_commit: x.can_commit ?? null,
         comfortable_on_camera: x.comfortable_on_camera ?? null,
         has_iphone: x.has_iphone ?? null,
+        has_us_bank: x.has_us_bank ?? null,
         wants_virality: x.wants_virality ?? null,
         posted_before: x.posted_before ?? null,
         social_handle: x.social_handle ?? null,
@@ -49,6 +51,19 @@ export async function GET() {
         interview_video_submitted_at: toIso(x.interview_video_submitted_at),
         calendly_reschedule_url: x.calendly_reschedule_url ?? null,
         calendly_cancel_url: x.calendly_cancel_url ?? null,
+        interview_checked_in_at: toIso(x.interview_checked_in_at),
+        interview_opened_at: toIso(x.interview_opened_at),
+        // Deny sends the "not moving forward" email only to people with a video.
+        denial_email_due: denialEmailDue(x),
+        denial_email_sent_at: toIso(x.denial_email_sent_at),
+        denied_reason: x.denied_reason ?? null,
+        auto_denied_at: toIso(x.auto_denied_at),
+        booking_canceled_at: toIso(x.booking_canceled_at),
+        booked_after_decision_start_time: x.booked_after_decision_start_time ?? null,
+        phone_e164: x.phone_e164 ?? null,
+        sms_opt_out_at: toIso(x.sms_opt_out_at),
+        interview_possible_duplicate_id: x.interview_possible_duplicate_id ?? null,
+        interview_possible_duplicate_of: Array.isArray(x.interview_possible_duplicate_of) ? x.interview_possible_duplicate_of : null,
         status: x.status ?? "pending",
         created_at: toIso(x.created_at),
         submitted_at: toIso(x.submitted_at),

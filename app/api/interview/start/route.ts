@@ -6,6 +6,14 @@
 // (or the match has no gender on file), responds needs_details so the
 // page asks for name + gender, then the client calls again with them and
 // we create a minimal application (source: "group_interview").
+//
+// Unknown email: the page first asks "Is this the email you applied with?"
+// (needs_details + unknown_email) so a typo can be fixed. If they continue,
+// the new doc is tagged interview_unmatched_email + the session, and any
+// application booked into this session's slot that looks like the same
+// person (same name, or an email a typo away) is flagged with
+// interview_possible_duplicate_id: the follow-up cron then sends it no
+// no-show email/text and never auto-denies it; the founder sorts it out.
 
 import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
@@ -13,9 +21,12 @@ import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import {
   APPLICATIONS,
   findApplicationByEmail,
+  getSessionApplicants,
   isAcceptingNow,
   resolveSession,
 } from "@/lib/interview";
+import { isDecided, looksLikeSamePerson } from "@/lib/interview-decisions";
+import { bookedIntoSlot, openedSession } from "@/lib/interview-reminders";
 
 type Body = { slug?: string; email?: string; full_name?: string; gender?: string };
 
@@ -76,9 +87,9 @@ export async function POST(req: Request) {
     }
 
     if (!givenName || !givenGender) {
-      return NextResponse.json({ needs_details: true, need_name: true, need_gender: true });
+      return NextResponse.json({ needs_details: true, need_name: true, need_gender: true, unknown_email: true });
     }
-    await db.collection(APPLICATIONS).add({
+    const created = await db.collection(APPLICATIONS).add({
       listing_slug: "paid-creator-intern",
       full_name: givenName,
       email: email.toLowerCase(),
@@ -91,7 +102,28 @@ export async function POST(req: Request) {
       submitted_at: now,
       last_updated_at: now,
       user_agent: req.headers.get("user-agent") ?? null,
+      interview_unmatched_email: true,
     });
+    console.warn(`interview start: new application ${created.id} for unknown email ${email.toLowerCase()} in ${session.slug}`);
+    // Booked into this slot, hasn't opened the page, and looks like the same
+    // person: probably the application they meant. Flag both. Never fails the start.
+    if (session.starts_at_ms > 0) {
+      try {
+        const others = (await getSessionApplicants(db, session)).filter((d) => {
+          if (d.id === created.id) return false;
+          const x = (d.data() ?? {}) as Record<string, unknown>;
+          if (isDecided(x.status) || openedSession(x, session.slug) || x.interview_video_submitted_at) return false;
+          return bookedIntoSlot(x, session.starts_at_ms) && looksLikeSamePerson({ full_name: givenName, email }, x);
+        });
+        if (others.length) {
+          await created.set({ interview_possible_duplicate_of: others.map((d) => d.id) }, { merge: true });
+          for (const d of others) await d.ref.set({ interview_possible_duplicate_id: created.id }, { merge: true });
+          console.warn(`interview start: ${created.id} may be the same person as ${others.map((d) => d.id).join(", ")}`);
+        }
+      } catch (e) {
+        console.error("interview start: duplicate check failed:", e instanceof Error ? e.message : e);
+      }
+    }
     return NextResponse.json({
       ok: true,
       first_name: givenName.split(/\s+/)[0],

@@ -4,6 +4,7 @@ import { CreatorDataError, assertOnboarded, getCreator } from "@/lib/creators/db
 import type { CreatorProfile } from "@/lib/creators/types";
 import { bearerToken, mobileAuthConfigured, MOBILE_OFF_MESSAGE, verifyMobileToken } from "@/lib/mobile/token";
 import { creatorIdForClaims } from "@/lib/mobile/identity";
+import { signerAuthFromClaims, type SignerAuth } from "@/lib/creators/signer-auth";
 
 export interface CreatorAuthDeps {
   /** Looks up an active creator by login email (mobile tokens without a cid claim). */
@@ -56,6 +57,15 @@ export async function requireCreator(req: NextRequest, deps: CreatorAuthDeps = {
   return creator;
 }
 
+/**
+ * Rejects (403) once their agreement has ended: the KESHAH accounts' passwords
+ * (and anything else only a working creator needs) are no longer theirs to see.
+ */
+export function requireNotEnded(creator: Pick<CreatorProfile, "status">, message = "Your agreement has ended, so there's nothing to post."): NextResponse | null {
+  if (creator.status !== "ended") return null;
+  return NextResponse.json({ error: message }, { status: 403 });
+}
+
 /** Rejects (friendly 403) until Getting started is finished. Returns null when allowed. */
 export async function requireOnboarded(creator: CreatorProfile): Promise<NextResponse | null> {
   try {
@@ -64,6 +74,16 @@ export async function requireOnboarded(creator: CreatorProfile): Promise<NextRes
   } catch (e) {
     return errorResponse(e, "onboarding gate");
   }
+}
+
+/**
+ * How the request's signer is signed in, for e-signature audit trails: from
+ * the mobile token's sign-in method, else the web portal's password session.
+ */
+export async function signerAuthFromRequest(req: NextRequest): Promise<SignerAuth> {
+  const bearer = bearerToken(req.headers);
+  if (!bearer) return "web_password";
+  return signerAuthFromClaims(await verifyMobileToken(bearer));
 }
 
 /** Client IP (first x-forwarded-for hop on Vercel) and user agent, for audit records. */

@@ -6,6 +6,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
+import { notifyFounderVideoSent } from "@/lib/interview";
 import { STORAGE_BUCKET } from "@/lib/creators/db";
 import { videoProblem } from "@/lib/mobile/applicant";
 import { loadApplicant } from "@/lib/mobile/firestore";
@@ -47,6 +48,7 @@ export async function POST(req: Request) {
       },
       { merge: true },
     );
+    await notifyFounderVideoSent(a.doc.id, a.app.full_name);
     return Response.json({ ok: true });
   } catch (e) {
     return serverError(e, "applicant/video/submit");

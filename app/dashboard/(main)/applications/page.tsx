@@ -10,7 +10,8 @@
 //
 // Row expand shows all form answers + Calendly booking details.
 // Accept opens Gmail's compose window pre-filled with the offer email
-// + contract link; Deny marks silently (no email).
+// + contract link. Deny emails a short "not moving forward" note to
+// applicants who sent their video test; no-shows get nothing.
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -58,6 +59,10 @@ type Application = {
   calendly_event_start_time: string | null;
   calendly_join_url: string | null;
   has_video?: boolean;
+  has_iphone?: string | null;
+  has_us_bank?: string | null;
+  denial_email_due?: boolean;
+  denied_reason?: string | null;
   interview_session?: string | null;
   interview_video_submitted_at?: string | null;
   calendly_reschedule_url: string | null;
@@ -209,6 +214,7 @@ function ApplicationsInner() {
           }}
           onStatus={async (row, status) => {
             if (status === "accepted" && !confirmAccept(row)) return;
+            if (status === "denied" && !confirmDeny(row, row.has_video)) return;
             await updateStatus(row.id, status);
           }}
         />
@@ -346,7 +352,9 @@ function ApplicationsInner() {
             onAccept={() => {
               if (confirmAccept(row)) updateStatus(row.id, "accepted");
             }}
-            onDeny={() => updateStatus(row.id, "denied")}
+            onDeny={() => {
+              if (confirmDeny(row, row.denial_email_due ?? (row.has_video || !!row.interview_video_submitted_at))) updateStatus(row.id, "denied");
+            }}
             onReopen={() => updateStatus(row.id, "booked")}
             hasThread={threadIds.has(row.id)}
             onThreadRead={refreshInbox}
@@ -544,6 +552,11 @@ function ApplicationRow({
               <Detail label="Grad year" value={row.graduation_year} />
               <Detail label="Can commit" value={row.can_commit} />
               <Detail label="On-camera" value={row.comfortable_on_camera} />
+              <Detail label="iPhone" value={row.has_iphone ?? null} />
+              <Detail label="US bank account" value={row.has_us_bank ?? null} />
+              {row.status === "denied" && (
+                <Detail label="Denied" value={row.denied_reason === "no_video" ? "Automatically, no video by the deadline" : "By you"} />
+              )}
               <Detail label="Wants virality" value={row.wants_virality} />
               <Detail label="Posted before" value={row.posted_before} />
               <Detail label="Social" value={row.social_handle} />
@@ -653,5 +666,13 @@ function confirmAccept(row: { full_name?: string | null; email?: string | null }
   const name = row.full_name || row.email || "this applicant";
   return window.confirm(
     `Accept ${name}?\n\nThis will:\n• make them a creator (they show up in Creator pay)\n• set up their @keshah.com email\n• email them the welcome note with the app link and the contract\n• start their 20-day trial\n\nNothing is sent until you press OK.`,
+  );
+}
+
+/** Says exactly what Deny sends: an email only to people who sent their video test. */
+function confirmDeny(row: { full_name?: string | null; email?: string | null }, emailed: boolean): boolean {
+  const name = row.full_name || row.email || "this applicant";
+  return window.confirm(
+    `Deny ${name}?\n\n${emailed ? "They'll get a short email saying we're not moving forward." : "No email, they didn't send a video."}`,
   );
 }

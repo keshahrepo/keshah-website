@@ -1,6 +1,6 @@
 // KESHAH Creators app: who am I, re-checked on every call (an applicant who
 // gets accepted shows up as a creator without signing in again).
-// GET (Bearer) -> { role, name, email, creator_id?, application_id?, onboarding: {...}, staff }
+// GET (Bearer) [?tz=America/Los_Angeles, the phone's zone] -> { role, name, email, creator_id?, application_id?, onboarding: {...}, staff }
 
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { resolveIdentity } from "@/lib/mobile/firestore";
@@ -22,7 +22,7 @@ export async function GET(req: Request) {
       isStaffEmail(claims.sub),
       // Founder's Progress timeline: "Signed in to the app" (best effort, never fails the call).
       id.role === "creator" && id.creator_id
-        ? recordAppSeen(db, id.creator_id).catch((e) => console.error("me: app seen stamp failed:", e))
+        ? recordAppSeen(db, id.creator_id, new Date(), new URL(req.url).searchParams.get("tz")).catch((e) => console.error("me: app seen stamp failed:", e))
         : null,
     ]);
     // staff: the founder side of the app (lib/staff.ts).

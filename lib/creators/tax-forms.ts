@@ -19,6 +19,7 @@ import path from "path";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, degrees, rgb } from "pdf-lib";
 import { adoptedSignatureText } from "./signature";
+import { signerAuthText } from "./signer-auth";
 import {
   IRS_CONSENT_STATEMENT,
   W8BEN_CAPACITY,
@@ -101,6 +102,8 @@ export interface TaxSignatureRecord {
   signer_user_id: string;
   signer_ip: string;
   signer_user_agent: string;
+  /** How the signer was signed in (lib/creators/signer-auth.ts). Absent on forms signed before it was recorded. */
+  signer_auth?: string;
   signed_at_utc: string;
   signed_at_local: string;
   signer_timezone: string;
@@ -213,7 +216,8 @@ async function addRecordPage(doc: PDFDocument, formLabel: string, certification:
     y -= o.gap ?? 0;
   };
   text("Electronic signature record", { font: bold, size: 15, gap: 4 });
-  text(`${formLabel}, signed electronically in the KESHAH creator portal.`, { size: 10, gap: 10 });
+  const where = rec.signer_auth === "web_password" ? "on the KESHAH creator website" : rec.signer_auth ? "in the KESHAH Creators app" : "in the signer's KESHAH creator account";
+  text(`${formLabel}, signed electronically ${where}.`, { size: 10, gap: 10 });
   const rows: [string, string][] = [
     ["Document ID", rec.document_id],
     ["Form", rec.form_revision],
@@ -236,7 +240,7 @@ async function addRecordPage(doc: PDFDocument, formLabel: string, certification:
   y -= 8;
   text("How the signer was identified", { font: bold, size: 10, gap: 2 });
   text(
-    "The signer was signed in to their own KESHAH creator portal account (password login tied to the email above). " +
+    `${signerAuthText(rec.signer_auth)} ` +
       "They filled in the form, were shown every entry and the full certification below before signing, ticked a box " +
       "confirming the certification under penalties of perjury, and adopted their signature by typing their full name.",
     { gap: 8 },
