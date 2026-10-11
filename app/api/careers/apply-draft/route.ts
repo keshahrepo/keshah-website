@@ -63,18 +63,7 @@ export async function POST(req: Request) {
 
     const { db } = getFirebaseAdmin();
     const ref = db.collection("careers_applications").doc(draftId);
-    const snap = await ref.get();
     const now = FieldValue.serverTimestamp();
-
-    // If the doc already exists and is past "pending" (accepted/denied/
-    // completed), do NOT downgrade it back to pending — that would let
-    // a stale client tab overwrite an admin decision. Silent skip.
-    if (snap.exists) {
-      const cur = snap.data() as { status?: string };
-      if (cur.status && cur.status !== "pending") {
-        return NextResponse.json({ ok: true, skipped: "locked" });
-      }
-    }
 
     const data: Record<string, unknown> = {
       draft_id: draftId,
@@ -97,16 +86,32 @@ export async function POST(req: Request) {
       video_original_name: (p.video_original_name ?? "").trim() || null,
       video_size_bytes: p.video_size_bytes ?? null,
       consent: p.consent === true,
-      status: "pending",
       last_updated_at: now,
     };
-    if (!snap.exists) {
-      data.created_at = now;
-      data.user_agent = req.headers.get("user-agent") ?? null;
-      data.referer = req.headers.get("referer") ?? null;
-    }
 
-    await ref.set(data, { merge: true });
+    // Read and write in one transaction. The final submit fires at the same
+    // moment as the last draft save; a plain get-then-set let the draft land
+    // second and knock "awaiting_booking" back to "pending". Once a doc is
+    // past "pending" (submitted, booked, decided) a draft save never touches
+    // it, and status is only written when the draft is first created.
+    const skipped = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (snap.exists) {
+        const cur = snap.data() as { status?: string };
+        if (cur.status && cur.status !== "pending") return true;
+        tx.set(ref, data, { merge: true });
+      } else {
+        tx.set(ref, {
+          ...data,
+          status: "pending",
+          created_at: now,
+          user_agent: req.headers.get("user-agent") ?? null,
+          referer: req.headers.get("referer") ?? null,
+        });
+      }
+      return false;
+    });
+    if (skipped) return NextResponse.json({ ok: true, skipped: "locked" });
     return NextResponse.json({ ok: true, id: draftId });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
