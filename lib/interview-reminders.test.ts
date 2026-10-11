@@ -320,9 +320,9 @@ const booked = (bookedMs: number, extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 
-test("bookingTextDue: 3 to 30 min after booking, interview 90+ min away, once per booked start", () => {
+test("bookingTextDue: 100 s to 30 min after booking, interview 90+ min away, once per booked start", () => {
   const b = START - 5 * HOUR;
-  assert.equal(bookingTextDue(booked(b), b + 2 * MIN), false); // too soon
+  assert.equal(bookingTextDue(booked(b), b + 60 * 1000), false); // too soon
   assert.equal(bookingTextDue(booked(b), b + BOOKING_TEXT_DELAY_MS), true);
   assert.equal(bookingTextDue(booked(b), b + 10 * MIN), true);
   assert.equal(bookingTextDue(booked(b), b + BOOKING_TEXT_MAX_AGE_MS), true);
