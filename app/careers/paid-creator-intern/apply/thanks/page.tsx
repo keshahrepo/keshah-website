@@ -19,6 +19,8 @@ import { Suspense, useEffect } from "react";
 const DRAFT_STORAGE_KEY = "keshah_careers_draft_id_v1";
 
 const APP_STORE_URL = "https://apps.apple.com/us/app/keshah/id6450676544";
+const PLAY_STORE_URL =
+  "https://play.google.com/store/apps/details?id=com.keshahapp.hair";
 
 // Calendly sends event_start_time as an ISO 8601 string in the invitee's
 // local time (e.g. "2026-10-07T15:00:00-07:00").
@@ -102,6 +104,49 @@ function ThanksInner() {
                 It&apos;s the app you&apos;ll be making videos about, and we&apos;ll ask about it on the call. It&apos;s
                 free to try. You don&apos;t need to start a trial, just go through the onboarding and quiz.
               </div>
+              {/* Desktop CTA — inverted QR card, same pattern as root. */}
+              <div className="thanks-qr-card">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/careers/keshah-qr-code.svg"
+                  alt="Scan to download KESHAH"
+                  width={112}
+                  height={112}
+                  className="thanks-qr"
+                />
+                <div className="thanks-qr-label">
+                  <div className="thanks-qr-title">Scan to download</div>
+                  <div className="thanks-qr-sub">
+                    Opens KESHAH in the App Store or Google Play.
+                  </div>
+                </div>
+              </div>
+
+              {/* Mobile CTA — store badges, hidden on desktop (QR takes over). */}
+              <div className="thanks-store-buttons">
+                <a
+                  href={APP_STORE_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="thanks-store-btn-primary"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                    <path d="M17.05 20.28c-.98.95-2.05.88-3.08.41-1.09-.47-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.41C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.19 2.31-.89 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.53 4.08zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
+                  </svg>
+                  App Store
+                </a>
+                <a
+                  href={PLAY_STORE_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="thanks-store-btn-secondary"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                    <path d="M3.6 20.5V3.5c0-.3.1-.6.3-.8L13 12l-9.1 9.3c-.2-.2-.3-.5-.3-.8zm10.5-7.5l2.5 2.5L5.4 21.6l8.7-8.6zm0-2L5.4 2.4l11.2 6.1-2.5 2.5zM20.4 10.6l-2.9 1.4 2.9 1.4c.6.3 1 .9 1 1.4 0 .6-.4 1.1-1 1.4l-2.9 1.4-2.6-2.6 2.6-2.6 2.9 1.4z" />
+                  </svg>
+                  Google Play
+                </a>
+              </div>
             </div>
           </li>
           <li className="thanks-step">
@@ -135,39 +180,6 @@ function ThanksInner() {
             </div>
           </li>
         </ol>
-
-        {/* Desktop CTA — inverted QR card, same pattern as root. */}
-        <div className="thanks-qr-card">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/careers/keshah-qr-code.svg"
-            alt="Scan to download KESHAH"
-            width={112}
-            height={112}
-            className="thanks-qr"
-          />
-          <div className="thanks-qr-label">
-            <div className="thanks-qr-title">Scan to download</div>
-            <div className="thanks-qr-sub">
-              Opens KESHAH in the App Store.
-            </div>
-          </div>
-        </div>
-
-        {/* Mobile CTA — store badges, hidden on desktop (QR takes over). */}
-        <div className="thanks-store-buttons">
-          <a
-            href={APP_STORE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="thanks-store-btn-primary"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-              <path d="M17.05 20.28c-.98.95-2.05.88-3.08.41-1.09-.47-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.41C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.19 2.31-.89 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.53 4.08zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
-            </svg>
-            App Store
-          </a>
-        </div>
 
         <p className="thanks-contact">
           Questions?{" "}
@@ -325,7 +337,7 @@ export default function ThanksPage() {
           border: 1px solid rgba(255, 255, 255, 0.12);
           border-radius: 14px;
           text-align: left;
-          margin-top: 4px;
+          margin-top: 14px;
         }
 
         .thanks-qr {
@@ -359,9 +371,9 @@ export default function ThanksPage() {
         .thanks-store-buttons {
           display: flex;
           gap: 10px;
-          justify-content: center;
+          justify-content: flex-start;
           flex-wrap: wrap;
-          margin-top: 4px;
+          margin-top: 14px;
         }
 
         .thanks-store-btn-primary,
