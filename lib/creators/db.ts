@@ -998,12 +998,23 @@ export interface OnboardingStepPayload {
   video_id?: string;
   /** quiz: chosen option index per QUIZ question, in order. */
   answers?: number[];
+  /** accounts: answer with each handle's status instead of an error (the app's check screen). */
+  report?: boolean;
+}
+
+/** One handle on the app's account check screen. */
+export interface AccountCheck {
+  handle: string;
+  /** found; missing (no such account); taken (another KESHAH creator's); unknown (lookup down: saved anyway). */
+  status: "found" | "missing" | "taken" | "unknown";
 }
 
 export interface OnboardingStepResult {
   state: OnboardingState;
   /** quiz only. */
   quiz?: { passed: boolean; correct: number; total: number };
+  /** accounts with report: each handle's status; ok = saved. */
+  accounts?: { ok: boolean; tiktok: AccountCheck; instagram: AccountCheck };
 }
 
 export async function setOnboardingStep(
@@ -1020,6 +1031,7 @@ export async function setOnboardingStep(
   if (!contractSigned) throw new CreatorDataError("Sign your contract first. The other steps open up after that.", 409);
   if (!state.contract_signed_at) state.contract_signed_at = creator.contract.signed_at || now;
   let quiz: OnboardingStepResult["quiz"];
+  let accountsReport: OnboardingStepResult["accounts"];
   switch (step) {
     case "videos": {
       if (!FOUNDER_VIDEOS.some((v) => v.id === payload.video_id)) throw new CreatorDataError("Unknown video");
@@ -1044,22 +1056,26 @@ export async function setOnboardingStep(
       if (!tt || !ig) throw new CreatorDataError("Add both your TikTok and Instagram handles");
       // Another creator's account would put their videos on this creator's days.
       const docs = await creatorDocs();
-      for (const h of new Set([tt, ig])) {
-        if (handleOwner(docs, id, h)) {
-          throw new CreatorDataError(`@${h} is another KESHAH creator's username. Use the account you just made.`, 409);
-        }
-      }
+      const ttTaken = !!handleOwner(docs, id, tt);
+      const igTaken = !!handleOwner(docs, id, ig);
       // Catch typos now rather than as a missed day later. null = couldn't
       // check (outage, no key): save anyway.
-      const [ttOk, igOk] = await Promise.all([handleExists("tiktok", tt), handleExists("instagram", ig)]);
-      const missing = [ttOk === false ? `@${tt} on TikTok` : "", igOk === false ? `@${ig} on Instagram` : ""].filter(Boolean);
-      if (missing.length) {
+      const [ttOk, igOk] = await Promise.all([ttTaken ? true : handleExists("tiktok", tt), igTaken ? true : handleExists("instagram", ig)]);
+      const statusOf = (taken: boolean, ok: boolean | null): AccountCheck["status"] => (taken ? "taken" : ok === false ? "missing" : ok === null ? "unknown" : "found");
+      const checks = { tiktok: { handle: tt, status: statusOf(ttTaken, ttOk) }, instagram: { handle: ig, status: statusOf(igTaken, igOk) } };
+      const bad = [checks.tiktok, checks.instagram].filter((c) => c.status === "taken" || c.status === "missing");
+      if (bad.length) {
+        if (payload.report) return { state, accounts: { ok: false, ...checks } };
+        const taken = bad.find((c) => c.status === "taken");
+        if (taken) throw new CreatorDataError(`@${taken.handle} is another KESHAH creator's username. Use the account you just made.`, 409);
+        const missing = [ttOk === false ? `@${tt} on TikTok` : "", igOk === false ? `@${ig} on Instagram` : ""].filter(Boolean);
         throw new CreatorDataError(
           `We couldn't find ${missing.join(" or ")}. Check the spelling, and make sure you've finished creating the account.`,
         );
       }
       await creatorRef(id).update({ tiktok_handle: tt, instagram_handle: ig });
       state.accounts_done_at = now;
+      accountsReport = payload.report ? { ok: true, ...checks } : undefined;
       break;
     }
     case "slack":
@@ -1094,7 +1110,7 @@ export async function setOnboardingStep(
   }
   await onboardingRef(id).set(state);
   if (state.completed_at) await advanceCreatorStatus(id).catch((e) => console.error("creator status advance failed:", e));
-  return { state, ...(quiz ? { quiz } : {}) };
+  return { state, ...(quiz ? { quiz } : {}), ...(accountsReport ? { accounts: accountsReport } : {}) };
 }
 
 // ---------------------------------------------------------------- invoices
