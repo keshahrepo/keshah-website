@@ -64,12 +64,10 @@ test("suggestReason: 100K+ within 30 days", () => {
   assert.equal(suggestReason(post(500_000, 2, { pinned: true }), 1000, NOW), null);
 });
 
-test("suggestReason: 3x normal with a 20K floor", () => {
-  assert.match(suggestReason(post(30_000, 2), 10_000, NOW)!, /3\.0x/);
-  assert.equal(suggestReason(post(29_999, 2), 10_000, NOW), null); // under 3x
-  assert.equal(suggestReason(post(15_000, 2), 1_000, NOW), null); // 15x but under 20K
-  assert.match(suggestReason(post(20_000, 2), 1_000, NOW)!, /20\.0x/);
-  assert.equal(suggestReason(post(50_000, 2), null, NOW), null); // no normal yet
+test("suggestReason: only 100K+ counts, however far above their normal", () => {
+  assert.equal(suggestReason(post(30_000, 2), 10_000, NOW), null); // 3x normal, under 100K
+  assert.equal(suggestReason(post(99_999, 2), 1_000, NOW), null);
+  assert.match(suggestReason(post(100_000, 2), 1_000, NOW)!, /100K views/);
 });
 
 // ---------------------------------------------------------------- daily picks

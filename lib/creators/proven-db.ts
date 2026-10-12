@@ -11,6 +11,7 @@
 import { randomBytes } from "node:crypto";
 import type { DocumentData, Firestore } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
+import { notifyFounder } from "@/lib/staff";
 import { CREATORS_COLLECTION, CreatorDataError, creatorToday, listCreators } from "./db";
 import { isWeekday, localDate } from "./pay";
 import {
@@ -1014,5 +1015,14 @@ export async function runProvenDaily(opts: {
       `${out.stats_updated} stats, ${out.tired_flagged.length} tired, ${out.transcripts_filled} transcripts, ${out.credits_used} credits` +
       (out.errors.length ? `, ${out.errors.length} errors` : ""),
   );
+  // One push a day for what went into the video bank (100K+ posts go straight in).
+  if (out.suggested.length && !opts.onlyIds) {
+    const n = out.suggested.length;
+    await notifyFounder({
+      title: `${n} new video${n === 1 ? "" : "s"} in the bank`,
+      body: `${n === 1 ? "A creator post" : `${n} creator posts`} crossed 100K views, so ${n === 1 ? "it's" : "they're"} now in everyone's daily picks.`,
+      data: { type: "founder_proven" },
+    }).catch(() => {});
+  }
   return out;
 }

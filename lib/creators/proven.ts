@@ -9,9 +9,8 @@
  *
  * Founder-approved rules:
  *   - Seed: @aadi.keshah + Isai videos with >= 100K views come in as "suggested".
- *   - Auto-suggest: a creator post from the last 30 days with >= 100K views, or
- *     >= 3x that creator's normal (median views of their non-pinned posts over
- *     the last 30 days, per platform) and >= 20K.
+ *   - Auto-add: a creator post from the last 30 days with >= 100K views goes
+ *     straight in (remakes included; picks never give two of one family a day).
  *   - Daily picks: 5 per creator (3 for format creators), least recently used
  *     first, never twice in a day, at most twice a week (soft), recent winners
  *     first among equals, audience respected.
@@ -263,10 +262,9 @@ export function suggestReason(post: ViewPost, normal: number | null, nowIso: str
   if (post.pinned) return null;
   const age = Date.parse(nowIso) - Date.parse(post.posted_at);
   if (!(age >= 0 && age <= SUGGEST_WINDOW_DAYS * DAY_MS)) return null;
+  // One rule: 100K+ views (remakes included) goes straight in. The old "3x their normal" path is gone.
+  void normal;
   if (post.views >= PROVEN_MIN_VIEWS) return `${fmtViews(post.views)} views`;
-  if (normal && normal > 0 && post.views >= SUGGEST_MULTIPLE_MIN_VIEWS && post.views >= SUGGEST_MULTIPLE * normal) {
-    return `${(post.views / normal).toFixed(1)}x this creator's normal (${fmtViews(normal)})`;
-  }
   return null;
 }
 
