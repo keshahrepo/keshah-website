@@ -311,7 +311,8 @@ export async function provisionCreatorGroup(
     throw new Error(`Group ${chosen} exists but its settings didn't save: ${await errText(r)}`);
   }
 
-  // Members: creator (MEMBER) + admin (OWNER).
+  // Members: creator (MEMBER) + admin (OWNER). Both get every email: the admin
+  // copy is how KESHAH still gets TikTok / Instagram codes after a creator leaves.
   const members: { email: string; role: "MEMBER" | "OWNER" }[] = [
     { email: input.personalEmail.trim().toLowerCase(), role: "MEMBER" },
     { email: client.adminEmail, role: "OWNER" },
@@ -320,7 +321,7 @@ export async function provisionCreatorGroup(
     if (!m.email) continue;
     const r = await client.fetch(`${DIRECTORY}/${encodeURIComponent(chosen)}/members`, {
       method: "POST",
-      body: JSON.stringify({ email: m.email, role: m.role }),
+      body: JSON.stringify({ email: m.email, role: m.role, delivery_settings: "ALL_MAIL" }),
     });
     if (r.ok) continue;
     // Google rejects a Gmail "+tag" address ("Resource Not Found") because it
@@ -329,16 +330,16 @@ export async function provisionCreatorGroup(
     if (r.status === 404 && plain && plain !== m.email) {
       const r2 = await client.fetch(`${DIRECTORY}/${encodeURIComponent(chosen)}/members`, {
         method: "POST",
-        body: JSON.stringify({ email: plain, role: m.role }),
+        body: JSON.stringify({ email: plain, role: m.role, delivery_settings: "ALL_MAIL" }),
       });
       if (r2.ok || r2.status === 409) continue;
     }
     if (r.status === 409) {
-      // Already a member. Make sure the admin is an OWNER.
+      // Already a member. Make sure the admin is an OWNER who gets every email.
       if (m.role === "OWNER") {
         const p = await client.fetch(`${DIRECTORY}/${encodeURIComponent(chosen)}/members/${encodeURIComponent(m.email)}`, {
           method: "PATCH",
-          body: JSON.stringify({ role: "OWNER" }),
+          body: JSON.stringify({ role: "OWNER", delivery_settings: "ALL_MAIL" }),
         });
         if (!p.ok) throw new Error(`Couldn't make ${m.email} an owner of ${chosen}: ${await errText(p)}`);
       }

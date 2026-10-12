@@ -84,6 +84,9 @@ test("provision: creates firstname@, applies settings, adds member + owner", asy
   assert.ok(f.members.has("jane@gmail.com"));
   const ownerAdd = f.calls.find((c) => c.method === "POST" && c.url.endsWith("/members") && (c.body as { role: string }).role === "OWNER");
   assert.equal((ownerAdd?.body as { email: string }).email, "admin@keshah.com");
+  for (const c of f.calls.filter((c) => c.method === "POST" && c.url.endsWith("/members"))) {
+    assert.equal((c.body as { delivery_settings?: string }).delivery_settings, "ALL_MAIL", `${(c.body as { email: string }).email} gets every email`);
+  }
 });
 
 test("provision: taken by a user or someone else's group falls back to first.last, then first.last2", async () => {
@@ -104,6 +107,8 @@ test("provision: re-run reuses our own group, tolerates existing members, retrie
   assert.equal(r.created, false);
   assert.equal(f.calls.filter((c) => c.method === "POST" && c.url.endsWith("/v1/groups")).length, 0);
   assert.ok(f.calls.some((c) => c.method === "PATCH" && c.url.includes("/members/admin%40keshah.com")), "admin promoted to OWNER");
+  const patch = f.calls.find((c) => c.method === "PATCH" && c.url.includes("/members/admin%40keshah.com"));
+  assert.equal((patch?.body as { delivery_settings?: string }).delivery_settings, "ALL_MAIL", "admin gets every email");
 });
 
 test("provision: same full name as another creator never shares their inbox", async () => {
