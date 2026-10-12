@@ -9,6 +9,7 @@ import {
   checkGoogleConnection,
   groupDisplayName,
   provisionCreatorGroup,
+  ensureInboxDelivery,
   type GroupsClient,
 } from "./google-groups";
 import { hashInviteToken, inviteProblem, newInvite, passwordProblem, setPasswordUrl, welcomeEmail } from "./invite";
@@ -239,4 +240,46 @@ test("welcome email for an existing creator is an app intro, not an offer", () =
   assert.ok(!m.text.includes("Congratulations"));
   assert.ok(m.text.includes("https://x/l"));
   for (const s of [m.subject, m.text]) assert.ok(!s.includes("—"), "no em dash");
+});
+
+test("ensureInboxDelivery: admin gets every email (added back if missing), creator only if still a member", async () => {
+  const members: Record<string, { role: string; delivery_settings: string }> = {
+    "admin@keshah.com": { role: "OWNER", delivery_settings: "NONE" },
+    "jane@gmail.com": { role: "MEMBER", delivery_settings: "DIGEST" },
+  };
+  const calls: string[] = [];
+  const client: GroupsClient = {
+    adminEmail: "admin@keshah.com",
+    fetch: async (url, init = {}) => {
+      const method = init.method ?? "GET";
+      const path = decodeURIComponent(new URL(url).pathname);
+      calls.push(`${method} ${path}`);
+      const one = path.match(/\/members\/([^/]+)$/);
+      if (one && method === "GET") return members[one[1]] ? new Response(JSON.stringify(members[one[1]])) : new Response("{}", { status: 404 });
+      if (one && method === "PATCH") {
+        members[one[1]] = { ...members[one[1]], ...JSON.parse(String(init.body)) };
+        return new Response("{}");
+      }
+      if (path.endsWith("/members") && method === "POST") {
+        const b = JSON.parse(String(init.body));
+        members[b.email] = { role: b.role, delivery_settings: b.delivery_settings };
+        return new Response("{}");
+      }
+      return new Response("{}", { status: 500 });
+    },
+  };
+  const changed = await ensureInboxDelivery(client, { groupEmail: "jane@keshah.com", personalEmail: "jane+test@gmail.com" });
+  assert.equal(members["admin@keshah.com"].delivery_settings, "ALL_MAIL");
+  assert.equal(members["admin@keshah.com"].role, "OWNER");
+  assert.equal(members["jane@gmail.com"].delivery_settings, "ALL_MAIL");
+  assert.equal(members["jane+test@gmail.com"], undefined, "a +tag address that isn't a member is never added");
+  assert.equal(changed.length, 2);
+  // Second run: nothing to change.
+  assert.deepEqual(await ensureInboxDelivery(client, { groupEmail: "jane@keshah.com", personalEmail: "jane+test@gmail.com" }), []);
+  // Admin removed by hand: added back. A creator who left stays gone.
+  delete members["admin@keshah.com"];
+  delete members["jane@gmail.com"];
+  await ensureInboxDelivery(client, { groupEmail: "jane@keshah.com", personalEmail: "jane@gmail.com" });
+  assert.equal(members["admin@keshah.com"].role, "OWNER");
+  assert.equal(members["jane@gmail.com"], undefined);
 });

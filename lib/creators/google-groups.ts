@@ -230,6 +230,42 @@ export interface ProvisionResult {
 }
 
 /**
+ * Make sure an existing creator inbox sends every email to the admin (OWNER,
+ * added back if missing) and to the creator if they're still a member. Run
+ * daily by the creator health check, so inboxes made before this rule, or
+ * changed by hand, heal on their own. Returns what it changed.
+ */
+export async function ensureInboxDelivery(
+  client: GroupsClient,
+  input: { groupEmail: string; personalEmail?: string },
+): Promise<string[]> {
+  const g = encodeURIComponent(input.groupEmail);
+  const changed: string[] = [];
+  const set = async (email: string, role: "OWNER" | "MEMBER", addIfMissing: boolean) => {
+    const url = `${DIRECTORY}/${g}/members/${encodeURIComponent(email)}`;
+    const cur = await client.fetch(url);
+    if (cur.status === 404) {
+      if (!addIfMissing) return;
+      const add = await client.fetch(`${DIRECTORY}/${g}/members`, { method: "POST", body: JSON.stringify({ email, role, delivery_settings: "ALL_MAIL" }) });
+      if (!add.ok && add.status !== 409) throw new Error(`Adding ${email} to ${input.groupEmail} failed: ${await errText(add)}`);
+      changed.push(`added ${email}`);
+      return;
+    }
+    if (!cur.ok) throw new Error(`Looking up ${email} in ${input.groupEmail} failed: ${await errText(cur)}`);
+    const m = (await cur.json()) as { role?: string; delivery_settings?: string };
+    const wantRole = role === "OWNER" ? "OWNER" : m.role;
+    if (m.delivery_settings === "ALL_MAIL" && m.role === wantRole) return;
+    const p = await client.fetch(url, { method: "PATCH", body: JSON.stringify({ role: wantRole, delivery_settings: "ALL_MAIL" }) });
+    if (!p.ok) throw new Error(`Updating ${email} in ${input.groupEmail} failed: ${await errText(p)}`);
+    changed.push(`${email} gets every email`);
+  };
+  await set(client.adminEmail, "OWNER", true);
+  const me = (input.personalEmail ?? "").trim().toLowerCase();
+  for (const e of new Set([me, gmailWithoutTag(me)].filter(Boolean) as string[])) await set(e, "MEMBER", false);
+  return changed;
+}
+
+/**
  * Can this existing group be reused for the creator with `personalEmail`?
  * Yes when they're already a member, or when it has no creator member yet
  * (an earlier run made it but stopped before adding them). No when someone

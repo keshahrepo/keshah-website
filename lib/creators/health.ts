@@ -16,6 +16,7 @@ import { emailConfigured, sendEmail } from "@/lib/email";
 import { CREATORS_COLLECTION, isYyyyMmDd } from "./db";
 import { PROVEN_COLLECTION } from "./proven";
 import { BEATS_MAX_ATTEMPTS } from "./proven-beats";
+import { ensureInboxDelivery, groupsClientFromEnv, groupsConfigured } from "./google-groups";
 
 export const LOW_CREDITS = 1500;
 export const MIN_USABLE_VIDEOS = 40;
@@ -129,6 +130,26 @@ export async function runCreatorHealth(opts: { db?: Firestore; dry?: boolean; no
     .select("status", "talking_points", "hook_first_person", "transcript", "beats")
     .get();
   const problems = healthProblems(creators, pv.docs.map((d) => d.data() as ProvenHealthInput), now.getTime());
+  // Every creator inbox copies the admin on everything (codes still reach KESHAH after a creator leaves).
+  if (!opts.dry && groupsConfigured()) {
+    const inboxes = snap.docs.filter((d) => String(d.data().keshah_email ?? "").endsWith("@keshah.com"));
+    if (inboxes.length) {
+      try {
+        const client = await groupsClientFromEnv();
+        for (const d of inboxes) {
+          const x = d.data();
+          try {
+            const changed = await ensureInboxDelivery(client, { groupEmail: String(x.keshah_email), personalEmail: String(x.email ?? "") });
+            if (changed.length) console.log(`creator inbox ${x.keshah_email}: ${changed.join(", ")}`);
+          } catch (e) {
+            problems.push(`${String(x.name ?? d.id)}'s inbox ${x.keshah_email}: ${e instanceof Error ? e.message : String(e)}`);
+          }
+        }
+      } catch (e) {
+        problems.push(`Couldn't check creator inboxes: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+  }
   const to = alertEmailTo();
   const out = { problems, emailed: false, to };
   if (!problems.length || opts.dry || !to || !emailConfigured()) return out;
