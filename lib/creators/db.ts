@@ -654,7 +654,9 @@ export async function savePostingDay(
   // The once-per-day "Day complete" marker survives a re-save (claimDayComplete).
   const celebrated = existing.exists ? existing.data()!.day_complete_at : null;
   await ref.set(celebrated ? { ...doc, day_complete_at: celebrated } : doc);
-  if (clean.length && !hasStarted(creator)) await setStartDateIfUnset(id, date);
+  if (clean.length && !hasStarted(creator) && (await setStartDateIfUnset(id, date))) {
+    await notifyFounder({ title: `${creator.name || "A creator"} started posting`, body: "Their first posting day is in.", data: { type: "founder_creator", id } }).catch(() => {});
+  }
   await advanceCreatorStatus(id).catch((e) => console.error("creator status advance failed:", e));
   return { date, videos: clean, logged_at: nowIso, ...(autoUrls.length ? { auto_urls: autoUrls } : {}) };
 }
@@ -743,13 +745,14 @@ export async function advanceCreatorStatus(id: string, opts: { db?: Firestore; n
   return changed ? to : null;
 }
 
-/** Pay starts on the first posting day: set start_date once, only if still unset. */
-async function setStartDateIfUnset(id: string, date: YyyyMmDd): Promise<void> {
+/** Pay starts on the first posting day: set start_date once, only if still unset. True when this call set it. */
+async function setStartDateIfUnset(id: string, date: YyyyMmDd): Promise<boolean> {
   const ref = creatorRef(id);
-  await fs().runTransaction(async (tx) => {
+  return fs().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
-    if (!snap.exists || isYyyyMmDd(snap.data()!.start_date)) return;
+    if (!snap.exists || isYyyyMmDd(snap.data()!.start_date)) return false;
     tx.update(ref, { start_date: date, start_date_source: "first_post", start_date_set_at: new Date().toISOString() });
+    return true;
   });
 }
 
@@ -921,7 +924,8 @@ function onboardingRef(id: string) {
 
 /** Getting started steps in portal order. Shared by the portal and admin progress counts. */
 // Portal order. Warm-up is last: it runs over the 3 days after everything else is done.
-export const ONBOARDING_STEP_KEYS: OnboardingStepKey[] = ["contract", "slack", "videos", "quiz", "accounts", "link", "rules", "warmup"];
+// The posting guide ("rules") isn't a setup step any more: the app shows it on their first posting day.
+export const ONBOARDING_STEP_KEYS: OnboardingStepKey[] = ["contract", "slack", "videos", "quiz", "accounts", "link", "warmup"];
 export const ONBOARDING_STEP_COUNT = ONBOARDING_STEP_KEYS.length;
 
 export interface OnboardingCheckOpts {

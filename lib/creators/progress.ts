@@ -227,7 +227,6 @@ export function creatorProgress(input: ProgressInput, now: Date = new Date()): C
   d.push({ key: "videos", label: "Videos", at: videosAt, done: videosDone || allOnboarded || started || finished, waitingOn: "creator" });
   d.push({ key: "quiz", label: "Quiz", at: onb.quiz, done: onbDone("quiz"), waitingOn: "creator" });
   d.push({ key: "accounts", label: "Accounts created", at: onb.accounts, done: onbDone("accounts"), waitingOn: "creator" });
-  d.push({ key: "rules", label: "Rules", at: onb.rules, done: onbDone("rules"), waitingOn: "creator" });
   const warmDone = warmupDone || allOnboarded || started || finished;
   d.push({
     key: "warmup",
