@@ -236,6 +236,8 @@ export interface AdminCreator {
   /** The founder still has to reset their TikTok / Instagram passwords and remove phone / two-factor. */
   passwords_reset_pending: boolean;
   phone_check_pending: boolean;
+  /** First time they saved the TikTok verification image (null = never). */
+  business_image_at: string | null;
   reactivated_at: string | null;
 }
 
@@ -297,6 +299,7 @@ export function toAdminCreator(id: string, d: DocumentData): AdminCreator {
     offboard: d.offboard && typeof d.offboard === "object" ? (plain(d.offboard) as OffboardRecord) : null,
     passwords_reset_pending: passwordsResetPending(d),
     phone_check_pending: phoneCheckPending(d),
+    business_image_at: typeof d.business_image_at === "string" ? d.business_image_at : null,
     reactivated_at: toIso(d.reactivated_at),
   };
 }
