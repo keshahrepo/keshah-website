@@ -230,6 +230,21 @@ export interface ProvisionResult {
 }
 
 /**
+ * Can this existing group be reused for the creator with `personalEmail`?
+ * Yes when they're already a member, or when it has no creator member yet
+ * (an earlier run made it but stopped before adding them). No when someone
+ * else is the member: two creators with the same full name.
+ */
+async function groupIsFor(client: GroupsClient, groupEmail: string, personalEmail: string): Promise<boolean> {
+  const r = await client.fetch(`${DIRECTORY}/${encodeURIComponent(groupEmail)}/members?maxResults=200`);
+  if (!r.ok) throw new Error(`Looking up the members of ${groupEmail} failed: ${await errText(r)}`);
+  const list = (((await r.json()) as { members?: { email?: string; role?: string }[] }).members ?? []).filter((m) => (m.role ?? "MEMBER") === "MEMBER");
+  const me = personalEmail.trim().toLowerCase();
+  const mine = new Set([me, gmailWithoutTag(me)].filter(Boolean));
+  return list.length === 0 || list.some((m) => mine.has(String(m.email ?? "").toLowerCase()));
+}
+
+/**
  * Create (or reuse) the creator's inbox group, apply settings, add members.
  * `override`: admin-chosen address; only that one is tried.
  * Idempotent: an existing group whose name + description match ours is
@@ -254,8 +269,10 @@ export async function provisionCreatorGroup(
     const g = await client.fetch(`${DIRECTORY}/${encodeURIComponent(email)}`);
     if (g.ok) {
       const existing = (await g.json()) as { name?: string; description?: string };
-      if (existing.name === name && existing.description === GROUP_DESCRIPTION) {
-        chosen = email; // ours, from an earlier run
+      // Ours from an earlier run, unless it's another creator's with the same
+      // full name: then it has them as a member and we move on.
+      if (existing.name === name && existing.description === GROUP_DESCRIPTION && (await groupIsFor(client, email, input.personalEmail))) {
+        chosen = email;
         break;
       }
       continue; // taken by someone/something else

@@ -36,6 +36,9 @@ function fakeClient(opts: { groups?: Record<string, { name: string; description:
       let m: RegExpMatchArray | null;
       if (u.host === "admin.googleapis.com") {
         if ((m = path.match(/^\/admin\/directory\/v1\/groups\/([^/]+)\/members\/([^/]+)$/)) && method === "PATCH") return json(200, {});
+        if ((m = path.match(/^\/admin\/directory\/v1\/groups\/([^/]+)\/members$/)) && method === "GET") {
+          return json(200, { members: [...members].map((email) => ({ email, role: email === "admin@keshah.com" ? "OWNER" : "MEMBER" })) });
+        }
         if ((m = path.match(/^\/admin\/directory\/v1\/groups\/([^/]+)\/members$/)) && method === "POST") {
           if (members.has(body.email)) return json(409, { error: { message: "Member already exists." } });
           members.add(body.email);
@@ -101,6 +104,26 @@ test("provision: re-run reuses our own group, tolerates existing members, retrie
   assert.equal(r.created, false);
   assert.equal(f.calls.filter((c) => c.method === "POST" && c.url.endsWith("/v1/groups")).length, 0);
   assert.ok(f.calls.some((c) => c.method === "PATCH" && c.url.includes("/members/admin%40keshah.com")), "admin promoted to OWNER");
+});
+
+test("provision: same full name as another creator never shares their inbox", async () => {
+  const f = fakeClient({
+    groups: { "jane@keshah.com": { name: groupDisplayName("Jane Doe"), description: GROUP_DESCRIPTION } },
+    existingMembers: ["first.jane@x.com", "admin@keshah.com"],
+  });
+  const r = await provisionCreatorGroup(f.client, { fullName: "Jane Doe", personalEmail: "second.jane@x.com" }, { retryDelayMs: 1 });
+  assert.equal(r.email, "jane.doe@keshah.com");
+  assert.equal(r.created, true);
+});
+
+test("provision: a group from an earlier run with no creator member yet is reused", async () => {
+  const f = fakeClient({
+    groups: { "jane@keshah.com": { name: groupDisplayName("Jane Doe"), description: GROUP_DESCRIPTION } },
+    existingMembers: ["admin@keshah.com"],
+  });
+  const r = await provisionCreatorGroup(f.client, { fullName: "Jane Doe", personalEmail: "j@x.com" }, { retryDelayMs: 1 });
+  assert.equal(r.email, "jane@keshah.com");
+  assert.equal(r.created, false);
 });
 
 test("provision: override address that's taken is an error (no fallback)", async () => {

@@ -34,7 +34,8 @@ import {
   weekdaysBetween,
   type MonthSummary,
 } from "./pay";
-import { FOUNDER_VIDEOS, QUIZ, WARMUP_DAYS } from "./onboarding-content";
+import { FOUNDER_VIDEOS, QUIZ, WARMUP_DAYS, suggestedHandle } from "./onboarding-content";
+import { handleOwner, pickHandle, takenHandles, type CreatorDoc } from "./uniqueness";
 import { handleExists, postKey } from "./scrape";
 import { isValidTimezone } from "./time";
 import { autoSubmitFields, disputeUpdate, InvoiceRuleError } from "./invoice-auto";
@@ -307,6 +308,30 @@ export function normalizeTrackingUrl(raw: unknown): string | null {
 
 export function normalizeHandle(h: string): string {
   return String(h ?? "").trim().replace(/^@+/, "").replace(/\s+/g, "");
+}
+
+/** Every creator doc, for checks that span creators (see uniqueness.ts). */
+export async function creatorDocs(): Promise<CreatorDoc[]> {
+  const snap = await fs().collection(CREATORS_COLLECTION).get();
+  return snap.docs.map((d) => ({ id: d.id, data: d.data() }));
+}
+
+/**
+ * The username we give this creator for TikTok and Instagram: anya.keshah,
+ * or anya.keshah2 when another creator already has it. Picked once and saved,
+ * in a transaction so two Anyas setting up at once can't get the same one.
+ */
+export async function assignedHandleFor(id: string, name: string): Promise<string> {
+  const col = fs().collection(CREATORS_COLLECTION);
+  return fs().runTransaction(async (tx) => {
+    const all = await tx.get(col);
+    const me = all.docs.find((d) => d.id === id);
+    const saved = me ? String(me.data().assigned_handle ?? "") : "";
+    if (saved || !me) return saved || suggestedHandle(name);
+    const h = pickHandle(name, takenHandles(all.docs.map((d) => ({ id: d.id, data: d.data() })), id));
+    tx.update(me.ref, { assigned_handle: h });
+    return h;
+  });
 }
 
 /**
@@ -1017,6 +1042,13 @@ export async function setOnboardingStep(
       const tt = normalizeHandle(payload.tiktok_handle ?? "");
       const ig = normalizeHandle(payload.instagram_handle ?? "");
       if (!tt || !ig) throw new CreatorDataError("Add both your TikTok and Instagram handles");
+      // Another creator's account would put their videos on this creator's days.
+      const docs = await creatorDocs();
+      for (const h of new Set([tt, ig])) {
+        if (handleOwner(docs, id, h)) {
+          throw new CreatorDataError(`@${h} is another KESHAH creator's username. Use the account you just made.`, 409);
+        }
+      }
       // Catch typos now rather than as a missed day later. null = couldn't
       // check (outage, no key): save anyway.
       const [ttOk, igOk] = await Promise.all([handleExists("tiktok", tt), handleExists("instagram", ig)]);

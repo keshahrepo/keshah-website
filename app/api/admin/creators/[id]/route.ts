@@ -17,7 +17,8 @@ import {
 } from "@/lib/creators/admin";
 import { addMonths, completedMonthsAsOf, draftInvoiceLines, nextLevel, trialStatus } from "@/lib/creators/pay";
 import { listContractEvents } from "@/lib/creators/contract";
-import { mapCreatorStatus, markContractStepDone } from "@/lib/creators/db";
+import { creatorDocs, mapCreatorStatus, markContractStepDone } from "@/lib/creators/db";
+import { campaignTagClash, handleOwner } from "@/lib/creators/uniqueness";
 import { offboardCreator } from "@/lib/creators/offboard";
 import { notifyLinkReady } from "@/lib/creators/lifecycle-notify";
 import { offerSummary } from "@/lib/creators/deadline";
@@ -95,6 +96,18 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     const dup = await db().collection(CREATORS_COLLECTION).where("email", "==", updates.email).limit(2).get();
     if (dup.docs.some((d) => d.id !== id)) {
       return NextResponse.json({ error: "Another creator already uses that email" }, { status: 409 });
+    }
+  }
+  // Campaign tags and handles belong to one creator: a shared tag would count
+  // installs for both, a shared handle would count posts for both.
+  if (Array.isArray(updates.campaign_tags) || updates.tiktok_handle || updates.instagram_handle) {
+    const docs = await creatorDocs();
+    const clash = Array.isArray(updates.campaign_tags) ? campaignTagClash(docs, id, updates.campaign_tags as string[]) : null;
+    if (clash) return NextResponse.json({ error: `${clash.owner} already has the campaign tag "${clash.tag}".` }, { status: 409 });
+    for (const k of ["tiktok_handle", "instagram_handle"] as const) {
+      const h = typeof updates[k] === "string" ? (updates[k] as string) : "";
+      const owner = h ? handleOwner(docs, id, h) : null;
+      if (owner) return NextResponse.json({ error: `${owner} already uses @${h.replace(/^@+/, "")}.` }, { status: 409 });
     }
   }
   // The contract's name match (B9) uses the legal name, so it's fixed once they've signed.

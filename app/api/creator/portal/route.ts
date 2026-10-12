@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  assignedHandleFor,
   creatorToday,
   getHistory,
   getMonthOverview,
@@ -28,7 +29,6 @@ import {
   WARMUP_HEADLINE,
   WARMUP_TEXT,
   publicQuiz,
-  suggestedHandle,
 } from "@/lib/creators/onboarding-content";
 import { isWeekday, monthOf, videosRequiredOn } from "@/lib/creators/pay";
 import { msUntilLocalDeadline } from "@/lib/creators/time";
@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
         quiz: publicQuiz(),
         accounts_step_text: ACCOUNTS_STEP_TEXT,
         verification_code_text: VERIFICATION_CODE_TEXT,
-        suggested_handle: suggestedHandle(creator.name),
+        suggested_handle: await assignedHandleFor(creator.id, creator.name),
         handle_taken_text: HANDLE_TAKEN_TEXT,
         accounts_guide_url: ACCOUNTS_GUIDE_URL || null,
         warmup_days: WARMUP_DAYS,
