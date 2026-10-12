@@ -359,22 +359,18 @@ export function confirmDue(app: Record<string, unknown>, replyMs: number, nowMs:
   return replyMs < startMs && nowMs < startMs;
 }
 
-const CHECKIN_AFFIRMATIONS = new Set([
-  "yes", "yeah", "yea", "yep", "yup", "y", "ya", "ok", "okay", "k", "sure", "ready", "present",
-  "here", "im here", "i am here", "here now", "confirmed", "confirm", "i confirm",
-  "check in", "checked in", "checking in", "check me in", "im in",
-  "will be there", "ill be there", "i will be there", "see you there", "see you soon",
-  "yes im here", "yes ill be there", "yes i will be there", "yes confirmed",
-]);
-const CHECKIN_BLOCKERS = /\b(late|reschedul\w*|cancel\w*|cant|cannot|can't|wont|won't|not|no|nope|miss\w*|sorry|who|what|when|where|why|how|link|help|stop)\b/i;
+// A question or a problem: these wait for a person, with no auto-reply.
+const CHECKIN_BLOCKERS =
+  /\b(late|reschedul\w*|cancel\w*|cant|cannot|can't|wont|won't|not|no|nope|miss\w*|sorry|who|what|when|where|why|how|link|help|stop|is it|do i|does|can i|could|should|wrong)\b/i;
 
 /**
- * Does a reply to the 1h text look like a check-in? 1 to 4 words, mostly
- * letters, no question, and either overlaps the applicant's name or is a
- * short yes/here. Anything else ("can I reschedule?", "running late") is left
- * for a person to answer.
+ * Does a reply to the booking or 1h text count as "yes, I'm coming"? We asked
+ * for their full name, but people answer "Anya, see you then!", "Thanks!
+ * Anya", a nickname or a typo, so any short reply counts unless it's a
+ * question or a problem ("can I reschedule?", "running late", "is it on
+ * zoom"). Those get no auto-reply. Every reply still lands in the inbox.
  */
-export function looksLikeCheckIn(text: string, fullName?: unknown): boolean {
+export function looksLikeCheckIn(text: string): boolean {
   const raw = (text ?? "").trim();
   if (!raw || raw.includes("?")) return false;
   const cleaned = raw
@@ -384,22 +380,10 @@ export function looksLikeCheckIn(text: string, fullName?: unknown): boolean {
     .replace(/\s+/g, " ")
     .trim();
   const words = cleaned.split(" ").filter(Boolean);
-  if (words.length < 1 || words.length > 4) return false;
-  const chars = cleaned.replace(/\s/g, "");
-  const letters = (chars.match(/\p{L}/gu) ?? []).length;
-  if (!chars.length || letters / chars.length < 0.8) return false;
-  if (CHECKIN_BLOCKERS.test(cleaned)) return false;
-  if (CHECKIN_AFFIRMATIONS.has(cleaned)) return true;
-  const nameWords = String(fullName ?? "")
-    .toLowerCase()
-    .replace(/[\u2019']/g, "")
-    .split(/[^\p{L}]+/u)
-    .filter((w) => w.length >= 2);
-  if (!nameWords.length) return false;
-  const filler = new Set(["its", "im", "i", "am", "this", "is", "here", "yes", "hi", "hey", "hello", "checking", "in", "name", "my"]);
-  const rest = words.filter((w) => !filler.has(w));
-  // Every non-filler word is part of the name, and at least one is there.
-  return rest.length > 0 && rest.every((w) => nameWords.includes(w));
+  if (words.length < 1 || words.length > 20) return false;
+  // Something to read: "12345" or a lone emoji isn't an answer.
+  if (!/\p{L}/u.test(cleaned)) return false;
+  return !CHECKIN_BLOCKERS.test(cleaned);
 }
 
 /** How long before the start a reply still counts as a check-in. */

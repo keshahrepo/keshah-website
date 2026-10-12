@@ -156,7 +156,7 @@ async function emailNotify(app: AppLite, texts: Parameters<typeof notificationEm
 }
 
 /**
- * A reply that looks like their name (or a short yes/here):
+ * Any short reply that isn't a question or a problem (see looksLikeCheckIn):
  *   - after the booking text, before the 1h text: confirms them for that
  *     booking and sends the join link ("you're confirmed").
  *   - after the 1h text (the 70 min before the start): checks them in (and
@@ -183,7 +183,7 @@ export async function handleCheckIn(
     const confirm = !checkIn && confirmDue(cur, reply.received_ms, nowMs);
     if (!checkIn && !confirm) return null;
     // Questions and anything else stay in the inbox for a person to answer.
-    if (!looksLikeCheckIn(reply.text, cur.full_name)) return null;
+    if (!looksLikeCheckIn(reply.text)) return null;
     snapshot = cur;
     const at = Timestamp.fromMillis(reply.received_ms);
     if (confirm) {

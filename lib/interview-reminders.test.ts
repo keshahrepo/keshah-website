@@ -266,10 +266,25 @@ test("checkInDue: only after the 1h text, inside the window, before the start, o
   assert.equal(checkInDue({ ...base, status: "denied" }, START - 30 * MIN, START - 30 * MIN), false);
 });
 
-test("looksLikeCheckIn: name or short yes/here counts; questions and other text don't", () => {
-  const name = "Jamie Rivera";
-  for (const t of ["Jamie Rivera", "jamie rivera.", "Jamie", "Rivera", "It's Jamie Rivera", "yes", "Here!", "checked in", "I'm here", "Yes I'll be there", "ok"]) {
-    assert.equal(looksLikeCheckIn(t, name), true, t);
+test("looksLikeCheckIn: any short reply counts; questions and problems don't", () => {
+  for (const t of [
+    "Jamie Rivera",
+    "jamie rivera.",
+    "Jamie",
+    "It's Jamie Rivera",
+    "yes",
+    "Here!",
+    "I'm here",
+    "Yes I'll be there",
+    "ok",
+    "Jamie Rivera, see you Tuesday!",
+    "Thanks! Jamie Rivera",
+    "Jaime", // typo
+    "Jay", // nickname
+    "Jamie Rivera Lopez", // more than the application had
+    "Jamie 😊",
+  ]) {
+    assert.equal(looksLikeCheckIn(t), true, t);
   }
   for (const t of [
     "can I reschedule?",
@@ -279,12 +294,15 @@ test("looksLikeCheckIn: name or short yes/here counts; questions and other text 
     "who is this",
     "I can't make it",
     "no",
-    "Hi, I wanted to ask about the interview time because I have class",
-    "Sam Smith", // someone else's name
+    "is it on zoom",
+    "can I join from my phone",
+    "sorry wrong number",
+    "Hi, I wanted to say thanks for the booking and also mention that I have class on Thursdays until three so",
     "12345",
+    "😊",
     "",
   ]) {
-    assert.equal(looksLikeCheckIn(t, name), false, t);
+    assert.equal(looksLikeCheckIn(t), false, t);
   }
 });
 
