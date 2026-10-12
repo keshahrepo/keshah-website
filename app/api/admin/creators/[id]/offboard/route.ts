@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/creators/admin";
 import { CreatorDataError } from "@/lib/creators/db";
-import { markPasswordsReset } from "@/lib/creators/offboard";
+import { markPasswordsReset, markPhoneRemoved } from "@/lib/creators/offboard";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +9,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 // POST /api/admin/creators/:id/offboard
 //   { action: "passwords_done" }  the founder reset their TikTok + Instagram passwords and removed phone / two-factor
+//   { action: "phone_done" }      while they're leaving: their phone number is off both accounts
 export async function POST(req: NextRequest, { params }: Ctx) {
   const denied = await requireAdmin(req);
   if (denied) return denied;
@@ -19,7 +20,11 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       await markPasswordsReset(id);
       return NextResponse.json({ ok: true });
     }
-    return NextResponse.json({ error: "action must be passwords_done" }, { status: 400 });
+    if (body.action === "phone_done") {
+      await markPhoneRemoved(id);
+      return NextResponse.json({ ok: true });
+    }
+    return NextResponse.json({ error: "action must be passwords_done or phone_done" }, { status: 400 });
   } catch (e) {
     if (e instanceof CreatorDataError) return NextResponse.json({ error: e.message }, { status: e.status });
     console.error("offboard action failed:", e);

@@ -146,6 +146,22 @@ export async function markPasswordsReset(id: string, now: Date = new Date()): Pr
   await ref.update({ "offboard.passwords_reset_at": now.toISOString() });
 }
 
+/**
+ * While they're leaving (still cooperative): take their phone number off the
+ * TikTok and Instagram accounts. A linked number can log in with a text code,
+ * and removing it can need a code sent to that phone, so it's done before they go.
+ */
+export function phoneCheckPending(d: DocumentData): boolean {
+  return d.status === "leaving" && !d.offboarded_at && !d.phone_removed_at;
+}
+
+/** Founder ticked "Done" on "Remove {Name}'s phone number…". */
+export async function markPhoneRemoved(id: string, now: Date = new Date()): Promise<void> {
+  const ref = getFirebaseAdmin().db.collection(CREATORS_COLLECTION).doc(id);
+  if (!(await ref.get()).exists) throw new CreatorDataError("Creator not found", 404);
+  await ref.update({ phone_removed_at: now.toISOString() });
+}
+
 /** The founder task is still open. */
 export function passwordsResetPending(d: DocumentData): boolean {
   const o = (d.offboard ?? null) as Partial<OffboardRecord> | null;

@@ -41,7 +41,7 @@ import { acceptCreator, acceptOf, type AcceptOptions, type AcceptResult } from "
 import { candidateAddresses } from "./google-groups";
 import { creatorProgress, type CreatorProgress } from "./progress";
 import { bankOnFile, paymentDetailsOf, taxFormOf, type PaymentDetailsSummary, type TaxFormSummary } from "./payments";
-import { passwordsResetPending, reactivateCreator, shouldReactivate, type OffboardRecord } from "./offboard";
+import { passwordsResetPending, phoneCheckPending, reactivateCreator, shouldReactivate, type OffboardRecord } from "./offboard";
 import type {
   AcceptRecord,
   Adjustment,
@@ -235,6 +235,7 @@ export interface AdminCreator {
   offboard: OffboardRecord | null;
   /** The founder still has to reset their TikTok / Instagram passwords and remove phone / two-factor. */
   passwords_reset_pending: boolean;
+  phone_check_pending: boolean;
   reactivated_at: string | null;
 }
 
@@ -295,6 +296,7 @@ export function toAdminCreator(id: string, d: DocumentData): AdminCreator {
     offboarded_at: toIso(d.offboarded_at),
     offboard: d.offboard && typeof d.offboard === "object" ? (plain(d.offboard) as OffboardRecord) : null,
     passwords_reset_pending: passwordsResetPending(d),
+    phone_check_pending: phoneCheckPending(d),
     reactivated_at: toIso(d.reactivated_at),
   };
 }

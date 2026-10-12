@@ -16,7 +16,7 @@ import {
   unpaidTrialCents,
 } from "./lifecycle";
 import { bonusLinesForMonth, monthSummary } from "./pay";
-import { planOffboard, planReactivate, passwordsResetPending, shouldReactivate, isOffboarded } from "./offboard";
+import { planOffboard, planReactivate, passwordsResetPending, phoneCheckPending, shouldReactivate, isOffboarded } from "./offboard";
 import { firstDayEveDate, postingNudgeDate, syncIsFresh, warmupNudgeDate } from "./nudges";
 import type { Adjustment, BonusClaim, Invoice } from "./types";
 
@@ -247,4 +247,11 @@ test("first-day eve and warm-up reminders", () => {
   assert.equal(syncIsFresh("2026-10-15T00:50:00Z", EVE), true);
   assert.equal(syncIsFresh("2026-10-15T00:30:00Z", EVE), false);
   assert.equal(syncIsFresh(null, EVE), false);
+});
+
+test("phoneCheckPending: only while leaving, until done, never after offboarding", () => {
+  assert.equal(phoneCheckPending({ status: "leaving" }), true);
+  assert.equal(phoneCheckPending({ status: "leaving", phone_removed_at: "2026-10-12" }), false);
+  assert.equal(phoneCheckPending({ status: "leaving", offboarded_at: "x" }), false);
+  assert.equal(phoneCheckPending({ status: "active" }), false);
 });
