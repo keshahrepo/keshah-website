@@ -239,6 +239,8 @@ function postedWeekdaySet(postingDays: PostingDay[], profile?: TrialProfile): Se
   const gap = (d: YyyyMmDd) => !!tw?.completedOn && d > tw.completedOn && (!tw.promotedOn || d < tw.promotedOn);
   const out = new Set<YyyyMmDd>();
   for (const [d, n] of weekdayCounts(postingDays)) if (n >= need(d) && !gap(d)) out.add(d);
+  // Short days the founder chose to count (counted_by_founder).
+  for (const p of postingDays) if (p.counted_by_founder && isWeekday(p.date) && !gap(p.date)) out.add(p.date);
   return out;
 }
 

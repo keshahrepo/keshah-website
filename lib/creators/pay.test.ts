@@ -2,6 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  isPostedDay,
   baseForCompletedMonths,
   completeVideoCount,
   bonusLinesForMonth,
@@ -621,4 +622,11 @@ test("original plan unchanged: 3 videos don't count", () => {
   const s = monthSummary(prof("2026-10-01"), "2026-10", pd, [], [], []);
   assert.equal(s.postedDays, 0);
   assert.equal(s.trialCents, 0);
+});
+
+test("a short weekday the founder counted counts as posted (and a weekend never does)", () => {
+  const short = { date: "2026-10-12", videos: [1, 2, 3, 4].map((k) => ({ tiktok_url: `t${k}`, instagram_url: `i${k}` })), logged_at: "x" };
+  assert.equal(isPostedDay([short], "2026-10-12"), false);
+  assert.equal(isPostedDay([{ ...short, counted_by_founder: "Filmed the pinned video how-to" }], "2026-10-12"), true);
+  assert.equal(isPostedDay([{ ...short, date: "2026-10-11", counted_by_founder: "x" }], "2026-10-11"), false);
 });

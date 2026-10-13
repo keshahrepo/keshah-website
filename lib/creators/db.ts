@@ -380,6 +380,7 @@ export function toPostingDay(id: string, d: DocumentData): PostingDay {
       : [],
     logged_at: toIso(d.logged_at) ?? "",
     ...(Array.isArray(d.auto_urls) && d.auto_urls.length ? { auto_urls: d.auto_urls.map(String) } : {}),
+    ...(typeof d.counted_by_founder === "string" && d.counted_by_founder ? { counted_by_founder: d.counted_by_founder } : {}),
   };
 }
 

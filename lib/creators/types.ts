@@ -274,6 +274,8 @@ export interface PostingDay {
   videos: PostedVideo[];
   /** Last save. */
   logged_at: IsoInstant;
+  /** The founder counted this weekday as posted though it was short (why, e.g. "Filmed the pinned video how-to"). */
+  counted_by_founder?: string;
   /**
    * "auto" when the post sync created the day, "manual+auto" when it filled
    * gaps in a creator's log (stored doc only). Absent = saved by the creator.
