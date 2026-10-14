@@ -27,6 +27,15 @@ export interface PinnedVideo {
   note?: string;
   reviewed_at?: string;
   approved_at?: string;
+  /** The founder checked it by hand ("Mark as pinned"). */
+  marked_pinned_at?: string;
+}
+
+/** Where the approved video is pinned: a pinned post on each app, posted after approval. */
+export interface PinnedLive {
+  tiktok: boolean;
+  instagram: boolean;
+  done: boolean;
 }
 
 const UPLOAD_PREFIX = (id: string) => `creators/${id}/pinned/`;
@@ -77,10 +86,28 @@ export async function requestPinned(id: string, when: "today" | "next", now: Dat
   return next;
 }
 
-/** Is a post pinned on their TikTok or Instagram (from the post sync)? */
-export async function hasPinnedPost(id: string, store?: Firestore): Promise<boolean> {
-  const s = await db(store).collection(CREATORS_COLLECTION).doc(id).collection("posts").where("pinned", "==", true).limit(1).get();
-  return !s.empty;
+/**
+ * Is the approved video pinned? The post sync records each post's pinned flag
+ * (TikTok marks it; Instagram lists pinned Reels). A pinned post posted after
+ * approval is the new one, on each app separately. "Mark as pinned" counts as both.
+ */
+export async function pinnedLiveFor(id: string, p: PinnedVideo | null, store?: Firestore): Promise<PinnedLive> {
+  if (!p || p.status !== "approved") return { tiktok: false, instagram: false, done: false };
+  if (p.marked_pinned_at) return { tiktok: true, instagram: true, done: true };
+  const since = p.approved_at ?? "";
+  const s = await db(store).collection(CREATORS_COLLECTION).doc(id).collection("posts").where("pinned", "==", true).get();
+  const newer = s.docs.map((d) => d.data()).filter((x) => typeof x.posted_at === "string" && x.posted_at >= since);
+  const tiktok = newer.some((x) => x.platform === "tiktok");
+  const instagram = newer.some((x) => x.platform === "instagram");
+  return { tiktok, instagram, done: tiktok && instagram };
+}
+
+/** Founder: checked their profiles by hand. */
+export async function markPinned(id: string, now: Date = new Date()): Promise<void> {
+  const ref = db().collection(CREATORS_COLLECTION).doc(id);
+  const cur = pinnedOf((await ref.get()).data());
+  if (!cur || cur.status !== "approved") throw new CreatorDataError("Approve their pinned video first.", 409);
+  await ref.update({ "pinned_video.marked_pinned_at": now.toISOString() });
 }
 
 /** A one-time upload URL under the creator's own random path. */

@@ -20,7 +20,7 @@ import { listContractEvents } from "@/lib/creators/contract";
 import { creatorDocs, getOnboarding, isYyyyMmDd, mapCreatorStatus, markContractStepDone } from "@/lib/creators/db";
 import { firstPostingDay } from "@/lib/creators/lifecycle";
 import { campaignTagClash, handleOwner } from "@/lib/creators/uniqueness";
-import { hasPinnedPost } from "@/lib/creators/pinned-video";
+import { pinnedLiveFor, pinnedOf } from "@/lib/creators/pinned-video";
 import { offboardCreator } from "@/lib/creators/offboard";
 import { notifyLinkReady } from "@/lib/creators/lifecycle-notify";
 import { offerSummary } from "@/lib/creators/deadline";
@@ -50,7 +50,11 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   const attribution = await attributionFor(creator.campaign_tags, Date.parse(`${prev}-01T00:00:00Z`));
 
   // Approved pinned video: is a post pinned on their profile yet?
-  const pinnedLive = creator.pinned_video?.status === "approved" ? await hasPinnedPost(id).catch(() => false) : false;
+  const pinnedRaw = creator.pinned_video?.status === "approved" ? pinnedOf((await db().collection(CREATORS_COLLECTION).doc(id).get()).data()) : null;
+  const pinnedLive = await pinnedLiveFor(id, pinnedRaw).catch(() => ({ tiktok: false, instagram: false, done: false }));
+  // Approved over 2 days ago and still not pinned on both: Needs you (with Mark as pinned).
+  const approvedAt = pinnedRaw?.approved_at ? Date.parse(pinnedRaw.approved_at) : 0;
+  const pinnedOverdue = !!approvedAt && !pinnedLive.done && Date.now() - approvedAt > 2 * 24 * 3600 * 1000;
   // Past their first posting day with no pinned video sent: their daily videos can't start (Needs you).
   let pinnedMissingSince: string | null = null;
   if (!creator.pinned_video && !isYyyyMmDd(creator.start_date)) {
@@ -59,7 +63,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
     if (firstDay && today > firstDay) pinnedMissingSince = firstDay;
   }
   return NextResponse.json({
-    creator: { ...creator, pinned_live: pinnedLive, pinned_missing_since: pinnedMissingSince },
+    creator: { ...creator, pinned_live: pinnedLive, pinned_overdue: pinnedOverdue, pinned_missing_since: pinnedMissingSince },
     month,
     today,
     summary,

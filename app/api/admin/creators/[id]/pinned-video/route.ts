@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/creators/admin";
 import { CreatorDataError, getCreator } from "@/lib/creators/db";
 import { notify } from "@/lib/push";
-import { hasPinnedPost, pinnedForReview, requestPinned, reviewPinned } from "@/lib/creators/pinned-video";
+import { markPinned, pinnedForReview, pinnedLiveFor, pinnedOf, requestPinned, reviewPinned } from "@/lib/creators/pinned-video";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +14,8 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   const denied = await requireAdmin(req);
   if (denied) return denied;
   const { id } = await params;
-  const [pinned, live] = await Promise.all([pinnedForReview(id), hasPinnedPost(id)]);
+  const pinned = await pinnedForReview(id);
+  const live = await pinnedLiveFor(id, pinned ? pinnedOf({ pinned_video: pinned }) : null);
   return NextResponse.json({ pinned_video: pinned, pinned_live: live }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
@@ -28,6 +29,16 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     try {
       const when = (body as { when?: string }).when === "today" ? "today" : "next";
       return NextResponse.json({ pinned_video: await requestPinned(id, when) });
+    } catch (e) {
+      if (e instanceof CreatorDataError) return NextResponse.json({ error: e.message }, { status: e.status });
+      throw e;
+    }
+  }
+  // Checked their profiles by hand: counts as pinned on both.
+  if (body.action === "mark_pinned") {
+    try {
+      await markPinned(id);
+      return NextResponse.json({ ok: true });
     } catch (e) {
       if (e instanceof CreatorDataError) return NextResponse.json({ error: e.message }, { status: e.status });
       throw e;
