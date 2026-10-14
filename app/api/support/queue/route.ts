@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listAwaitingConversations, getRecentMessages, getUserProfile } from "@/lib/support/repo";
+import { listAwaitingConversations, getUserProfile } from "@/lib/support/repo";
 import { requireDashboardSession } from "@/lib/support/auth";
 import { draftCoversLatest, latestMessageMs } from "@/lib/support/background-drafts";
 
@@ -13,22 +13,21 @@ export async function GET() {
 
   const awaiting = await listAwaitingConversations({ limit: 1000 });
 
-  // Hydrate each conversation with profile + last 5 messages for the UI.
-  // Parallel because each round-trip is independent.
+  // Hydrate each conversation with the user's profile. The inbox row only
+  // shows the latest message, which the conversation doc already carries.
   const cards = await Promise.all(
     awaiting.map(async (convo) => {
-      const [profile, messages] = await Promise.all([
-        getUserProfile(convo.userId),
-        getRecentMessages(convo.userId, 5),
-      ]);
+      const profile = await getUserProfile(convo.userId);
       return {
         userId: convo.userId,
         profile,
-        recentMessages: messages.map((m) => ({
-          fromId: m.fromId,
-          content: m.content,
-          timestampMs: m.timestamp?.toMillis() ?? null,
-        })),
+        recentMessages: [
+          {
+            fromId: convo.lastMessage.fromId,
+            content: convo.lastMessage.content,
+            timestampMs: convo.lastMessage.timestamp?.toMillis() ?? null,
+          },
+        ],
         lastUpdateMs: convo.lastUpdateAt?.toMillis() ?? null,
         draft: convo.draft
           ? {
