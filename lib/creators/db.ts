@@ -513,12 +513,14 @@ export function monthDayStates(
   const counts = new Map<string, number>();
   for (const p of history.postingDays) counts.set(p.date, (counts.get(p.date) ?? 0) + completeVideoCount(p));
   const off = new Map(history.daysOff.map((d) => [d.date, d.status]));
+  // Days the founder counted (a pinned video day, a short day they let count) show as posted, like pay counts them.
+  const countedByFounder = new Set(history.postingDays.filter((p) => p.counted_by_founder).map((p) => p.date));
   return weekdaysBetween(monthFirst(month), monthLast(month))
     .filter((d) => isScheduledDay(creator, history.postingDays, d))
     .map((date) => {
       const videos = counts.get(date) ?? 0;
       let state: DayState;
-      if (videos >= videosRequiredOn(creator, history.postingDays, date)) state = "posted";
+      if (videos >= videosRequiredOn(creator, history.postingDays, date) || countedByFounder.has(date)) state = "posted";
       else if (off.get(date) === "approved") state = "off";
       else if (date >= today) state = off.get(date) === "requested" ? "off_requested" : "pending";
       else state = "missed";

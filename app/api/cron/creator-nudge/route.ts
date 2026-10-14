@@ -140,6 +140,11 @@ async function postingNudge(
   }
   const day = await x.ref.collection("posting_days").doc(date).get();
   const done = day.exists ? completeVideoCount(day.data() as PostingDay) : 0;
+  // A day the founder already counted (e.g. a pinned video day): nothing to remind.
+  if (day.exists && (day.data() as PostingDay).counted_by_founder) {
+    row.result = "not needed";
+    return;
+  }
   const profile = c.start_date ? c : c.trial_plan === "v2" ? { start_date: date, trial_plan: "v2" as const } : undefined;
   const need = videosRequiredOn(profile, hist, date);
   row.done = done;
