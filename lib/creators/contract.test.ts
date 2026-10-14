@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { writeFileSync } from "fs";
 import { deflateSync } from "zlib";
 import { PDFDocument, StandardFonts } from "pdf-lib";
-import { CONSENT_TEXT_SHA256, CONSENT_TEXT_VERSION, SIGNATURE_STYLE, __buildSignedPdfForTest, contractSetupProblem, founderSignatureMode } from "./contract";
+import { CONSENT_TEXT_SHA256, CONSENT_TEXT_VERSION, SIGNATURE_STYLE, __buildSignedPdfForTest, contractSetupProblem, founderSignatureMode, nameMatchesOnFile } from "./contract";
 import type { ContractAudit, ContractSettings } from "./types";
 
 async function tinyTemplate(pages = 2): Promise<Buffer> {
@@ -130,4 +130,13 @@ test("founder signature readiness", () => {
   // Uploaded PNG without the override flag isn't used; with it, it is (no adoption needed).
   assert.equal(founderSignatureMode({ ...base, signature_path: "contracts/founder_signature.png" }), null);
   assert.equal(founderSignatureMode({ ...base, signature_path: "contracts/founder_signature.png", use_drawn_signature: true }), "drawn");
+});
+
+test("nameMatchesOnFile: first and last name as on file, any case, accents or middle names", () => {
+  assert.equal(nameMatchesOnFile("Isai Trujillo", "Isai Trujillo"), true);
+  assert.equal(nameMatchesOnFile("isai trujillo", "Isai Trujillo"), true);
+  assert.equal(nameMatchesOnFile("Isai María Trujillo", "Isai Trujillo"), true);
+  assert.equal(nameMatchesOnFile("Isaí Trujillo", "Isai Trujillo"), true);
+  assert.equal(nameMatchesOnFile("Isai", "Isai Trujillo"), false);
+  assert.equal(nameMatchesOnFile("Jen Lopez", "Isai Trujillo"), false);
 });

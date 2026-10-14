@@ -383,6 +383,28 @@ export async function sendContract(
   return { contract, emailed };
 }
 
+function nameWords(s: string): string[] {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z\s'-]/g, " ")
+    .split(/[\s'-]+/)
+    .filter(Boolean);
+}
+
+/**
+ * The typed signature names the person on the contract: it has their first and
+ * last name as on file (any case, accents, extra middle names), e.g. "Isai
+ * Maria Trujillo" for "Isai Trujillo". "Isai" alone or someone else doesn't.
+ */
+export function nameMatchesOnFile(typed: string, onFile: string): boolean {
+  const want = nameWords(onFile);
+  const have = new Set(nameWords(typed));
+  if (!want.length) return true;
+  return have.has(want[0]) && have.has(want[want.length - 1]);
+}
+
 /** Records the first time the creator opens the contract PDF (audit trail). */
 export async function recordContractViewed(id: string, meta: { ip: string; user_agent: string }): Promise<void> {
   const ref = creatorRef(id);
@@ -458,8 +480,8 @@ export async function signContract(
   const typed = squash(input.typed_name);
   if (typed.length < 2 || typed.length > 120) throw new CreatorDataError("Type your full legal name.");
   const onFile = squash(d.legal_name);
-  if (onFile && onFile.toLowerCase() !== typed.toLowerCase()) {
-    throw new CreatorDataError(`Type your full legal name exactly as we have it: ${onFile}. If that's wrong, message us on Slack.`);
+  if (onFile && !nameMatchesOnFile(typed, onFile)) {
+    throw new CreatorDataError("That doesn't match the name on your contract. Write your full legal name, first and last. If we've spelled your name wrong, message us.");
   }
   const legalName = onFile || typed;
   const address = squash(input.address);
