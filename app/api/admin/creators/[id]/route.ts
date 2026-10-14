@@ -17,7 +17,8 @@ import {
 } from "@/lib/creators/admin";
 import { addMonths, completedMonthsAsOf, draftInvoiceLines, nextLevel, trialStatus } from "@/lib/creators/pay";
 import { listContractEvents } from "@/lib/creators/contract";
-import { creatorDocs, mapCreatorStatus, markContractStepDone } from "@/lib/creators/db";
+import { creatorDocs, getOnboarding, isYyyyMmDd, mapCreatorStatus, markContractStepDone } from "@/lib/creators/db";
+import { firstPostingDay } from "@/lib/creators/lifecycle";
 import { campaignTagClash, handleOwner } from "@/lib/creators/uniqueness";
 import { hasPinnedPost } from "@/lib/creators/pinned-video";
 import { offboardCreator } from "@/lib/creators/offboard";
@@ -50,8 +51,15 @@ export async function GET(req: NextRequest, { params }: Ctx) {
 
   // Approved pinned video: is a post pinned on their profile yet?
   const pinnedLive = creator.pinned_video?.status === "approved" ? await hasPinnedPost(id).catch(() => false) : false;
+  // Past their first posting day with no pinned video sent: their daily videos can't start (Needs you).
+  let pinnedMissingSince: string | null = null;
+  if (!creator.pinned_video && !isYyyyMmDd(creator.start_date)) {
+    const onb = await getOnboarding(id).catch(() => null);
+    const firstDay = onb?.completed_at ? firstPostingDay(onb.completed_at, creator.timezone) : null;
+    if (firstDay && today > firstDay) pinnedMissingSince = firstDay;
+  }
   return NextResponse.json({
-    creator: { ...creator, pinned_live: pinnedLive },
+    creator: { ...creator, pinned_live: pinnedLive, pinned_missing_since: pinnedMissingSince },
     month,
     today,
     summary,

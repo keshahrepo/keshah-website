@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/creators/admin";
-import { CreatorDataError } from "@/lib/creators/db";
+import { CreatorDataError, getCreator } from "@/lib/creators/db";
+import { notify } from "@/lib/push";
 import { hasPinnedPost, pinnedForReview, reviewPinned } from "@/lib/creators/pinned-video";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,13 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   if (denied) return denied;
   const { id } = await params;
   const body = (await req.json().catch(() => ({}))) as { action?: string; note?: string };
+  // A reminder for a creator who hasn't sent it yet.
+  if (body.action === "nudge") {
+    const c = await getCreator(id);
+    if (!c) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    await notify({ creatorId: id, email: c.email || null }, { title: "Your pinned video", body: "Make your pinned video today. Your daily videos start once it's in.", data: { type: "pinned_nudge" } });
+    return NextResponse.json({ ok: true });
+  }
   if (body.action !== "approve" && body.action !== "changes") return NextResponse.json({ error: "action must be approve or changes" }, { status: 400 });
   try {
     return NextResponse.json({ pinned_video: await reviewPinned(id, body.action, String(body.note ?? "")) });
