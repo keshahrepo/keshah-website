@@ -38,6 +38,7 @@ import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFP
 import { getStorage } from "firebase-admin/storage";
 import type { DocumentData } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
+import { waitUntil } from "@vercel/functions";
 import { emailConfigured, sendEmail } from "@/lib/email";
 import { CREATOR_FROM_NAME, CREATOR_SIGNOFF } from "./invite";
 import { CREATORS_COLLECTION, CreatorDataError, DEFAULT_TIMEZONE, STORAGE_BUCKET, markContractStepDone } from "./db";
@@ -588,7 +589,15 @@ export async function signContract(
   }
 
   await markContractStepDone(id, signedAt).catch((e) => console.error("contract onboarding step update failed:", e));
-  const emailed = await emailSignedCopies(id, { pdf: Buffer.from(pdf), audit, signedSha, firstName: String(d.name || legalName).split(" ")[0] });
+  // The signature is saved: answer now and send the signed copies after the
+  // response (they take ~15s and used to keep the creator on a spinner).
+  // waitUntil keeps the function alive until the emails are out.
+  waitUntil(
+    emailSignedCopies(id, { pdf: Buffer.from(pdf), audit, signedSha, firstName: String(d.name || legalName).split(" ")[0] }).catch((e) =>
+      console.error("signed copy email failed:", e),
+    ),
+  );
+  const emailed = { creator: !!audit.signer_email && emailConfigured(), founder: emailConfigured() };
   return { signed_at: signedAt, signed_sha256: signedSha, pdf_path: pdfPath, document_id: audit.document_id, emailed };
 }
 
