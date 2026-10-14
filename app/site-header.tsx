@@ -1,7 +1,7 @@
 "use client";
 
-// keshah.com top bar. Desktop: logo + wordmark, section links and a
-// Download button, sticky with a blurred background once you scroll.
+// keshah.com top bar. Desktop: wordmark, centered section links and a
+// quiet "Get the app" pill, sticky with a blurred background once you scroll.
 // Mobile: just the logo, so the download hero still fits one screen.
 
 import Image from "next/image";
@@ -27,10 +27,9 @@ export default function SiteHeader({ downloadUrl }: { downloadUrl: string }) {
           <a href="#how">How it works</a>
           <a href="#results">Results</a>
           <a href="#story">Our story</a>
-          <Link href="/support">Support</Link>
         </nav>
         <a href={downloadUrl} target="_blank" rel="noopener noreferrer" className={styles.cta}>
-          Download
+          Get the app
         </a>
       </div>
     </header>

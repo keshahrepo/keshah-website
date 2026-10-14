@@ -3,11 +3,12 @@
   z-index: 20;
   flex-shrink: 0;
   height: 56px;
-  transition: background 250ms ease, border-color 250ms ease;
   border-bottom: 1px solid transparent;
+  transition: background 300ms ease, border-color 300ms ease;
 }
 
 .inner {
+  position: relative;
   height: 100%;
   max-width: 1200px;
   margin: 0 auto;
@@ -15,20 +16,20 @@
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: 32px;
+  justify-content: space-between;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
   text-decoration: none;
+  opacity: 0.95;
 }
 
 .wordmark {
   display: block;
   width: auto;
-  height: 15px;
+  height: 14px;
 }
 
 .nav,
@@ -40,14 +41,14 @@
   .bar {
     position: sticky;
     top: 0;
-    height: 68px;
+    height: 64px;
   }
 
   .scrolled {
-    background: rgba(0, 0, 0, 0.72);
-    backdrop-filter: saturate(160%) blur(16px);
-    -webkit-backdrop-filter: saturate(160%) blur(16px);
-    border-bottom-color: rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-bottom-color: rgba(255, 255, 255, 0.06);
   }
 
   .inner {
@@ -55,32 +56,44 @@
     padding: 0 48px;
   }
 
-  .wordmark { height: 18px; }
+  .wordmark { height: 15px; }
 
+  /* Centered on the page, independent of the brand and button widths. */
   .nav {
     display: flex;
-    gap: 28px;
-    margin-left: auto;
+    gap: 36px;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
   }
 
   .nav a {
-    font-size: 14px;
-    color: rgba(255, 255, 255, 0.7);
+    font-size: 13px;
+    letter-spacing: 0.1px;
+    color: rgba(255, 255, 255, 0.55);
     text-decoration: none;
-    transition: color 150ms ease;
+    transition: color 200ms ease;
   }
 
-  .nav a:hover { color: #fff; }
+  .nav a:hover { color: rgba(255, 255, 255, 0.95); }
 
   .cta {
     display: inline-flex;
     align-items: center;
-    padding: 9px 16px;
+    padding: 7px 14px;
     border-radius: 999px;
-    background: #fff;
-    color: #000;
-    font-size: 14px;
-    font-weight: 600;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.1px;
     text-decoration: none;
+    transition: background 200ms ease, color 200ms ease, border-color 200ms ease;
+  }
+
+  .cta:hover {
+    background: #fff;
+    border-color: #fff;
+    color: #000;
   }
 }

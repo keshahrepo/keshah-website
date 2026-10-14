@@ -11,6 +11,8 @@
   color: #fff;
   font-family: "Poppins", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  /* The results wall is full-bleed (100vw); clip doesn't break the sticky header. */
+  overflow-x: clip;
 }
 
 /* First screen: on mobile a hard viewport cap so the download hero is

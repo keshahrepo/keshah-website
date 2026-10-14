@@ -5,7 +5,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import styles from "./home-sections.module.css";
-import { BeforeAfter, Chain, ResultsCarousel, Reveal } from "./home-motion";
+import { BeforeAfter, Chain, Reveal, ResultsWall, type WallShot } from "./home-motion";
 
 const STEPS = [
   {
@@ -28,15 +28,25 @@ const STEPS = [
   },
 ];
 
-// Member before/afters (c1 left out: its caption makes a drug comparison).
-const RESULTS = [
-  { src: "/images/comparisons/c2.jpeg", alt: "Ankur, day 1 and day 150" },
-  { src: "/images/comparisons/c3.jpeg", alt: "Jonathon, day 1 and day 120" },
-  { src: "/images/comparisons/c4.jpeg", alt: "Vinnie, day 1 and day 90" },
-  { src: "/images/comparisons/c5.jpeg", alt: "Collin, day 45 and day 86" },
-  { src: "/images/comparisons/c6.jpeg", alt: "Shelly, day 1 and day 120" },
-  { src: "/images/comparisons/c7.jpeg", alt: "Anya, day 1 and day 120" },
-  { src: "/images/comparisons/c8.jpeg", alt: "Bayal, day 1 and day 162" },
+// Member posts for the results wall (same screenshots as the in-app proof page).
+const shot = (name: string, w: number, h: number, alt: string): WallShot => ({ src: `/images/results/${name}.jpeg`, w, h, alt });
+const WALL: WallShot[][] = [
+  [
+    shot("proof_tiktok_growing_back", 1203, 383, "TikTok comment about hair growing back"),
+    shot("proof_tiktok_tension_reduced", 1206, 991, "TikTok comment about scalp tension going down"),
+    shot("proof_reddit_30_days", 1206, 358, "Reddit post at 30 days"),
+    shot("proof_tiktok_3_months", 1206, 768, "TikTok comment at 3 months"),
+    shot("proof_tiktok_stops_hair_loss", 1202, 257, "TikTok comment about hair loss stopping"),
+    shot("proof_imessage_grateful", 1206, 1419, "Message from a grateful member"),
+  ],
+  [
+    shot("proof_reddit_105_days", 1206, 843, "Reddit post at 105 days"),
+    shot("proof_whatsapp_hairline", 1206, 844, "WhatsApp message about a hairline"),
+    shot("proof_reddit_worth_every_penny", 1206, 670, "Reddit post saying it was worth every penny"),
+    shot("proof_tiktok_it_works", 1206, 301, "TikTok comment saying it works"),
+    shot("proof_tiktok_almost_working", 1206, 863, "TikTok comment"),
+    shot("proof_reddit_5_month", 1206, 864, "Reddit post at 5 months"),
+  ],
 ];
 
 // Messages members sent us, with our replies (same threads as the in-app proof page).
@@ -115,13 +125,13 @@ export default function HomeSections({ appStoreUrl, playStoreUrl }: { appStoreUr
 
       <section className={styles.section} id="results">
         <Reveal>
-          <p className={styles.eyebrow}>Member results</p>
-          <h2 className={styles.h2}>Real people. Real scalps.</h2>
+          <p className={styles.eyebrow}>From TikTok, Reddit and more</p>
+          <h2 className={styles.h2}>What people are posting.</h2>
         </Reveal>
         <Reveal delay={120}>
-          <ResultsCarousel slides={RESULTS} />
+          <ResultsWall rows={WALL} />
         </Reveal>
-        <p className={styles.source}>Photos members shared with us. Results vary. Everyone&apos;s scalp is different.</p>
+        <p className={styles.source}>Tap any post to read it. Results vary. Everyone&apos;s scalp is different.</p>
       </section>
 
       <section className={`${styles.section} ${styles.story}`} id="story">

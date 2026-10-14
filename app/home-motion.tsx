@@ -186,82 +186,57 @@ export function BeforeAfter({ before, after }: { before: string; after: string }
   );
 }
 
-/** Member before/afters: swipe, arrows or dots; advances by itself until touched. */
-export function ResultsCarousel({ slides }: { slides: { src: string; alt: string }[] }) {
-  const track = useRef<HTMLDivElement>(null);
-  const [index, setIndex] = useState(0);
-  const touched = useRef(false);
+export type WallShot = { src: string; w: number; h: number; alt: string };
 
-  const goTo = (i: number) => {
-    const el = track.current;
-    const slide = el?.children[i] as HTMLElement | undefined;
-    if (!el || !slide) return;
-    el.scrollTo({ left: slide.offsetLeft - el.offsetLeft, behavior: reducedMotion() ? "auto" : "smooth" });
-  };
+/** "What people are posting": full-width rows of member posts drifting in
+ *  opposite directions (pause on hover); tap one to read it full size. */
+export function ResultsWall({ rows }: { rows: WallShot[][] }) {
+  const [open, setOpen] = useState<WallShot | null>(null);
 
-  // Which slide is showing (nearest to the left edge).
   useEffect(() => {
-    const el = track.current;
-    if (!el) return;
-    const onScroll = () => {
-      const kids = Array.from(el.children) as HTMLElement[];
-      let best = 0;
-      kids.forEach((k, i) => {
-        if (Math.abs(k.offsetLeft - el.offsetLeft - el.scrollLeft) < Math.abs(kids[best].offsetLeft - el.offsetLeft - el.scrollLeft)) best = i;
-      });
-      setIndex(best);
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(null);
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
     };
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
-  }, []);
-
-  useEffect(() => {
-    if (reducedMotion()) return;
-    const t = setInterval(() => {
-      if (touched.current || document.hidden) return;
-      goTo((index + 1) % slides.length);
-    }, 4500);
-    return () => clearInterval(t);
-  }, [index, slides.length]);
-
-  const stop = () => {
-    touched.current = true;
-  };
+  }, [open]);
 
   return (
-    <div className={styles.carousel}>
-      <div ref={track} className={styles.carouselTrack} onPointerDown={stop} onWheel={stop} onTouchStart={stop}>
-        {slides.map((s) => (
-          <div key={s.src} className={styles.carouselSlide}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={s.src} alt={s.alt} className={styles.carouselImg} loading="lazy" draggable={false} />
+    <div className={styles.wall}>
+      {rows.map((row, r) => (
+        <div key={r} className={styles.wallRow}>
+          {/* Two copies so the loop is seamless (the track moves by half its width). */}
+          <div className={`${styles.wallTrack} ${r % 2 ? styles.wallReverse : ""}`}>
+            {[...row, ...row].map((shot, k) => (
+              <button
+                key={`${shot.src}-${k}`}
+                type="button"
+                className={styles.wallItem}
+                style={{ aspectRatio: `${shot.w} / ${shot.h}` }}
+                onClick={() => setOpen(shot)}
+                aria-label={k < row.length ? `Read: ${shot.alt}` : undefined}
+                aria-hidden={k >= row.length ? true : undefined}
+                tabIndex={k >= row.length ? -1 : 0}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={shot.src} alt={k < row.length ? shot.alt : ""} width={shot.w} height={shot.h} className={styles.wallImg} decoding="async" />
+              </button>
+            ))}
           </div>
-        ))}
-      </div>
-      <div className={styles.carouselBar}>
-        <div className={styles.dots}>
-          {slides.map((s, i) => (
-            <button
-              key={s.src}
-              type="button"
-              aria-label={`Show result ${i + 1}`}
-              className={`${styles.dot} ${i === index ? styles.dotOn : ""}`}
-              onClick={() => {
-                stop();
-                goTo(i);
-              }}
-            />
-          ))}
         </div>
-        <div className={styles.arrows}>
-          <button type="button" aria-label="Previous result" className={styles.arrow} disabled={index === 0} onClick={() => { stop(); goTo(index - 1); }}>
-            ‹
-          </button>
-          <button type="button" aria-label="Next result" className={styles.arrow} disabled={index === slides.length - 1} onClick={() => { stop(); goTo(index + 1); }}>
-            ›
+      ))}
+      {open && (
+        <div className={styles.lightbox} onClick={() => setOpen(null)} role="dialog" aria-modal="true" aria-label={open.alt}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={open.src} alt={open.alt} className={styles.lightboxImg} />
+          <button type="button" className={styles.lightboxClose} aria-label="Close">
+            ×
           </button>
         </div>
-      </div>
+      )}
     </div>
   );
 }
