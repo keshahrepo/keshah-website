@@ -16,7 +16,8 @@
 /* First screen: on mobile a hard viewport cap so the download hero is
    visible in one glance; the company sections continue below it. */
 .fold {
-  height: 100dvh;
+  /* Minus the 56px top bar. */
+  height: calc(100dvh - 56px);
   display: flex;
   flex-direction: column;
   overflow: hidden;

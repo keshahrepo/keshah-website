@@ -5,14 +5,14 @@
 import Image from "next/image";
 import Link from "next/link";
 import styles from "./home-sections.module.css";
-import { BeforeAfter, Chain, Reveal } from "./home-motion";
+import { BeforeAfter, Chain, ResultsCarousel, Reveal } from "./home-motion";
 
 const STEPS = [
   {
     img: "/images/techniques/technique_scalp_pinching.png",
     alt: "Scalp pinching technique",
     title: "Follow along with the videos",
-    body: "Every day you get a short guided session of scalp and neck massage. You just copy what you see.",
+    body: "Every day you get a guided session of scalp and neck massage. You just copy what you see.",
   },
   {
     img: "/images/techniques/technique_scalp_pressing.png",
@@ -23,9 +23,20 @@ const STEPS = [
   {
     img: "/images/techniques/technique_neck_presses.png",
     alt: "Neck presses technique",
-    title: "Stick with it for 60 days",
-    body: "The program runs for 60 days, with a new session waiting for you every day.",
+    title: "Make it part of your day",
+    body: "It's a daily routine. A new guided session is waiting for you every day.",
   },
+];
+
+// Member before/afters (c1 left out: its caption makes a drug comparison).
+const RESULTS = [
+  { src: "/images/comparisons/c2.jpeg", alt: "Ankur, day 1 and day 150" },
+  { src: "/images/comparisons/c3.jpeg", alt: "Jonathon, day 1 and day 120" },
+  { src: "/images/comparisons/c4.jpeg", alt: "Vinnie, day 1 and day 90" },
+  { src: "/images/comparisons/c5.jpeg", alt: "Collin, day 45 and day 86" },
+  { src: "/images/comparisons/c6.jpeg", alt: "Shelly, day 1 and day 120" },
+  { src: "/images/comparisons/c7.jpeg", alt: "Anya, day 1 and day 120" },
+  { src: "/images/comparisons/c8.jpeg", alt: "Bayal, day 1 and day 162" },
 ];
 
 // Messages members sent us, with our replies (same threads as the in-app proof page).
@@ -71,7 +82,7 @@ const QUOTES = [
 export default function HomeSections({ appStoreUrl, playStoreUrl }: { appStoreUrl: string; playStoreUrl: string }) {
   return (
     <div className={styles.wrap}>
-      <section className={styles.section}>
+      <section className={styles.section} id="why">
         <Reveal>
           <p className={styles.eyebrow}>Why hair falls out</p>
           <h2 className={styles.h2}>It usually starts with a tight scalp.</h2>
@@ -80,10 +91,10 @@ export default function HomeSections({ appStoreUrl, playStoreUrl }: { appStoreUr
         <p className={styles.source}>Scalp tension research: Byun et al., 2015.</p>
       </section>
 
-      <section className={styles.section}>
+      <section className={styles.section} id="how">
         <Reveal>
           <p className={styles.eyebrow}>How KESHAH works</p>
-          <h2 className={styles.h2}>A few minutes of scalp massage a day, guided step by step.</h2>
+          <h2 className={styles.h2}>A daily scalp massage routine, guided step by step.</h2>
           <p className={styles.lead}>
             KESHAH is an app that walks you through scalp and neck massage techniques that loosen a tight scalp, so
             blood can reach your hair again.
@@ -102,7 +113,18 @@ export default function HomeSections({ appStoreUrl, playStoreUrl }: { appStoreUr
         </div>
       </section>
 
-      <section className={`${styles.section} ${styles.story}`}>
+      <section className={styles.section} id="results">
+        <Reveal>
+          <p className={styles.eyebrow}>Member results</p>
+          <h2 className={styles.h2}>Real people. Real scalps.</h2>
+        </Reveal>
+        <Reveal delay={120}>
+          <ResultsCarousel slides={RESULTS} />
+        </Reveal>
+        <p className={styles.source}>Photos members shared with us. Results vary. Everyone&apos;s scalp is different.</p>
+      </section>
+
+      <section className={`${styles.section} ${styles.story}`} id="story">
         <div className={styles.storyMedia}>
           <BeforeAfter before="/images/story/before_hairline.jpg" after="/images/story/after_hairline.jpg" />
           <p className={styles.source}>My hairline, before and after. Drag to compare.</p>
@@ -126,7 +148,7 @@ export default function HomeSections({ appStoreUrl, playStoreUrl }: { appStoreUr
         </Reveal>
       </section>
 
-      <section className={styles.section}>
+      <section className={styles.section} id="members">
         <Reveal>
           <p className={styles.eyebrow}>Messages to Aadi</p>
           <h2 className={styles.h2}>What members tell us.</h2>

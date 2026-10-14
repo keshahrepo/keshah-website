@@ -11,6 +11,7 @@
 .section {
   padding: 64px 0;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+  scroll-margin-top: 72px;
 }
 
 .eyebrow {
@@ -333,6 +334,91 @@
   color: rgba(255, 255, 255, 0.6);
 }
 
+/* Results: swipeable before/afters. */
+.carousel {
+  position: relative;
+}
+
+.carouselTrack {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  margin: 0 -20px;
+  padding: 0 20px;
+  scroll-padding: 0 20px;
+  scrollbar-width: none;
+}
+
+.carouselTrack::-webkit-scrollbar { display: none; }
+
+.carouselSlide {
+  flex: 0 0 88%;
+  scroll-snap-align: start;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #111;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.carouselImg {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 2 / 1;
+  object-fit: cover;
+  user-select: none;
+}
+
+.carouselBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+}
+
+.dots {
+  display: flex;
+  gap: 6px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+  transition: width 300ms cubic-bezier(0.215, 0.61, 0.355, 1), background 300ms ease;
+}
+
+.dotOn {
+  width: 22px;
+  background: #fff;
+}
+
+.arrows {
+  display: none;
+  gap: 8px;
+}
+
+.arrow {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 150ms ease, opacity 150ms ease;
+}
+
+.arrow:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); }
+.arrow:disabled { opacity: 0.3; cursor: default; }
+
 /* Download. */
 .cta {
   text-align: center;
@@ -427,6 +513,9 @@
   .h2 { font-size: 40px; letter-spacing: -1.4px; }
   .steps { grid-template-columns: repeat(3, 1fr); }
   .story { grid-template-columns: 360px 1fr; gap: 64px; }
+  .carouselTrack { margin: 0; padding: 0; scroll-padding: 0; gap: 16px; }
+  .carouselSlide { flex-basis: 62%; }
+  .arrows { display: flex; }
   .quotes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 0; padding: 0; overflow: visible; }
 }
 
