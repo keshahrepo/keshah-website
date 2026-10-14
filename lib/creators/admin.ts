@@ -358,7 +358,7 @@ export type WithId<T> = T & { id: string };
 export interface CreatorHistory {
   postingDays: PostingDay[];
   /** Raw posting docs (for the calendar / links). */
-  postingRaw: { date: string; videos: Record<string, unknown>[]; complete: number; logged_at: string | null }[];
+  postingRaw: { date: string; videos: Record<string, unknown>[]; complete: number; logged_at: string | null; counted_by_founder?: string }[];
   daysOff: WithId<DayOff>[];
   bonusClaims: WithId<BonusClaim>[];
   adjustments: WithId<Adjustment>[];
@@ -422,13 +422,20 @@ export async function loadHistory(creatorId: string, opts: { contractSigned?: bo
       complete: complete.length,
       logged_at: toIso(d.logged_at),
       _complete: complete,
+      ...(d.counted_by_founder ? { counted_by_founder: String(d.counted_by_founder) } : {}),
     };
   });
   // Videos passed to pay.ts are the complete, de-duplicated entries in their
   // stored shape, so its videos.length >= VIDEOS_PER_WEEKDAY check means
   // "5 unique videos on both platforms".
   const postingDays = postingRaw.map(
-    (p) => ({ date: p.date, videos: p._complete, logged_at: p.logged_at ?? "" }) as unknown as PostingDay,
+    (p) =>
+      ({
+        date: p.date,
+        videos: p._complete,
+        logged_at: p.logged_at ?? "",
+        ...(p.counted_by_founder ? { counted_by_founder: p.counted_by_founder } : {}),
+      }) as unknown as PostingDay,
   );
 
   const daysOff = off.docs.map((doc) => {
@@ -525,10 +532,10 @@ export function calendarFor(c: AdminCreator, h: CreatorHistory, month: YyyyMm): 
     return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
   })();
   const today = todayIn(c.timezone);
-  const posting = new Map<string, { n: number; at: string | null }>();
+  const posting = new Map<string, { n: number; at: string | null; counted: boolean }>();
   for (const p of h.postingRaw) {
     const cur = posting.get(p.date);
-    posting.set(p.date, { n: (cur?.n ?? 0) + p.complete, at: cur?.at ?? p.logged_at });
+    posting.set(p.date, { n: (cur?.n ?? 0) + p.complete, at: cur?.at ?? p.logged_at, counted: !!cur?.counted || !!p.counted_by_founder });
   }
   const off = new Map(h.daysOff.map((d) => [d.date, d.status]));
   const profile = c.start_date ? payProfileOf(c) : undefined;
@@ -537,7 +544,7 @@ export function calendarFor(c: AdminCreator, h: CreatorHistory, month: YyyyMm): 
     const n = p?.n ?? 0;
     let state: DayState;
     if (!c.start_date || !isScheduledDay(profile!, h.postingDays, date)) state = "inactive";
-    else if (n >= videosRequiredOn(profile, h.postingDays, date)) state = "posted";
+    else if (p?.counted || n >= videosRequiredOn(profile, h.postingDays, date)) state = "posted";
     else if (off.get(date) === "approved") state = "approved_off";
     else if (off.get(date) === "requested") state = "requested_off";
     else if (date >= today) state = "pending";
