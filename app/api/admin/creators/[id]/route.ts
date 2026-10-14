@@ -17,7 +17,7 @@ import {
 } from "@/lib/creators/admin";
 import { addMonths, completedMonthsAsOf, draftInvoiceLines, nextLevel, trialStatus } from "@/lib/creators/pay";
 import { listContractEvents } from "@/lib/creators/contract";
-import { creatorDocs, getOnboarding, isYyyyMmDd, mapCreatorStatus, markContractStepDone } from "@/lib/creators/db";
+import { creatorDocs, getOnboarding, isYyyyMmDd, mapCreatorStatus, markContractStepDone, monthDayStates } from "@/lib/creators/db";
 import { firstPostingDay } from "@/lib/creators/lifecycle";
 import { campaignTagClash, handleOwner } from "@/lib/creators/uniqueness";
 import { pinnedLiveFor, pinnedOf } from "@/lib/creators/pinned-video";
@@ -62,7 +62,14 @@ export async function GET(req: NextRequest, { params }: Ctx) {
     const firstDay = onb?.completed_at ? firstPostingDay(onb.completed_at, creator.timezone) : null;
     if (firstDay && today > firstDay) pinnedMissingSince = firstDay;
   }
+  // The month's posting days for the founder's calendar (same states the creator sees).
+  const days = monthDayStates(
+    { start_date: creator.start_date ?? "", ended_on: creator.ended_on ?? undefined, timezone: creator.timezone, trial_plan: creator.trial_plan, trial_outcome: creator.trial_outcome, trial_decided_on: creator.trial_decided_on } as Parameters<typeof monthDayStates>[0],
+    month,
+    { postingDays: h.postingDays, daysOff: h.daysOff },
+  );
   return NextResponse.json({
+    days,
     creator: { ...creator, pinned_live: pinnedLive, pinned_overdue: pinnedOverdue, pinned_missing_since: pinnedMissingSince },
     month,
     today,
