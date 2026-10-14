@@ -255,6 +255,7 @@ test("ensureInboxDelivery: admin gets every email (added back if missing), creat
       const path = decodeURIComponent(new URL(url).pathname);
       calls.push(`${method} ${path}`);
       const one = path.match(/\/members\/([^/]+)$/);
+      if (one && method === "GET" && one[1].includes("+")) return new Response('{"error":{"message":"Missing required field: memberKey"}}', { status: 400 });
       if (one && method === "GET") return members[one[1]] ? new Response(JSON.stringify(members[one[1]])) : new Response("{}", { status: 404 });
       if (one && method === "PATCH") {
         members[one[1]] = { ...members[one[1]], ...JSON.parse(String(init.body)) };

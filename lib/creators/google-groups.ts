@@ -244,6 +244,8 @@ export async function ensureInboxDelivery(
   const set = async (email: string, role: "OWNER" | "MEMBER", addIfMissing: boolean) => {
     const url = `${DIRECTORY}/${g}/members/${encodeURIComponent(email)}`;
     const cur = await client.fetch(url);
+    // Google can't look up some addresses (a Gmail +tag gives 400 "memberKey"): treat as not a member.
+    if (cur.status === 400 && role === "MEMBER") return;
     if (cur.status === 404) {
       if (!addIfMissing) return;
       const add = await client.fetch(`${DIRECTORY}/${g}/members`, { method: "POST", body: JSON.stringify({ email, role, delivery_settings: "ALL_MAIL" }) });
@@ -260,8 +262,9 @@ export async function ensureInboxDelivery(
     changed.push(`${email} gets every email`);
   };
   await set(client.adminEmail, "OWNER", true);
+  // The creator is in as their plain Gmail when they applied with a +tag (Google rejects +tags).
   const me = (input.personalEmail ?? "").trim().toLowerCase();
-  for (const e of new Set([me, gmailWithoutTag(me)].filter(Boolean) as string[])) await set(e, "MEMBER", false);
+  for (const e of new Set([gmailWithoutTag(me) ?? me, me].filter(Boolean) as string[])) await set(e, "MEMBER", false);
   return changed;
 }
 
