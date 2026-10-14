@@ -5,25 +5,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import styles from "./home-sections.module.css";
-
-const CHAIN = [
-  {
-    title: "Your scalp gets tight.",
-    body: "The hairline and crown are generally the tightest parts of the scalp. That's also where most people lose hair first.",
-  },
-  {
-    title: "The tightness squeezes your blood vessels.",
-    body: "A tight scalp presses on the small blood vessels that feed every hair on your head.",
-  },
-  {
-    title: "Blood can't reach your hair.",
-    body: "Blood flow in balding areas has been measured at 2.6 times lower than in areas with full hair.",
-  },
-  {
-    title: "Without blood, the hair dies.",
-    body: "Hair can't grow without what blood brings it, so it gets thinner and falls out.",
-  },
-];
+import { BeforeAfter, Chain, Reveal } from "./home-motion";
 
 const STEPS = [
   {
@@ -46,54 +28,86 @@ const STEPS = [
   },
 ];
 
+// Messages members sent us, with our replies (same threads as the in-app proof page).
 const QUOTES = [
-  { who: "B.", day: 17, text: "I'm seeing good results with looser scalp and less hair fall. Thank you!" },
-  { who: "A.", day: 35, text: "My hair fall got significantly reduced and getting thick when i touch my hair i can feel it" },
-  { who: "A.", day: 38, text: "I am seeing the results including a lot of baby hairs including my front hairline" },
-  { who: "A.", day: 45, text: "My hair shedding has reduced a decent bit.. I could tell bc there's a progression of less shedding" },
+  {
+    who: "B.",
+    day: 17,
+    text: "I'm seeing good results with looser scalp and less hair fall. Thank you!",
+    reply: "Great to hear the scalp is loosening up and shedding is dropping at 17 days, that's exactly what should be happening!",
+  },
+  {
+    who: "T.",
+    day: 27,
+    text: "Felt my scalp so relaxed and flexible today suddenly. It's such a great feeling. Deep down in my heart I know my hair will come back now.",
+    reply: "It makes me very happy to hear this :)",
+  },
+  {
+    who: "A.",
+    day: 35,
+    text: "My hair fall got significantly reduced and getting thick when i touch my hair i can feel it",
+    reply: "This is exactly what progress looks like at 35 days! Reduced shedding and hair feeling thicker are real signs.",
+  },
+  {
+    who: "A.",
+    day: 38,
+    text: "I am seeing the results including a lot of baby hairs including my front hairline",
+    reply: "Baby hairs on the front hairline at 38 days is genuinely exciting, keep at it!",
+  },
+  {
+    who: "A.",
+    day: 45,
+    text: "My hair shedding has reduced a decent bit.. I could tell bc there's a progression of less shedding",
+    reply: "Reduced shedding at 45 days is a really good sign. Keep at it.",
+  },
+  {
+    who: "R.",
+    day: 61,
+    text: "I already see baby hairs everyday on my scalp and they are getting longer",
+    reply: "61 days in with baby hairs already showing and getting longer is a great sign! Keep at it!",
+  },
 ];
 
 export default function HomeSections({ appStoreUrl, playStoreUrl }: { appStoreUrl: string; playStoreUrl: string }) {
   return (
     <div className={styles.wrap}>
       <section className={styles.section}>
-        <p className={styles.eyebrow}>Why hair falls out</p>
-        <h2 className={styles.h2}>It usually starts with a tight scalp.</h2>
-        <ol className={styles.chain}>
-          {CHAIN.map((c, k) => (
-            <li key={c.title} className={styles.chainItem}>
-              <span className={styles.chainNum}>{k + 1}</span>
-              <div>
-                <h3 className={styles.h3}>{c.title}</h3>
-                <p className={styles.body}>{c.body}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
+        <Reveal>
+          <p className={styles.eyebrow}>Why hair falls out</p>
+          <h2 className={styles.h2}>It usually starts with a tight scalp.</h2>
+        </Reveal>
+        <Chain />
         <p className={styles.source}>Scalp tension research: Byun et al., 2015.</p>
       </section>
 
       <section className={styles.section}>
-        <p className={styles.eyebrow}>How KESHAH works</p>
-        <h2 className={styles.h2}>A few minutes of scalp massage a day, guided step by step.</h2>
-        <p className={styles.lead}>
-          KESHAH is an app that walks you through scalp and neck massage techniques that loosen a tight scalp, so blood
-          can reach your hair again.
-        </p>
+        <Reveal>
+          <p className={styles.eyebrow}>How KESHAH works</p>
+          <h2 className={styles.h2}>A few minutes of scalp massage a day, guided step by step.</h2>
+          <p className={styles.lead}>
+            KESHAH is an app that walks you through scalp and neck massage techniques that loosen a tight scalp, so
+            blood can reach your hair again.
+          </p>
+        </Reveal>
         <div className={styles.steps}>
-          {STEPS.map((s) => (
-            <div key={s.title} className={styles.step}>
-              <Image src={s.img} alt={s.alt} width={600} height={600} className={styles.stepImg} />
+          {STEPS.map((s, k) => (
+            <Reveal key={s.title} delay={k * 120} className={styles.step}>
+              <div className={styles.stepImgWrap}>
+                <Image src={s.img} alt={s.alt} width={600} height={600} className={styles.stepImg} />
+              </div>
               <h3 className={styles.h3}>{s.title}</h3>
               <p className={styles.body}>{s.body}</p>
-            </div>
+            </Reveal>
           ))}
         </div>
       </section>
 
       <section className={`${styles.section} ${styles.story}`}>
-        <Image src="/images/aadi.png" alt="Aadi, founder of KESHAH" width={1263} height={1772} className={styles.storyImg} />
-        <div className={styles.storyCopy}>
+        <div className={styles.storyMedia}>
+          <BeforeAfter before="/images/story/before_hairline.jpg" after="/images/story/after_hairline.jpg" />
+          <p className={styles.source}>My hairline, before and after. Drag to compare.</p>
+        </div>
+        <Reveal className={styles.storyCopy}>
           <p className={styles.eyebrow}>Where it started</p>
           <h2 className={styles.h2}>I built KESHAH because it&apos;s what stopped my own hair loss.</h2>
           <p className={styles.body}>
@@ -105,27 +119,38 @@ export default function HomeSections({ appStoreUrl, playStoreUrl }: { appStoreUr
             So I made a plan with 6 scalp and neck techniques and did it every day. By day 30 I could pinch and lift almost
             any part of my scalp. By day 60 my hair fall had pretty much stopped. KESHAH is that exact plan, put into an app.
           </p>
-          <p className={styles.sign}>Aadi, founder</p>
-        </div>
+          <div className={styles.signRow}>
+            <Image src="/images/aadi.png" alt="Aadi" width={96} height={96} className={styles.signImg} />
+            <p className={styles.sign}>Aadi, founder</p>
+          </div>
+        </Reveal>
       </section>
 
       <section className={styles.section}>
-        <p className={styles.eyebrow}>From KESHAH members</p>
-        <h2 className={styles.h2}>What people tell us.</h2>
-        <div className={styles.quotes}>
-          {QUOTES.map((q) => (
-            <figure key={q.day} className={styles.quote}>
-              <blockquote className={styles.quoteText}>&ldquo;{q.text}&rdquo;</blockquote>
-              <figcaption className={styles.quoteWho}>
-                {q.who} · Day {q.day}
-              </figcaption>
-            </figure>
-          ))}
-        </div>
-        <p className={styles.source}>Results vary. Everyone&apos;s scalp is different.</p>
+        <Reveal>
+          <p className={styles.eyebrow}>Messages to Aadi</p>
+          <h2 className={styles.h2}>What members tell us.</h2>
+        </Reveal>
+        <Reveal delay={120}>
+          <div className={styles.quotes}>
+            {QUOTES.map((q) => (
+              <figure key={q.day} className={styles.quote}>
+                <blockquote className={styles.quoteText}>&ldquo;{q.text}&rdquo;</blockquote>
+                <figcaption className={styles.quoteWho}>
+                  {q.who} · Day {q.day}
+                </figcaption>
+                <div className={styles.reply}>
+                  <p className={styles.replyLabel}>KESHAH team</p>
+                  <p className={styles.replyText}>{q.reply}</p>
+                </div>
+              </figure>
+            ))}
+          </div>
+        </Reveal>
+        <p className={styles.source}>From messages members sent us, with our replies. Results vary. Everyone&apos;s scalp is different.</p>
       </section>
 
-      <section className={`${styles.section} ${styles.cta}`}>
+      <Reveal className={`${styles.section} ${styles.cta}`}>
         <h2 className={styles.h2}>Start your first session today.</h2>
         <div className={styles.ctaButtons}>
           <a href={appStoreUrl} target="_blank" rel="noopener noreferrer" className={styles.btnPrimary}>
@@ -135,7 +160,7 @@ export default function HomeSections({ appStoreUrl, playStoreUrl }: { appStoreUr
             Google Play
           </a>
         </div>
-      </section>
+      </Reveal>
 
       <footer className={styles.footer}>
         <div className={styles.footerTop}>
