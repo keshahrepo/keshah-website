@@ -95,6 +95,10 @@ export async function listAwaitingConversations(opts: { limit?: number } = {}): 
     if (lastMessage.fromId === AADI_FROM_ID) continue;
     const skipUntil = (data.skip_until ?? null) as Timestamp | null;
     if (skipUntil && skipUntil.toMillis() > now.toMillis()) continue;
+    // Closed without a reply (old threads cleared in bulk): hidden until the user writes again.
+    const closedAt = (data.closed_at ?? null) as Timestamp | null;
+    const updatedAt = (data.last_update_at ?? null) as Timestamp | null;
+    if (closedAt && (!updatedAt || closedAt.toMillis() >= updatedAt.toMillis())) continue;
     out.push({
       userId: doc.id,
       lastMessage: {
