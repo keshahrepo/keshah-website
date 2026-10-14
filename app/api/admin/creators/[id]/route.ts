@@ -19,6 +19,7 @@ import { addMonths, completedMonthsAsOf, draftInvoiceLines, nextLevel, trialStat
 import { listContractEvents } from "@/lib/creators/contract";
 import { creatorDocs, mapCreatorStatus, markContractStepDone } from "@/lib/creators/db";
 import { campaignTagClash, handleOwner } from "@/lib/creators/uniqueness";
+import { hasPinnedPost } from "@/lib/creators/pinned-video";
 import { offboardCreator } from "@/lib/creators/offboard";
 import { notifyLinkReady } from "@/lib/creators/lifecycle-notify";
 import { offerSummary } from "@/lib/creators/deadline";
@@ -47,8 +48,10 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   const prev = addMonths(month, -1);
   const attribution = await attributionFor(creator.campaign_tags, Date.parse(`${prev}-01T00:00:00Z`));
 
+  // Approved pinned video: is a post pinned on their profile yet?
+  const pinnedLive = creator.pinned_video?.status === "approved" ? await hasPinnedPost(id).catch(() => false) : false;
   return NextResponse.json({
-    creator,
+    creator: { ...creator, pinned_live: pinnedLive },
     month,
     today,
     summary,

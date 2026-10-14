@@ -747,7 +747,7 @@ export async function advanceCreatorStatus(id: string, opts: { db?: Firestore; n
 }
 
 /** Pay starts on the first posting day: set start_date once, only if still unset. True when this call set it. */
-async function setStartDateIfUnset(id: string, date: YyyyMmDd): Promise<boolean> {
+export async function setStartDateIfUnset(id: string, date: YyyyMmDd): Promise<boolean> {
   const ref = creatorRef(id);
   return fs().runTransaction(async (tx) => {
     const snap = await tx.get(ref);

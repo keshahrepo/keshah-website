@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getFirebaseAdmin } from "@/lib/firebase-admin";
+import { hasPinnedPost, pinnedOf } from "@/lib/creators/pinned-video";
 import {
+  CREATORS_COLLECTION,
   assignedHandleFor,
   creatorToday,
   getHistory,
@@ -45,7 +48,13 @@ export async function GET(req: NextRequest) {
   try {
     const now = new Date();
     const today = creatorToday(creator, now);
-    const [onb, history, settings] = await Promise.all([getOnboarding(creator.id), getHistory(creator.id), getPortalSettings()]);
+    const [onb, history, settings, raw] = await Promise.all([
+      getOnboarding(creator.id),
+      getHistory(creator.id),
+      getPortalSettings(),
+      getFirebaseAdmin().db.collection(CREATORS_COLLECTION).doc(creator.id).get(),
+    ]);
+    const pinned = pinnedOf(raw.data());
     // Self-heal: a contract marked signed by admin (or a sign whose step write failed) ticks the contract step.
     const onboarding =
       creator.contract.status === "signed" && !onb.contract_signed_at
@@ -75,6 +84,9 @@ export async function GET(req: NextRequest) {
       // deadline_at / deadline_date (ET): the 72-hour signing deadline, while it's unsigned (null otherwise).
       contract: { status: creator.contract.status, signed_at: creator.contract.signed_at ?? null, ...(creatorDeadline(creator) ?? { deadline_at: null, deadline_date: null }) },
       tracking_url: creator.tracking_url || null,
+      // The first-posting-day pinned video: status, the founder's note, and whether a post is pinned yet.
+      pinned_video: pinned ? { status: pinned.status, note: pinned.note ?? null, counted_day: pinned.counted_day ?? null } : null,
+      pinned_live: pinned?.status === "approved" ? await hasPinnedPost(creator.id) : false,
       config: {
         slack_invite_url: settings.slack_invite_url,
         site_url: KESHAH_SITE_URL,
