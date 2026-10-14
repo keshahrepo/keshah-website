@@ -1341,10 +1341,21 @@ export async function markInvoicePaid(
 const PORTAL_SETTINGS_DOC = "creator_portal";
 
 /** Settings/creator_portal. slack_invite_url falls back to env SLACK_INVITE_URL. */
-export async function getPortalSettings(): Promise<{ slack_invite_url: string | null; slack_invite_url_stored: string }> {
+/** The pinned video's reference and how-to, until changed in Settings/creator_portal. */
+const PINNED_REFERENCE_URL = "https://www.tiktok.com/t/ZPLS5vPLu/";
+const PINNED_HOWTO_URL = "https://firebasestorage.googleapis.com/v0/b/keshah-app.appspot.com/o/videos%2Fpinned_howto_isai.mp4?alt=media";
+
+export async function getPortalSettings(): Promise<{ slack_invite_url: string | null; slack_invite_url_stored: string; pinned_reference_url: string; pinned_howto_url: string }> {
   const snap = await fs().collection("Settings").doc(PORTAL_SETTINGS_DOC).get();
-  const stored = snap.exists && typeof snap.data()!.slack_invite_url === "string" ? snap.data()!.slack_invite_url.trim() : "";
-  return { slack_invite_url: stored || process.env.SLACK_INVITE_URL || null, slack_invite_url_stored: stored };
+  const d = snap.exists ? snap.data()! : {};
+  const str = (k: string) => (typeof d[k] === "string" ? String(d[k]).trim() : "");
+  const stored = str("slack_invite_url");
+  return {
+    slack_invite_url: stored || process.env.SLACK_INVITE_URL || null,
+    slack_invite_url_stored: stored,
+    pinned_reference_url: str("pinned_reference_url") || PINNED_REFERENCE_URL,
+    pinned_howto_url: str("pinned_howto_url") || PINNED_HOWTO_URL,
+  };
 }
 
 export async function savePortalSettings(patch: { slack_invite_url?: string }): Promise<void> {

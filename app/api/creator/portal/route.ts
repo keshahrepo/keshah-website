@@ -85,10 +85,12 @@ export async function GET(req: NextRequest) {
       contract: { status: creator.contract.status, signed_at: creator.contract.signed_at ?? null, ...(creatorDeadline(creator) ?? { deadline_at: null, deadline_date: null }) },
       tracking_url: creator.tracking_url || null,
       // The first-posting-day pinned video: status, the founder's note, and whether a post is pinned yet.
-      pinned_video: pinned ? { status: pinned.status, note: pinned.note ?? null, counted_day: pinned.counted_day ?? null } : null,
+      pinned_video: pinned ? { status: pinned.status, note: pinned.note ?? null, counted_day: pinned.counted_day ?? null, requested_day: pinned.requested_day ?? null } : null,
       pinned_live: pinned?.status === "approved" ? await hasPinnedPost(creator.id) : false,
       config: {
         slack_invite_url: settings.slack_invite_url,
+        pinned_reference_url: settings.pinned_reference_url,
+        pinned_howto_url: settings.pinned_howto_url,
         site_url: KESHAH_SITE_URL,
         founder_videos: FOUNDER_VIDEOS,
         quiz: publicQuiz(),

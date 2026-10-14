@@ -12,13 +12,16 @@ import { signedReadUrl, signedUploadUrl } from "./admin";
 import { CREATORS_COLLECTION, CreatorDataError, creatorToday, getCreator, getOnboarding, hasStarted, setStartDateIfUnset } from "./db";
 import { isWeekday } from "./pay";
 
-export type PinnedStatus = "submitted" | "changes" | "approved";
+/** requested: the founder asked an existing creator for one (no upload yet). */
+export type PinnedStatus = "requested" | "submitted" | "changes" | "approved";
 
 export interface PinnedVideo {
   status: PinnedStatus;
-  /** Storage path of the latest upload (random name: storage serves known paths). */
+  /** Storage path of the latest upload (random name: storage serves known paths). Empty while requested. */
   path: string;
   submitted_at: string;
+  /** Requested: the creator-local day that's their pinned video day (only that video that day). */
+  requested_day?: string;
   /** The creator-local day the first upload counted for (their first posting day). */
   counted_day?: string;
   note?: string;
@@ -35,8 +38,43 @@ function db(store?: Firestore) {
 
 export function pinnedOf(d: Record<string, unknown> | undefined): PinnedVideo | null {
   const p = d?.pinned_video as Partial<PinnedVideo> | undefined;
-  if (!p || typeof p.status !== "string" || !p.path) return null;
-  return p as PinnedVideo;
+  if (!p || typeof p.status !== "string") return null;
+  if (p.status !== "requested" && !p.path) return null;
+  return { path: "", submitted_at: "", ...p } as PinnedVideo;
+}
+
+/** The day itself if it's a weekday, else the next weekday. */
+function weekdayFrom(d: string): string {
+  let cur = d;
+  while (!isWeekday(cur)) {
+    const t = new Date(`${cur}T12:00:00Z`);
+    t.setUTCDate(t.getUTCDate() + 1);
+    cur = t.toISOString().slice(0, 10);
+  }
+  return cur;
+}
+
+/**
+ * Founder asks an existing creator for a pinned video: `when` today or their
+ * next weekday becomes a pinned video day (only that video, counted on upload).
+ */
+export async function requestPinned(id: string, when: "today" | "next", now: Date = new Date()): Promise<PinnedVideo> {
+  const creator = await getCreator(id);
+  if (!creator) throw new CreatorDataError("Creator not found", 404);
+  const ref = db().collection(CREATORS_COLLECTION).doc(id);
+  const cur = pinnedOf((await ref.get()).data());
+  if (cur && cur.status !== "approved") throw new CreatorDataError("They already have a pinned video on the go.", 409);
+  const today = creatorToday(creator, now);
+  const t = new Date(`${today}T12:00:00Z`);
+  if (when === "next") t.setUTCDate(t.getUTCDate() + 1);
+  const day = weekdayFrom(t.toISOString().slice(0, 10));
+  const next: PinnedVideo = { status: "requested", path: "", submitted_at: "", requested_day: day };
+  await ref.update({ pinned_video: { status: "requested", requested_day: day, requested_at: now.toISOString() } });
+  await notify(
+    { creatorId: id, email: creator.email || null },
+    { title: "Your pinned video", body: day === today ? "Today your only video is your pinned video. Open the app to start." : "Your pinned video day is coming up. That day, it's your only video.", data: { type: "pinned_requested" } },
+  );
+  return next;
 }
 
 /** Is a post pinned on their TikTok or Instagram (from the post sync)? */
@@ -64,10 +102,12 @@ export async function submitPinned(id: string, path: string, now: Date = new Dat
   const ref = db().collection(CREATORS_COLLECTION).doc(id);
   const prev = pinnedOf((await ref.get()).data());
   if (prev?.status === "approved") throw new CreatorDataError("Your pinned video is already approved. Post it and pin it.", 409);
+  const requested = prev?.status === "requested";
   const iso = now.toISOString();
   const today = creatorToday(creator, now);
   const onb = await getOnboarding(id);
-  const counts = !prev?.counted_day && !hasStarted(creator) && !!onb.completed_at && isWeekday(today);
+  // New creators: their first posting day. Asked for by the founder: whichever weekday they send it.
+  const counts = !prev?.counted_day && isWeekday(today) && (requested || (!hasStarted(creator) && !!onb.completed_at));
   const next: PinnedVideo = {
     status: "submitted",
     path,
@@ -77,12 +117,12 @@ export async function submitPinned(id: string, path: string, now: Date = new Dat
   await ref.update({ pinned_video: next });
   if (counts) {
     await ref.collection("posting_days").doc(today).set({ date: today, counted_by_founder: "Pinned video sent for review", logged_at: iso }, { merge: true });
-    if (await setStartDateIfUnset(id, today)) {
+    if (!requested && (await setStartDateIfUnset(id, today))) {
       await notifyFounder({ title: `${creator.name || "A creator"} started posting`, body: "Their pinned video is in for review.", data: { type: "founder_creator", id } }).catch(() => {});
     }
   }
   await notifyFounder({
-    title: prev ? `${creator.name || "A creator"} sent their pinned video again` : `${creator.name || "A creator"} sent their pinned video`,
+    title: prev && !requested ? `${creator.name || "A creator"} sent their pinned video again` : `${creator.name || "A creator"} sent their pinned video`,
     body: "Tap to review it.",
     data: { type: "founder_pinned", id },
   }).catch(() => {});
@@ -94,7 +134,7 @@ export async function reviewPinned(id: string, action: "approve" | "changes", no
   const ref = db().collection(CREATORS_COLLECTION).doc(id);
   const snap = await ref.get();
   const cur = pinnedOf(snap.data());
-  if (!cur) throw new CreatorDataError("There's no pinned video to review yet.", 404);
+  if (!cur || cur.status === "requested") throw new CreatorDataError("There's no pinned video to review yet.", 404);
   const iso = now.toISOString();
   const clean = note.trim().slice(0, 1000);
   if (action === "changes" && !clean) throw new CreatorDataError("Add a note so they know what to change.");
@@ -118,5 +158,5 @@ export async function reviewPinned(id: string, action: "approve" | "changes", no
 export async function pinnedForReview(id: string): Promise<(PinnedVideo & { video_url: string }) | null> {
   const cur = pinnedOf((await db().collection(CREATORS_COLLECTION).doc(id).get()).data());
   if (!cur) return null;
-  return { ...cur, video_url: await signedReadUrl(cur.path, 60) };
+  return { ...cur, video_url: cur.path ? await signedReadUrl(cur.path, 60) : "" };
 }
