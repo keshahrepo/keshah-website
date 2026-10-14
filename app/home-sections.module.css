@@ -1,0 +1,266 @@
+/* keshah.com company sections below the download hero. */
+
+.wrap {
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 0 20px;
+  box-sizing: border-box;
+}
+
+.section {
+  padding: 64px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.h2 {
+  margin: 0 0 24px;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.8px;
+  color: #fff;
+  max-width: 720px;
+}
+
+.h3 {
+  margin: 0 0 6px;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  color: #fff;
+}
+
+.lead {
+  margin: -8px 0 32px;
+  font-size: 16px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.7);
+  max-width: 640px;
+}
+
+.body {
+  margin: 0 0 14px;
+  font-size: 15px;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.source {
+  margin: 20px 0 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+/* Why: numbered chain. */
+.chain {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.chainItem {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+}
+
+.chainItem .body { margin: 0; }
+
+.chainNum {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #fff;
+  color: #000;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* How: three steps. */
+.steps {
+  display: grid;
+  gap: 28px;
+}
+
+.step .body { margin: 0; }
+
+.stepImg {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 16px;
+  margin-bottom: 14px;
+  display: block;
+}
+
+/* Story: Aadi. */
+.story {
+  display: grid;
+  gap: 28px;
+  align-items: center;
+}
+
+.storyImg {
+  width: 100%;
+  max-width: 360px;
+  height: auto;
+  border-radius: 20px;
+  display: block;
+}
+
+.sign {
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+}
+
+/* Members: quotes. */
+.quotes {
+  display: grid;
+  gap: 12px;
+}
+
+.quote {
+  margin: 0;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.quoteText {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: #fff;
+}
+
+.quoteWho {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* Download. */
+.cta {
+  text-align: center;
+}
+
+.cta .h2 {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.ctaButtons {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.btnPrimary,
+.btnSecondary {
+  display: inline-flex;
+  align-items: center;
+  padding: 13px 22px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  line-height: 1;
+}
+
+.btnPrimary {
+  background: #fff;
+  color: #000;
+}
+
+.btnSecondary {
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Footer: the company. */
+.footer {
+  padding: 40px 0 48px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.footerTop {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  justify-content: space-between;
+}
+
+.company {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.footerText {
+  margin: 0 0 4px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.footerNav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  align-items: flex-start;
+}
+
+.footerLink {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  text-decoration: none;
+}
+
+.footerLink:hover {
+  color: #fff;
+}
+
+.copyright {
+  margin: 28px 0 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+@media (min-width: 720px) {
+  .wrap { padding: 0 48px; }
+  .section { padding: 96px 0; }
+  .h2 { font-size: 40px; letter-spacing: -1.4px; }
+  .chain { grid-template-columns: 1fr 1fr; gap: 16px; }
+  .chainItem { padding: 24px; }
+  .steps { grid-template-columns: repeat(3, 1fr); }
+  .story { grid-template-columns: 340px 1fr; gap: 56px; }
+  .quotes { grid-template-columns: 1fr 1fr; gap: 16px; }
+}
