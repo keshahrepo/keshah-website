@@ -8,7 +8,7 @@ import type { Firestore } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { notify } from "@/lib/push";
 import { notifyFounder } from "@/lib/staff";
-import { signedReadUrl, signedUploadUrl } from "./admin";
+import { bucket, signedReadUrl, signedUploadUrl } from "./admin";
 import { CREATORS_COLLECTION, CreatorDataError, creatorToday, getCreator, getOnboarding, hasStarted, setStartDateIfUnset } from "./db";
 import { isWeekday } from "./pay";
 
@@ -110,7 +110,20 @@ export async function markPinned(id: string, now: Date = new Date()): Promise<vo
   await ref.update({ "pinned_video.marked_pinned_at": now.toISOString() });
 }
 
-/** A one-time upload URL under the creator's own random path. */
+/**
+ * A resumable upload session under the creator's own random path: the app
+ * sends the video in pieces (Content-Range), so big files and flaky
+ * connections don't fail as one all-or-nothing PUT, and progress is real.
+ */
+export async function pinnedUploadSession(id: string, contentType: string): Promise<{ session_uri: string; path: string }> {
+  if (!OK_TYPES.has(contentType)) throw new CreatorDataError("Pick a video from your camera roll.");
+  const ext = contentType === "video/quicktime" ? "mov" : "mp4";
+  const path = `${UPLOAD_PREFIX(id)}${randomBytes(16).toString("hex")}.${ext}`;
+  const [uri] = await bucket().file(path).createResumableUpload({ metadata: { contentType } });
+  return { session_uri: uri, path };
+}
+
+/** A one-time upload URL under the creator's own random path (build 7 and earlier). */
 export async function pinnedUploadUrl(id: string, contentType: string): Promise<{ upload_url: string; path: string }> {
   if (!OK_TYPES.has(contentType)) throw new CreatorDataError("Pick a video from your camera roll.");
   const ext = contentType === "video/quicktime" ? "mov" : "mp4";
