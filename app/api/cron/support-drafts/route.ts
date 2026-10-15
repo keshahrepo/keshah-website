@@ -30,7 +30,9 @@ export async function GET(req: Request) {
   if (!requireCronSecret(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const dry = new URL(req.url).searchParams.get("dry") === "1";
   try {
-    const awaiting = await listAwaitingConversations({ limit: 1000 });
+    // Runs every minute: only chats active in the last week (older ones were
+    // drafted when they came in). Reading all ~1,000 each run was ~1.4M reads/day.
+    const awaiting = await listAwaitingConversations({ limit: 1000, since: new Date(Date.now() - 7 * 86_400_000) });
     const picked = selectConversationsToDraft(awaiting, Date.now(), DRAFTS_PER_RUN);
     if (dry || picked.length === 0) {
       return NextResponse.json({

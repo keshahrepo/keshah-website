@@ -78,13 +78,13 @@ export type UserProfile = {
   plan: string | null;
 };
 
-export async function listAwaitingConversations(opts: { limit?: number } = {}): Promise<AwaitingConversation[]> {
+export async function listAwaitingConversations(opts: { limit?: number; since?: Date } = {}): Promise<AwaitingConversation[]> {
   const { db } = getFirebaseAdmin();
-  const snap = await db
-    .collection(SUPPORT_COLLECTION)
-    .orderBy("last_update_at", "desc")
-    .limit(opts.limit ?? 200)
-    .get();
+  // `since` keeps frequent callers (the every-minute draft cron) to recently
+  // active chats instead of re-reading the whole collection each run.
+  let q = db.collection(SUPPORT_COLLECTION).orderBy("last_update_at", "desc");
+  if (opts.since) q = q.where("last_update_at", ">=", Timestamp.fromDate(opts.since));
+  const snap = await q.limit(opts.limit ?? 200).get();
   const now = Timestamp.now();
   const out: AwaitingConversation[] = [];
   for (const doc of snap.docs) {
