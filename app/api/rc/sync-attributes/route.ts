@@ -147,3 +147,6 @@ export async function POST(req: Request) {
     finished_at: new Date().toISOString(),
   });
 }
+
+// Vercel crons call with GET; same handler (cron secret checked inside).
+export const GET = POST;

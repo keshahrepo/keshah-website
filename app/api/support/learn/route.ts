@@ -145,3 +145,6 @@ Analyze. Output the JSON array of proposals.`;
     proposals_raw: proposals.length,
   });
 }
+
+// Vercel crons call with GET; same handler (cron secret checked inside).
+export const GET = POST;
