@@ -17,7 +17,8 @@ import {
 } from "@/lib/creators/admin";
 import { addMonths, completedMonthsAsOf, draftInvoiceLines, nextLevel, trialStatus } from "@/lib/creators/pay";
 import { listContractEvents } from "@/lib/creators/contract";
-import { creatorDocs, getOnboarding, isYyyyMmDd, mapCreatorStatus, markContractStepDone, monthDayStates } from "@/lib/creators/db";
+import { creatorDocs, getOnboarding, isYyyyMmDd, mapCreatorStatus, markContractStepDone, monthDayStates, onboardingSteps } from "@/lib/creators/db";
+import { setupInputFromDoc, setupState } from "@/lib/creators/setup-deadline";
 import { firstPostingDay } from "@/lib/creators/lifecycle";
 import { campaignTagClash, handleOwner } from "@/lib/creators/uniqueness";
 import { pinnedLiveFor, pinnedOf } from "@/lib/creators/pinned-video";
@@ -85,6 +86,10 @@ export async function GET(req: NextRequest, { params }: Ctx) {
     adjustments: [...h.adjustments].sort((a, b) => b.month.localeCompare(a.month)),
     invoices: h.invoices,
     onboarding: h.onboarding,
+    // The 3-day setup deadline: { done, steps_left, next_step, due_date, waiting_on_us, overdue_days } (null once past onboarding).
+    setup: creator.status === "onboarding" && !creator.withdrawn_at
+      ? setupState(setupInputFromDoc((await db().collection(CREATORS_COLLECTION).doc(id).get()).data() ?? {}, (h.onboarding.raw ?? null) as never, onboardingSteps(h.onboarding.raw as never, { contractSigned: creator.contract.status === "signed" })), new Date())
+      : null,
     // Founder app Progress timeline: Accepted -> ... -> Trial / Promoted / Ended.
     progress: progressFor(creator, h),
     // 72-hour contract deadline (null for creators without one): drives "Give 48 more hours" / "Withdraw offer".
@@ -140,6 +145,11 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   const existingContract = (snap.data()?.contract ?? {}) as { signed_sha256?: string };
   if (existingContract.signed_sha256 && Object.keys(updates).some((k) => k.startsWith("contract."))) {
     return NextResponse.json({ error: "This contract was e-signed and is locked." }, { status: 409 });
+  }
+  // First tracking link: the 3-day setup deadline gives them at least a day from now
+  // (setup waits on it: lib/creators/setup-deadline.ts).
+  if (typeof updates.tracking_url === "string" && updates.tracking_url && !String(snap.data()?.tracking_url ?? "").trim()) {
+    updates.tracking_url_set_at = new Date().toISOString();
   }
   // Marking a contract signed without a date stamps it now.
   if (updates["contract.status"] === "signed" && body.contract && !(body.contract as Record<string, unknown>).signed_at) {

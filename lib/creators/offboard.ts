@@ -28,7 +28,7 @@ import { CREATORS_COLLECTION, CreatorDataError, mapCreatorStatus } from "./db";
 import { groupsClientFromEnv, groupsConfigured, provisionCreatorGroup, removeCreatorFromGroup } from "./google-groups";
 import { localDateIn } from "./time";
 
-export type OffboardReason = "trial" | "status" | "removed" | "withdrawn";
+export type OffboardReason = "trial" | "status" | "removed" | "withdrawn" | "setup";
 
 export interface OffboardGroupResult {
   result: "removed" | "not a member" | "skipped" | "error";

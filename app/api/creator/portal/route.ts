@@ -13,7 +13,9 @@ import {
   isOnboardingComplete,
   markContractStepDone,
   type CreatorHistory,
+  onboardingSteps,
 } from "@/lib/creators/db";
+import { setupInputFromDoc, setupState } from "@/lib/creators/setup-deadline";
 import { finalPayFor, firstPostingDay } from "@/lib/creators/lifecycle";
 import { LINK_WAIT_TEXT, agreementEndedText } from "@/lib/creators/notices";
 import type { CreatorProfile } from "@/lib/creators/types";
@@ -68,6 +70,8 @@ export async function GET(req: NextRequest) {
     const waitingForLink = !started && warmupDone && !onboarding.link_seen_at && !creator.tracking_url;
     // The next weekday after Getting started is finished; null until then or once started.
     const firstDay = !started && onboarding.completed_at ? firstPostingDay(onboarding.completed_at, creator.timezone) : null;
+    // The 3-day setup deadline (lib/creators/setup-deadline.ts): drives the Getting started timeline.
+    const setup = started ? null : setupState(setupInputFromDoc(raw.data() ?? {}, onboarding, onboardingSteps(onboarding, { contractSigned: creator.contract.status === "signed" })), now);
     return NextResponse.json({
       creator: publicCreator(creator),
       // onboarding / trial / active / leaving / ended. Ended: the app shows the agreement card, no posting prompts.
@@ -80,6 +84,8 @@ export async function GET(req: NextRequest) {
         waiting_for_link: waitingForLink,
         link_wait_text: waitingForLink ? LINK_WAIT_TEXT : null,
         first_posting_day: firstDay,
+        // { done, steps_left, next_step, due_date (yyyy-mm-dd, their tz), waiting_on_us, overdue_days }; null once started.
+        setup,
       },
       // deadline_at / deadline_date (ET): the 72-hour signing deadline, while it's unsigned (null otherwise).
       contract: { status: creator.contract.status, signed_at: creator.contract.signed_at ?? null, ...(creatorDeadline(creator) ?? { deadline_at: null, deadline_date: null }) },

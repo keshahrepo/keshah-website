@@ -7,6 +7,9 @@
 //              on days they aren't scheduled (trial done and waiting, ended, ...).
 //   first day  8 PM local the evening before their first posting day.
 //   warm-up    6 PM local on a warm-up day not ticked yet.
+//   setup      6 PM local from the day after signing to the 3-day setup due date (the last one
+//              says "Last day"), naming the next step; email when they have no device. Skipped
+//              on a day the warm-up reminder goes (lib/creators/setup-deadline.ts).
 // Once per creator per local day each: ContentCreators/{id}/mobile/push
 // (nudge_date / first_day_eve_date / warmup_nudge_date), claimed in a
 // transaction before sending, freed again when they have no device.
@@ -18,7 +21,11 @@ import { NextResponse } from "next/server";
 import { FieldValue, type DocumentReference } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { requireCronSecret } from "@/lib/support/auth";
-import { CREATORS_COLLECTION, getOnboarding, listCreators, toPostingDay } from "@/lib/creators/db";
+import { CREATORS_COLLECTION, getOnboarding, listCreators, onboardingSteps, toPostingDay } from "@/lib/creators/db";
+import { emailConfigured, sendEmail } from "@/lib/email";
+import { CREATOR_FROM_NAME } from "@/lib/creators/invite";
+import { setupInputFromDoc, setupNudgeEmail, setupNudgeKind, setupNudgePush, setupState } from "@/lib/creators/setup-deadline";
+import { localDateIn } from "@/lib/creators/time";
 import { completeVideoCount, isScheduledDay, videosRequiredOn } from "@/lib/creators/pay";
 import type { CreatorProfile, PostingDay } from "@/lib/creators/types";
 import { claimOnce } from "@/lib/interview";
@@ -76,13 +83,20 @@ export async function GET(req: Request) {
       const firstDay = onb ? firstPostingDay(onb.completed_at ?? onb.ready_at ?? null, c.timezone) : null;
 
       // ---- warm-up reminder (6 PM)
+      let warmupToday = false;
       if (onb) {
         const date = warmupNudgeDate(c, now, onb, mark("warmup_nudge_date"));
         if (date) {
+          warmupToday = true;
           const row: Row = { id: c.id, name: c.name, kind: "warmup", date };
           report.push(row);
           if (!dry) await sendOnce(markerRef, "warmup_nudge_date", date, target, warmupReminderPush((onb.warmup_days ?? []).length + 1, WARMUP_DAYS), row, now);
         }
+      }
+
+      // ---- setup reminder (6 PM, day after signing to the 3-day due date; skipped when the warm-up one goes)
+      if (onb && !warmupToday && hour === WARMUP_NUDGE_HOUR && c.status === "onboarding" && c.contract.status === "signed") {
+        await setupNudge(c, now, { ref, markerRef, target, onb, last: mark("setup_nudge_date"), dry, report });
       }
 
       // ---- "Tomorrow is your first posting day" (8 PM the evening before)
@@ -102,6 +116,49 @@ export async function GET(req: Request) {
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ error: msg, report }, { status: 500 });
   }
+}
+
+async function setupNudge(
+  c: CreatorProfile,
+  now: Date,
+  x: { ref: DocumentReference; markerRef: DocumentReference; target: { creatorId: string; email: string | null }; onb: Awaited<ReturnType<typeof getOnboarding>>; last: string | null; dry: boolean; report: Row[] },
+) {
+  const raw = (await x.ref.get()).data() ?? {};
+  const st = setupState(setupInputFromDoc(raw, x.onb, onboardingSteps(x.onb, { contractSigned: true })), now);
+  const today = localDateIn(now, c.timezone);
+  const signedAt = x.onb.contract_signed_at || c.contract.signed_at || null;
+  const kind = setupNudgeKind(st, today, signedAt ? localDateIn(new Date(signedAt), c.timezone) : null);
+  if (!kind || x.last === today) return;
+  const row: Row = { id: c.id, name: c.name, kind: `setup_${kind}`, date: today, steps_left: st.steps_left, next: st.next_step };
+  x.report.push(row);
+  if (x.dry) return;
+  const { db } = getFirebaseAdmin();
+  const won = await claimOnce(db, x.markerRef, (cur) => (cur.setup_nudge_date === today ? null : { setup_nudge_date: today, setup_nudge_date_at: now.toISOString() }));
+  if (!won) {
+    row.result = "already sent";
+    return;
+  }
+  const r = await notify(x.target, setupNudgePush(kind, st));
+  if (r && r.sent > 0) {
+    row.result = "push sent";
+    return;
+  }
+  // No app on a device yet: the same reminder by email.
+  const email = (c.email || "").trim().toLowerCase();
+  if (email && emailConfigured()) {
+    try {
+      const dueLabel = st.due_date ? new Date(`${st.due_date}T12:00:00Z`).toLocaleString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" }) : "the deadline";
+      const m = setupNudgeEmail({ firstName: (c.name || "").split(/\s+/)[0] ?? "", kind, st, dueLabel });
+      await sendEmail({ to: email, subject: m.subject, text: m.text, html: m.html, fromName: CREATOR_FROM_NAME });
+      row.result = "emailed (no devices)";
+      return;
+    } catch (e) {
+      row.result = `email failed: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  } else {
+    row.result = "no devices, no email";
+  }
+  await x.markerRef.update({ setup_nudge_date: FieldValue.delete() }).catch(() => {});
 }
 
 async function postingNudge(

@@ -3,7 +3,8 @@
  * three business numbers. Reads the same collections the web dashboard does.
  */
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
-import { CREATORS_COLLECTION, DEFAULT_TIMEZONE, mapCreatorStatus } from "@/lib/creators/db";
+import { CREATORS_COLLECTION, DEFAULT_TIMEZONE, mapCreatorStatus, onboardingSteps } from "@/lib/creators/db";
+import { setupInputFromDoc, setupState } from "@/lib/creators/setup-deadline";
 import { passwordsResetPending } from "@/lib/creators/offboard";
 import { bankOnFile } from "@/lib/creators/payments";
 import { localDateIn } from "@/lib/creators/time";
@@ -19,6 +20,7 @@ import { revenueOverview, type RevenueOverview } from "@/lib/revenue";
 export type NeedKind =
   | "trial_decision"
   | "deadline"
+  | "setup"
   | "stuck"
   | "application"
   | "invoice_approve"
@@ -124,9 +126,21 @@ export async function founderHome(now = new Date()): Promise<FounderHome> {
         const dl = deadlineOf(c)!;
         needs.push({ kind: "deadline", id: doc.id, title: name, subtitle: `Didn't sign by ${deadlineShort(dl)}`, at: dl });
       }
+      // Signed but didn't finish setup in 3 days (lib/creators/setup-deadline.ts): never ended
+      // automatically; the creator page has "Give 3 more days" and "End agreement".
+      let setupLate = false;
+      if (settingUp && !missed && c.status === "onboarding" && !c.withdrawn_at) {
+        const od = onb?.exists ? onb.data()! : null;
+        const st = setupState(setupInputFromDoc(c, od, onboardingSteps(od, { contractSigned: c.contract?.status === "signed" })), now);
+        if (st.overdue_days > 0 && st.due_date) {
+          setupLate = true;
+          const due = new Date(`${st.due_date}T12:00:00Z`).toLocaleString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+          needs.push({ kind: "setup", id: doc.id, title: name, subtitle: `Didn't finish setup by ${due} · ${st.steps_left} step${st.steps_left === 1 ? "" : "s"} left`, at: st.due_date });
+        }
+      }
       // Stuck on a Progress step that's on them (lib/creators/progress.ts) for 2+ days.
       // The trial step is never stuck, so posting days aren't needed here.
-      if (settingUp && !missed) {
+      if (settingUp && !missed && !setupLate) {
         const a = toAdminCreator(doc.id, c);
         const p = creatorProgress(
           {
@@ -240,6 +254,7 @@ export async function founderHome(now = new Date()): Promise<FounderHome> {
   const order: NeedKind[] = [
     "trial_decision",
     "deadline",
+    "setup",
     "dispute",
     "application",
     "tracking_link",
