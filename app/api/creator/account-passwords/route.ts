@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   const creator = await requireCreator(req);
   if (creator instanceof NextResponse) return creator;
   // Ended / offboarded: the founder resets these passwords, so they're never shown again.
-  const ended = requireNotEnded(creator, "Your agreement has ended, so the account passwords aren't available any more.");
+  const ended = requireNotEnded(creator, "Your contract has ended, so the account passwords aren't available any more.");
   if (ended) return ended;
   try {
     const passwords = await creatorAccountPasswords(await firestoreAccountPasswordStore(), creator.id);

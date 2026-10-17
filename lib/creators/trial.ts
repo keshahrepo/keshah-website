@@ -58,7 +58,7 @@ export async function decideTrial(id: string, decision: TrialDecision, opts: { n
     await ref.update({ trial_outcome: "keep", trial_decided_on: today, status: "active", status_changed_at: at });
     await notify(
       { creatorId: id, email: email || null },
-      { title: "You made it", body: "You passed your trial. Open the app to see what changes.", data: { type: "trial_decision" } },
+      { title: "You're a KESHAH Creator", body: "You passed your trial. Open the app to see what changes.", data: { type: "trial_decision" } },
     );
     // Push is new to them: the email says what changes, from the first full-plan day.
     const fullPlanFrom = trialWindow(

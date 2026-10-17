@@ -27,11 +27,11 @@ function monthName(month: YyyyMm): string {
 /** Keep: what changes from their first full-plan day. */
 export function trialPassedEmail(input: { firstName: string; fullPlanFrom: YyyyMmDd }): Mail {
   return {
-    subject: "You passed your trial",
+    subject: "You're a KESHAH Creator",
     text: [
       hi(input.firstName),
       "",
-      "You passed your trial. Well done, and welcome to the team properly.",
+      "You passed your trial, so you're now a KESHAH Creator. Well done, and welcome to the team properly.",
       "",
       "Here's what changes:",
       "",
@@ -54,7 +54,7 @@ export function trialEndedEmail(input: { firstName: string; finalPayCents: numbe
     text: [
       hi(input.firstName),
       "",
-      "Thank you for the work you put into your trial. We've decided not to continue, so your agreement ends with your 20th posting day.",
+      "Thank you for the work you put into your trial. We've decided not to continue, so your contract ends with your 20th posting day.",
       "",
       input.finalPayCents > 0
         ? `You're still paid for every trial day you posted. Your final trial pay of ${fmtMoney(input.finalPayCents)} arrives by ${fmtShort(input.payBy)}. You can see the invoice in the app.`
@@ -155,7 +155,7 @@ export function warmupReminderPush(day: number, of: number): PushMessage {
 // ---------------------------------------------------------------- the end
 
 export function agreementEndedText(endedOn: YyyyMmDd, finalCents: number | null, payBy: YyyyMmDd | null): string {
-  const first = `Your agreement ended on ${fmtShort(endedOn)}.`;
+  const first = `Your contract ended on ${fmtShort(endedOn)}.`;
   if (finalCents === null || finalCents <= 0 || !payBy) return `${first} Your invoices stay here.`;
   return `${first} Final pay ${fmtMoney(finalCents)} arrives by ${fmtShort(payBy)}.`;
 }

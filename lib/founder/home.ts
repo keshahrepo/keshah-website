@@ -135,7 +135,7 @@ export async function founderHome(now = new Date()): Promise<FounderHome> {
         if (st.overdue_days > 0 && st.due_date) {
           setupLate = true;
           const due = new Date(`${st.due_date}T12:00:00Z`).toLocaleString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-          needs.push({ kind: "setup", id: doc.id, title: name, subtitle: `Didn't finish setup by ${due} · ${st.steps_left} step${st.steps_left === 1 ? "" : "s"} left`, at: st.due_date });
+          needs.push({ kind: "setup", id: doc.id, title: name, subtitle: `Didn't finish onboarding by ${due} · ${st.steps_left} step${st.steps_left === 1 ? "" : "s"} left`, at: st.due_date });
         }
       }
       // Stuck on a Progress step that's on them (lib/creators/progress.ts) for 2+ days.

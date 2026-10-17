@@ -172,8 +172,8 @@ export function reminderPush(deadlineIso: string, now: Date): { title: string; b
   return {
     title: "Your KESHAH offer is waiting",
     body: sameDay
-      ? "Sign your agreement by 11:59 PM ET tonight to keep your spot."
-      : "Sign your agreement by tomorrow 11:59 PM ET to keep your spot.",
+      ? "Sign your contract by 11:59 PM ET tonight to keep your spot."
+      : "Sign your contract by tomorrow 11:59 PM ET to keep your spot.",
     data: { type: "contract" },
   };
 }
@@ -181,7 +181,7 @@ export function reminderPush(deadlineIso: string, now: Date): { title: string; b
 export function reminderEmail(input: { firstName: string; deadlineIso: string }): { subject: string; text: string; html: string } {
   const paras = [
     { text: `Hi ${input.firstName || "there"},` },
-    { text: "Just a quick reminder that your agreement still needs your signature." },
+    { text: "Just a quick reminder that your contract still needs your signature." },
     { text: `Please sign it in the KESHAH Creators app by ${deadlineLong(input.deadlineIso)} to keep your spot.`, bold: true },
     { text: "It's the first step when you open the app, and it only takes a couple of minutes." },
     { text: "If anything is holding you up, just reply to this email and I'll help." },
@@ -194,7 +194,7 @@ export function withdrawEmail(input: { firstName: string; deadlineIso: string | 
   const by = input.deadlineIso ? ` by ${deadlineLong(input.deadlineIso)}` : "";
   const paras = [
     { text: `Hi ${input.firstName || "there"},` },
-    { text: `We weren't able to confirm your spot, because your agreement wasn't signed${by}. So we've withdrawn the offer for the content creator role.` },
+    { text: `We weren't able to confirm your spot, because your contract wasn't signed${by}. So we've withdrawn the offer for the content creator role.` },
     { text: "Thank you for your time and for your interest in KESHAH. We wish you all the best." },
   ];
   const text = [...paras.flatMap((x) => [x.text, ""]), CREATOR_SIGNOFF].join("\n");

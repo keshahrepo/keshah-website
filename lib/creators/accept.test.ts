@@ -222,15 +222,15 @@ test("welcome email sends people to the app when CREATOR_APP_URL is set", () => 
 
 test("welcome email names the contract deadline right before How to get started (new offers only)", () => {
   const m = welcomeEmail({ firstName: "Jen", link: "https://x/l", contractReady: true, deadlineText: deadlineLong(contractDeadlineFor(new Date("2025-10-11T19:00:00Z"))) });
-  const line = "Please sign your agreement by Tuesday, October 14 at 11:59 PM ET to confirm your spot.";
+  const line = "Please sign your contract by Tuesday, October 14 at 11:59 PM ET to confirm your spot.";
   assert.ok(m.text.includes(`${line}\n\nHow to get started`));
   assert.ok(!m.text.includes("—"));
   // No deadline (e.g. accepted before deadlines existed): no line.
   const none = welcomeEmail({ firstName: "Jen", link: "https://x/l", contractReady: true });
-  assert.ok(!none.text.includes("Please sign your agreement"));
+  assert.ok(!none.text.includes("Please sign your contract"));
   // Existing creators never get it, even if one were passed.
   const isai = welcomeEmail({ firstName: "Isai", link: "https://x/l", contractReady: true, existing: true, deadlineText: "Tuesday, October 14 at 11:59 PM ET" });
-  assert.ok(!isai.text.includes("Please sign your agreement"));
+  assert.ok(!isai.text.includes("Please sign your contract"));
 });
 
 test("welcome email for an existing creator is an app intro, not an offer", () => {

@@ -87,8 +87,8 @@ test("reminder: only in the last 30 hours, once, and only while it's on the crea
 test("reminder copy: push says tomorrow the evening before, tonight after midnight ET; email names the deadline", () => {
   const eve = reminderPush(DL, new Date("2026-10-14T00:00:00Z")); // 8 PM EDT Tue
   assert.equal(eve.title, "Your KESHAH offer is waiting");
-  assert.equal(eve.body, "Sign your agreement by tomorrow 11:59 PM ET to keep your spot.");
-  assert.equal(reminderPush(DL, new Date("2026-10-14T05:00:00Z")).body, "Sign your agreement by 11:59 PM ET tonight to keep your spot.");
+  assert.equal(eve.body, "Sign your contract by tomorrow 11:59 PM ET to keep your spot.");
+  assert.equal(reminderPush(DL, new Date("2026-10-14T05:00:00Z")).body, "Sign your contract by 11:59 PM ET tonight to keep your spot.");
   const m = reminderEmail({ firstName: "Jen", deadlineIso: DL });
   assert.equal(m.subject, "Your KESHAH offer is waiting");
   assert.ok(m.text.startsWith("Hi Jen,"));

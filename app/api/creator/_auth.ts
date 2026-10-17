@@ -61,7 +61,7 @@ export async function requireCreator(req: NextRequest, deps: CreatorAuthDeps = {
  * Rejects (403) once their agreement has ended: the KESHAH accounts' passwords
  * (and anything else only a working creator needs) are no longer theirs to see.
  */
-export function requireNotEnded(creator: Pick<CreatorProfile, "status">, message = "Your agreement has ended, so there's nothing to post."): NextResponse | null {
+export function requireNotEnded(creator: Pick<CreatorProfile, "status">, message = "Your contract has ended, so there's nothing to post."): NextResponse | null {
   if (creator.status !== "ended") return null;
   return NextResponse.json({ error: message }, { status: 403 });
 }

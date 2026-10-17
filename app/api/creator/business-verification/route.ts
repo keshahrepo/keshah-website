@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const creator = await requireCreator(req);
   if (creator instanceof NextResponse) return creator;
-  const ended = requireNotEnded(creator, "Your agreement has ended, so this isn't available any more.");
+  const ended = requireNotEnded(creator, "Your contract has ended, so this isn't available any more.");
   if (ended) return ended;
   try {
     const headers = { "Cache-Control": "private, no-store" };

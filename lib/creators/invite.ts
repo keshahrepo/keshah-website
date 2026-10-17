@@ -103,7 +103,7 @@ export function welcomeEmail(input: {
       "",
       "• Your videos show up in the app on their own within a few hours of posting. If one is missing near the deadline, you can paste its link.",
       "• Bonuses are added automatically when a video passes 100K views ($15) or 1M views ($100 total), within 30 days of posting.",
-      `• ${input.contractReady ? "Your new agreement is waiting in the app for you to sign." : "Your new agreement will be in the app shortly for you to sign."}`,
+      `• ${input.contractReady ? "Your new contract is waiting in the app for you to sign." : "Your new contract will be in the app shortly for you to sign."}`,
       "• You'll also be asked to add your payment details and tax form so we can pay you.",
       "",
       "Let me know if anything is unclear. Just reply to this email.",
@@ -122,11 +122,11 @@ export function welcomeEmail(input: {
   // lands in Primary.
   const opener =
     "Congratulations! We've decided to move forward with you for the content creator role at KESHAH. We've reviewed over 250 applications and yours stood out. Fewer than 6% of applicants get into our creator program, so we're excited to have you on board.";
-  const deadline = input.deadlineText ? `Please sign your agreement by ${input.deadlineText} to confirm your spot.` : null;
+  const deadline = input.deadlineText ? `Please sign your contract by ${input.deadlineText} to confirm your spot.` : null;
   const signIn = input.signInEmail || "the email this message was sent to";
   const step3 = input.contractReady
-    ? "Sign your agreement. It's the first step in the app, and the app walks you through the rest."
-    : "Sign your agreement. It'll be the first step in the app shortly, and the app walks you through the rest.";
+    ? "Sign your contract. It's the first step in the app, and the app walks you through the rest."
+    : "Sign your contract. It'll be the first step in the app shortly, and the app walks you through the rest.";
   const trial = "20 posting days, 3 videos a weekday, $300 total";
   const after = "5 videos a weekday, $500/month to start, growing to $1,100, plus bonuses ($15 when a video hits 100K views, $100 total at 1M)";
   const closing = "We are excited to have you on the team. If you have any questions, feel free to reply to this email.";

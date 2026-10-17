@@ -75,8 +75,8 @@ async function loadSetup(id: string, now: Date) {
 export async function setSetupDue(id: string, dueDate: string, now: Date = new Date()) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) throw new CreatorDataError("Pick a date.");
   const { d, st } = await loadSetup(id, now);
-  if (d.status !== "onboarding" || d.withdrawn_at) throw new CreatorDataError("They're not in setup.", 409);
-  if (st.done) throw new CreatorDataError("They've already finished setup.", 409);
+  if (d.status !== "onboarding" || d.withdrawn_at) throw new CreatorDataError("They're not in onboarding.", 409);
+  if (st.done) throw new CreatorDataError("They've already finished onboarding.", 409);
   const today = localDateIn(now, typeof d.timezone === "string" ? d.timezone : "UTC");
   if (dueDate < today) throw new CreatorDataError("Pick today or a later date.");
   await ref(id).update({ setup_due_override: dueDate, setup_extra_days: 0, setup_due_set_at: now.toISOString() });
@@ -88,8 +88,8 @@ export async function setSetupDue(id: string, dueDate: string, now: Date = new D
 /** "Give 3 more days": moves the setup due date (no message to the creator). */
 export async function extendSetup(id: string, now: Date = new Date()) {
   const { d, st } = await loadSetup(id, now);
-  if (d.status !== "onboarding") throw new CreatorDataError("They're past setup.", 409);
-  if (st.done) throw new CreatorDataError("They've already finished setup.", 409);
+  if (d.status !== "onboarding") throw new CreatorDataError("They're past onboarding.", 409);
+  if (st.done) throw new CreatorDataError("They've already finished onboarding.", 409);
   await ref(id).update({ setup_extra_days: FieldValue.increment(SETUP_EXTEND_DAYS), setup_extended_at: now.toISOString() });
   const after = await loadSetup(id, now);
   await logEvent(id, { type: "setup_extended", at: now.toISOString(), actor: "admin", detail: `Setup due ${after.st.due_date}` }).catch(() => {});
@@ -99,18 +99,18 @@ export async function extendSetup(id: string, now: Date = new Date()) {
 export function setupEndedEmail(firstName: string): { subject: string; text: string; html: string } {
   const paras = [
     { text: `Hi ${firstName || "there"},` },
-    { text: "Since your setup in the KESHAH Creators app wasn't finished, we've ended your creator agreement." },
+    { text: "Since your onboarding in the KESHAH Creators app wasn't finished, we've ended your creator contract." },
     { text: "Thank you for your time and your interest in KESHAH. We wish you all the best." },
   ];
   const text = [...paras.flatMap((x) => [x.text, ""]), CREATOR_SIGNOFF].join("\n");
-  return { subject: "Your KESHAH creator agreement", text, html: lightEmailHtml(paras) };
+  return { subject: "Your KESHAH creator contract", text, html: lightEmailHtml(paras) };
 }
 
 /** "End agreement" for a creator who didn't finish setup: offboard + a short email + push. */
 export async function endSetup(id: string, now: Date = new Date()) {
   const { d, st } = await loadSetup(id, now);
-  if (d.status !== "onboarding") throw new CreatorDataError("They're past setup, so end it from their page instead.", 409);
-  if (st.done) throw new CreatorDataError("They've already finished setup.", 409);
+  if (d.status !== "onboarding") throw new CreatorDataError("They're past onboarding, so end it from their page instead.", 409);
+  if (st.done) throw new CreatorDataError("They've already finished onboarding.", 409);
   const off = await offboardCreator(id, "setup", { now });
   const email = String(d.email ?? "").trim().toLowerCase();
   let mailed = false;
@@ -123,7 +123,7 @@ export async function endSetup(id: string, now: Date = new Date()) {
       console.error("setup ended email failed:", errMsg(e));
     }
   }
-  await notify({ creatorId: id, email: email || null }, { title: "Your KESHAH agreement", body: "Open the app for an update on your agreement.", data: { type: "agreement" } }).catch(() => null);
+  await notify({ creatorId: id, email: email || null }, { title: "Your KESHAH contract", body: "Open the app for an update on your contract.", data: { type: "agreement" } }).catch(() => null);
   await logEvent(id, { type: "setup_ended", at: now.toISOString(), actor: "admin", detail: `Setup not finished (${st.steps_left} steps left); email ${mailed ? "sent" : "not sent"}` }).catch(() => {});
   return { ended_on: off.ended_on, group: off.group, passwords_reset_needed: off.passwords_reset_needed, email: mailed };
 }

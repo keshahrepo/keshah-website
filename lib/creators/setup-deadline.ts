@@ -128,25 +128,25 @@ export function setupNudgeKind(st: SetupState, today: string, signedDate: string
 }
 
 export function setupNudgePush(kind: "daily" | "last_day", st: SetupState): { title: string; body: string; data: Record<string, string> } {
-  const step = st.next_step ? SETUP_STEP_LABELS[st.next_step] : "finish setting up";
+  const step = st.next_step ? SETUP_STEP_LABELS[st.next_step] : "finish onboarding";
   const left = st.steps_left === 1 ? "1 step left" : `${st.steps_left} steps left`;
   return kind === "last_day"
-    ? { title: "Last day to finish setup", body: `${left}. Next: ${step}. Finish today to keep your spot.`, data: { type: "setup" } }
-    : { title: "Finish setting up", body: `${left}. Next: ${step}.`, data: { type: "setup" } };
+    ? { title: "Last day to finish onboarding", body: `${left}. Next: ${step}. Finish today to keep your spot.`, data: { type: "setup" } }
+    : { title: "Finish onboarding", body: `${left}. Next: ${step}.`, data: { type: "setup" } };
 }
 
 export function setupNudgeEmail(input: { firstName: string; kind: "daily" | "last_day"; st: SetupState; dueLabel: string }): { subject: string; text: string; html: string } {
-  const step = input.st.next_step ? SETUP_STEP_LABELS[input.st.next_step] : "finish setting up";
+  const step = input.st.next_step ? SETUP_STEP_LABELS[input.st.next_step] : "finish onboarding";
   const paras = [
     { text: `Hi ${input.firstName || "there"},` },
     input.kind === "last_day"
-      ? { text: `Today is the last day to finish your setup in the KESHAH Creators app, so you keep your spot.`, bold: true }
-      : { text: `You're almost set up in the KESHAH Creators app. Please finish by ${input.dueLabel} to keep your spot.` },
+      ? { text: `Today is the last day to finish your onboarding in the KESHAH Creators app, so you keep your spot.`, bold: true }
+      : { text: `You're almost done with onboarding in the KESHAH Creators app. Please finish by ${input.dueLabel} to keep your spot.` },
     { text: `Next up: ${step}. Open the app and it picks up right where you left off.` },
     { text: "If anything is holding you up, just reply to this email and I'll help." },
   ];
   const text = [...paras.flatMap((x) => [x.text, ""]), CREATOR_SIGNOFF].join("\n");
-  return { subject: input.kind === "last_day" ? "Last day to finish your KESHAH setup" : "Finish setting up your KESHAH account", text, html: lightEmailHtml(paras) };
+  return { subject: input.kind === "last_day" ? "Last day to finish your KESHAH onboarding" : "Finish your KESHAH onboarding", text, html: lightEmailHtml(paras) };
 }
 
 // ---------------------------------------------------------------- "Get started" email (offer open, app never opened)
@@ -182,7 +182,7 @@ export function getStartedEmail(input: { firstName: string; appUrl: string | nul
     { text: "Just checking you saw your offer. To lock in your spot:" },
     { text: input.appUrl ? `1. Download the KESHAH Creators app: ${input.appUrl}` : "1. Download the KESHAH Creators app (link in your offer email)" },
     { text: `2. Sign in with ${input.signInEmail}` },
-    { text: "3. Sign your agreement. It's the first thing the app shows you." },
+    { text: "3. Sign your contract. It's the first thing the app shows you." },
     { text: `Your offer is open until ${deadlineLong(input.deadlineIso)}.`, bold: true },
     { text: "If anything is holding you up, just reply to this email and I'll help." },
   ];
