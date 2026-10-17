@@ -11,11 +11,12 @@ export async function demoLogin(db: Firestore): Promise<{ email: string; code: s
   return email && code.length === 6 ? { email, code } : null;
 }
 
-/** Settings/mobile: the lowest app version allowed (forced updates) and where to get it. */
-export async function mobileSettings(db: Firestore): Promise<{ min_version?: string; app_store_url?: string }> {
+/** Settings/mobile: the lowest app version allowed (forced updates), the build waiting to become it, and where to get it. */
+export async function mobileSettings(db: Firestore): Promise<{ min_version?: string; app_store_url?: string; pending_min_version?: string }> {
   const d = (await db.collection("Settings").doc("mobile").get()).data() ?? {};
   return {
     ...(typeof d.min_version === "string" && d.min_version.trim() ? { min_version: d.min_version.trim() } : {}),
+    ...(typeof d.pending_min_version === "string" && d.pending_min_version.trim() ? { pending_min_version: d.pending_min_version.trim() } : {}),
     ...(typeof d.app_store_url === "string" && d.app_store_url.trim() ? { app_store_url: d.app_store_url.trim() } : {}),
   };
 }
