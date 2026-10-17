@@ -1145,6 +1145,7 @@ export async function runProvenDaily(opts: {
     const testing = all.filter(
       (v) => v.added_by === "founder_idea" && v.status === "active" && !v.test_result && (v.idea_assignments ?? []).some((a) => a.date < today),
     );
+    const promotedTitles: string[] = [];
     for (const v of testing) {
       try {
         const rs = (await provenCol.doc(v.id).collection("remakes").get()).docs.map((d) => d.data() as ProvenRemake);
@@ -1157,6 +1158,7 @@ export async function runProvenDaily(opts: {
           const ref = best?.tiktok_url || best?.instagram_url;
           Object.assign(patch, { test_result: result, from_idea: true, promoted_at: nowIso, ...(!v.reference_url && ref ? { reference_url: ref } : {}) });
           out.ideas_promoted.push(v.id);
+          promotedTitles.push((v.short_title || hookShown(v) || "An idea").trim());
         } else if (result === "dropped") {
           Object.assign(patch, { test_result: result, status: "retired", status_changed_at: nowIso, retired_reason: "test dropped" });
           out.ideas_dropped.push(v.id);
@@ -1169,6 +1171,10 @@ export async function runProvenDaily(opts: {
       } catch (e) {
         out.errors.push(`idea ${v.id}: ${errMsg(e)}`);
       }
+    }
+    // One founder push per promoted idea (opens the Content page).
+    for (const t of promotedTitles) {
+      await notifyFounder({ title: `${t} just passed 100K`, body: "It's on the proven list.", data: { type: "content" } }).catch(() => {});
     }
   }
 
