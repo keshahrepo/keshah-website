@@ -12,7 +12,9 @@
  * arrives late, they get at least LINK_GRACE_DAYS from that day.
  *
  * Fields on ContentCreators/{id}:
- *   setup_extra_days        number, +3 per "Give 3 more days"
+ *   setup_due_override      yyyy-mm-dd the founder set ("Change"), e.g. a later agreed start;
+ *                           replaces the 3-days-after-signing date (can be set before they sign)
+ *   setup_extra_days        number, +3 per "Give 3 more days" (on top of either date)
  *   tracking_url_set_at     ISO, when the founder first added the tracking link
  *   get_started_sent_at     ISO, when the "Get started" email went out (once)
  *
@@ -49,6 +51,8 @@ export interface SetupInput {
   trackingUrl: string;
   trackingUrlSetAt?: string | null;
   extraDays?: number;
+  /** yyyy-mm-dd the founder set, instead of SETUP_DAYS after signing. */
+  dueOverride?: string | null;
   /** Getting started fully done (onboarding.completed_at). */
   completed?: boolean;
 }
@@ -64,6 +68,8 @@ export interface SetupState {
   waiting_on_us: boolean;
   /** Calendar days past the due date (0 while on time, done, unsigned or paused). */
   overdue_days: number;
+  /** The founder's set date, if any (shown to the founder even before they sign). */
+  due_override: string | null;
 }
 
 const validIso = (v: string | null | undefined): string | null => (v && Number.isFinite(Date.parse(v)) ? v : null);
@@ -84,8 +90,10 @@ export function setupState(x: SetupInput, now: Date): SetupState {
   // Paused only when the link step is all that's left and it's blocked on our tracking link.
   const waiting = !done && left.length === 1 && left[0] === "link" && !x.trackingUrl.trim();
   let due: string | null = null;
+  const override = x.dueOverride && /^\d{4}-\d{2}-\d{2}$/.test(x.dueOverride) ? x.dueOverride : null;
   if (signed) {
-    due = addDaysYmd(localDate(signed, tz), SETUP_DAYS + Math.max(0, Math.floor(x.extraDays ?? 0)));
+    const extra = Math.max(0, Math.floor(x.extraDays ?? 0));
+    due = addDaysYmd(override ?? addDaysYmd(localDate(signed, tz), SETUP_DAYS), extra);
     const linkAt = validIso(x.trackingUrlSetAt);
     if (linkAt) {
       const grace = addDaysYmd(localDate(linkAt, tz), LINK_GRACE_DAYS);
@@ -97,18 +105,23 @@ export function setupState(x: SetupInput, now: Date): SetupState {
     const today = localDate(now.toISOString(), tz);
     if (today > due) overdue = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${due}T00:00:00Z`)) / 86_400_000);
   }
-  return { done, steps_left: done ? 0 : left.length, next_step: done ? null : (left[0] ?? null), due_date: due, waiting_on_us: waiting, overdue_days: overdue };
+  return { done, steps_left: done ? 0 : left.length, next_step: done ? null : (left[0] ?? null), due_date: due, waiting_on_us: waiting, overdue_days: overdue, due_override: override };
 }
 
 // ---------------------------------------------------------------- setup nudge (creator app push, email fallback)
 
+/** Reminders only go out in the last few days before the due date (a later agreed date doesn't mean a week of nudges). */
+export const SETUP_NUDGE_DAYS = 3;
+
 /**
- * The daily setup reminder (6 PM local, from the day after signing up to and
- * including the due date): null when nothing should go out today.
+ * The daily setup reminder (6 PM local, from the day after signing, but only in
+ * the last SETUP_NUDGE_DAYS up to and including the due date): null when nothing
+ * should go out today.
  */
 export function setupNudgeKind(st: SetupState, today: string, signedDate: string | null): "daily" | "last_day" | null {
   if (st.done || st.waiting_on_us || !st.due_date || !signedDate || st.next_step === "contract") return null;
   if (today <= signedDate || today > st.due_date) return null;
+  if (today < addDaysYmd(st.due_date, -(SETUP_NUDGE_DAYS - 1))) return null;
   return today === st.due_date ? "last_day" : "daily";
 }
 
@@ -189,6 +202,7 @@ export function setupInputFromDoc(
     trackingUrl: typeof d.tracking_url === "string" ? d.tracking_url : "",
     trackingUrlSetAt: isoOf(d.tracking_url_set_at),
     extraDays: Number(d.setup_extra_days ?? 0) || 0,
+    dueOverride: typeof d.setup_due_override === "string" ? d.setup_due_override : null,
     completed: !!onb?.completed_at,
   };
 }

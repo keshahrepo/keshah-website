@@ -87,3 +87,19 @@ test("Get started email names the app, the sign-in email and the deadline", () =
   assert.match(m.text, /open until Sunday, October 18 at 11:59 PM ET/);
   assert.match(m.text, /McKenzie/);
 });
+
+test("a founder-set due date replaces 3-days-after-signing, and Give 3 more days adds to it", () => {
+  const st = setupState({ ...base, dueOverride: "2026-10-22", steps: { ...all(false), contract: true } }, new Date("2026-10-21T16:00:00Z"));
+  assert.equal(st.due_date, "2026-10-22");
+  assert.equal(st.overdue_days, 0);
+  assert.equal(st.due_override, "2026-10-22");
+  assert.equal(setupState({ ...base, dueOverride: "2026-10-22", extraDays: 3, steps: { ...all(false), contract: true } }, new Date("2026-10-21T16:00:00Z")).due_date, "2026-10-25");
+});
+
+test("a later due date only gets reminders in its last 3 days", () => {
+  const st = setupState({ ...base, dueOverride: "2026-10-22", steps: { ...all(false), contract: true } }, new Date("2026-10-17T16:00:00Z"));
+  assert.equal(setupNudgeKind(st, "2026-10-17", "2026-10-15"), null);
+  assert.equal(setupNudgeKind(st, "2026-10-19", "2026-10-15"), null);
+  assert.equal(setupNudgeKind(st, "2026-10-20", "2026-10-15"), "daily");
+  assert.equal(setupNudgeKind(st, "2026-10-22", "2026-10-15"), "last_day");
+});

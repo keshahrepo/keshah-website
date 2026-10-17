@@ -3,6 +3,7 @@
  * live in lib/creators/setup-deadline.ts.
  *
  *   sendGetStartedEmails  cron (with the contract reminders): offer open 24h, app never opened
+ *   setSetupDue           founder: "Change" the setup due date (any time during setup, even before signing)
  *   extendSetup           founder: "Give 3 more days"
  *   endSetup              founder: "End agreement" (offboard + short email)
  */
@@ -16,6 +17,7 @@ import { logEvent } from "./contract";
 import { CREATOR_FROM_NAME, CREATOR_SIGNOFF, creatorAppUrl, lightEmailHtml } from "./invite";
 import { offboardCreator } from "./offboard";
 import { deadlineOf, firstNameOf } from "./deadline";
+import { localDateIn } from "./time";
 import { SETUP_EXTEND_DAYS, getStartedDue, getStartedEmail, setupInputFromDoc, setupState, type GetStartedDoc } from "./setup-deadline";
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -67,6 +69,20 @@ async function loadSetup(id: string, now: Date) {
   const onb = await getOnboarding(id);
   const st = setupState(setupInputFromDoc(d, onb, onboardingSteps(onb, { contractSigned: d.contract?.status === "signed" })), now);
   return { d, st };
+}
+
+/** "Change": sets the setup due date (yyyy-mm-dd, their timezone). Replaces any "Give 3 more days". No message. */
+export async function setSetupDue(id: string, dueDate: string, now: Date = new Date()) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) throw new CreatorDataError("Pick a date.");
+  const { d, st } = await loadSetup(id, now);
+  if (d.status !== "onboarding" || d.withdrawn_at) throw new CreatorDataError("They're not in setup.", 409);
+  if (st.done) throw new CreatorDataError("They've already finished setup.", 409);
+  const today = localDateIn(now, typeof d.timezone === "string" ? d.timezone : "UTC");
+  if (dueDate < today) throw new CreatorDataError("Pick today or a later date.");
+  await ref(id).update({ setup_due_override: dueDate, setup_extra_days: 0, setup_due_set_at: now.toISOString() });
+  const after = await loadSetup(id, now);
+  await logEvent(id, { type: "setup_extended", at: now.toISOString(), actor: "admin", detail: `Setup due set to ${dueDate}` }).catch(() => {});
+  return { setup: after.st };
 }
 
 /** "Give 3 more days": moves the setup due date (no message to the creator). */
