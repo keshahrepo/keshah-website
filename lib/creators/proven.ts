@@ -212,6 +212,12 @@ export interface ProvenVideo {
   hook_first_person?: boolean;
   /** Scroll-stopping on-screen text for the top of the video, separate from the spoken hook (proven-beats.ts). */
   header_text?: string;
+  /** Content system scripts (content-db.ts approve): what the creator does at second 0, the on-screen text, an optional photo for one point. */
+  first_frame?: string;
+  on_screen_text?: string;
+  photo?: { point: 1 | 2 | 3; url: string; caption: string };
+  /** The ContentScripts doc this idea came from. */
+  content_script_id?: string;
   /** Beat generation bookkeeping (proven-beats.ts). */
   beats?: { generated_at?: string; model?: string; attempts?: number; last_error?: string; last_attempt_at?: string };
 }

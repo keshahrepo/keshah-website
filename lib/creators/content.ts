@@ -271,3 +271,84 @@ export function editPatch(fields: Record<string, unknown>): Partial<ContentScrip
   }
   return out;
 }
+
+// ---------------------------------------------------------------- approve
+
+/** What an approved script becomes on the idea doc (addIdeaBatch input). */
+export function ideaInputFromScript(s: ContentScript): {
+  hook_line: string;
+  talking_points: string[];
+  reference_url?: string;
+  idea_text: string;
+  id_prefix: string;
+  script: {
+    hook_full: string;
+    cta_line: string;
+    short_title: string;
+    header_text: string;
+    first_frame: string;
+    on_screen_text: string;
+    photo?: ScriptPhoto;
+    format: ProvenFormat;
+    hook_family: string;
+    content_script_id: string;
+  };
+} {
+  return {
+    hook_line: s.hook,
+    talking_points: [...s.points],
+    ...(s.reference?.url ? { reference_url: s.reference.url } : {}),
+    idea_text: `${s.title} (${s.source}, week of ${s.week_of})`,
+    id_prefix: `c${s.week_of.replace(/-/g, "")}s${String(s.slot).padStart(2, "0")}`,
+    script: {
+      hook_full: s.hook,
+      cta_line: scriptCta(s),
+      short_title: s.title,
+      // Older app builds show header_text as the on-screen text.
+      header_text: s.on_screen_text,
+      first_frame: s.first_frame,
+      on_screen_text: s.on_screen_text,
+      ...(s.photo ? { photo: s.photo } : {}),
+      format: s.format,
+      hook_family: s.hook_family,
+      content_script_id: s.id,
+    },
+  };
+}
+
+/** The script with defaults (older / partial docs never crash readers). */
+export function toScript(id: string, d: Record<string, unknown>): ContentScript {
+  const pts = Array.isArray(d.points) ? d.points.map(String) : [];
+  return {
+    id,
+    week_of: String(d.week_of ?? ""),
+    slot: Number(d.slot ?? 0),
+    source: (SCRIPT_SOURCES as readonly string[]).includes(String(d.source)) ? (d.source as ScriptSource) : "new-self-test",
+    format: (PROVEN_FORMATS as readonly string[]).includes(String(d.format)) ? (d.format as ProvenFormat) : "other",
+    hook_family: String(d.hook_family ?? ""),
+    title: String(d.title ?? ""),
+    first_frame: String(d.first_frame ?? ""),
+    on_screen_text: String(d.on_screen_text ?? ""),
+    hook: String(d.hook ?? ""),
+    points: [pts[0] ?? "", pts[1] ?? "", pts[2] ?? ""],
+    cta_1: String(d.cta_1 ?? ""),
+    beat: String(d.beat ?? ""),
+    cta_2: String(d.cta_2 ?? ""),
+    fact: (d.fact as ContentScript["fact"]) ?? null,
+    photo: (d.photo as ScriptPhoto | null) ?? null,
+    reference: (d.reference as ScriptReference | null) ?? null,
+    status: (["draft", "approved", "rejected", "replaced"].includes(String(d.status)) ? d.status : "draft") as ScriptStatus,
+    ...(typeof d.reject_reason === "string" ? { reject_reason: d.reject_reason } : {}),
+    ...(typeof d.replaces === "string" ? { replaces: d.replaces } : {}),
+    history: Array.isArray(d.history) ? (d.history as ContentScript["history"]) : [],
+    ...(typeof d.idea_id === "string" ? { idea_id: d.idea_id } : {}),
+  };
+}
+
+/** A week's state from its scripts (the stored state wins while drafting). */
+export function weekStateOf(stored: WeekState | undefined, scripts: Pick<ContentScript, "status">[]): WeekState {
+  if (stored === "drafting" && !scripts.length) return "drafting";
+  const live = scripts.filter((s) => s.status === "draft" || s.status === "approved");
+  if (!live.length) return stored === "drafting" ? "drafting" : "none";
+  return live.every((s) => s.status === "approved") ? "approved" : "ready";
+}

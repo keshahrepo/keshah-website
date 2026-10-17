@@ -146,6 +146,10 @@ export function toProven(d: DocumentData): ProvenVideo {
     ...(d.hook_edited ? { hook_edited: true } : {}),
     ...(typeof d.thumbnail_url === "string" && d.thumbnail_url ? { thumbnail_url: d.thumbnail_url } : {}),
     ...(d.media && typeof d.media === "object" ? { media: d.media } : {}),
+    ...(typeof d.first_frame === "string" && d.first_frame ? { first_frame: d.first_frame } : {}),
+    ...(typeof d.on_screen_text === "string" && d.on_screen_text ? { on_screen_text: d.on_screen_text } : {}),
+    ...(d.photo && typeof d.photo === "object" && typeof d.photo.url === "string" && d.photo.url ? { photo: d.photo } : {}),
+    ...(typeof d.content_script_id === "string" && d.content_script_id ? { content_script_id: d.content_script_id } : {}),
   };
 }
 
@@ -500,9 +504,13 @@ export interface IdeaInput {
   reference_url?: string;
   idea_text?: string;
   audience?: string;
+  /** Content system scripts: the rest of the script, stored on the idea as is (content-db.ts approve). */
+  script?: Pick<ProvenVideo, "hook_full" | "cta_line" | "short_title" | "header_text" | "first_frame" | "on_screen_text" | "photo" | "format" | "hook_family" | "content_script_id">;
+  /** Sorts the idea's id (picks order a creator's ideas by id), e.g. "c20261019s03" for a week's slot 3. */
+  id_prefix?: string;
 }
 
-const newIdeaId = () => `idea_${randomBytes(6).toString("hex")}`;
+const newIdeaId = (prefix = "") => `idea_${prefix ? `${prefix.replace(/[^a-z0-9]/gi, "").slice(0, 24)}_` : ""}${randomBytes(6).toString("hex")}`;
 
 /** A new idea doc (no assignments yet). Throws on a missing hook or bad link. */
 function ideaDoc(input: IdeaInput, nowIso: string): ProvenVideo {
@@ -528,6 +536,7 @@ function ideaDoc(input: IdeaInput, nowIso: string): ProvenVideo {
     remake_count: 0,
     last_used_at: null,
     stats: emptyStats(),
+    ...Object.fromEntries(Object.entries(input.script ?? {}).filter(([, v]) => v !== undefined && v !== null && v !== "")),
   };
 }
 
@@ -550,7 +559,7 @@ export interface IdeaBatchResult {
  * creators' local days, like picks.
  */
 export async function addIdeaBatch(
-  input: { ideas: IdeaInput[]; week_of?: string },
+  input: { ideas: IdeaInput[]; week_of?: string; skip_past?: boolean },
   opts: { db?: Firestore; now?: Date } = {},
 ): Promise<IdeaBatchResult> {
   const db = fsdb(opts.db);
@@ -561,7 +570,7 @@ export async function addIdeaBatch(
   // Validate everything before writing anything.
   const docs = input.ideas.map((x, i) => {
     try {
-      return { id: newIdeaId(), doc: ideaDoc(x, nowIso) };
+      return { id: newIdeaId(x.id_prefix), doc: ideaDoc(x, nowIso) };
     } catch (e) {
       throw new CreatorDataError(`Idea ${i + 1}: ${errMsg(e)}`);
     }
@@ -572,6 +581,12 @@ export async function addIdeaBatch(
       throw new CreatorDataError("week_of must be a Monday (YYYY-MM-DD).");
     }
     week = [0, 1, 2, 3, 4].map((i) => addDaysTo(input.week_of as YyyyMmDd, i));
+    // Approved mid-week: only the days still ahead (the whole week when none are).
+    if (input.skip_past) {
+      const today = localDate(nowIso, "America/New_York");
+      const ahead = week.filter((d) => d > today);
+      if (ahead.length) week = ahead;
+    }
   } else {
     week = comingWeek(localDate(nowIso, "America/New_York"));
   }
