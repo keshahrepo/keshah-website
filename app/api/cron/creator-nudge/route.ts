@@ -7,9 +7,9 @@
 //              on days they aren't scheduled (trial done and waiting, ended, ...).
 //   first day  8 PM local the evening before their first posting day.
 //   warm-up    6 PM local on a warm-up day not ticked yet.
-//   setup      6 PM local from the day after signing to the 3-day setup due date (the last one
-//              says "Last day"), naming the next step; email when they have no device. Skipped
-//              on a day the warm-up reminder goes (lib/creators/setup-deadline.ts).
+//   setup      6 PM local in the last 3 days before the onboarding due date, naming the next
+//              step (email when they have no device; skipped on a day the warm-up reminder goes).
+//              On the due date itself: 10 AM local, push and email ("Last day").
 // Once per creator per local day each: ContentCreators/{id}/mobile/push
 // (nudge_date / first_day_eve_date / warmup_nudge_date), claimed in a
 // transaction before sending, freed again when they have no device.
@@ -24,7 +24,7 @@ import { requireCronSecret } from "@/lib/support/auth";
 import { CREATORS_COLLECTION, getOnboarding, listCreators, onboardingSteps, toPostingDay } from "@/lib/creators/db";
 import { emailConfigured, sendEmail } from "@/lib/email";
 import { CREATOR_FROM_NAME } from "@/lib/creators/invite";
-import { setupInputFromDoc, setupNudgeEmail, setupNudgeKind, setupNudgePush, setupState } from "@/lib/creators/setup-deadline";
+import { SETUP_DAILY_HOUR, SETUP_LAST_DAY_HOUR, setupInputFromDoc, setupNudgeEmail, setupNudgeKind, setupNudgePush, setupState } from "@/lib/creators/setup-deadline";
 import { localDateIn } from "@/lib/creators/time";
 import { completeVideoCount, isScheduledDay, videosRequiredOn } from "@/lib/creators/pay";
 import type { CreatorProfile, PostingDay } from "@/lib/creators/types";
@@ -74,7 +74,7 @@ export async function GET(req: Request) {
       } catch {
         continue;
       }
-      if (hour !== NUDGE_HOUR && hour !== WARMUP_NUDGE_HOUR && hour !== FIRST_DAY_EVE_HOUR) continue;
+      if (hour !== NUDGE_HOUR && hour !== WARMUP_NUDGE_HOUR && hour !== FIRST_DAY_EVE_HOUR && hour !== SETUP_LAST_DAY_HOUR) continue;
       const ref = db.collection(CREATORS_COLLECTION).doc(c.id);
       const markerRef = ref.collection("mobile").doc("push");
       const target = { creatorId: c.id, email: c.email || null };
@@ -95,8 +95,8 @@ export async function GET(req: Request) {
       }
 
       // ---- setup reminder (6 PM, day after signing to the 3-day due date; skipped when the warm-up one goes)
-      if (onb && !warmupToday && hour === WARMUP_NUDGE_HOUR && c.status === "onboarding" && c.contract.status === "signed") {
-        await setupNudge(c, now, { ref, markerRef, target, onb, last: mark("setup_nudge_date"), dry, report });
+      if (onb && ((hour === SETUP_DAILY_HOUR && !warmupToday) || hour === SETUP_LAST_DAY_HOUR) && c.status === "onboarding" && c.contract.status === "signed") {
+        await setupNudge(c, now, { ref, markerRef, target, onb, hour, last: mark("setup_nudge_date"), dry, report });
       }
 
       // ---- "Tomorrow is your first posting day" (8 PM the evening before)
@@ -121,7 +121,7 @@ export async function GET(req: Request) {
 async function setupNudge(
   c: CreatorProfile,
   now: Date,
-  x: { ref: DocumentReference; markerRef: DocumentReference; target: { creatorId: string; email: string | null }; onb: Awaited<ReturnType<typeof getOnboarding>>; last: string | null; dry: boolean; report: Row[] },
+  x: { ref: DocumentReference; markerRef: DocumentReference; target: { creatorId: string; email: string | null }; onb: Awaited<ReturnType<typeof getOnboarding>>; hour: number; last: string | null; dry: boolean; report: Row[] },
 ) {
   const raw = (await x.ref.get()).data() ?? {};
   const st = setupState(setupInputFromDoc(raw, x.onb, onboardingSteps(x.onb, { contractSigned: true })), now);
@@ -129,6 +129,8 @@ async function setupNudge(
   const signedAt = x.onb.contract_signed_at || c.contract.signed_at || null;
   const kind = setupNudgeKind(st, today, signedAt ? localDateIn(new Date(signedAt), c.timezone) : null);
   if (!kind || x.last === today) return;
+  // Daily reminders in the evening; the last-day one in the morning.
+  if ((kind === "daily" && x.hour !== SETUP_DAILY_HOUR) || (kind === "last_day" && x.hour !== SETUP_LAST_DAY_HOUR)) return;
   const row: Row = { id: c.id, name: c.name, kind: `setup_${kind}`, date: today, steps_left: st.steps_left, next: st.next_step };
   x.report.push(row);
   if (x.dry) return;
@@ -139,24 +141,28 @@ async function setupNudge(
     return;
   }
   const r = await notify(x.target, setupNudgePush(kind, st));
-  if (r && r.sent > 0) {
+  const pushed = !!r && r.sent > 0;
+  // Daily: push, or email when they have no device. Last day: push and email, so it can't be missed.
+  if (pushed && kind === "daily") {
     row.result = "push sent";
     return;
   }
-  // No app on a device yet: the same reminder by email.
   const email = (c.email || "").trim().toLowerCase();
   if (email && emailConfigured()) {
     try {
       const dueLabel = st.due_date ? new Date(`${st.due_date}T12:00:00Z`).toLocaleString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" }) : "the deadline";
       const m = setupNudgeEmail({ firstName: (c.name || "").split(/\s+/)[0] ?? "", kind, st, dueLabel });
       await sendEmail({ to: email, subject: m.subject, text: m.text, html: m.html, fromName: CREATOR_FROM_NAME });
-      row.result = "emailed (no devices)";
+      row.result = pushed ? "push + email sent" : "emailed (no devices)";
       return;
     } catch (e) {
-      row.result = `email failed: ${e instanceof Error ? e.message : String(e)}`;
+      row.result = `${pushed ? "push sent, " : ""}email failed: ${e instanceof Error ? e.message : String(e)}`;
+      // The push got through: don't free the marker (that would push again on the next run).
+      if (pushed) return;
     }
   } else {
-    row.result = "no devices, no email";
+    row.result = pushed ? "push sent (no email)" : "no devices, no email";
+    if (pushed) return;
   }
   await x.markerRef.update({ setup_nudge_date: FieldValue.delete() }).catch(() => {});
 }

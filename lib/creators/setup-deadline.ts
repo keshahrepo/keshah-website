@@ -112,6 +112,10 @@ export function setupState(x: SetupInput, now: Date): SetupState {
 
 // ---------------------------------------------------------------- setup nudge (creator app push, email fallback)
 
+/** Local hours: the daily onboarding reminder goes in the evening, the last-day one in the morning (a full day to act). */
+export const SETUP_DAILY_HOUR = 18;
+export const SETUP_LAST_DAY_HOUR = 10;
+
 /** Reminders only go out in the last few days before the due date (a later agreed date doesn't mean a week of nudges). */
 export const SETUP_NUDGE_DAYS = 3;
 
