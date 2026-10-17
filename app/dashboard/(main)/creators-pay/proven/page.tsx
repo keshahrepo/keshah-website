@@ -88,7 +88,7 @@ export default function ProvenPage() {
     <div>
       <PageHeader
         title="Proven videos"
-        subtitle="Videos that already worked. Creators get 5 of the active ones to remake each weekday (format creators get 3)."
+        subtitle="Videos that already worked. Creators get 5 of the active ones to remake each weekday (format creators and trial creators get 3)."
         right={
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <Btn onClick={() => runSeed(true)} disabled={seedBusy}>
@@ -400,7 +400,7 @@ function IdeaForm({ onDone }: { onDone: () => void }) {
     <div style={card}>
       <h3 style={h3}>New idea</h3>
       <p style={{ ...muted, marginBottom: 12 }}>
-        It goes to 3 creators on their next posting day as one of their videos. After a week of results it joins everyone&apos;s rotation. Pause it if it doesn&apos;t work.
+        It goes to 3 creators on their next posting day as one of their videos. A week later: a remake at 100K+ puts it in everyone&apos;s rotation, every remake under 20K retires it, anything else waits for you.
       </p>
       <div style={{ display: "grid", gap: 12 }}>
         <Field label="Hook line">

@@ -17,7 +17,17 @@ import {
   tiredCheck,
   topUpPicks,
   weeklyGain,
-  ideaInTest,
+  inRotation,
+  hookPickable,
+  hookShown,
+  inTrialV2,
+  givenFor,
+  isFullCreator,
+  comingWeek,
+  scheduleIdeaBatch,
+  ideaTestSummary,
+  ideaOutcome,
+  normalizeFormat,
   type PickCandidate,
   type ViewPost,
 } from "./proven";
@@ -167,10 +177,11 @@ test("idea assignment: trial/active creators who had an idea least recently", ()
   assert.deepEqual(pickIdeaCreators([{ id: "a", status: "active", last_idea_on: "" }], "idea_2"), ["a"]);
 });
 
-test("ideas stay with their test creators for a week", () => {
-  assert.equal(ideaInTest({ added_by: "founder_idea", created_at: daysAgo(2) }, NOW), true);
-  assert.equal(ideaInTest({ added_by: "founder_idea", created_at: daysAgo(8) }, NOW), false);
-  assert.equal(ideaInTest({ added_by: "seed", created_at: daysAgo(1) }, NOW), false);
+test("ideas join the general rotation only once promoted", () => {
+  assert.equal(inRotation({ added_by: "founder_idea" }), false);
+  assert.equal(inRotation({ added_by: "founder_idea", test_result: "borderline" }), false);
+  assert.equal(inRotation({ added_by: "founder_idea", test_result: "promoted" }), true);
+  assert.equal(inRotation({ added_by: "seed" }), true);
 });
 
 // ---------------------------------------------------------------- remakes + tired
@@ -283,7 +294,7 @@ test("selectDailyPicks: one per family a day; a re-upload counts as done", () =>
   assert.deepEqual(day2, ["e1"]);
 });
 
-test("selectDailyPicks: a pinch variation can come the next day, never two in a day", () => {
+test("selectDailyPicks: a pinch variation can come the next day when nothing fresh is left, never two in a day", () => {
   const candidates = [
     { id: "top", format: "top", family: "pinch", recent_wins: 0, views: 900 },
     { id: "hairline", format: "hairline", family: "pinch", recent_wins: 0, views: 800 },
@@ -302,4 +313,169 @@ test("rankCandidates: new creators get different videos, big ones still favoured
   const first = (creatorId: string) => selectDailyPicks({ candidates, history: {}, date: "2026-10-08", count: 4, creatorId }).join(",");
   const days = new Set(["c1", "c2", "c3", "c4", "c5", "c6"].map(first));
   assert.ok(days.size >= 5, `creators should mostly differ, got ${days.size} distinct sets`);
+});
+
+// ---------------------------------------------------------------- trial count, no-repeat window, mix
+
+const prof = (extra: Record<string, unknown> = {}) =>
+  ({ status: "active", format_creator: false, ...extra }) as unknown as Parameters<typeof isFullCreator>[0];
+
+test("trial v2 creators get 3 picks until the day after a keep decision; never ideas", () => {
+  const trial = prof({ status: "trial", trial_plan: "v2" });
+  assert.equal(inTrialV2(trial, "2026-10-07"), true);
+  assert.equal(givenFor(trial, "2026-10-07"), 3);
+  assert.equal(isFullCreator(trial, "2026-10-07"), false);
+  const kept = prof({ trial_plan: "v2", trial_outcome: "keep", trial_decided_on: "2026-10-07" });
+  assert.equal(givenFor(kept, "2026-10-07"), 3);
+  assert.equal(givenFor(kept, "2026-10-08"), 5);
+  assert.equal(isFullCreator(kept, "2026-10-08"), true);
+  assert.equal(givenFor(prof({ format_creator: true }), "2026-10-07"), 3);
+  assert.equal(isFullCreator(prof({ format_creator: true }), "2026-10-07"), false);
+  assert.equal(givenFor(prof(), "2026-10-07"), 5);
+  assert.equal(isFullCreator(prof({ status: "trial" }), "2026-10-07"), true); // original-plan trial
+  assert.equal(isFullCreator(prof({ ended_on: "2026-10-01" }), "2026-10-07"), false);
+});
+
+test("no-repeat window: a family given in the last 21 days waits while fresh ones exist", () => {
+  const candidates = cands(["p1", "p2", "m1", "e1"], { p1: { family: "pinch" }, p2: { family: "pinch" }, m1: { family: "m" }, e1: { family: "e" } });
+  // p1 given 10 days ago: p2 (same family) is held back even though it was never given.
+  const picks = selectDailyPicks({ candidates, history: { p1: ["2026-09-27"] }, date: "2026-10-07", count: 2, creatorId: "c" });
+  assert.deepEqual(new Set(picks), new Set(["m1", "e1"]));
+  // 21+ days later the family is fresh again.
+  const later = selectDailyPicks({ candidates, history: { p1: ["2026-09-16"], m1: ["2026-10-06"], e1: ["2026-10-06"] }, date: "2026-10-07", count: 1, creatorId: "c" });
+  assert.equal(candidates.find((c) => c.id === later[0])!.family, "pinch");
+});
+
+test("no-repeat window: pool dry falls back to the least recently used family", () => {
+  const candidates = cands(["a", "b", "c"], { a: { family: "A" }, b: { family: "B" }, c: { family: "C" } });
+  const history = { a: ["2026-10-01"], b: ["2026-09-25"], c: ["2026-10-05"] };
+  const picks = selectDailyPicks({ candidates, history, date: "2026-10-07", count: 3, creatorId: "c" });
+  assert.deepEqual(picks, ["b", "a", "c"]);
+});
+
+test("full creator mix: up to 2 ideas, 2 self-tests and 1 other format among proven picks", () => {
+  const ids = ["s1", "s2", "s3", "s4", "x1", "x2", "n1"];
+  const candidates = cands(ids, {
+    s1: { video_format: "self-test", views: 9_000_000 },
+    s2: { video_format: "self-test" },
+    s3: { video_format: "self-test", views: 5_000_000 },
+    s4: { video_format: "self-test", views: 5_000_000 },
+    x1: { video_format: "myth-bust" },
+    x2: { video_format: "explainer" },
+    n1: {},
+  });
+  const fmtOf = (id: string) => candidates.find((c) => c.id === id)?.video_format;
+  for (const creatorId of ["a", "b", "c", "d"]) {
+    const picks = selectDailyPicks({
+      candidates,
+      history: {},
+      date: "2026-10-07",
+      count: 5,
+      creatorId,
+      forced: ["idea_1", "idea_2"],
+      mix: { selfTest: 2, other: 1 },
+    });
+    assert.deepEqual(picks.slice(0, 2), ["idea_1", "idea_2"]);
+    const proven = picks.slice(2);
+    assert.equal(proven.filter((id) => fmtOf(id) === "self-test").length, 2, creatorId);
+    assert.equal(proven.filter((id) => fmtOf(id) && fmtOf(id) !== "self-test").length, 1, creatorId);
+  }
+  // Soft: no self-tests at all still fills every slot.
+  const none = selectDailyPicks({ candidates: cands(["x1", "x2", "x3"], { x1: { video_format: "list" } }), history: {}, date: "2026-10-07", count: 3, creatorId: "a", mix: { selfTest: 2, other: 1 } });
+  assert.equal(none.length, 3);
+});
+
+// ---------------------------------------------------------------- idea batches + outcomes
+
+test("comingWeek: Monday to Friday of next week", () => {
+  assert.deepEqual(comingWeek("2026-10-17"), ["2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23"]); // Saturday
+  assert.equal(comingWeek("2026-10-19")[0], "2026-10-26"); // a Monday gives next week's
+  assert.equal(comingWeek("2026-10-18")[0], "2026-10-19"); // Sunday
+});
+
+const WEEK = comingWeek("2026-10-17");
+
+test("scheduleIdeaBatch: one creator, 10 ideas -> 2 a day Mon-Fri", () => {
+  const ideas = Array.from({ length: 10 }, (_, i) => `i${i}`);
+  const plan = scheduleIdeaBatch(ideas, ["solo"], WEEK);
+  const perDay = new Map<string, number>();
+  for (const id of ideas) {
+    assert.equal(plan[id].length, 1);
+    perDay.set(plan[id][0].date, (perDay.get(plan[id][0].date) ?? 0) + 1);
+  }
+  assert.deepEqual([...perDay.values()], [2, 2, 2, 2, 2]);
+});
+
+test("scheduleIdeaBatch: up to 5 different creators an idea, never more than 2 a creator a day", () => {
+  const creators = Array.from({ length: 7 }, (_, i) => `c${i}`);
+  const ideas = Array.from({ length: 12 }, (_, i) => `i${i}`);
+  const booked = [{ creator_id: "c0", date: WEEK[0] }, { creator_id: "c0", date: WEEK[0] }];
+  const plan = scheduleIdeaBatch(ideas, creators, WEEK, { booked });
+  const load = new Map<string, number>([[`c0|${WEEK[0]}`, 2]]);
+  for (const id of ideas) {
+    assert.equal(plan[id].length, 5);
+    assert.equal(new Set(plan[id].map((a) => a.creator_id)).size, 5);
+    for (const a of plan[id]) {
+      assert.ok(WEEK.includes(a.date));
+      load.set(`${a.creator_id}|${a.date}`, (load.get(`${a.creator_id}|${a.date}`) ?? 0) + 1);
+    }
+  }
+  assert.ok([...load.values()].every((n) => n <= 2));
+  // Two creators: each idea goes to both.
+  assert.equal(scheduleIdeaBatch(["x"], ["a", "b"], WEEK).x.length, 2);
+  // Past capacity (1 creator, 2 a day, 5 days): the 11th idea gets nobody.
+  const full = scheduleIdeaBatch(Array.from({ length: 11 }, (_, i) => `f${i}`), ["solo"], WEEK);
+  assert.equal(full.f10.length, 0);
+});
+
+const remake = (creator_id: string, date: string, tiktok: number | null, instagram: number | null = null) => ({
+  creator_id,
+  date,
+  views: { tiktok, instagram },
+  tiktok_url: `https://tiktok.com/${creator_id}`,
+  instagram_url: "",
+});
+
+test("idea tests: summary keeps 3d/7d views; judged 7 days after the last scheduled day", () => {
+  const assigned = [{ creator_id: "a", date: "2026-10-19" }, { creator_id: "b", date: "2026-10-21" }];
+  const day1 = ideaTestSummary(assigned, [remake("a", "2026-10-19", 5_000)], undefined, "2026-10-22", NOW);
+  assert.equal(day1.judge_on, "2026-10-28");
+  assert.equal(day1.creators, 2);
+  assert.equal(day1.remakes[0].views_3d, 5_000);
+  assert.equal(day1.remakes[0].views_7d, undefined);
+  const day2 = ideaTestSummary(assigned, [remake("a", "2026-10-19", 40_000, 60_000), remake("b", "2026-10-21", 1_000)], day1, "2026-10-26", NOW);
+  assert.equal(day2.remakes[0].views_3d, 5_000); // kept from the earlier run
+  assert.equal(day2.remakes[0].views_7d, 60_000); // better platform
+  assert.equal(day2.best_views, 60_000);
+  assert.equal(day2.posts, 2);
+  assert.equal(ideaOutcome(day2, "2026-10-27"), null);
+  assert.equal(ideaOutcome(day2, "2026-10-28"), "borderline");
+});
+
+test("ideaOutcome: 100K+ promotes, all under 20K drops, nobody posting is borderline", () => {
+  const t = (views: (number | null)[]) => ({ judge_on: "2026-10-28", remakes: views.map((v, i) => ({ creator_id: `c${i}`, date: "2026-10-20", views: v })) });
+  assert.equal(ideaOutcome(t([5_000, 120_000]), "2026-10-28"), "promoted");
+  assert.equal(ideaOutcome(t([5_000, 19_999, null]), "2026-10-28"), "dropped");
+  assert.equal(ideaOutcome(t([5_000, 20_000]), "2026-10-28"), "borderline");
+  assert.equal(ideaOutcome(t([]), "2026-10-28"), "borderline");
+});
+
+// ---------------------------------------------------------------- stored tags + third-person hooks
+
+test("normalizeFormat maps tagging names onto the stored list", () => {
+  assert.equal(normalizeFormat("list/plan"), "list");
+  assert.equal(normalizeFormat("how-to promise"), "how-to-promise");
+  assert.equal(normalizeFormat("Personal story"), "personal-story");
+  assert.equal(normalizeFormat("self-test"), "self-test");
+  assert.equal(normalizeFormat("nonsense"), undefined);
+});
+
+test("first-person videos are pickable with a third-person hook, which is shown instead", () => {
+  assert.equal(hookPickable({ hook_first_person: true }), false);
+  assert.equal(hookPickable({ hook_first_person: true, hook_third_person: "He fixed his hair loss in a year." }), true);
+  assert.equal(hookPickable({ hook_first_person: false }), true);
+  const v = { hook_line: "I fixed it.", hook_full: "I fixed my hair loss in a year.", hook_first_person: true, hook_third_person: "He fixed his hair loss in a year." };
+  assert.equal(hookShown(v), "He fixed his hair loss in a year.");
+  assert.equal(hookShown({ ...v, hook_first_person: false }), "I fixed my hair loss in a year.");
+  assert.equal(hookShown({ ...v, hook_third_person: undefined, hook_edited: true }), "I fixed it.");
 });

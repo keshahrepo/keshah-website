@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Firestore } from "firebase-admin/firestore";
-import { BEATS_MAX_ATTEMPTS, beatProblem, beatsFor, cleanCta, cleanHeader, cleanHook, parseTitleLines, retitleFormats, cleanTitle, generateProvenBeats, needsBeats, parseBeats, tidyLine } from "./proven-beats";
+import { BEATS_MAX_ATTEMPTS, BEATS_SYSTEM, beatProblem, beatsFor, cleanCta, cleanHeader, cleanHook, parseTitleLines, retitleFormats, cleanTitle, generateProvenBeats, needsBeats, parseBeats, tidyLine } from "./proven-beats";
 
 const TRANSCRIPT =
   "Pinch the top of your scalp right now. Now pinch the sides. The top feels way tighter, right? That's restricting blood flow to your follicles. I fixed my own hair this way. Check my pinned video for the full routine.";
@@ -51,6 +51,56 @@ test("cleanCta: only pinned-video endings without asks or result claims", () => 
   assert.equal(cleanCta("Check my pinned video. You'll thank me later."), "");
   assert.equal(cleanCta("The pinned video shows how I fixed my hair loss."), "");
   assert.equal(cleanCta(""), "");
+});
+
+const NEW_CTA =
+  "If you're wondering if your scalp is actually tight, or how to fix it, it's all in my pinned video, the one that says watch this first. " +
+  "It's literally the first video on my profile, so please don't DM me saying you can't find it. " +
+  "It also shows you the mistake most people make when they try to loosen it. " +
+  "So if yours felt stuck, at least you know why. It takes 5 seconds to check, what do you have to lose?";
+
+test("cleanCta: the two-part ending passes, with its honest 'please don't DM me' line", () => {
+  assert.equal(cleanCta(NEW_CTA), NEW_CTA);
+  assert.equal(cleanCta(NEW_CTA.replace(", the one", " — the one")), NEW_CTA);
+});
+
+test("cleanCta: no 'not selling' / 'not paid' lines, no asks, length capped", () => {
+  assert.equal(cleanCta(`${NEW_CTA} I'm not selling anything.`), "");
+  assert.equal(cleanCta(`${NEW_CTA} I don't get paid for this.`), "");
+  assert.equal(cleanCta(`${NEW_CTA} Follow for more.`), "");
+  assert.equal(cleanCta(`${NEW_CTA} Save this for later.`), "");
+  assert.equal(cleanCta(`${NEW_CTA} ${NEW_CTA}`), ""); // way over the word cap
+  assert.equal(cleanCta("It's the first video on my profile."), ""); // never says pinned
+});
+
+test("BEATS_SYSTEM: always asks for the two-call ending and its rules", () => {
+  assert.match(BEATS_SYSTEM, /"cta": always write it/);
+  assert.match(BEATS_SYSTEM, /watch this first/);
+  assert.match(BEATS_SYSTEM, /don't DM me/);
+  assert.match(BEATS_SYSTEM, /what do you have to lose/);
+  assert.match(BEATS_SYSTEM, /Never say "I'm not selling anything", "I don't get paid"/);
+  assert.match(BEATS_SYSTEM, /Vary the wording/);
+  assert.doesNotMatch(BEATS_SYSTEM, /If the original ends any other way, "cta" is ""/);
+});
+
+test("parseBeats requireCta: throws without a usable ending", () => {
+  const noCta = JSON.stringify({ ...JSON.parse(GOOD), cta: "" });
+  assert.throws(() => parseBeats(noCta, "", { requireCta: true }), /cta/);
+  assert.equal(parseBeats(noCta).cta, "");
+  assert.equal(parseBeats(JSON.stringify({ ...JSON.parse(GOOD), cta: NEW_CTA }), "", { requireCta: true }).cta, NEW_CTA);
+});
+
+test("beatsFor: retries for a missing ending, keeps the beats if the retry still has none", async () => {
+  const noCta = JSON.stringify({ ...JSON.parse(GOOD), cta: "Link in bio." });
+  const prompts: string[] = [];
+  const r = await beatsFor({ hook_line: "Pinch.", transcript: TRANSCRIPT }, async (_s, u) => {
+    prompts.push(u);
+    return noCta;
+  });
+  assert.equal(prompts.length, 2);
+  assert.match(prompts[1], /cta/);
+  assert.equal(r.cta, "");
+  assert.equal(r.beats.length, 4);
 });
 
 test("cleanTitle: 2-4 words, no punctuation, no first person or 'routine'", () => {

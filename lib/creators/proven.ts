@@ -11,13 +11,23 @@
  *   - Seed: @aadi.keshah + Isai videos with >= 100K views come in as "suggested".
  *   - Auto-add: a creator post from the last 30 days with >= 100K views goes
  *     straight in (remakes included; picks never give two of one family a day).
- *   - Daily picks: 5 per creator (3 for format creators), least recently used
- *     first, never twice in a day, at most twice a week (soft), recent winners
- *     first among equals, audience respected.
+ *   - Daily picks: 5 per creator (3 for format creators and trial v2 creators),
+ *     least recently used first, never twice in a day, at most twice a week
+ *     (soft), recent winners first among equals, audience respected.
+ *   - No repeats: a hook family isn't given to the same creator again within
+ *     FAMILY_REPEAT_DAYS (falls back to the least recently used family rather
+ *     than leave a slot empty).
+ *   - Full creators (not trial v2, not format creators): up to 2 of the day are
+ *     founder ideas scheduled for them; of the proven ones, 2 self-tests and 1
+ *     other format when the stored format allows (soft).
+ *   - Ideas: scheduled in weekly batches (scheduleIdeaBatch), never in general
+ *     rotation. 7 days after the last scheduled day: a remake at 100K+ makes it
+ *     a proven video, every remake under 20K retires it, anything else is
+ *     "borderline" for the founder (ideaOutcome).
  *   - Tired: flag only. >= 6 remakes by >= 3 creators over >= 2 weeks, most
  *     below each remaker's normal, and the original isn't still pulling views.
  */
-import type { Platform, YyyyMmDd } from "./types";
+import type { CreatorProfile, Platform, YyyyMmDd } from "./types";
 
 export const PROVEN_COLLECTION = "ProvenVideos";
 export const PROVEN_MIN_VIEWS = 100_000;
@@ -37,14 +47,81 @@ export const TIRED_MIN_CREATORS = 3;
 export const TIRED_MIN_SPAN_DAYS = 14;
 /** The original counts as "still pulling views" while it gains at least this many views a week. */
 export const STILL_PULLING_WEEKLY_VIEWS = 10_000;
-/** A founder idea goes to this many creators the next day. */
+/** Picks a day for a creator still in a v2 trial (TRIAL_V2_VIDEOS in pay.ts); all proven, never ideas. */
+export const DAILY_GIVEN_TRIAL = 3;
+/** A hook family isn't given to the same creator again for this many days. */
+export const FAMILY_REPEAT_DAYS = 21;
+/** Most founder ideas in one creator's day. */
+export const IDEAS_PER_DAY = 2;
+/** Proven slots of a full creator's day: at least this many self-tests and this many other formats (soft). */
+export const MIX_SELF_TEST = 2;
+export const MIX_OTHER = 1;
+/** A single founder idea (addIdea) goes to this many creators the next day. */
 export const IDEA_CREATORS = 3;
-/** Ideas stay with their test creators only for this long before joining everyone's rotation. */
-export const IDEA_TEST_DAYS = 7;
+/** A batch idea goes to this many creators (fewer when there aren't that many). */
+export const IDEA_BATCH_CREATORS = 5;
+/** An idea's test is judged this many days after its last scheduled day. */
+export const IDEA_RESULT_DAYS = 7;
+/** A remake at this many views makes the idea a proven video. */
+export const IDEA_WIN_VIEWS = PROVEN_MIN_VIEWS;
+/** Every remake under this many views retires the idea ("test dropped"). */
+export const IDEA_DROP_VIEWS = 20_000;
 
 export type ProvenStatus = "suggested" | "active" | "paused" | "retired";
 export type ProvenSource = "seed" | "auto" | "founder_idea";
 export type Audience = "men" | "women" | "any";
+
+/** What kind of video it is (stored by the founder's tagging, scripts/_backfill_proven_tags.ts). */
+export const PROVEN_FORMATS = [
+  "self-test",
+  "explainer",
+  "myth-bust",
+  "personal-story",
+  "doing-it-wrong",
+  "authority-story",
+  "list",
+  "how-to-promise",
+  "other",
+] as const;
+export type ProvenFormat = (typeof PROVEN_FORMATS)[number];
+
+/** "Personal story", "list/plan", "how-to promise" -> the stored name; undefined when unknown. */
+export function normalizeFormat(raw: unknown): ProvenFormat | undefined {
+  const s = String(raw ?? "").toLowerCase().split("/")[0].trim().replace(/[\s_]+/g, "-");
+  return (PROVEN_FORMATS as readonly string[]).includes(s) ? (s as ProvenFormat) : undefined;
+}
+
+export interface IdeaAssignment {
+  creator_id: string;
+  date: YyyyMmDd;
+}
+
+export type IdeaTestResult = "promoted" | "dropped" | "borderline";
+
+/** One remake of an idea under test. Views are the better of the two platforms. */
+export interface IdeaTestRemake {
+  creator_id: string;
+  date: YyyyMmDd;
+  views: number | null;
+  /** Views once the remake was 3 / 7 days old (recorded by the first daily run past that age). */
+  views_3d?: number | null;
+  views_7d?: number | null;
+  tiktok_url?: string;
+  instagram_url?: string;
+}
+
+/** Compact test summary on an idea doc (for the founder's "All tests" page). */
+export interface IdeaTest {
+  /** Creators it was scheduled for. */
+  creators: number;
+  /** Remakes posted. */
+  posts: number;
+  best_views: number | null;
+  remakes: IdeaTestRemake[];
+  /** Day the result is due (last scheduled day + IDEA_RESULT_DAYS). */
+  judge_on: YyyyMmDd;
+  updated_at: string;
+}
 
 export interface ProvenStats {
   remakes: number;
@@ -93,7 +170,22 @@ export interface ProvenVideo {
   idea_text?: string;
   talking_points?: string[];
   reference_url?: string;
-  idea_assignments?: { creator_id: string; date: YyyyMmDd }[];
+  /** Who gets this idea on which day (addIdea: next weekday; addIdeaBatch: across the coming Mon-Fri). */
+  idea_assignments?: IdeaAssignment[];
+  /** Set once the idea's test is judged (ideaOutcome). Only "promoted" ideas join the general rotation. */
+  test_result?: IdeaTestResult;
+  test?: IdeaTest;
+  /** A founder idea that became a proven video (a remake reached IDEA_WIN_VIEWS). */
+  from_idea?: boolean;
+  promoted_at?: string;
+  /** Why it was retired, e.g. "test dropped". */
+  retired_reason?: string;
+  /** What kind of video it is (stored tagging). */
+  format?: ProvenFormat;
+  /** Stored hook family (variations of one idea); wins over the computed one (formatGroups at FAMILY_SIMILARITY). */
+  hook_family?: string;
+  /** The hook rewritten about someone else, so a first-person video can still be given out (shown instead of the hook). */
+  hook_third_person?: string;
   // auto suggestions
   source_creator_id?: string;
   suggest_reason?: string;
@@ -280,8 +372,10 @@ export interface PickCandidate {
   id: string;
   /** Re-uploads of the same video share a format (formatGroups at DUPLICATE_SIMILARITY): doing one counts for all. */
   format?: string;
-  /** Variations of one idea share a family (formatGroups at FAMILY_SIMILARITY), e.g. every pinch test: one per day. */
+  /** Variations of one idea share a family (stored hook_family, else formatGroups at FAMILY_SIMILARITY), e.g. every pinch test: one per day, and once per FAMILY_REPEAT_DAYS per creator. */
   family?: string;
+  /** Stored video format (self-test, explainer, ...), for the daily mix. */
+  video_format?: ProvenFormat;
   audience?: Audience;
   recent_wins: number;
   views: number;
@@ -299,6 +393,8 @@ export interface PickInput {
   forced?: string[];
   /** Ids never to pick (already on today's list, swapped out today). */
   exclude?: string[];
+  /** Full creators: at least this many self-tests and other formats among the proven picks, when there are fresh ones (soft). */
+  mix?: { selfTest: number; other: number };
 }
 
 function audienceOk(video: Audience | undefined, creator: Audience | null | undefined): boolean {
@@ -323,18 +419,37 @@ export function luckKey(seed: string, c: Pick<PickCandidate, "views" | "recent_w
   return -Math.log(u) / weight;
 }
 
+export interface RankedCandidate {
+  id: string;
+  /** Times this creator was given it in the last 7 days. */
+  week: number;
+  format: string;
+  family: string;
+  /** Last day this creator was given anything from its family ("" = never). */
+  family_last: YyyyMmDd | "";
+  /** Its family wasn't given to this creator in the last FAMILY_REPEAT_DAYS. */
+  fresh: boolean;
+  video_format?: ProvenFormat;
+}
+
 /**
- * Candidates in pick order: least recently used by this creator first (never
- * used = oldest), then a per-creator per-day weighted shuffle (luckKey). Each entry carries this week's use count.
+ * Candidates in pick order: least recently used family first (never used =
+ * oldest), then format, then the video itself, then a per-creator per-day
+ * weighted shuffle (luckKey). Each entry carries this week's use count and
+ * whether its family is outside the no-repeat window.
  */
-export function rankCandidates(input: PickInput): { id: string; week: number; format: string }[] {
+export function rankCandidates(input: PickInput): RankedCandidate[] {
   const weekStart = addDaysTo(input.date, -6);
   const fmt = (c: PickCandidate) => c.format ?? c.id;
-  // A format counts as used whenever any of its versions was given.
+  const fam = (c: PickCandidate) => c.family ?? fmt(c);
+  // A format (or family) counts as used whenever any of its versions was given.
   const formatLast = new Map<string, string>();
+  const familyLast = new Map<string, string>();
   for (const c of input.candidates) {
     for (const d of input.history[c.id] ?? []) {
-      if (d < input.date && d > (formatLast.get(fmt(c)) ?? "")) formatLast.set(fmt(c), d);
+      if (d >= input.date) continue;
+      if (d > (formatLast.get(fmt(c)) ?? "")) formatLast.set(fmt(c), d);
+      if (d > (familyLast.get(fam(c)) ?? "")) familyLast.set(fam(c), d);
     }
   }
   return input.candidates
@@ -342,25 +457,36 @@ export function rankCandidates(input: PickInput): { id: string; week: number; fo
     .map((c) => {
       const dates = (input.history[c.id] ?? []).filter((d) => d < input.date);
       const last = dates.reduce((m, d) => (d > m ? d : m), "");
-      return { c, last, flast: formatLast.get(fmt(c)) ?? "", week: dates.filter((d) => d >= weekStart).length };
+      return { c, last, flast: formatLast.get(fmt(c)) ?? "", famLast: familyLast.get(fam(c)) ?? "", week: dates.filter((d) => d >= weekStart).length };
     })
     .map((x) => ({ ...x, luck: luckKey(`${input.creatorId}|${input.date}|${x.c.id}`, x.c) }))
     .sort(
       (a, b) =>
+        a.famLast.localeCompare(b.famLast) ||
         a.flast.localeCompare(b.flast) ||
         a.last.localeCompare(b.last) ||
         // Among equally fresh videos: a weighted shuffle per creator per day, so creators
         // don't all get the same videos, while big and recently winning ones still come up more.
         a.luck - b.luck,
     )
-    .map((x) => ({ id: x.c.id, week: x.week, format: fmt(x.c) }));
+    .map((x) => ({
+      id: x.c.id,
+      week: x.week,
+      format: fmt(x.c),
+      family: fam(x.c),
+      family_last: x.famLast as YyyyMmDd | "",
+      fresh: !x.famLast || daysApart(x.famLast, input.date) >= FAMILY_REPEAT_DAYS,
+      ...(x.c.video_format ? { video_format: x.c.video_format } : {}),
+    }));
 }
 
 /**
- * Today's picks. Forced ideas first; then ranked candidates used fewer than
- * MAX_PER_WEEK times this week; then (soft cap) anyone else rather than leave
- * a slot empty. Never the same video twice in a day, so a list smaller than
- * `count` leaves the remaining slots empty.
+ * Today's picks. Forced ideas first; then (full creators) the format mix from
+ * fresh families; then ranked candidates whose family is fresh, used fewer
+ * than MAX_PER_WEEK times this week first; then (pool dry) the least recently
+ * used families; then anyone else rather than leave a slot empty. Never the
+ * same video twice in a day, so a list smaller than `count` leaves the
+ * remaining slots empty.
  */
 export function selectDailyPicks(input: PickInput): string[] {
   const out: string[] = [];
@@ -377,6 +503,18 @@ export function selectDailyPicks(input: PickInput): string[] {
   };
   for (const id of input.forced ?? []) add(id, true);
   const ranked = rankCandidates(input);
+  const fresh = [...ranked.filter((r) => r.fresh && r.week < MAX_PER_WEEK), ...ranked.filter((r) => r.fresh)];
+  if (input.mix) {
+    // Soft: only from fresh families, so the mix never brings back a recent family.
+    const quota = (want: number, ok: (r: RankedCandidate) => boolean) => {
+      const stop = Math.min(input.count, out.length + want);
+      for (const r of fresh) if (out.length < stop && ok(r)) add(r.id);
+    };
+    quota(input.mix.selfTest, (r) => r.video_format === "self-test");
+    quota(input.mix.other, (r) => !!r.video_format && r.video_format !== "self-test");
+  }
+  for (const r of fresh) add(r.id);
+  // Pool dry: families given in the last FAMILY_REPEAT_DAYS, least recently used first.
   for (const r of ranked) if (r.week < MAX_PER_WEEK) add(r.id);
   for (const r of ranked) add(r.id);
   // Only when there are fewer families than slots: a second one from a family beats an empty slot.
@@ -445,9 +583,50 @@ export function topUpPicks(existing: DailyPick[], given: number, fresh: string[]
   return out;
 }
 
-/** Is this founder idea still in its test window (only its assigned creators get it)? */
-export function ideaInTest(v: Pick<ProvenVideo, "added_by" | "created_at">, nowIso: string): boolean {
-  return v.added_by === "founder_idea" && Date.parse(nowIso) - Date.parse(v.created_at) < IDEA_TEST_DAYS * DAY_MS;
+/** Can everyone be given this video? Ideas only once their test promoted them (until then only their scheduled creators get them). */
+export function inRotation(v: Pick<ProvenVideo, "added_by" | "test_result">): boolean {
+  return v.added_by !== "founder_idea" || v.test_result === "promoted";
+}
+
+/** First-person hooks ("I fixed my hair loss") aren't given out, unless there's a third-person version to show instead. */
+export function hookPickable(v: Pick<ProvenVideo, "hook_first_person" | "hook_third_person">): boolean {
+  return !v.hook_first_person || !!v.hook_third_person?.trim();
+}
+
+/** The hook a creator is shown: the third-person version for a first-person video, else the full hook (unless edited by hand). */
+export function hookShown(v: Pick<ProvenVideo, "hook_line" | "hook_full" | "hook_edited" | "hook_first_person" | "hook_third_person">): string {
+  if (v.hook_first_person && v.hook_third_person?.trim()) return v.hook_third_person.trim();
+  return (!v.hook_edited && v.hook_full) || v.hook_line;
+}
+
+// ---------------------------------------------------------------- creator kinds
+
+type TrialFields = Pick<CreatorProfile, "trial_plan" | "trial_outcome" | "trial_decided_on">;
+
+/**
+ * Still in a v2 trial on `date` (not yet promoted). Promotion is the next
+ * weekday after the founder's "keep" (pay.ts trialWindow); picks only exist
+ * on weekdays, so "after the decision day" is the same thing.
+ */
+export function inTrialV2(c: TrialFields, date: YyyyMmDd): boolean {
+  if (c.trial_plan !== "v2") return false;
+  return !(c.trial_outcome === "keep" && c.trial_decided_on && date > c.trial_decided_on);
+}
+
+/** Picks a day: 3 for format creators and trial v2 creators, else 5. */
+export function givenFor(c: Pick<CreatorProfile, "format_creator"> & TrialFields, date: YyyyMmDd): number {
+  if (c.format_creator) return DAILY_GIVEN_FORMAT;
+  return inTrialV2(c, date) ? DAILY_GIVEN_TRIAL : DAILY_GIVEN;
+}
+
+/** A full creator (gets ideas and the format mix): trial/active, not a format creator, not in a v2 trial, not ended. */
+export function isFullCreator(
+  c: Pick<CreatorProfile, "status" | "format_creator" | "ended_on"> & TrialFields,
+  date: YyyyMmDd,
+): boolean {
+  if (c.status !== "active" && c.status !== "trial") return false;
+  if (c.format_creator || inTrialV2(c, date)) return false;
+  return !c.ended_on || c.ended_on >= date;
 }
 
 // ---------------------------------------------------------------- founder ideas
@@ -469,6 +648,130 @@ export function pickIdeaCreators(creators: IdeaCreator[], ideaId: string, n = ID
     .sort((a, b) => a.last_idea_on.localeCompare(b.last_idea_on) || spread(`${ideaId}|${a.id}`) - spread(`${ideaId}|${b.id}`))
     .slice(0, n)
     .map((c) => c.id);
+}
+
+/** Monday to Friday of the week after `today` (a Monday `today` gives next week's). */
+export function comingWeek(today: YyyyMmDd): YyyyMmDd[] {
+  const dow = new Date(dayNum(today) * DAY_MS).getUTCDay(); // 0 = Sunday
+  const monday = addDaysTo(today, ((8 - dow) % 7) || 7);
+  return [0, 1, 2, 3, 4].map((i) => addDaysTo(monday, i));
+}
+
+/**
+ * Schedules a batch of ideas over `days`: each idea goes to up to
+ * min(perIdea, creators) different creators, nobody gets more than perDay
+ * ideas on a day (counting `booked`, ideas already scheduled). Each pick is the
+ * creator with the fewest ideas that week, on their emptiest day (earliest
+ * first); stable tie-break by hash. Ideas past capacity get fewer creators
+ * (possibly none).
+ */
+export function scheduleIdeaBatch(
+  ideaIds: string[],
+  creatorIds: string[],
+  days: YyyyMmDd[],
+  opts: { perIdea?: number; perDay?: number; booked?: IdeaAssignment[] } = {},
+): Record<string, IdeaAssignment[]> {
+  const perIdea = Math.min(opts.perIdea ?? IDEA_BATCH_CREATORS, creatorIds.length);
+  const perDay = opts.perDay ?? IDEAS_PER_DAY;
+  const dayLoad = new Map<string, number>();
+  const weekLoad = new Map<string, number>();
+  const daySet = new Set(days);
+  const bump = (a: IdeaAssignment) => {
+    dayLoad.set(`${a.creator_id}|${a.date}`, (dayLoad.get(`${a.creator_id}|${a.date}`) ?? 0) + 1);
+    weekLoad.set(a.creator_id, (weekLoad.get(a.creator_id) ?? 0) + 1);
+  };
+  for (const a of opts.booked ?? []) if (daySet.has(a.date)) bump(a);
+  const out: Record<string, IdeaAssignment[]> = {};
+  for (const idea of ideaIds) {
+    const mine: IdeaAssignment[] = [];
+    for (let k = 0; k < perIdea; k++) {
+      let best: { a: IdeaAssignment; key: [number, number, number, number] } | null = null;
+      for (const cid of creatorIds) {
+        if (mine.some((m) => m.creator_id === cid)) continue;
+        days.forEach((date, di) => {
+          const load = dayLoad.get(`${cid}|${date}`) ?? 0;
+          if (load >= perDay) return;
+          const key: [number, number, number, number] = [weekLoad.get(cid) ?? 0, load, di, spread(`${idea}|${cid}`)];
+          if (!best || lexLess(key, best.key)) best = { a: { creator_id: cid, date }, key };
+        });
+      }
+      if (!best) break;
+      const chosen = (best as { a: IdeaAssignment }).a;
+      mine.push(chosen);
+      bump(chosen);
+    }
+    out[idea] = mine;
+  }
+  return out;
+}
+
+function lexLess(a: number[], b: number[]): boolean {
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] < b[i];
+  return false;
+}
+
+// ---------------------------------------------------------------- idea tests
+
+/** Better of a remake's two platforms (null = neither measured). */
+export function bestViews(v: { tiktok: number | null; instagram: number | null }): number | null {
+  const n = [v.tiktok, v.instagram].filter((x): x is number => x != null && Number.isFinite(x));
+  return n.length ? Math.max(...n) : null;
+}
+
+/**
+ * The idea's test summary from its remakes, keeping 3-day / 7-day views
+ * recorded by earlier runs and recording them the first time a remake is old
+ * enough. `today` is the judge's calendar day.
+ */
+export function ideaTestSummary(
+  assignments: IdeaAssignment[],
+  remakes: Pick<ProvenRemake, "creator_id" | "date" | "views" | "tiktok_url" | "instagram_url">[],
+  prev: IdeaTest | undefined,
+  today: YyyyMmDd,
+  nowIso: string,
+): IdeaTest {
+  const before = new Map((prev?.remakes ?? []).map((r) => [`${r.creator_id}|${r.date}`, r]));
+  const rows: IdeaTestRemake[] = remakes
+    .map((r) => {
+      const views = bestViews(r.views);
+      const old = before.get(`${r.creator_id}|${r.date}`);
+      const age = daysApart(r.date, today);
+      const at = (k: "views_3d" | "views_7d", days: number) =>
+        old?.[k] != null ? { [k]: old[k] } : age >= days && views != null ? { [k]: views } : {};
+      return {
+        creator_id: r.creator_id,
+        date: r.date,
+        views,
+        ...at("views_3d", 3),
+        ...at("views_7d", 7),
+        ...(r.tiktok_url ? { tiktok_url: r.tiktok_url } : {}),
+        ...(r.instagram_url ? { instagram_url: r.instagram_url } : {}),
+      };
+    })
+    .sort((a, b) => a.date.localeCompare(b.date) || a.creator_id.localeCompare(b.creator_id));
+  const measured = rows.map((r) => r.views).filter((v): v is number => v != null);
+  const last = assignments.map((a) => a.date).sort().pop() ?? today;
+  return {
+    creators: new Set(assignments.map((a) => a.creator_id)).size,
+    posts: rows.length,
+    best_views: measured.length ? Math.max(...measured) : null,
+    remakes: rows,
+    judge_on: addDaysTo(last, IDEA_RESULT_DAYS),
+    updated_at: nowIso,
+  };
+}
+
+/**
+ * The test's result once it's due (null = not yet): a remake at
+ * IDEA_WIN_VIEWS+ promotes it, every remake under IDEA_DROP_VIEWS drops it,
+ * anything else (including nobody posting) is borderline for the founder.
+ */
+export function ideaOutcome(test: Pick<IdeaTest, "remakes" | "judge_on">, today: YyyyMmDd): IdeaTestResult | null {
+  if (today < test.judge_on) return null;
+  const views = test.remakes.map((r) => r.views ?? 0);
+  if (views.some((v) => v >= IDEA_WIN_VIEWS)) return "promoted";
+  if (views.length && views.every((v) => v < IDEA_DROP_VIEWS)) return "dropped";
+  return "borderline";
 }
 
 // ---------------------------------------------------------------- remakes

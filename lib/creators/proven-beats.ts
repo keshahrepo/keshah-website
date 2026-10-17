@@ -5,15 +5,16 @@
  * The creators app shows, per proven video:
  *   1. the hook (hook_line), said word for word,
  *   2. these 3-4 beats, made in the creator's own words,
- *   3. a pinned-video ending (cta_line when the original ended with one,
- *      otherwise a line from the app's own library),
+ *   3. a pinned-video ending (cta_line: two calls to action with a short
+ *      new-info beat between, written for every video; the app's own library
+ *      only when it's missing),
  *   4. the original transcript, collapsed.
  *
  * Generated from the transcript with Claude and stored on the doc:
  *
  *   ProvenVideos/{id}.talking_points        string[] (3-4)
  *   ProvenVideos/{id}.talking_points_source "auto" (generated) | "admin" (edited, never overwritten)
- *   ProvenVideos/{id}.cta_line              cleaned-up pinned-video ending of the original, or ""
+ *   ProvenVideos/{id}.cta_line              the pinned-video ending (always asked for; "" only when the model's ending broke the rules)
  *   ProvenVideos/{id}.short_title           2-4 word name for the app's list row ("Pinch test")
  *   ProvenVideos/{id}.beats                 { generated_at, model } or failures { attempts, last_error, last_attempt_at }
  *
@@ -99,13 +100,26 @@ Example beats in the right style:
 - Without enough blood, the hair usually gets thinner and falls out.
 - Scalp exercises every day can loosen it up.
 
-"cta": only if the original ends by sending viewers to the pinned video on the profile. Then write that ending, cleaned up, as one or two short spoken sentences that point to the pinned video on the creator's profile. Confident and generous, never needy. Keep "how to find it" and "don't DM me saying you can't find it" style lines if the original has them. Drop any result claim ("it fixed my hair"), any link in bio, comment or follow request, any "you'll thank me later", and any em dash. If the original ends any other way, "cta" is "".`;
+"cta": always write it, whatever the original's ending was. It is the spoken ending, 3 short parts in this order, as plain sentences:
+1. The favour: tell the viewer where the answer is. Frame it around the doubts they have right now, like is my scalp actually tight, does this actually work, how do I fix it. Then say exactly where to find it: the pinned video on the profile, the one that says watch this first, it's literally the first video on the profile. Add an honest line like please don't DM me saying you can't find it.
+2. One short beat of new information about what that video shows, for example: it also shows you the mistake most people make when they try to loosen it.
+3. A second call to action from a different angle, low pressure and personal, for example: so if yours felt stuck, at least you know why, it takes 5 seconds to check, what do you have to lose.
+Rules for "cta":
+- Spoken, simple words a 5-year-old knows. 40 to 90 words in all. No em dashes or en dashes.
+- Always say "pinned video" once, and say it's the first video on the profile.
+- Never promise a result (no regrowth, no "it fixed my hair", no "you'll thank me later", no timeline).
+- Never say "I'm not selling anything", "I don't get paid" or anything like it: creators are paid and say so.
+- No link in bio, no "comment", no "follow", no "like", no "save this".
+- Vary the wording from video to video. The examples above show the idea; don't copy them word for word every time. Tie the doubts and the new-info beat to this video's angle where you can.`;
 
 const DASHES = /\s*[—–]\s*/g;
 const FIRST_PERSON = /\b(i|i'm|i've|i'd|i'll|me|my|mine|myself|we|we're|we've|our|ours|us)\b/i;
 const STORY = /\b(friend|cousin|brother|sister|dad|father|uncle|barber|client|buddy|a guy|this guy|people i know)\b/i;
 const BANNED = /\b(routine|keshah|link in (my )?bio|comment|follow)\b/i;
-const CTA_BANNED = /\b(bio|comment|follow|thank (me|yourself) later|please)\b/i;
+const CTA_BANNED = /\b(bio|comment|follow|link|save this|thank (me|yourself) later|not selling|don'?t sell|(not|don'?t|never) (get )?paid|sponsored by)\b/i;
+/** Pinned-video endings run 40-90 words; this leaves room for a long one. */
+export const CTA_MAX_WORDS = 110;
+export const CTA_MAX_CHARS = 700;
 const RESULT_CLAIM = /\b(fixed|regrew|regrow|grew back|stopped|saved|worked for|cured|reversed)\b/i;
 
 /** Em / en dashes to commas, spacing tidied, ends with punctuation. */
@@ -137,8 +151,9 @@ export function cleanCta(raw: unknown): string {
   const t = tidyLine(String(raw ?? ""));
   if (!t || !/\bpinned\b/i.test(t)) return "";
   if (CTA_BANNED.test(t)) return "";
-  if (RESULT_CLAIM.test(t) && /\b(i|my|me)\b/i.test(t)) return "";
-  if (t.length > 240) return "";
+  // Claims about the speaker's own results ("the pinned video shows how I fixed my hair").
+  if (RESULT_CLAIM.test(t) && /\b(i|my)\b/i.test(t)) return "";
+  if (t.length > CTA_MAX_CHARS || t.split(/\s+/).length > CTA_MAX_WORDS) return "";
   return t;
 }
 
@@ -191,8 +206,11 @@ export function cleanHeader(raw: unknown): string {
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
-/** Model output -> clean beats (3-4) + cta. Throws when fewer than 3 beats survive the rules. */
-export function parseBeats(raw: string, transcript = ""): ParsedBeats {
+/**
+ * Model output -> clean beats (3-4) + cta. Throws when fewer than 3 beats
+ * survive the rules, or (requireCta) when the ending is missing or breaks them.
+ */
+export function parseBeats(raw: string, transcript = "", opts: { requireCta?: boolean } = {}): ParsedBeats {
   const s = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
   const start = s.indexOf("{");
   const end = s.lastIndexOf("}");
@@ -206,12 +224,14 @@ export function parseBeats(raw: string, transcript = ""): ParsedBeats {
     return !p;
   });
   if (beats.length < 3) throw new Error(`only ${beats.length} usable beats (${problems.join("; ").slice(0, 200)})`);
+  const cta = cleanCta(j.cta);
+  if (opts.requireCta && !cta) throw new Error(`the "cta" ending is missing or broke a rule (${String(j.cta ?? "").slice(0, 80)})`);
   return {
     hook: transcript ? cleanHook(j.hook, transcript) : "",
     hook_first_person: j.hook_first_person === true,
     header: cleanHeader(j.header),
     beats: beats.slice(0, 4),
-    cta: cleanCta(j.cta),
+    cta,
     title: cleanTitle(j.title),
   };
 }
@@ -255,13 +275,18 @@ function anthropicGenerate(apiKey: string): GenerateFn {
   };
 }
 
-/** Beats for one video. Retries once when the output breaks the rules. No Firestore writes. */
+/**
+ * Beats for one video. Retries once when the output breaks the rules (the
+ * first try also needs a usable ending; the retry keeps its beats without one,
+ * and the app falls back to its library). No Firestore writes.
+ */
 export async function beatsFor(v: Pick<ProvenVideo, "hook_line" | "transcript">, generate: GenerateFn): Promise<ParsedBeats> {
   const user = `FIRST LINE OF THE HOOK (it may be cut short):\n${v.hook_line}\n\nORIGINAL TRANSCRIPT:\n${v.transcript.slice(0, 6000)}`;
   let last: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      return parseBeats(await generate(BEATS_SYSTEM, attempt ? `${user}\n\nYour last answer broke a rule (${String(last).slice(0, 160)}). Follow every rule.` : user), v.transcript);
+      const prompt = attempt ? `${user}\n\nYour last answer broke a rule (${String(last).slice(0, 160)}). Follow every rule.` : user;
+      return parseBeats(await generate(BEATS_SYSTEM, prompt), v.transcript, { requireCta: attempt === 0 });
     } catch (e) {
       last = e instanceof Error ? e.message : e;
     }
@@ -275,7 +300,7 @@ export interface BeatsRunResult {
   needing: number;
   attempted: number;
   generated: number;
-  /** Of those, how many came with the original's own pinned-video ending. */
+  /** Of those, how many came with a usable pinned-video ending. */
   with_cta: number;
   failed: { id: string; error: string }[];
   /** Still missing after this run (cap / deadline); run again for the rest. */
@@ -364,7 +389,7 @@ export async function generateProvenBeats(opts: {
     }),
   );
   out.remaining = need.length - out.generated;
-  log(`proven beats: ${out.generated}/${out.attempted} generated (${out.with_cta} with the original's ending), ${out.failed.length} failed`);
+  log(`proven beats: ${out.generated}/${out.attempted} generated (${out.with_cta} with an ending), ${out.failed.length} failed`);
   return out;
 }
 

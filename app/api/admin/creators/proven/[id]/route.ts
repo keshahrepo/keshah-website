@@ -7,10 +7,11 @@ import { generateProvenBeats, needsBeats } from "@/lib/creators/proven-beats";
 
 export const dynamic = "force-dynamic";
 
-const ACTIONS = new Set<ProvenAction>(["approve", "dismiss", "pause", "retire", "restore", "keep", "edit_hook", "set_audience", "edit_idea", "edit_points"]);
+const ACTIONS = new Set<ProvenAction>(["approve", "dismiss", "pause", "retire", "restore", "keep", "edit_hook", "set_audience", "edit_idea", "edit_points", "promote_idea"]);
 
 // PATCH { action, hook_line?, audience?, talking_points?, reference_url? }
 // edit_points: a proven video's beats edited by hand (marked "admin", never regenerated).
+// promote_idea: a borderline (or dropped) idea test goes into everyone's rotation.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const denied = await requireAdmin(req);
   if (denied) return denied;

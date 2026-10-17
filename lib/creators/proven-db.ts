@@ -6,24 +6,34 @@
  *                         attribute remakes, refresh stats + tired flags, fill missing transcripts
  *   getDailyPicks         a creator's picks for their local day (created once, then stable)
  *   swapPick              swap one pick for the next best active video
- *   addIdea / updateProven  admin actions
+ *   addIdea / addIdeaBatch / updateProven  admin actions
  */
 import { randomBytes } from "node:crypto";
-import type { DocumentData, Firestore } from "firebase-admin/firestore";
+import { FieldValue, type DocumentData, type Firestore } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { notifyFounder } from "@/lib/staff";
 import { CREATORS_COLLECTION, CreatorDataError, creatorToday, listCreators } from "./db";
 import { isWeekday, localDate } from "./pay";
 import {
-  DAILY_GIVEN,
-  DAILY_GIVEN_FORMAT,
+  IDEAS_PER_DAY,
+  MIX_OTHER,
+  MIX_SELF_TEST,
   PROVEN_COLLECTION,
   PROVEN_MIN_VIEWS,
   REMAKE_JUDGE_AFTER_DAYS,
   addDaysTo,
   emptyStats,
+  comingWeek,
+  givenFor,
   hookLineFrom,
-  ideaInTest,
+  hookPickable,
+  hookShown,
+  ideaOutcome,
+  ideaTestSummary,
+  inRotation,
+  isFullCreator,
+  normalizeFormat,
+  scheduleIdeaBatch,
   formatGroups,
   DUPLICATE_SIMILARITY,
   FAMILY_SIMILARITY,
@@ -43,6 +53,8 @@ import {
   type Audience,
   type DailyPick,
   type DailyPicks,
+  type IdeaAssignment,
+  type IdeaTest,
   type PickCandidate,
   type ProvenRemake,
   type ProvenStatus,
@@ -116,6 +128,14 @@ export function toProven(d: DocumentData): ProvenVideo {
     ...(typeof d.hook_full === "string" && d.hook_full ? { hook_full: d.hook_full } : {}),
     ...(typeof d.hook_first_person === "boolean" ? { hook_first_person: d.hook_first_person } : {}),
     ...(typeof d.header_text === "string" && d.header_text ? { header_text: d.header_text } : {}),
+    ...(normalizeFormat(d.format) ? { format: normalizeFormat(d.format) } : {}),
+    ...(typeof d.hook_family === "string" && d.hook_family.trim() ? { hook_family: d.hook_family.trim() } : {}),
+    ...(typeof d.hook_third_person === "string" && d.hook_third_person.trim() ? { hook_third_person: d.hook_third_person.trim() } : {}),
+    ...(d.test_result === "promoted" || d.test_result === "dropped" || d.test_result === "borderline" ? { test_result: d.test_result } : {}),
+    ...(d.test && typeof d.test === "object" ? { test: d.test as IdeaTest } : {}),
+    ...(d.from_idea ? { from_idea: true } : {}),
+    ...(typeof d.promoted_at === "string" ? { promoted_at: d.promoted_at } : {}),
+    ...(typeof d.retired_reason === "string" && d.retired_reason ? { retired_reason: d.retired_reason } : {}),
     ...(d.reference_url ? { reference_url: d.reference_url } : {}),
     ...(Array.isArray(d.idea_assignments) ? { idea_assignments: d.idea_assignments } : {}),
     ...(d.source_creator_id ? { source_creator_id: d.source_creator_id } : {}),
@@ -346,7 +366,7 @@ export async function findProvenVideos(opts: {
 
 // ================================================================ admin actions
 
-export type ProvenAction = "approve" | "dismiss" | "pause" | "retire" | "restore" | "keep" | "edit_hook" | "set_audience" | "edit_idea" | "edit_points";
+export type ProvenAction = "approve" | "dismiss" | "pause" | "retire" | "restore" | "keep" | "edit_hook" | "set_audience" | "edit_idea" | "edit_points" | "promote_idea";
 
 export async function updateProven(
   id: string,
@@ -403,6 +423,12 @@ export async function updateProven(
       if (body.reference_url !== undefined) patch.reference_url = cleanUrl(body.reference_url);
       break;
     }
+    case "promote_idea":
+      // The founder's call on a borderline test: into the general rotation like a winner.
+      if (cur.added_by !== "founder_idea") throw new CreatorDataError("Only ideas can be promoted.");
+      status("active");
+      Object.assign(patch, { test_result: "promoted", from_idea: true, promoted_at: nowIso, retired_reason: FieldValue.delete() });
+      break;
     case "edit_points": {
       // A proven video's beats (proven-beats.ts), edited by hand: never regenerated.
       if (cur.added_by === "founder_idea") throw new CreatorDataError("Edit an idea's talking points with edit_idea.");
@@ -430,21 +456,19 @@ function cleanUrl(v: unknown): string {
 }
 
 /**
- * Founder idea: active straight away, assigned to up to 3 trial/active
+ * Founder idea: active straight away, assigned to up to 3 full
  * creators for their next local posting day (as one of their given videos). Those
  * creators are the ones who got an idea least recently.
  */
 export async function addIdea(
-  input: { hook_line: string; talking_points?: unknown; reference_url?: string; idea_text?: string; audience?: string },
+  input: IdeaInput,
   opts: { db?: Firestore; now?: Date } = {},
 ): Promise<{ id: string } & ProvenVideo> {
   const db = fsdb(opts.db);
   const now = opts.now ?? new Date();
   const nowIso = now.toISOString();
-  const hook = String(input.hook_line ?? "").replace(/\s+/g, " ").trim();
-  if (!hook) throw new CreatorDataError("Write the hook line first.");
-  const points = cleanPoints(input.talking_points);
-  const id = `idea_${randomBytes(6).toString("hex")}`;
+  const base = ideaDoc(input, nowIso);
+  const id = newIdeaId();
 
   const [creators, all] = await Promise.all([listCreators(), listProven({ db })]);
   const lastIdea = new Map<string, string>();
@@ -452,7 +476,8 @@ export async function addIdea(
     for (const a of v.idea_assignments ?? []) if ((lastIdea.get(a.creator_id) ?? "") < a.date) lastIdea.set(a.creator_id, a.date);
   }
   const chosen = pickIdeaCreators(
-    creators.map((c) => ({ id: c.id, status: c.status, last_idea_on: lastIdea.get(c.id) ?? "" })),
+    // Only full creators test ideas (never trial v2 or format creators).
+    creators.filter((c) => isFullCreator(c, creatorToday(c, now))).map((c) => ({ id: c.id, status: c.status, last_idea_on: lastIdea.get(c.id) ?? "" })),
     id,
   );
   const byId = new Map(creators.map((c) => [c.id, c]));
@@ -464,7 +489,26 @@ export async function addIdea(
   };
   const assignments = chosen.map((cid) => ({ creator_id: cid, date: nextWeekday(creatorToday(byId.get(cid)!, now)) }));
 
-  const doc: ProvenVideo = {
+  const doc: ProvenVideo = { ...base, idea_assignments: assignments };
+  await db.collection(PROVEN_COLLECTION).doc(id).set(doc);
+  return { id, ...doc };
+}
+
+export interface IdeaInput {
+  hook_line: string;
+  talking_points?: unknown;
+  reference_url?: string;
+  idea_text?: string;
+  audience?: string;
+}
+
+const newIdeaId = () => `idea_${randomBytes(6).toString("hex")}`;
+
+/** A new idea doc (no assignments yet). Throws on a missing hook or bad link. */
+function ideaDoc(input: IdeaInput, nowIso: string): ProvenVideo {
+  const hook = String(input.hook_line ?? "").replace(/\s+/g, " ").trim();
+  if (!hook) throw new CreatorDataError("Write the hook line first.");
+  return {
     source_url: null,
     platform: null,
     handle: null,
@@ -474,7 +518,7 @@ export async function addIdea(
     transcript: "",
     hook_line: hook.slice(0, 300),
     idea_text: String(input.idea_text ?? "").trim().slice(0, 2000),
-    talking_points: points,
+    talking_points: cleanPoints(input.talking_points),
     reference_url: cleanUrl(input.reference_url),
     status: "active",
     added_by: "founder_idea",
@@ -484,10 +528,69 @@ export async function addIdea(
     remake_count: 0,
     last_used_at: null,
     stats: emptyStats(),
-    idea_assignments: assignments,
   };
-  await db.collection(PROVEN_COLLECTION).doc(id).set(doc);
-  return { id, ...doc };
+}
+
+/** Most ideas one batch takes. */
+export const IDEA_BATCH_MAX = 30;
+
+export interface IdeaBatchResult {
+  week: YyyyMmDd[];
+  creators: number;
+  ideas: ({ id: string } & ProvenVideo)[];
+  /** Ideas that got no creator (the week was full). */
+  unscheduled: string[];
+}
+
+/**
+ * A week's batch of founder ideas, scheduled over the coming Mon-Fri (or the
+ * week starting `week_of`, a Monday): each idea to up to
+ * min(IDEA_BATCH_CREATORS, full creators) creators, at most IDEAS_PER_DAY a
+ * creator a day, counting ideas already scheduled that week. Dates are the
+ * creators' local days, like picks.
+ */
+export async function addIdeaBatch(
+  input: { ideas: IdeaInput[]; week_of?: string },
+  opts: { db?: Firestore; now?: Date } = {},
+): Promise<IdeaBatchResult> {
+  const db = fsdb(opts.db);
+  const now = opts.now ?? new Date();
+  const nowIso = now.toISOString();
+  if (!Array.isArray(input.ideas) || !input.ideas.length) throw new CreatorDataError("Add at least one idea.");
+  if (input.ideas.length > IDEA_BATCH_MAX) throw new CreatorDataError(`At most ${IDEA_BATCH_MAX} ideas in one batch.`);
+  // Validate everything before writing anything.
+  const docs = input.ideas.map((x, i) => {
+    try {
+      return { id: newIdeaId(), doc: ideaDoc(x, nowIso) };
+    } catch (e) {
+      throw new CreatorDataError(`Idea ${i + 1}: ${errMsg(e)}`);
+    }
+  });
+  let week: YyyyMmDd[];
+  if (input.week_of) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.week_of) || new Date(`${input.week_of}T00:00:00Z`).getUTCDay() !== 1) {
+      throw new CreatorDataError("week_of must be a Monday (YYYY-MM-DD).");
+    }
+    week = [0, 1, 2, 3, 4].map((i) => addDaysTo(input.week_of as YyyyMmDd, i));
+  } else {
+    week = comingWeek(localDate(nowIso, "America/New_York"));
+  }
+
+  const [creators, all] = await Promise.all([listCreators(), listProven({ db })]);
+  const eligible = creators.filter((c) => isFullCreator(c, week[0])).map((c) => c.id);
+  const booked: IdeaAssignment[] = all.filter((v) => v.added_by === "founder_idea").flatMap((v) => v.idea_assignments ?? []);
+  const plan = scheduleIdeaBatch(docs.map((d) => d.id), eligible, week, { booked });
+
+  const batch = db.batch();
+  const out: IdeaBatchResult = { week, creators: eligible.length, ideas: [], unscheduled: [] };
+  for (const { id, doc } of docs) {
+    const full: ProvenVideo = { ...doc, idea_assignments: plan[id] ?? [] };
+    if (!full.idea_assignments!.length) out.unscheduled.push(id);
+    batch.set(db.collection(PROVEN_COLLECTION).doc(id), full);
+    out.ideas.push({ id, ...full });
+  }
+  await batch.commit();
+  return out;
 }
 
 // ================================================================ daily picks
@@ -502,7 +605,7 @@ export interface PublicProven {
   hook_line: string;
   transcript: string;
   talking_points: string[];
-  /** The original's own pinned-video ending, cleaned up ("" = the app picks one from its library). */
+  /** The pinned-video ending written for this video (proven-beats.ts; "" = the app picks one from its library). */
   cta_line: string;
   reference_url: string | null;
   /** Cover of the original for list rows (small when we have one), null when we don't have one (the app shows a placeholder). */
@@ -538,8 +641,8 @@ function publicProven(id: string, v: ProvenVideo): PublicProven {
     platform: v.platform,
     handle: v.handle,
     views: v.views,
-    // The generated full hook, unless the founder edited the hook by hand.
-    hook_line: (!v.hook_edited && v.hook_full) || v.hook_line,
+    // The generated full hook, unless the founder edited the hook by hand; the third-person version for a first-person video.
+    hook_line: hookShown(v),
     transcript: v.transcript,
     talking_points: v.talking_points ?? [],
     cta_line: v.cta_line ?? "",
@@ -557,8 +660,8 @@ function pickPosted(a: SlotAttribution | undefined): PickPosted | null {
   return { tiktok_url: a.tiktok_url || null, instagram_url: a.instagram_url || null };
 }
 
-export function givenCount(c: Pick<CreatorProfile, "format_creator">): number {
-  return c.format_creator ? DAILY_GIVEN_FORMAT : DAILY_GIVEN;
+export function givenCount(c: Pick<CreatorProfile, "format_creator" | "trial_plan" | "trial_outcome" | "trial_decided_on">, date: YyyyMmDd): number {
+  return givenFor(c, date);
 }
 
 interface PickContext {
@@ -568,9 +671,11 @@ interface PickContext {
   forced: string[];
   history: Record<string, YyyyMmDd[]>;
   audience: Audience | undefined;
+  /** Full creator's format mix (undefined for trial v2 / format creators). */
+  mix?: { selfTest: number; other: number };
 }
 
-async function pickContext(db: Firestore, creator: CreatorProfile, date: YyyyMmDd, nowIso: string): Promise<PickContext> {
+async function pickContext(db: Firestore, creator: CreatorProfile, date: YyyyMmDd): Promise<PickContext> {
   const cref = db.collection(CREATORS_COLLECTION).doc(creator.id);
   const [activeSnap, histSnap, raw] = await Promise.all([
     // Only the fields picking needs: the full docs carry transcripts and view
@@ -578,30 +683,56 @@ async function pickContext(db: Firestore, creator: CreatorProfile, date: YyyyMmD
     db
       .collection(PROVEN_COLLECTION)
       .where("status", "==", "active")
-      .select("added_by", "created_at", "idea_assignments", "audience", "stats.recent_wins", "views", "hook_first_person", "hook_line", "hook_full", "talking_points")
+      .select(
+        "added_by", "created_at", "idea_assignments", "test_result", "audience", "stats.recent_wins", "views",
+        "hook_first_person", "hook_third_person", "hook_line", "hook_full", "talking_points", "format", "hook_family",
+      )
       .get(),
     cref.collection("daily_picks").where("date", ">=", addDaysTo(date, -30)).get(),
     cref.get(),
   ]);
   const active = activeSnap.docs.map((d) => ({ id: d.id, ...toProven(d.data()) }));
-  const forced = active
-    .filter((v) => v.added_by === "founder_idea" && (v.idea_assignments ?? []).some((a) => a.creator_id === creator.id && a.date === date))
-    .map((v) => v.id);
+  const full = isFullCreator(creator, date);
+  // Ideas scheduled for this creator today (full creators only, at most IDEAS_PER_DAY).
+  const forced = full
+    ? active
+        .filter((v) => v.added_by === "founder_idea" && (v.idea_assignments ?? []).some((a) => a.creator_id === creator.id && a.date === date))
+        .map((v) => v.id)
+        .sort()
+        .slice(0, IDEAS_PER_DAY)
+    : [];
   const hooks = active.map((v) => ({ id: v.id, hook: v.hook_full || v.hook_line, views: v.views }));
   const formats = formatGroups(hooks, DUPLICATE_SIMILARITY);
   const families = formatGroups(hooks, FAMILY_SIMILARITY);
   const candidates = active
-    // Hooks that claim the speaker's own results ("I fixed my hair loss") aren't given out.
+    // Ideas only once their test promoted them.
+    // Hooks that claim the speaker's own results ("I fixed my hair loss") aren't given out, unless there's a third-person version.
     // ...and only videos with a script to remake (talking points come from a real transcript).
-    .filter((v) => !ideaInTest(v, nowIso) && !v.hook_first_person && (v.added_by === "founder_idea" || (v.talking_points?.length ?? 0) > 0))
-    .map((v) => ({ id: v.id, format: formats.get(v.id), family: families.get(v.id), audience: v.audience, recent_wins: v.stats.recent_wins, views: v.views }));
+    .filter((v) => inRotation(v) && hookPickable(v) && (v.added_by === "founder_idea" || (v.talking_points?.length ?? 0) > 0))
+    .map((v) => ({
+      id: v.id,
+      format: formats.get(v.id),
+      // A stored family wins (prefixed so it can't collide with a computed one, which is a video id).
+      family: v.hook_family ? `hf:${v.hook_family.toLowerCase()}` : families.get(v.id),
+      ...(v.format ? { video_format: v.format } : {}),
+      audience: v.audience,
+      recent_wins: v.stats.recent_wins,
+      views: v.views,
+    }));
   const history: Record<string, YyyyMmDd[]> = {};
   for (const d of histSnap.docs) {
     const p = d.data() as DailyPicks;
     if (p.date >= date) continue;
     for (const x of p.picks ?? []) (history[x.proven_id] ??= []).push(p.date);
   }
-  return { activeIds: new Set(active.map((v) => v.id)), candidates, forced, history, audience: asAudience(raw.data()?.audience) };
+  return {
+    activeIds: new Set(active.map((v) => v.id)),
+    candidates,
+    forced,
+    history,
+    audience: asAudience(raw.data()?.audience),
+    ...(full ? { mix: { selfTest: MIX_SELF_TEST, other: MIX_OTHER } } : {}),
+  };
 }
 
 /** Full docs for just these videos (the day's picks). */
@@ -674,10 +805,10 @@ export async function getDailyPicks(creator: CreatorProfile, opts: { db?: Firest
   const now = opts.now ?? new Date();
   const nowIso = now.toISOString();
   const date = opts.date ?? creatorToday(creator, now);
-  const given = givenCount(creator);
+  const given = givenCount(creator, date);
   if (!isWeekday(date)) return { date, given, picks: [], extra_posted: [], can_swap: false };
   const ref = db.collection(CREATORS_COLLECTION).doc(creator.id).collection("daily_picks").doc(date);
-  const [ctx, first] = await Promise.all([pickContext(db, creator, date, nowIso), ref.get()]);
+  const [ctx, first] = await Promise.all([pickContext(db, creator, date), ref.get()]);
   const firstDoc = first.exists ? (first.data() as DailyPicks) : null;
 
   // Usual case: the day's picks already exist and are full, so no transaction.
@@ -697,6 +828,7 @@ export async function getDailyPicks(creator: CreatorProfile, opts: { db?: Firest
       creatorId: creator.id,
       creatorAudience: ctx.audience,
       forced: ctx.forced,
+      mix: ctx.mix,
       exclude: [...existing.map((p) => p.proven_id), ...(cur?.swapped_out ?? [])],
     });
     if (!fresh.length) return { picks: existing, swappedOut: cur?.swapped_out ?? [], added: [], attribution };
@@ -739,10 +871,10 @@ export async function swapPick(creator: CreatorProfile, slot: number, opts: { db
   const now = opts.now ?? new Date();
   const nowIso = now.toISOString();
   const date = creatorToday(creator, now);
-  const given = givenCount(creator);
+  const given = givenCount(creator, date);
   if (!Number.isInteger(slot) || slot < 0 || slot >= given) throw new CreatorDataError("That video can't be swapped.");
   const ref = db.collection(CREATORS_COLLECTION).doc(creator.id).collection("daily_picks").doc(date);
-  const ctx = await pickContext(db, creator, date, nowIso);
+  const ctx = await pickContext(db, creator, date);
   const res = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new CreatorDataError("Today's videos aren't ready yet. Refresh and try again.", 409);
@@ -788,6 +920,10 @@ export interface ProvenDailyResult {
   days_stamped: number;
   stats_updated: number;
   tired_flagged: string[];
+  /** Ideas whose test was judged today, by result. */
+  ideas_promoted: string[];
+  ideas_dropped: string[];
+  ideas_borderline: string[];
   transcripts_filled: number;
   credits_used: number;
   errors: string[];
@@ -798,7 +934,9 @@ export interface ProvenDailyResult {
  * 2. Remakes: posting-day rows i < picks are linked to that day's pick i
  *    (proven_id stamped on the row), measured against the creator's normal.
  * 3. Stats + tired flag for every proven video with remakes.
- * 4. Missing transcripts (pending) filled, up to DAILY_TRANSCRIPT_CAP.
+ * 4. Idea tests: summary refreshed; judged IDEA_RESULT_DAYS after the last
+ *    scheduled day (promoted / retired "test dropped" / borderline).
+ * 5. Missing transcripts (pending) filled, up to DAILY_TRANSCRIPT_CAP.
  * Firestore reads only, except transcripts of new suggestions and a views
  * check of an original that looks tired (1 credit each).
  */
@@ -818,7 +956,7 @@ export async function runProvenDaily(opts: {
   const apiKey = opts.apiKey ?? process.env.SCRAPECREATORS_API_KEY ?? "";
   const deadline = opts.deadlineMs ?? Date.now() + 120_000;
   const timeLeft = () => deadline - Date.now();
-  const out: ProvenDailyResult = { creators: 0, suggested: [], remakes_written: 0, days_stamped: 0, stats_updated: 0, tired_flagged: [], transcripts_filled: 0, credits_used: 0, errors: [] };
+  const out: ProvenDailyResult = { creators: 0, suggested: [], remakes_written: 0, days_stamped: 0, stats_updated: 0, tired_flagged: [], ideas_promoted: [], ideas_dropped: [], ideas_borderline: [], transcripts_filled: 0, credits_used: 0, errors: [] };
   const provenCol = db.collection(PROVEN_COLLECTION);
   const creators = (await listCreators()).filter(
     (c) => SYNC_STATUSES.has(c.status) && (c.tiktok_handle?.trim() || c.instagram_handle?.trim()) && (!opts.onlyIds || opts.onlyIds.includes(c.id)),
@@ -986,7 +1124,40 @@ export async function runProvenDaily(opts: {
     }
   }
 
-  // 4. transcripts: new suggestions first, then anything still pending
+  // 4. idea tests (skipped on a partial run: other creators' remakes weren't re-measured)
+  if (!opts.onlyIds) {
+    const today = localDate(nowIso, "America/New_York");
+    const testing = all.filter(
+      (v) => v.added_by === "founder_idea" && v.status === "active" && !v.test_result && (v.idea_assignments ?? []).some((a) => a.date < today),
+    );
+    for (const v of testing) {
+      try {
+        const rs = (await provenCol.doc(v.id).collection("remakes").get()).docs.map((d) => d.data() as ProvenRemake);
+        const test = ideaTestSummary(v.idea_assignments ?? [], rs, v.test, today, nowIso);
+        const result = ideaOutcome(test, today);
+        const patch: Record<string, unknown> = { test };
+        if (result === "promoted") {
+          // A normal proven video from now on; the best remake becomes its reference when it has none.
+          const best = [...test.remakes].sort((a, b) => (b.views ?? 0) - (a.views ?? 0))[0];
+          const ref = best?.tiktok_url || best?.instagram_url;
+          Object.assign(patch, { test_result: result, from_idea: true, promoted_at: nowIso, ...(!v.reference_url && ref ? { reference_url: ref } : {}) });
+          out.ideas_promoted.push(v.id);
+        } else if (result === "dropped") {
+          Object.assign(patch, { test_result: result, status: "retired", status_changed_at: nowIso, retired_reason: "test dropped" });
+          out.ideas_dropped.push(v.id);
+        } else if (result === "borderline") {
+          // Stays out of the general rotation until the founder decides.
+          patch.test_result = result;
+          out.ideas_borderline.push(v.id);
+        }
+        await provenCol.doc(v.id).update(patch);
+      } catch (e) {
+        out.errors.push(`idea ${v.id}: ${errMsg(e)}`);
+      }
+    }
+  }
+
+  // 5. transcripts: new suggestions first, then anything still pending
   if (apiKey) {
     const pending = [
       ...newSuggestions,
@@ -1012,7 +1183,8 @@ export async function runProvenDaily(opts: {
   }
   log(
     `[proven] daily: ${out.creators} creators, ${out.suggested.length} suggested, ${out.remakes_written} remakes, ` +
-      `${out.stats_updated} stats, ${out.tired_flagged.length} tired, ${out.transcripts_filled} transcripts, ${out.credits_used} credits` +
+      `${out.stats_updated} stats, ${out.tired_flagged.length} tired, ` +
+      `ideas ${out.ideas_promoted.length} promoted / ${out.ideas_dropped.length} dropped / ${out.ideas_borderline.length} borderline, ${out.transcripts_filled} transcripts, ${out.credits_used} credits` +
       (out.errors.length ? `, ${out.errors.length} errors` : ""),
   );
   // One push a day for what went into the video bank (100K+ posts go straight in).
