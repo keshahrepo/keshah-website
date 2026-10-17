@@ -69,6 +69,10 @@
       "schedule": "20 5 * * *"
     },
     {
+      "path": "/api/cron/niche-scan",
+      "schedule": "5 * * * *"
+    },
+    {
       "path": "/api/cron/proven-beats",
       "schedule": "40 5 * * *"
     },
