@@ -35,7 +35,17 @@ export interface ScrapedPost {
   pinned: boolean;
   /** Cover image (signed CDN URL, expires after a few days). Absent when the response has none. */
   thumbnail_url?: string;
+  /** Engagement counts. Each is absent when the response doesn't carry it (never guessed as 0). */
+  likes?: number;
+  comments?: number;
+  shares?: number;
+  saves?: number;
 }
+
+/** Engagement fields of ScrapedPost / CreatorPost, in a fixed order. */
+export const ENGAGEMENT_KEYS = ["likes", "comments", "shares", "saves"] as const;
+export type EngagementKey = (typeof ENGAGEMENT_KEYS)[number];
+export type Engagement = Partial<Record<EngagementKey, number>>;
 
 export interface ScrapedPage {
   posts: ScrapedPost[];
@@ -43,6 +53,8 @@ export interface ScrapedPage {
   /** Pass back as max_cursor (TikTok) / max_id (Instagram). */
   cursor: string | null;
   credits_remaining: number | null;
+  /** The account's follower count when the response carries it (TikTok author.follower_count). */
+  followers?: number;
 }
 
 type Json = Record<string, unknown>;
@@ -51,6 +63,17 @@ const num = (v: unknown): number => {
   const n = typeof v === "string" ? Number(v) : typeof v === "number" ? v : NaN;
   return Number.isFinite(n) ? n : 0;
 };
+/** A count that is really there: finite and >= 0, else undefined (missing must not read as 0). */
+const optNum = (v: unknown): number | undefined => {
+  const n = typeof v === "string" && v.trim() ? Number(v) : typeof v === "number" ? v : NaN;
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
+};
+/** Only the engagement keys that have a value. */
+function engagement(e: Engagement): Engagement {
+  const out: Engagement = {};
+  for (const k of ENGAGEMENT_KEYS) if (e[k] !== undefined) out[k] = e[k];
+  return out;
+}
 const creditsOf = (d: Json): number | null =>
   typeof d.credits_remaining === "number" ? d.credits_remaining : null;
 
@@ -87,35 +110,56 @@ export function parseTikTokPage(raw: unknown, handle: string): ScrapedPage {
   const list = Array.isArray(d.aweme_list) ? d.aweme_list : [];
   const h = cleanHandle(handle);
   const posts: ScrapedPost[] = [];
+  let followers: number | undefined;
   for (const it of list) {
     const a = obj(it);
+    const author = obj(a.author);
+    if (followers === undefined && (!author.unique_id || cleanHandle(String(author.unique_id)).toLowerCase() === h.toLowerCase())) {
+      followers = optNum(author.follower_count);
+    }
     const id = String(a.aweme_id ?? "").trim();
     const created = num(a.create_time);
     if (!/^\d+$/.test(id) || !created) continue;
     const share = typeof a.share_url === "string" ? a.share_url : "";
     const kind = /\/photo\//.test(share) ? "photo" : "video";
     const thumb = tiktokThumb(a);
+    const st = obj(a.statistics);
     posts.push({
       platform: "tiktok",
       post_id: id,
       url: `https://www.tiktok.com/@${h}/${kind}/${id}`,
       posted_at: new Date(created * 1000).toISOString(),
       caption: typeof a.desc === "string" ? a.desc.slice(0, 500) : "",
-      views: num(obj(a.statistics).play_count),
+      views: num(st.play_count),
       pinned: num(a.is_top) === 1 || a.is_top === true,
       ...(thumb ? { thumbnail_url: thumb } : {}),
+      ...engagement({
+        likes: optNum(st.digg_count),
+        comments: optNum(st.comment_count),
+        shares: optNum(st.share_count),
+        saves: optNum(st.collect_count),
+      }),
     });
   }
   const cursor = d.max_cursor != null && d.max_cursor !== "" ? String(d.max_cursor) : null;
-  return { posts, has_more: num(d.has_more) === 1 || d.has_more === true, cursor, credits_remaining: creditsOf(d) };
+  return {
+    posts,
+    has_more: num(d.has_more) === 1 || d.has_more === true,
+    cursor,
+    credits_remaining: creditsOf(d),
+    ...(followers !== undefined ? { followers } : {}),
+  };
 }
 
 export function parseInstagramPage(raw: unknown): ScrapedPage {
   const d = obj(raw);
   const items = Array.isArray(d.items) ? d.items : [];
   const posts: ScrapedPost[] = [];
+  let followers: number | undefined;
   for (const it of items) {
     const m = obj(obj(it).media ?? it);
+    // The reels endpoint's user/owner has no follower_count today; read it if it ever appears.
+    followers ??= optNum(obj(m.user).follower_count) ?? optNum(obj(m.owner).follower_count);
     const code = typeof m.code === "string" ? m.code.trim() : "";
     const taken = num(m.taken_at);
     if (!code || !taken) continue;
@@ -130,11 +174,23 @@ export function parseInstagramPage(raw: unknown): ScrapedPage {
       views: Math.max(num(m.play_count), num(m.ig_play_count), num(m.view_count)),
       pinned: pinnedIds.some((p) => Array.isArray(p) && p.length > 0),
       ...(thumb ? { thumbnail_url: thumb } : {}),
+      ...engagement({
+        likes: optNum(m.like_count),
+        comments: optNum(m.comment_count),
+        shares: optNum(m.reshare_count ?? m.share_count),
+        saves: optNum(m.save_count),
+      }),
     });
   }
   const p = obj(d.paging_info);
   const cursor = typeof p.max_id === "string" && p.max_id ? p.max_id : null;
-  return { posts, has_more: p.more_available === true && !!cursor, cursor, credits_remaining: creditsOf(d) };
+  return {
+    posts,
+    has_more: p.more_available === true && !!cursor,
+    cursor,
+    credits_remaining: creditsOf(d),
+    ...(followers !== undefined ? { followers } : {}),
+  };
 }
 
 // ---------------------------------------------------------------- URL keys
@@ -189,6 +245,8 @@ export interface FetchPostsResult {
   credits_remaining: number | null;
   /** Stopped at maxPages while the API still had more inside the window (oldest day may be incomplete). */
   truncated: boolean;
+  /** Account follower count from the first page that carried one (absent when none did). */
+  followers?: number;
 }
 
 export class ScrapeError extends Error {
@@ -243,6 +301,7 @@ export async function fetchRecentPosts(
   let calls = 0;
   let credits: number | null = null;
   let truncated = false;
+  let followers: number | undefined;
   while (pages < maxPages) {
     if (opts.deadlineMs && pages > 0 && Date.now() > opts.deadlineMs) {
       truncated = true;
@@ -264,6 +323,7 @@ export async function fetchRecentPosts(
       credits = page.credits_remaining;
       opts.onCredits?.(credits);
     }
+    followers ??= page.followers;
     for (const p of page.posts) seen.set(p.post_id, p);
     const unpinned = page.posts.filter((p) => !p.pinned);
     const oldest = unpinned.length ? unpinned.reduce((a, b) => (a.posted_at < b.posted_at ? a : b)) : null;
@@ -281,7 +341,14 @@ export async function fetchRecentPosts(
     }
     cursor = page.cursor;
   }
-  return { posts: [...seen.values()], pages, calls, credits_remaining: credits, truncated };
+  return {
+    posts: [...seen.values()],
+    pages,
+    calls,
+    credits_remaining: credits,
+    truncated,
+    ...(followers !== undefined ? { followers } : {}),
+  };
 }
 
 /**

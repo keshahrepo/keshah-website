@@ -11,8 +11,10 @@
  *
  * Every sync, per creator:
  *   1. Fetch recent TikToks + Instagram Reels (lib/creators/scrape.ts).
- *   2. Upsert ContentCreators/{id}/posts/{platform}_{post_id} (views, views_history,
- *      crossed_100k_at / crossed_1m_at).
+ *   2. Upsert ContentCreators/{id}/posts/{platform}_{post_id} (views, likes /
+ *      comments / shares / saves, views_history with engagement snapshots,
+ *      crossed_100k_at / crossed_1m_at). Account follower counts, when the
+ *      response carries them (TikTok only), go to ContentCreators/{id}.followers.
  *   3. Bonuses: a post that is observed >= 100K / 1M views within 30 days of
  *      posting gets an approved BonusClaim (source "auto", doc id
  *      auto_{platform}_{post_id}; upgraded in place when 1M is crossed).
@@ -35,13 +37,14 @@ import { emailConfigured, sendEmail } from "@/lib/email";
 import { advanceCreatorStatus, getCreator, getOnboarding, isOnboarded, isYyyyMmDd, listCreators, toPostingDay } from "./db";
 import type { BonusPushInfo } from "@/lib/push";
 import { BONUS_100K_CENTS, BONUS_1M_TOTAL_CENTS, BONUS_WINDOW_DAYS, TRIAL_V2_VIDEOS, VIDEOS_PER_WEEKDAY, isWeekday, localDate, trialWindow } from "./pay";
-import { fetchRecentPosts, postKey, type FetchPostsResult, type ScrapedPost } from "./scrape";
+import { ENGAGEMENT_KEYS, fetchRecentPosts, postKey, type FetchPostsResult, type ScrapedPost } from "./scrape";
 import { firstPostingDay, inPostEndWindow } from "./lifecycle";
 import type {
   BonusClaim,
   CreatorPost,
   CreatorProfile,
   Platform,
+  PostEngagement,
   PostSyncState,
   PostedVideo,
   YyyyMmDd,
@@ -177,11 +180,17 @@ export function applyObservation(
   p: ScrapedPost,
   ctx: { nowIso: string; timezone: string; handle: string },
 ): CreatorPost {
+  // Engagement: this response's value, else the stored one (a missing field never becomes 0).
+  const eng: PostEngagement = {};
+  for (const k of ENGAGEMENT_KEYS) {
+    const v = typeof p[k] === "number" ? p[k] : typeof prev?.[k] === "number" ? prev[k] : undefined;
+    if (v !== undefined) eng[k] = v;
+  }
   const history = Array.isArray(prev?.views_history) ? [...prev!.views_history] : [];
   const last = history[history.length - 1];
   const stale = !last || Date.parse(ctx.nowIso) - Date.parse(last.at) >= DAY_MS;
   if (!last || last.views !== p.views || stale) {
-    if (!last || last.at !== ctx.nowIso) history.push({ at: ctx.nowIso, views: p.views });
+    if (!last || last.at !== ctx.nowIso) history.push({ at: ctx.nowIso, views: p.views, ...eng });
   }
   // Views can briefly dip (platform recounts); thresholds are "first observed >=".
   return {
@@ -193,6 +202,7 @@ export function applyObservation(
     local_date: localDate(p.posted_at, ctx.timezone),
     caption: p.caption,
     views: p.views,
+    ...eng,
     views_history: history.slice(-VIEWS_HISTORY_MAX),
     pinned: p.pinned,
     first_seen_at: prev?.first_seen_at || ctx.nowIso,
@@ -201,6 +211,17 @@ export function applyObservation(
     crossed_1m_at: prev?.crossed_1m_at || (p.views >= VIEWS_1M ? ctx.nowIso : null),
     thumbnail_url: p.thumbnail_url || prev?.thumbnail_url || null,
   };
+}
+
+/** Dotted-path update for ContentCreators/{id}.followers; only platforms whose response had a count (others keep their value). */
+export function followersPatch(fetched: Partial<Record<Platform, Pick<FetchPostsResult, "followers">>>, nowIso: string): Record<string, number | string> {
+  const out: Record<string, number | string> = {};
+  for (const platform of ["tiktok", "instagram"] as Platform[]) {
+    const n = fetched[platform]?.followers;
+    if (typeof n === "number") out[`followers.${platform}`] = n;
+  }
+  if (Object.keys(out).length) out["followers.at"] = nowIso;
+  return out;
 }
 
 export function postDocId(platform: Platform, postId: string): string {
@@ -651,7 +672,7 @@ export async function syncCreatorPosts(creatorOrId: string | CreatorProfile, dep
       : { last_ok_at: prev.last_ok_at, last_error: errorText, last_error_at: nowIso }),
   };
   if (state.last_ok_at === undefined) delete state.last_ok_at;
-  await ref.update({ post_sync: state });
+  await ref.update({ post_sync: state, ...followersPatch(fetched, nowIso) });
   return result;
 }
 
@@ -785,7 +806,11 @@ export interface PostView {
   thumbnail_url: string | null;
   /** The account it was found on (posts from an old handle are filtered out for the app). */
   handle?: string;
-  views_history?: { at: string; views: number }[];
+  likes?: number;
+  comments?: number;
+  shares?: number;
+  saves?: number;
+  views_history?: ({ at: string; views: number } & PostEngagement)[];
 }
 
 export interface DetectedDay {
@@ -831,6 +856,7 @@ export async function listPosts(
         crossed_1m_at: r.crossed_1m_at ?? null,
         thumbnail_url: r.thumbnail_url || null,
         ...(r.handle ? { handle: r.handle } : {}),
+        ...Object.fromEntries(ENGAGEMENT_KEYS.filter((k) => typeof r[k] === "number").map((k) => [k, r[k]])),
         ...(opts.withHistory ? { views_history: r.views_history ?? [] } : {}),
       };
     })

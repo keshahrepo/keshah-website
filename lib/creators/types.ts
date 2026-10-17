@@ -326,8 +326,16 @@ export interface CreatorPost {
   local_date: YyyyMmDd;
   caption: string;
   views: number;
-  /** One entry per sync at most (when views changed or a day passed); newest last, capped. */
-  views_history: { at: IsoInstant; views: number }[];
+  /**
+   * One entry per sync at most (when views changed or a day passed); newest last, capped.
+   * Entries also carry the engagement counts known at that sync (keys absent when never seen).
+   */
+  views_history: ({ at: IsoInstant; views: number } & PostEngagement)[];
+  /** Latest engagement counts. Absent until a response carries them; a missing field never overwrites a known value. */
+  likes?: number;
+  comments?: number;
+  shares?: number;
+  saves?: number;
   pinned: boolean;
   first_seen_at: IsoInstant;
   last_synced_at: IsoInstant;
@@ -336,6 +344,24 @@ export interface CreatorPost {
   crossed_1m_at: IsoInstant | null;
   /** Latest cover image seen (signed CDN URL that expires after a few days), null when none. */
   thumbnail_url?: string | null;
+}
+
+export interface PostEngagement {
+  likes?: number;
+  comments?: number;
+  shares?: number;
+  saves?: number;
+}
+
+/**
+ * ContentCreators/{id}.followers: account follower counts seen by the post sync.
+ * TikTok comes from the profile-videos author; Instagram's reels endpoint has none,
+ * so instagram stays absent unless that changes. `at` = last sync that saw any count.
+ */
+export interface CreatorFollowers {
+  tiktok?: number;
+  instagram?: number;
+  at?: IsoInstant;
 }
 
 /** ContentCreators/{id}.post_sync: health of the automatic post sync. */

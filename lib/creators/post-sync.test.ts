@@ -20,6 +20,7 @@ import {
   bucketByLocalDate,
   detectDay,
   detectedDays,
+  followersPatch,
   mergeAutoVideos,
 } from "./post-sync";
 import { bonusLinesForMonth, monthSummary } from "./pay";
@@ -60,6 +61,34 @@ test("Instagram page parses shortcodes, reel urls, views, pinned and paging", ()
   assert.equal(r.url, "https://www.instagram.com/reel/DeH4Z70COxd/");
   assert.equal(r.views, 2255);
   assert.equal(r.pinned, false);
+});
+
+test("parsers keep engagement counts and TikTok followers; absent fields stay absent", () => {
+  const tt = parseTikTokPage(TT, "@isai.trujillo01");
+  const v = tt.posts.find((x) => x.post_id === "7693255888584346894")!;
+  assert.deepEqual([v.likes, v.comments, v.shares, v.saves], [143, 9, 4, 21]);
+  const bare = tt.posts.find((x) => x.post_id === "7611284030465527053")!;
+  for (const k of ["likes", "comments", "shares", "saves"]) assert.equal(k in bare, false);
+  assert.equal(tt.followers, 48210);
+  // another account's author block is not this creator's follower count
+  const other = parseTikTokPage({ aweme_list: [{ aweme_id: "71", create_time: 1760000000, author: { unique_id: "someone", follower_count: 9 } }] }, "isai");
+  assert.equal(other.followers, undefined);
+
+  const ig = parseInstagramPage(IG);
+  const r = ig.posts.find((x) => x.post_id === "DeH4Z70COxd")!;
+  assert.equal(r.likes, 87);
+  assert.equal(r.comments, 6);
+  assert.equal("shares" in r, false);
+  assert.equal("saves" in r, false);
+  assert.equal(ig.followers, undefined);
+});
+
+test("followersPatch writes only platforms that reported a count", () => {
+  assert.deepEqual(followersPatch({ tiktok: { followers: 500 }, instagram: {} }, "2026-10-01T00:00:00Z"), {
+    "followers.tiktok": 500,
+    "followers.at": "2026-10-01T00:00:00Z",
+  });
+  assert.deepEqual(followersPatch({ instagram: {} }, "2026-10-01T00:00:00Z"), {});
 });
 
 test("parsers tolerate junk", () => {
@@ -210,6 +239,23 @@ test("applyObservation: history appended at most once per sync, capped; crossing
   for (let i = 0; i < 100; i++) r = applyObservation(r, { ...p, views: 2_000_000 + i }, ctx(new Date(Date.parse("2026-10-05T00:00:00Z") + i * 3600e3).toISOString()));
   assert.equal(r.views_history.length, VIEWS_HISTORY_MAX);
   assert.equal(r.views_history.at(-1)!.views, 2_000_099);
+});
+
+test("applyObservation: engagement stored, snapshotted in history, never zeroed by a missing field", () => {
+  const p = post("tiktok", "5000000002", "2026-10-01T15:00:00Z", { views: 1000, likes: 50, comments: 3, shares: 1, saves: 7 });
+  let r = applyObservation(null, p, ctx("2026-10-01T18:00:00Z"));
+  assert.deepEqual([r.likes, r.comments, r.shares, r.saves], [50, 3, 1, 7]);
+  assert.deepEqual(r.views_history, [{ at: "2026-10-01T18:00:00Z", views: 1000, likes: 50, comments: 3, shares: 1, saves: 7 }]);
+  // next response lacks saves/shares: keep the stored ones, update the rest
+  r = applyObservation(r, { ...post("tiktok", "5000000002", "2026-10-01T15:00:00Z"), views: 2000, likes: 80, comments: 4 }, ctx("2026-10-01T21:00:00Z"));
+  assert.deepEqual([r.likes, r.comments, r.shares, r.saves], [80, 4, 1, 7]);
+  assert.deepEqual(r.views_history.at(-1), { at: "2026-10-01T21:00:00Z", views: 2000, likes: 80, comments: 4, shares: 1, saves: 7 });
+  // a real 0 does overwrite
+  r = applyObservation(r, { ...p, views: 2000, comments: 0 }, ctx("2026-10-01T22:00:00Z"));
+  assert.equal(r.comments, 0);
+  // never-seen engagement leaves no keys behind
+  const bare = applyObservation(null, post("instagram", "DAbc", "2026-10-01T15:00:00Z", { views: 5 }), ctx("2026-10-01T18:00:00Z"));
+  for (const k of ["likes", "comments", "shares", "saves"]) assert.equal(k in bare, false);
 });
 
 // ---------------------------------------------------------------- bonuses

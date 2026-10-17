@@ -43,7 +43,15 @@
    "share_url": "https://www.tiktok.com/@isai.trujillo01/video/7693255888584346894?_r=1&u_code=f0d4ed9hcbijk3&preview_pb=0&sharer_language=en&_d=f0dk44jgm83jdk&share_item_id=7693255888584346894&source=h5_m",
    "is_top": 0,
    "statistics": {
-    "play_count": 1791
+    "play_count": 1791,
+    "digg_count": 143,
+    "comment_count": 9,
+    "share_count": 4,
+    "collect_count": 21
+   },
+   "author": {
+    "unique_id": "isai.trujillo01",
+    "follower_count": 48210
    }
   },
   {
