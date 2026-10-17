@@ -103,3 +103,9 @@ test("a later due date only gets reminders in its last 3 days", () => {
   assert.equal(setupNudgeKind(st, "2026-10-20", "2026-10-15"), "daily");
   assert.equal(setupNudgeKind(st, "2026-10-22", "2026-10-15"), "last_day");
 });
+
+test("not signed but a date was agreed: it shows, and isn't overdue before they sign", () => {
+  const st = setupState({ ...base, signedAt: null, dueOverride: "2026-10-22", steps: all(false) }, new Date("2026-10-25T16:00:00Z"));
+  assert.equal(st.due_date, "2026-10-22");
+  assert.equal(st.overdue_days, 0);
+});

@@ -100,8 +100,10 @@ export function setupState(x: SetupInput, now: Date): SetupState {
       if (grace > due) due = grace;
     }
   }
+  // Not signed yet but the founder agreed a date: show it (it can't be overdue before they sign).
+  if (!signed && override) due = override;
   let overdue = 0;
-  if (due && !done && !waiting) {
+  if (due && signed && !done && !waiting) {
     const today = localDate(now.toISOString(), tz);
     if (today > due) overdue = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${due}T00:00:00Z`)) / 86_400_000);
   }
