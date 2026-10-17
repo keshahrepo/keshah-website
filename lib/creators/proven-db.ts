@@ -630,6 +630,10 @@ export interface PublicProven {
   /** 2-4 word name for the list row ("" = the app makes one from the hook). */
   short_title: string;
   header_text: string;
+  /** Content system scripts only (absent otherwise): second-0 action, on-screen text, a photo for one point. */
+  first_frame?: string;
+  on_screen_text?: string;
+  photo?: { point: 1 | 2 | 3; url: string; caption: string };
 }
 
 /** What "I posted it" found for a slot (null until something was attributed). */
@@ -648,7 +652,7 @@ export interface PicksPayload {
   can_swap: boolean;
 }
 
-function publicProven(id: string, v: ProvenVideo): PublicProven {
+export function publicProven(id: string, v: ProvenVideo): PublicProven {
   return {
     id,
     kind: v.added_by === "founder_idea" ? "idea" : "video",
@@ -667,6 +671,9 @@ function publicProven(id: string, v: ProvenVideo): PublicProven {
     cover_url: v.media?.thumbnail_url || v.thumbnail_url || null,
     short_title: v.short_title ?? "",
     header_text: v.header_text ?? "",
+    ...(v.first_frame ? { first_frame: v.first_frame } : {}),
+    ...(v.on_screen_text ? { on_screen_text: v.on_screen_text } : {}),
+    ...(v.photo ? { photo: { point: v.photo.point, url: v.photo.url, caption: v.photo.caption ?? "" } } : {}),
   };
 }
 

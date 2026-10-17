@@ -192,3 +192,14 @@ test("toScript fills defaults for partial docs", () => {
   assert.equal(s.fact, null);
   assert.deepEqual(s.history, []);
 });
+
+test("creator picks expose first_frame, on_screen_text and photo only when the idea doc has them", async () => {
+  const { publicProven, toProven } = await import("./proven-db");
+  const base = { hook_line: "Raise your eyebrows", status: "active", added_by: "founder_idea", views: 0 };
+  const withScript = publicProven("i1", toProven({ ...base, first_frame: "Hands on forehead", on_screen_text: "try this test", photo: { point: 2, url: "https://x/y.jpg", caption: "Scalp" } }));
+  assert.equal(withScript.first_frame, "Hands on forehead");
+  assert.equal(withScript.on_screen_text, "try this test");
+  assert.deepEqual(withScript.photo, { point: 2, url: "https://x/y.jpg", caption: "Scalp" });
+  const plain = publicProven("i2", toProven(base));
+  assert.equal("first_frame" in plain || "on_screen_text" in plain || "photo" in plain, false);
+});
