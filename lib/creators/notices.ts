@@ -139,7 +139,7 @@ export function linkReadyPush(): PushMessage {
 export function firstDayEvePush(date: YyyyMmDd, videos: number): PushMessage {
   return {
     title: "Tomorrow is your first posting day",
-    body: `${fmtWeekdayLong(date)}: ${videos} videos on TikTok and Instagram by 11:59 PM.`,
+    body: `It's Day 1 of your trial. ${fmtWeekdayLong(date)}: ${videos} videos on TikTok and Instagram by 11:59 PM.`,
     data: { type: "first_day" },
   };
 }
