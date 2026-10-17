@@ -195,7 +195,7 @@ test("welcome email: no em dashes, has link and next steps", () => {
   // The @keshah.com address is shown in the app's Accounts step, not the offer email.
   assert.ok(!m.text.includes("jen@keshah.com"));
   assert.ok(m.text.includes("It'll be the first step in the app shortly"));
-  assert.ok(m.text.includes("How to get started"));
+  assert.ok(m.text.includes("Next steps"));
   assert.ok(m.text.includes("1-month paid trial: 20 posting days"));
   assert.ok(m.text.includes("If you pass your trial"));
 });
@@ -220,10 +220,10 @@ test("welcome email sends people to the app when CREATOR_APP_URL is set", () => 
   }
 });
 
-test("welcome email names the contract deadline right before How to get started (new offers only)", () => {
+test("welcome email names the contract deadline right before Next steps (new offers only)", () => {
   const m = welcomeEmail({ firstName: "Jen", link: "https://x/l", contractReady: true, deadlineText: deadlineLong(contractDeadlineFor(new Date("2025-10-11T19:00:00Z"))) });
   const line = "Please sign your contract by Tuesday, October 14 at 11:59 PM ET to confirm your spot.";
-  assert.ok(m.text.includes(`${line}\n\nHow to get started`));
+  assert.ok(m.text.includes(`${line}\n\nNext steps`));
   assert.ok(!m.text.includes("—"));
   // No deadline (e.g. accepted before deadlines existed): no line.
   const none = welcomeEmail({ firstName: "Jen", link: "https://x/l", contractReady: true });

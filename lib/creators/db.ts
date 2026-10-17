@@ -972,7 +972,7 @@ export function isOnboarded(s: Partial<OnboardingState> | null | undefined, opts
 export async function assertOnboarded(creator: Pick<CreatorProfile, "id" | "contract">): Promise<void> {
   const s = await getOnboarding(creator.id);
   if (!isOnboarded(s, { contractSigned: creator.contract.status === "signed" })) {
-    throw new CreatorDataError("Finish the Getting started steps first. Your full portal opens up once they're all done.", 409);
+    throw new CreatorDataError("Finish onboarding and warm-up first. Your full portal opens up once they're done.", 409);
   }
 }
 

@@ -137,7 +137,7 @@ export function welcomeEmail(input: {
     opener,
     "",
     ...(deadline ? [deadline, ""] : []),
-    "How to get started",
+    "Next steps",
     "",
     ...(app
       ? [
@@ -167,7 +167,7 @@ export function welcomeEmail(input: {
     p(`Hi ${esc(first)},`),
     p(esc(opener)),
     deadline ? p(`<b>${esc(deadline)}</b>`) : "",
-    `<p style="margin:0 0 6px"><b>How to get started</b></p>`,
+    `<p style="margin:0 0 6px"><b>Next steps</b></p>`,
     `<ol style="margin:0 0 16px;padding-left:20px">`,
     `<li style="margin-bottom:6px">${step1}</li>`,
     `<li style="margin-bottom:6px">Sign in with ${esc(signIn)}</li>`,
