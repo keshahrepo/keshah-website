@@ -1,5 +1,5 @@
-// Cron, hourly (vercel.json): the weekly niche scan (lib/creators/niche-scan.ts).
-// Starts Saturdays from 20:00 UTC (Sunday as a catch-up), or within the hour
+// Cron, every 10 minutes (vercel.json; one Firestore read when idle, so a long scan resumes quickly): the weekly niche scan (lib/creators/niche-scan.ts).
+// Starts Saturdays from 20:00 UTC (Sunday as a catch-up), or within 10 minutes
 // when Settings/creator_portal.niche_scan_requested is true. A scan that runs
 // past one call's deadline is left in Settings/creator_portal.niche_scan_active
 // and resumed by the next call. Otherwise one Firestore read.

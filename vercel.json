@@ -70,7 +70,7 @@
     },
     {
       "path": "/api/cron/niche-scan",
-      "schedule": "5 * * * *"
+      "schedule": "*/10 * * * *"
     },
     {
       "path": "/api/cron/proven-beats",
