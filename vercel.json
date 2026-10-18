@@ -69,6 +69,10 @@
       "schedule": "20 5 * * *"
     },
     {
+      "path": "/api/cron/faceless-draft",
+      "schedule": "*/10 * * * *"
+    },
+    {
       "path": "/api/cron/niche-scan",
       "schedule": "*/10 * * * *"
     },
