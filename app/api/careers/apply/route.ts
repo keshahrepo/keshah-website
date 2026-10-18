@@ -74,7 +74,7 @@ export async function POST(req: Request) {
     if (!phoneE164) {
       return NextResponse.json({ error: `That phone number won't work for texts. ${PHONE_HINT}.`, fields: ["phone"] }, { status: 400 });
     }
-    if (!/^20\d{2}$/.test(p.graduation_year!)) {
+    if (!/^(20\d{2}|graduated)$/.test(p.graduation_year!.trim())) {
       return NextResponse.json(
         { error: "Invalid graduation year." },
         { status: 400 }

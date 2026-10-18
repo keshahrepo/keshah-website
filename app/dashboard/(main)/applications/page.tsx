@@ -434,7 +434,7 @@ function ApplicationRow({
         <div style={{ color: "rgba(255,255,255,0.8)" }}>{row.email ?? "—"}</div>
         <div style={{ color: "rgba(255,255,255,0.65)" }}>
           {row.gender ?? "—"}
-          {row.graduation_year ? ` · ${row.graduation_year}` : ""}
+          {row.graduation_year ? ` · ${row.graduation_year === "graduated" ? "Graduated" : row.graduation_year}` : ""}
         </div>
         <div style={{ color: "rgba(255,255,255,0.65)" }}>
           {bookingLabel ?? (row.status === "pending" ? "—" : "Awaiting")}
@@ -549,7 +549,7 @@ function ApplicationRow({
               <Detail label="Phone" value={row.phone} />
               <Detail label="Gender" value={row.gender} />
               <Detail label="College" value={row.college} />
-              <Detail label="Grad year" value={row.graduation_year} />
+              <Detail label="Grad year" value={row.graduation_year === "graduated" ? "Already graduated" : row.graduation_year} />
               <Detail label="Can commit" value={row.can_commit} />
               <Detail label="On-camera" value={row.comfortable_on_camera} />
               <Detail label="iPhone" value={row.has_iphone ?? null} />

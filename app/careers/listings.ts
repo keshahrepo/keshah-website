@@ -66,7 +66,7 @@ export const LISTINGS: Listing[] = [
       {
         heading: "Minimum qualifications",
         bullets: [
-          "Currently enrolled in a US college (juniors and seniors preferred)",
+          "Currently enrolled in a US college or already graduated (juniors, seniors and recent grads preferred)",
           "Comfortable speaking on camera",
           "An iPhone (our creator app is iPhone only for now)",
           "No personal experience with hair loss or prior posting experience required",

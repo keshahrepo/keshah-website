@@ -109,6 +109,7 @@ const STEPS: Step[] = [
   { kind: "select", key: "graduation_year", title: "When do you graduate?", options: [
     { value: "2026", label: "2026" }, { value: "2027", label: "2027" },
     { value: "2028", label: "2028" }, { value: "2029", label: "2029" },
+    { value: "graduated", label: "Already graduated" },
   ] },
   { kind: "yesno", key: "can_commit", title: "Can you commit ~1 hr/day, Mon–Fri?", yesLabel: "Yes, I can", noLabel: "No, I can't", noSub: "This role may not be the right fit" },
   // Hard filter: the KESHAH Creators app is iPhone only (TestFlight).
