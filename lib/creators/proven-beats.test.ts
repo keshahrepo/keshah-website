@@ -73,11 +73,12 @@ test("cleanCta: no 'not selling' / 'not paid' lines, no asks, length capped", ()
   assert.equal(cleanCta("It's the first video on my profile."), ""); // never says pinned
 });
 
-test("BEATS_SYSTEM: always asks for the two-call ending and its rules", () => {
+test("BEATS_SYSTEM: always asks for the one-ask ending (then a useful line) and its rules", () => {
   assert.match(BEATS_SYSTEM, /"cta": always write it/);
   assert.match(BEATS_SYSTEM, /watch this first/);
   assert.match(BEATS_SYSTEM, /don't DM me/);
-  assert.match(BEATS_SYSTEM, /what do you have to lose/);
+  assert.match(BEATS_SYSTEM, /ONE ask/);
+  assert.match(BEATS_SYSTEM, /never a second ask/);
   assert.match(BEATS_SYSTEM, /Never say "I'm not selling anything", "I don't get paid"/);
   assert.match(BEATS_SYSTEM, /Vary the wording/);
   assert.doesNotMatch(BEATS_SYSTEM, /If the original ends any other way, "cta" is ""/);

@@ -100,12 +100,12 @@ Example beats in the right style:
 - Without enough blood, the hair usually gets thinner and falls out.
 - Scalp exercises every day can loosen it up.
 
-"cta": always write it, whatever the original's ending was. It is the spoken ending, 3 short parts in this order, as plain sentences:
-1. The favour: tell the viewer where the answer is. Frame it around the doubts they have right now, like is my scalp actually tight, does this actually work, how do I fix it. Then say exactly where to find it: the pinned video on the profile, the one that says watch this first, it's literally the first video on the profile. Add an honest line like please don't DM me saying you can't find it.
-2. One short beat of new information about what that video shows, for example: it also shows you the mistake most people make when they try to loosen it.
-3. A second call to action from a different angle, low pressure and personal, for example: so if yours felt stuck, at least you know why, it takes 5 seconds to check, what do you have to lose.
+"cta": always write it, whatever the original's ending was. It is the short spoken ending, like the founder's top videos: ONE ask, then something useful, never a second ask. 3 short parts in this order, as plain sentences:
+1. The ask: where to see exactly how, framed around what the viewer wants now (how to check it properly, how to loosen it). Say exactly where: the pinned video on the profile, the one that says watch this first, it's literally the first video on the profile. Add an honest line like please don't DM me saying you can't find it.
+2. One useful line, not an ask, for example: watch the whole thing, there are small things most people miss.
+3. A short natural closer, not an ask, for example: that's usually why people say it didn't work for them.
 Rules for "cta":
-- Spoken, simple words a 5-year-old knows. 40 to 90 words in all. No em dashes or en dashes.
+- Spoken, simple words a 5-year-old knows. 30 to 60 words in all. No em dashes or en dashes.
 - Always say "pinned video" once, and say it's the first video on the profile.
 - Never promise a result (no regrowth, no "it fixed my hair", no "you'll thank me later", no timeline).
 - Never say "I'm not selling anything", "I don't get paid" or anything like it: creators are paid and say so.
