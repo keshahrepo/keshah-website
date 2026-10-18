@@ -67,7 +67,7 @@ export interface CreatorProgress {
 /** Compact form for list rows: the current step only. */
 export interface ProgressStepSummary {
   key: ProgressKey | null;
-  /** e.g. "Contract", "Warm-up day 2 of 3", "Trial day 4 of 20"; "Done" when nothing is left. */
+  /** e.g. "Contract", "Warm-up · 1 of 3 days", "Trial day 4 of 20"; "Done" when nothing is left. */
   label: string;
   days: number | null;
   stuck: boolean;
@@ -329,7 +329,8 @@ export function progressStepSummary(p: CreatorProgress): ProgressStepSummary {
   let label = short[step.key];
   if (step.key === "warmup") {
     const done = Number((step.detail ?? "0").split(" ")[0]) || 0;
-    label = `Warm-up day ${Math.min(done + 1, WARMUP_DAYS)} of ${WARMUP_DAYS}`;
+    // Days done, same as the detail screen ("1 of 3 days"), not the day they're on.
+    label = `Warm-up · ${Math.min(done, WARMUP_DAYS)} of ${WARMUP_DAYS} days`;
   } else if (step.key === "trial" && step.detail?.startsWith("Day ")) {
     label = `Trial ${step.detail.replace(/^Day/, "day").replace(/, your call$/, "")}`;
   }

@@ -117,7 +117,7 @@ test("warm-up: day count, clock from the last tick", () => {
   assert.equal(p.steps.find((s) => s.key === "warmup")!.detail, "1 of 3 days");
   assert.equal(p.currentSince, "2026-10-13");
   assert.equal(p.stuck, false);
-  assert.equal(progressStepSummary(p).label, "Warm-up day 2 of 3");
+  assert.equal(progressStepSummary(p).label, "Warm-up · 1 of 3 days");
   const later = creatorProgress({ ...accepted, contract: { status: "signed" }, onboarding }, new Date("2026-10-16T12:00:00Z"));
   assert.equal(later.stuck, true);
   assert.equal(progressStepSummary(later).days, 3);

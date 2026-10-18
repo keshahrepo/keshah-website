@@ -70,7 +70,7 @@ export interface FounderCreatorRow {
   paidUsers: number;
   roi: number | null;
   onboarding?: { done: number; total: number };
-  /** Current Progress step (lib/creators/progress.ts), e.g. "Warm-up day 2 of 3", with days on it and stuck. */
+  /** Current Progress step (lib/creators/progress.ts), e.g. "Warm-up · 1 of 3 days", with days on it and stuck. */
   progressStep?: ProgressStepSummary;
   /** Videos posted in the period (each on both apps counts once). */
   videos: number;
