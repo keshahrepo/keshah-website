@@ -65,7 +65,10 @@ Narration rules:
 - Facts: only from this library, said with the same meaning, never their NEVER line. Replace any claim in the original that the library doesn't support (for example "minoxidil doesn't grow hair", "products don't reach your follicles", exact numbers not in the library).
 - 90 to 140 words. Short spoken sentences, words a 5-year-old knows, no em dashes or en dashes, no hashtags, no emojis.
 - End with one line pointing to the pinned video, e.g. "How to loosen it is in the pinned video." No "link in bio", no "follow", no "comment".
-- Hedge medical facts ("one small study found", "usually", "can"). Never promise regrowth or results.
+- Hedge medical facts lightly ("one small study found", "usually", "can"). Never promise regrowth or results. But never add disclaimers or caveats that kill the momentum ("that does not prove...", "this is not medical advice"). The library wording is already careful enough.
+- Sound like a person talking: always use contractions (it's, here's, you're, don't, can't), short punchy sentences, a little rhythm. Never "it is", "here is", "you are".
+- Keep the original's strongest lines (e.g. "It's not your genetics. It's not your shampoo.", "You can try the drugs, you can try the products, but fix this first.", "pressing, pinching, sliding"), adjusted only to remove first person.
+- Don't use the word "galea" or explain the scalp layers unless the original does. Keep it simple: "your scalp gets tight".
 
 Scene plan: 9 to 13 scenes. Each scene has "type" and "cue". "cue" is the exact first 2 to 4 words of the sentence in your script where the scene starts (copy them exactly). The first scene's cue is "". The last scene is {"type":"end","cue":"<first words of the pinned video line>"}. Something new should appear every 2 to 4 seconds of narration. Scene types (use only these, with these fields):
 - {"type":"big","cue","lines":[{"text","tone"?:"tight"|"loose"|"ink"}],"dark"?:true}  1 to 3 short uppercase lines, max 16 characters each. Use dark:true at most once, for the "part nobody tells you" moment.
@@ -104,9 +107,13 @@ const TOOL = {
 
 export const factsLibrary = () => CONTENT_FACTS.map((f) => `- ${f.id}: "${f.line}" NEVER: ${f.never}`).join("\n");
 
-export function facelessUserPrompt(src: FacelessSource, extra = ""): string {
+export function facelessUserPrompt(src: FacelessSource, extra = "", earlier: FacelessSpec[] = []): string {
+  const day = earlier.length
+    ? `Videos already made today (yours must feel different: a different middle, a different fact or no fact, different scene choices; the F02 blood flow study may appear in at most 2 of the day's videos and it's already in ${earlier.filter((e) => /two and a half times/i.test(e.script)).length}):\n${earlier.map((e, i) => `${i + 1}. ${e.title}: ${e.script.slice(0, 260)}...`).join("\n")}`
+    : "";
   return [
     `Fact library:\n${factsLibrary()}`,
+    day,
     `Original (${src.format}, ${Math.round(src.views / 1000)}K views):\n${src.transcript.slice(0, 3000)}`,
     extra,
   ]
@@ -125,6 +132,8 @@ export function checkSpec(s: FacelessSpec): string[] {
   if (/[—–]/.test(s.script + s.caption)) p.push("dash character");
   if (BANNED.test(s.script)) p.push("first person or a banned ask in the script");
   if (!/pinned video/i.test(s.script)) p.push("no pinned video line");
+  if (/(^|[.!?]\s+)(it is|here is|you are|that is)\b|\b(do not|does not|cannot|can not)\b/i.test(s.script)) p.push("use contractions (it's, here's, you're, don't, can't, doesn't, that's)");
+  if (/does ?n.t prove|not medical advice/i.test(s.script)) p.push("no momentum-killing disclaimers");
   if (!Array.isArray(s.scenes) || s.scenes.length < 6 || s.scenes.length > 15) p.push("scene count");
   const script = ` ${norm(s.script)} `;
   (s.scenes ?? []).forEach((sc, i) => {
@@ -160,12 +169,14 @@ export function anthropicFaceless(apiKey = process.env.ANTHROPIC_API_KEY ?? ""):
 }
 
 /** Adapts one source, retrying once with the problems listed. */
-export async function adaptSource(src: FacelessSource, generate: FacelessGenerate): Promise<FacelessSpec> {
-  let spec = await generate(FACELESS_SYSTEM, facelessUserPrompt(src));
-  let problems = checkSpec(spec);
+export async function adaptSource(src: FacelessSource, generate: FacelessGenerate, earlier: FacelessSpec[] = []): Promise<FacelessSpec> {
+  const studyUses = earlier.filter((e) => /two and a half times/i.test(e.script)).length;
+  const check = (s: FacelessSpec) => [...checkSpec(s), ...(studyUses >= 2 && /two and a half times/i.test(s.script) ? ["the F02 study is already in 2 of today's videos; use a different fact or none"] : [])];
+  let spec = await generate(FACELESS_SYSTEM, facelessUserPrompt(src, "", earlier));
+  let problems = check(spec);
   if (problems.length) {
-    spec = await generate(FACELESS_SYSTEM, facelessUserPrompt(src, `Your last attempt had these problems, fix them all: ${problems.join("; ")}`));
-    problems = checkSpec(spec);
+    spec = await generate(FACELESS_SYSTEM, facelessUserPrompt(src, `Your last attempt had these problems, fix them all: ${problems.join("; ")}`, earlier));
+    problems = check(spec);
   }
   if (problems.length) throw new Error(problems.join("; "));
   return spec;
@@ -188,10 +199,11 @@ export async function draftFacelessDay(db: Firestore, opts: { date: string; perD
   const generate = opts.generate ?? anthropicFaceless();
   const drafted: string[] = [];
   const failed: string[] = [];
+  const made: FacelessSpec[] = [];
   for (const src of picks) {
     if (drafted.length >= n) break;
     try {
-      const spec = await adaptSource(src, generate);
+      const spec = await adaptSource(src, generate, made);
       const id = `${opts.date}_${drafted.length + 1}`;
       await col.doc(id).set({
         id,
@@ -204,6 +216,7 @@ export async function draftFacelessDay(db: Firestore, opts: { date: string; perD
         created_at: FieldValue.serverTimestamp(),
       });
       drafted.push(id);
+      made.push(spec);
     } catch (e) {
       failed.push(`${src.id}: ${e instanceof Error ? e.message : String(e)}`);
     }
