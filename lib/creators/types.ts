@@ -139,7 +139,7 @@ export interface ContractTemplate {
 /** ContentCreators/{id}/contract_events/{auto}: written once, never updated. */
 export interface ContractEvent {
   /** deadline_extended / reminder_sent / offer_withdrawn: the 72-hour deadline (lib/creators/offer.ts). */
-  type: "sent" | "viewed" | "signed" | "emailed" | "email_failed" | "deadline_extended" | "reminder_sent" | "offer_withdrawn" | "get_started_sent" | "setup_extended" | "setup_ended";
+  type: "sent" | "viewed" | "signed" | "emailed" | "email_failed" | "deadline_extended" | "reminder_sent" | "offer_withdrawn" | "get_started_sent" | "setup_extended" | "setup_ended" | "removed";
   at: IsoInstant;
   actor: "admin" | "creator" | "system";
   template_version?: string;
