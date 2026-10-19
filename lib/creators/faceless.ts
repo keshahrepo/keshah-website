@@ -64,7 +64,7 @@ Narration rules:
 - Keep the mechanism without skipping a beat: tight scalp squeezes the blood vessels underneath, blood can't properly reach the hair, it gets thinner and falls out.
 - Facts: only from this library, said with the same meaning, never their NEVER line. Replace any claim in the original that the library doesn't support (for example "minoxidil doesn't grow hair", "products don't reach your follicles", exact numbers not in the library).
 - 90 to 140 words. Short spoken sentences, words a 5-year-old knows, no em dashes or en dashes, no hashtags, no emojis.
-- End with one line pointing to the pinned video, e.g. "How to loosen it is in the pinned video." No "link in bio", no "follow", no "comment".
+- End with one or two lines pointing to the pinned video that play on the viewer's doubts (is it actually tight, does this work, how to fix it), in fresh wording each video, e.g. "Not sure if yours is actually tight, or if this even works? The pinned video shows you how to check, and how to fix it." No "link in bio", no "follow", no "comment".
 - Hedge medical facts lightly ("one small study found", "usually", "can"). Never promise regrowth or results. But never add disclaimers or caveats that kill the momentum ("that does not prove...", "this is not medical advice"). The library wording is already careful enough.
 - Sound like a person talking: always use contractions (it's, here's, you're, don't, can't), short punchy sentences, a little rhythm. Never "it is", "here is", "you are".
 - Keep the original's strongest lines (e.g. "It's not your genetics. It's not your shampoo.", "You can try the drugs, you can try the products, but fix this first.", "pressing, pinching, sliding"), adjusted only to remove first person.

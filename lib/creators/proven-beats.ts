@@ -101,7 +101,7 @@ Example beats in the right style:
 - Scalp exercises every day can loosen it up.
 
 "cta": always write it, whatever the original's ending was. It is the short spoken ending, like the founder's top videos: ONE ask, then something useful, never a second ask. 3 short parts in this order, as plain sentences:
-1. The ask: where to see exactly how, framed around what the viewer wants now (how to check it properly, how to loosen it). Say exactly where: the pinned video on the profile, the one that says watch this first, it's literally the first video on the profile. Add an honest line like please don't DM me saying you can't find it.
+1. The ask. It speaks to the three doubts the viewer has right now: is my scalp (or hairline, temples, neck: the area in this script) actually tight, does this actually work, and if so how do I fix it. Name at least two of them, in fresh wording each time (never the same sentence twice across scripts; e.g. 'So now you're wondering, is my scalp actually tight, does loosening it even work, and how would I do it?', 'Is your hairline actually tight, or does everyone's feel like that? And if it is, does this even work?', 'If yours felt stuck, the next questions are, is it really tight, does this actually work, and what do I do about it?'). Then say the answers are in the pinned video. Say exactly where: the pinned video on the profile, the one that says watch this first, it's literally the first video on the profile. Add an honest line like please don't DM me saying you can't find it.
 2. One useful line, not an ask, for example: watch the whole thing, there are small things most people miss.
 3. A short natural closer, not an ask, for example: that's usually why people say it didn't work for them.
 Rules for "cta":
