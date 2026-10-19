@@ -376,7 +376,7 @@ test("full creator mix: up to 2 ideas, 2 self-tests and 1 other format among pro
       mix: { selfTest: 2, other: 1 },
     });
     assert.deepEqual(picks.slice(-2), ["idea_1", "idea_2"]);
-    const proven = picks.slice(2);
+    const proven = picks.slice(0, -2);
     assert.equal(proven.filter((id) => fmtOf(id) === "self-test").length, 2, creatorId);
     assert.equal(proven.filter((id) => fmtOf(id) && fmtOf(id) !== "self-test").length, 1, creatorId);
   }
