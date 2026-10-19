@@ -1,5 +1,5 @@
 // Cron, every 10 minutes (vercel.json): The Scalp Report's daily drafts (lib/creators/faceless.ts).
-// Drafts today's batch after 16:00 UTC (21:30 IST), a chunk per call until complete, or now when
+// Drafts today's batch after 10:00 UTC (3 AM PDT / 2 AM PST), a chunk per call until complete, or now when
 // Settings/creator_portal.faceless_draft_requested is true. Idle: one Firestore read.
 // Auth: Vercel cron sends Authorization: Bearer ${CRON_SECRET}.
 import { NextResponse } from "next/server";
@@ -19,7 +19,7 @@ export async function GET(req: Request) {
     const now = new Date();
     const date = now.toISOString().slice(0, 10);
     const requested = s.faceless_draft_requested === true;
-    const due = s.faceless_enabled !== false && now.getUTCHours() >= 16 && s.faceless_last_draft !== date;
+    const due = s.faceless_enabled !== false && now.getUTCHours() >= 10 && s.faceless_last_draft !== date;
     if (!requested && !due) return NextResponse.json({ ok: true, skipped: true });
     if (requested) await ref.set({ faceless_draft_requested: false }, { merge: true });
     const perDay = typeof s.faceless_per_day === "number" ? s.faceless_per_day : FACELESS_DEFAULT_PER_DAY;

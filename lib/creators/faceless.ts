@@ -1,7 +1,7 @@
 /**
  * The Scalp Report: daily faceless explainer videos for aadi.keshah.
  *
- * Each day (cron /api/cron/faceless-draft) this picks proven videos with
+ * Each day from 10:00 UTC (cron /api/cron/faceless-draft) this picks proven videos with
  * transcripts and has Claude adapt each into a narrator script plus a scene
  * plan (scene types the Remotion renderer in ~/keshah-faceless knows). The
  * plans go to FacelessVideos/{date}_{n} as "drafted"; a Modal job voices,
