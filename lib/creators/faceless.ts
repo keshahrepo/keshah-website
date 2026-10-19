@@ -18,7 +18,7 @@ import { PROVEN_COLLECTION } from "./proven";
 export const FACELESS_COLLECTION = "FacelessVideos";
 export const FACELESS_DEFAULT_PER_DAY = 5;
 /** A proven video isn't adapted again for this many days. */
-export const FACELESS_REUSE_DAYS = 30;
+export const FACELESS_REUSE_DAYS = 14;
 const FORMATS_OK = new Set(["self-test", "explainer", "myth-bust", "doing-it-wrong", "list", "how-to-promise"]);
 const SCENE_TYPES = ["big", "cards", "pinch", "head", "section", "study", "tags", "compare", "bottle", "end"] as const;
 
@@ -109,7 +109,7 @@ export const factsLibrary = () => CONTENT_FACTS.map((f) => `- ${f.id}: "${f.line
 
 export function facelessUserPrompt(src: FacelessSource, extra = "", earlier: FacelessSpec[] = []): string {
   const day = earlier.length
-    ? `Videos already made today (yours must feel different: a different middle, a different fact or no fact, different scene choices; the F02 blood flow study may appear in at most 2 of the day's videos and it's already in ${earlier.filter((e) => /two and a half times/i.test(e.script)).length}):\n${earlier.map((e, i) => `${i + 1}. ${e.title}: ${e.script.slice(0, 260)}...`).join("\n")}`
+    ? `Videos already made today (yours must feel different: a different middle, a different fact or no fact, different scene choices; the F02 blood flow study may appear in at most 3 of the day's videos and it's already in ${earlier.filter((e) => /two and a half times/i.test(e.script)).length}):\n${earlier.map((e, i) => `${i + 1}. ${e.title}: ${e.script.slice(0, 260)}...`).join("\n")}`
     : "";
   return [
     `Fact library:\n${factsLibrary()}`,
@@ -171,7 +171,7 @@ export function anthropicFaceless(apiKey = process.env.ANTHROPIC_API_KEY ?? ""):
 /** Adapts one source, retrying once with the problems listed. */
 export async function adaptSource(src: FacelessSource, generate: FacelessGenerate, earlier: FacelessSpec[] = []): Promise<FacelessSpec> {
   const studyUses = earlier.filter((e) => /two and a half times/i.test(e.script)).length;
-  const check = (s: FacelessSpec) => [...checkSpec(s), ...(studyUses >= 2 && /two and a half times/i.test(s.script) ? ["the F02 study is already in 2 of today's videos; use a different fact or none"] : [])];
+  const check = (s: FacelessSpec) => [...checkSpec(s), ...(studyUses >= 3 && /two and a half times/i.test(s.script) ? ["the F02 study is already in 3 of today's videos; use a different fact or none"] : [])];
   let spec = await generate(FACELESS_SYSTEM, facelessUserPrompt(src, "", earlier));
   let problems = check(spec);
   if (problems.length) {
@@ -182,11 +182,16 @@ export async function adaptSource(src: FacelessSource, generate: FacelessGenerat
   return spec;
 }
 
-/** Drafts today's batch into FacelessVideos. Skips if today already has drafts. */
-export async function draftFacelessDay(db: Firestore, opts: { date: string; perDay?: number; generate?: FacelessGenerate; now?: Date }): Promise<{ date: string; drafted: string[]; failed: string[]; skipped?: string }> {
+/** Drafts today's batch into FacelessVideos, in chunks: fills what's missing until `deadlineMs`, so a later call carries on. */
+export async function draftFacelessDay(
+  db: Firestore,
+  opts: { date: string; perDay?: number; generate?: FacelessGenerate; now?: Date; deadlineMs?: number },
+): Promise<{ date: string; drafted: string[]; failed: string[]; total: number; complete: boolean }> {
   const col = db.collection(FACELESS_COLLECTION);
-  const existing = await col.where("date", "==", opts.date).get();
-  if (!existing.empty) return { date: opts.date, drafted: [], failed: [], skipped: "already drafted" };
+  const n = opts.perDay ?? FACELESS_DEFAULT_PER_DAY;
+  const today = (await col.where("date", "==", opts.date).get()).docs;
+  const made: FacelessSpec[] = today.map((d) => d.data() as FacelessSpec);
+  if (today.length >= n) return { date: opts.date, drafted: [], failed: [], total: today.length, complete: true };
   const since = new Date((opts.now ?? new Date()).getTime() - FACELESS_REUSE_DAYS * 86400000).toISOString().slice(0, 10);
   const used = new Set((await col.where("date", ">=", since).get()).docs.map((d) => String(d.data().source_id ?? "")));
   const snap = await db.collection(PROVEN_COLLECTION).where("status", "==", "active").get();
@@ -194,17 +199,18 @@ export async function draftFacelessDay(db: Firestore, opts: { date: string; perD
     const x = d.data();
     return { id: d.id, views: Number(x.views ?? 0), format: String(x.format ?? ""), hook_family: String(x.hook_family ?? ""), transcript: String(x.transcript ?? "") };
   });
-  const n = opts.perDay ?? FACELESS_DEFAULT_PER_DAY;
-  const picks = pickSources(all, used, n + 2); // two spares in case an adaptation fails
+  const todayFams = new Set(today.map((d) => String(d.data().source_family ?? "")));
+  const picks = pickSources(all.filter((a) => !todayFams.has(a.hook_family)), used, n - today.length + 2, Math.max(0, Math.ceil(n * 0.3) - today.filter((d) => d.data().source_format === "self-test").length));
   const generate = opts.generate ?? anthropicFaceless();
   const drafted: string[] = [];
   const failed: string[] = [];
-  const made: FacelessSpec[] = [];
+  let next = today.length;
   for (const src of picks) {
-    if (drafted.length >= n) break;
+    if (next >= n) break;
+    if (opts.deadlineMs && Date.now() > opts.deadlineMs) break;
     try {
       const spec = await adaptSource(src, generate, made);
-      const id = `${opts.date}_${drafted.length + 1}`;
+      const id = `${opts.date}_${next + 1}`;
       await col.doc(id).set({
         id,
         date: opts.date,
@@ -212,14 +218,17 @@ export async function draftFacelessDay(db: Firestore, opts: { date: string; perD
         source_id: src.id,
         source_views: src.views,
         source_format: src.format,
+        source_family: src.hook_family,
         ...spec,
         created_at: FieldValue.serverTimestamp(),
       });
       drafted.push(id);
       made.push(spec);
+      next++;
     } catch (e) {
       failed.push(`${src.id}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
-  return { date: opts.date, drafted, failed };
+  const outOfPicks = picks.length === 0 || (drafted.length + failed.length >= picks.length);
+  return { date: opts.date, drafted, failed, total: next, complete: next >= n || outOfPicks };
 }
