@@ -525,7 +525,9 @@ export function selectDailyPicks(input: PickInput): string[] {
   for (const r of ranked) add(r.id);
   // Only when there are fewer families than slots: a second one from a family beats an empty slot.
   for (const r of ranked) add(r.id, true);
-  return out;
+  // Founder ideas (new scripts) are chosen first but come last in the day, after the proven videos.
+  const forced = new Set(input.forced ?? []);
+  return [...out.filter((id) => !forced.has(id)), ...out.filter((id) => forced.has(id))];
 }
 
 /** Words that carry meaning in a hook (lowercase, 3+ letters). */

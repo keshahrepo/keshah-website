@@ -128,7 +128,7 @@ test("daily picks: 2 per week cap is soft", () => {
   assert.equal(ranked[0].week, 0);
 });
 
-test("daily picks: forced ideas first, audience respected", () => {
+test("daily picks: forced ideas are always picked and come last, audience respected", () => {
   const picks = selectDailyPicks({
     candidates: cands(["m", "w", "any", "x"], { m: { audience: "men" }, w: { audience: "women" }, any: { audience: "any" } }),
     history: {},
@@ -138,7 +138,7 @@ test("daily picks: forced ideas first, audience respected", () => {
     creatorAudience: "men",
     forced: ["idea_1"],
   });
-  assert.equal(picks[0], "idea_1");
+  assert.equal(picks[picks.length - 1], "idea_1");
   assert.ok(!picks.includes("w"));
   assert.equal(picks.length, 3);
 });
@@ -375,7 +375,7 @@ test("full creator mix: up to 2 ideas, 2 self-tests and 1 other format among pro
       forced: ["idea_1", "idea_2"],
       mix: { selfTest: 2, other: 1 },
     });
-    assert.deepEqual(picks.slice(0, 2), ["idea_1", "idea_2"]);
+    assert.deepEqual(picks.slice(-2), ["idea_1", "idea_2"]);
     const proven = picks.slice(2);
     assert.equal(proven.filter((id) => fmtOf(id) === "self-test").length, 2, creatorId);
     assert.equal(proven.filter((id) => fmtOf(id) && fmtOf(id) !== "self-test").length, 1, creatorId);
