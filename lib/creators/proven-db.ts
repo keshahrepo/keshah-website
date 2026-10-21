@@ -449,7 +449,8 @@ export async function updateProven(
 
 function cleanPoints(v: unknown): string[] {
   const list = Array.isArray(v) ? v : String(v ?? "").split("\n");
-  return list.map((s) => String(s).replace(/^[\s\-*•]+/, "").trim()).filter(Boolean).slice(0, 12).map((s) => s.slice(0, 300));
+  // Weekly scripts have 3-4 sentence points (about 300-500 characters); keep them whole.
+  return list.map((s) => String(s).replace(/^[\s\-*•]+/, "").trim()).filter(Boolean).slice(0, 12).map((s) => s.slice(0, 1200));
 }
 
 function cleanUrl(v: unknown): string {
