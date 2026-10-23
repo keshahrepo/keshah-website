@@ -96,6 +96,15 @@ export async function refreshInstallsDaily(now = new Date()): Promise<{ days: nu
     const b = segs ? bucketDay(segs, aadiTags, creatorTags) : null;
     days.push({ date, installs: b?.installs ?? null, aadi: b?.aadi ?? null, creators: b?.creators ?? null, organic: b?.organic ?? null, views: views.get(date) ?? 0, ...(date === end ? { partial: true } : {}) });
   }
-  await db.collection("Stats").doc(STATS_DOC).set({ days, updated_at: now.toISOString(), aadi_tags: [...aadiTags], error: error ?? null });
+  // Per campaign tag per day (e.g. "Isai TikTok" vs "Isai Insta"), to spot a bio link that isn't the tracked one.
+  const tagged = [...aadiTags, ...creatorTags];
+  const by_tag: Record<string, Record<string, number>> = {};
+  for (const [date, segs] of byDay) {
+    for (const t of tagged) {
+      const n = segs.get(t);
+      if (n) (by_tag[t] ??= {})[date] = n;
+    }
+  }
+  await db.collection("Stats").doc(STATS_DOC).set({ days, by_tag, updated_at: now.toISOString(), aadi_tags: [...aadiTags], error: error ?? null });
   return { days: days.length, ...(error ? { error } : {}) };
 }
