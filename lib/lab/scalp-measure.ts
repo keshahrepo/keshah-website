@@ -251,3 +251,125 @@ export function repTravel(samples: Sample[], segments: Segment[]): { reps: numbe
     spread: reps.length > 1 ? Math.max(...reps) - Math.min(...reps) : NaN,
   };
 }
+
+// Mesh points that stay put when the scalp slides (eye corners, nose bridge
+// and tip, cheekbones). Fitting the head's movement to all of them cancels
+// small nods and turns far better than two eye corners alone.
+export const RIGID = [33, 133, 362, 263, 168, 6, 197, 195, 5, 4, 1, 116, 345, 123, 352] as const;
+
+/** Affine transform [a, b, c, d, e, f]: x' = a x + b y + c, y' = d x + e y + f. */
+export type Affine = [number, number, number, number, number, number];
+
+function solve3(m: number[][], r: number[]): number[] | null {
+  const [a, b, c] = m;
+  const det = a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0]);
+  if (Math.abs(det) < 1e-9) return null;
+  const col = (i: number) => m.map((row, k) => row.map((v, j) => (j === i ? r[k] : v)));
+  const d3 = (n: number[][]) => n[0][0] * (n[1][1] * n[2][2] - n[1][2] * n[2][1]) - n[0][1] * (n[1][0] * n[2][2] - n[1][2] * n[2][0]) + n[0][2] * (n[1][0] * n[2][1] - n[1][1] * n[2][0]);
+  return [d3(col(0)) / det, d3(col(1)) / det, d3(col(2)) / det];
+}
+
+/** Least-squares affine map from src points to dst points. */
+export function affineFit(src: Pt[], dst: Pt[]): Affine | null {
+  let sxx = 0, sxy = 0, syy = 0, sx = 0, sy = 0;
+  let ux = 0, uy = 0, u1 = 0, vx = 0, vy = 0, v1 = 0;
+  src.forEach((p, i) => {
+    const q = dst[i];
+    sxx += p.x * p.x; sxy += p.x * p.y; syy += p.y * p.y; sx += p.x; sy += p.y;
+    ux += p.x * q.x; uy += p.y * q.x; u1 += q.x;
+    vx += p.x * q.y; vy += p.y * q.y; v1 += q.y;
+  });
+  const M = [[sxx, sxy, sx], [sxy, syy, sy], [sx, sy, src.length]];
+  const r1 = solve3(M, [ux, uy, u1]);
+  const r2 = solve3(M, [vx, vy, v1]);
+  return r1 && r2 ? [r1[0], r1[1], r1[2], r2[0], r2[1], r2[2]] : null;
+}
+
+export function applyAffine(m: Affine, p: Pt): Pt {
+  return { x: m[0] * p.x + m[1] * p.y + m[2], y: m[3] * p.x + m[4] * p.y + m[5] };
+}
+
+export function invertAffine(m: Affine): Affine | null {
+  const det = m[0] * m[4] - m[1] * m[3];
+  if (Math.abs(det) < 1e-12) return null;
+  const a = m[4] / det, b = -m[1] / det, d = -m[3] / det, e = m[0] / det;
+  return [a, b, -(a * m[2] + b * m[5]), d, e, -(d * m[2] + e * m[5])];
+}
+
+/** Standard deviation of a patch: how much detail there is to lock onto. */
+export function texture(g: Gray): number {
+  let m = 0;
+  for (const v of g.data) m += v;
+  m /= g.data.length;
+  let s = 0;
+  for (const v of g.data) s += (v - m) * (v - m);
+  return Math.sqrt(s / g.data.length);
+}
+
+/**
+ * Free-paced back-and-forth: find the swings in a movement trace. A swing is
+ * a move from one turning point to the next that is at least `thr` mm, so
+ * jitter smaller than that never counts. Returns each swing's size in mm.
+ */
+export function detectSwings(v: number[], thr: number): number[] {
+  const swings: number[] = [];
+  if (v.length < 3) return swings;
+  let dir = 0; // +1 rising, -1 falling, 0 unknown
+  let lo = v[0];
+  let hi = v[0];
+  let ext = v[0]; // last confirmed turning point
+  for (const x of v) {
+    if (dir === 0) {
+      lo = Math.min(lo, x);
+      hi = Math.max(hi, x);
+      if (hi - lo >= thr) {
+        dir = x === hi ? 1 : -1;
+        ext = dir === 1 ? lo : hi;
+        hi = lo = x;
+      }
+      continue;
+    }
+    if (dir === 1) {
+      if (x > hi) hi = x;
+      else if (hi - x >= thr) {
+        swings.push(hi - ext);
+        ext = hi;
+        dir = -1;
+        lo = x;
+      }
+    } else {
+      if (x < lo) lo = x;
+      else if (x - lo >= thr) {
+        swings.push(ext - lo);
+        ext = lo;
+        dir = 1;
+        hi = x;
+      }
+    }
+  }
+  return swings;
+}
+
+/**
+ * Least-squares similarity (shift, rotation, uniform scale) from src to dst,
+ * as an Affine. Fewer degrees of freedom than affineFit, so landmark jitter is
+ * amplified less when projecting up to the hairline.
+ */
+export function similarityFit(src: Pt[], dst: Pt[]): Affine | null {
+  const n = src.length;
+  if (n < 2) return null;
+  const ca = src.reduce((s, p) => ({ x: s.x + p.x / n, y: s.y + p.y / n }), { x: 0, y: 0 });
+  const cb = dst.reduce((s, p) => ({ x: s.x + p.x / n, y: s.y + p.y / n }), { x: 0, y: 0 });
+  let A = 0, B = 0, N = 0;
+  src.forEach((p, i) => {
+    const ax = p.x - ca.x, ay = p.y - ca.y;
+    const bx = dst[i].x - cb.x, by = dst[i].y - cb.y;
+    A += ax * bx + ay * by;
+    B += ax * by - ay * bx;
+    N += ax * ax + ay * ay;
+  });
+  if (N < 1e-9) return null;
+  const a = A / N; // s cos
+  const b = B / N; // s sin
+  return [a, -b, cb.x - (a * ca.x - b * ca.y), b, a, cb.y - (b * ca.x + a * ca.y)];
+}

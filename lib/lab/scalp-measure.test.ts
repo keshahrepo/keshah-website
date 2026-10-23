@@ -105,3 +105,33 @@ test("repTravel: travel per forward/back rep, ignoring reaction time", () => {
   assert.ok(Math.abs(r.mean - 4.5) < 1e-9);
   assert.ok(Math.abs(r.spread - 1) < 1e-9);
 });
+
+test("affineFit recovers a known transform and inverts cleanly", async () => {
+  const { affineFit, applyAffine, invertAffine } = await import("./scalp-measure");
+  const m: [number, number, number, number, number, number] = [1.05, -0.08, 12, 0.07, 0.98, -30];
+  const src = [{ x: 0, y: 0 }, { x: 100, y: 10 }, { x: 40, y: 90 }, { x: 70, y: 50 }, { x: 10, y: 60 }];
+  const dst = src.map((p) => applyAffine(m, p));
+  const fit = affineFit(src, dst)!;
+  fit.forEach((v, i) => assert.ok(Math.abs(v - m[i]) < 1e-6));
+  const back = applyAffine(invertAffine(fit)!, dst[2]);
+  assert.ok(Math.abs(back.x - 40) < 1e-6 && Math.abs(back.y - 90) < 1e-6);
+});
+
+test("detectSwings counts back-and-forth swings and ignores jitter", async () => {
+  const { detectSwings } = await import("./scalp-measure");
+  const v: number[] = [];
+  for (let i = 0; i < 300; i++) v.push(2 * Math.sin((i / 50) * Math.PI) + 0.2 * Math.sin(i * 1.7)); // 3 cycles of +-2mm with jitter
+  const s = detectSwings(v, 1);
+  assert.ok(s.length >= 5 && s.length <= 6, `swings ${s.length}`);
+  s.slice(1).forEach((x) => assert.ok(x > 3.6 && x < 4.6, `amp ${x}`));
+  assert.equal(detectSwings(v.map((x) => x * 0.1), 1).length, 0);
+});
+
+test("similarityFit recovers rotation, scale and shift", async () => {
+  const { similarityFit, applyAffine } = await import("./scalp-measure");
+  const th = 0.05, s = 1.1;
+  const m: [number, number, number, number, number, number] = [s * Math.cos(th), -s * Math.sin(th), 7, s * Math.sin(th), s * Math.cos(th), -4];
+  const src = [{ x: 0, y: 0 }, { x: 100, y: 10 }, { x: 40, y: 90 }, { x: 70, y: 50 }];
+  const fit = similarityFit(src, src.map((p) => applyAffine(m, p)))!;
+  fit.forEach((v, i) => assert.ok(Math.abs(v - m[i]) < 1e-9));
+});
