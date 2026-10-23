@@ -45,6 +45,10 @@ export interface FacelessSpec {
   scenes: Record<string, unknown>[];
   /** The one fact the video leans on (a CONTENT_FACTS id) or "none". */
   main_fact?: string;
+  /** "qoves" for the Qoves-style look (renderer src/qoves), else the Scalp Report look. */
+  style?: "qoves";
+  /** Qoves: new images to make for this video, referenced in scenes as "gen:<index>". */
+  images?: { cast: string; pose: string }[];
 }
 
 /** Proven videos to adapt: strongest first, one per hook family, at most `tests` self-tests. */
@@ -171,6 +175,126 @@ Also:
 
 Answer only by calling save_video.`;
 
+
+// ---------------------------------------------------------------- Qoves style
+
+/** Photoreal library images already made (public/qoves/<key>.png in ~/keshah-faceless). */
+export const QOVES_LIBRARY = [
+  "man1_base", "man1_pinch_side", "man1_pinch_top", "man1_massage", "man1_stage1", "man1_stage2", "man1_stage3", "man1_stage4",
+  "man2_base", "man2_pinch_top", "man2_press", "man2_pinch", "man2_slide",
+  "woman1_base", "woman1_pinch_top", "crown_topdown",
+  "man3_base", "man4_base", "woman2_base", "man5_base", "man6_base",
+] as const;
+/** The audience is mostly white and Indian men in their 20s to 40s, plus women: lead with those cast members. */
+export const QOVES_CAST: Record<string, string> = {
+  man1: "white man around 30, dark hair, early receding hairline (has hair loss stage images man1_stage1..4)",
+  man2: "white man around 35, light brown hair thinning on top",
+  man5: "Indian man in his late 20s, black hair, receding hairline",
+  man6: "East Asian man in his early 30s, black hair thinning on top",
+  woman1: "woman around 30, dark hair pulled back, slightly widening centre part",
+  woman2: "woman around 40, shoulder-length hair, thinning along the part",
+  man3: "white man around 45, greying, clearly balding on top (use rarely)",
+  man4: "Black man in his mid 20s, receding hairline (use rarely)",
+};
+const QOVES_TYPES = ["portrait", "pair", "stages", "diagram", "heat", "chart", "chips", "trio", "text", "cta"] as const;
+
+const narrationRules = () => FACELESS_SYSTEM.slice(FACELESS_SYSTEM.indexOf("Narration rules:"), FACELESS_SYSTEM.indexOf("Scene plan:"))
+  .replace(/- End with one or two lines pointing to the pinned video[^\n]*\n/, "")
+  .replace(/When the input is a SELF-TEST IDEA[\s\S]*$/, "");
+
+export const QOVES_SYSTEM = () => `You adapt a proven hair loss video, or a new self-test idea, into a calm, premium explainer in the style of Qoves Studio: a neutral narrator over photoreal studio portraits (muted blue-grey background, black sweaters), quiet thin titles, small mono labels, simple white diagrams. For the account @aadi.keshah.
+
+${narrationRules()}
+- End with ONE sentence, Qoves-style, that offers the answer to their doubt: the link in bio has an app that checks if their scalp is tight and shows how to loosen it. Fresh wording each video (e.g. "Want to check if yours is tight? The link in bio has an app that checks it, and shows you how to loosen it."). Never mention a pinned video. No "follow", no "comment".
+
+When the input is a SELF-TEST IDEA instead of an original video, write a fresh script in the same voice:
+- First sentence: the test, as a command the viewer can do right now (you may tighten the wording).
+- Then the fail result, and that it could be why they're losing hair or going bald (hedge with "could", "may", "usually"; never "will").
+- For face, jaw and neck tests, add one bridge sentence: tension there pulls on the same tight layer over the top of the head, or usually comes with a tight scalp. Keep it plain and hedged.
+- Then the mechanism (one or two sentences), the one main fact, the full-routine fix, and the closing link in bio line.
+
+Scene plan: 8 to 13 scenes. Each scene has "type" and "cue" (the exact first 2 to 4 words of the sentence where it starts; the first scene's cue is ""). Something new every 2 to 4 seconds. The LAST scene is {"type":"cta","cue":"<first words of the closing link in bio sentence>"}.
+
+Pictures: an image field is either "lib:<key>" (an existing photo) or "gen:<n>" (an entry of "images", made for this video; counting starts at 0, so the first new photo is "gen:0").
+Existing photos: ${QOVES_LIBRARY.join(", ")}.
+Cast you can ask new photos of (keep the same person through a video when it makes sense; mostly man1, man2, man5, man6 and the women, since the audience is mostly white and Indian men in their 20s to 40s, plus women): ${Object.entries(QOVES_CAST).map(([k, v]) => `${k} (${v})`).join("; ")}.
+"images": up to 3 new photos, each {"cast":"<cast id>","pose":"<ONE simple hand action in a few words, e.g. pressing their fingertips into the muscles between their neck and shoulders; no extra details about head angle or expression>"}. Ask for one whenever the test shows a body action the library doesn't have (traps, jaw, ears, neck tilts, hair pulls, eyebrows...). Hands must be simple and natural.
+
+Scene types (only these, with these fields):
+- {"type":"portrait","cue","img","title"?,"label"?,"tags"?:[...]}  one big photo. title 2 to 5 words, sentence case. label short, e.g. "Step 1 · the side". tags: up to 4 short pills.
+- {"type":"pair","cue","title"?,"left":{"src","label"},"right":{"src","label"}}  two photos side by side (e.g. "Moves freely" vs "Barely moves").
+- {"type":"stages","cue","title"?,"imgs":["lib:man1_stage1","lib:man1_stage2","lib:man1_stage3","lib:man1_stage4"],"labels":["Stage 1","Stage 2","Stage 3","Stage 4"]}  hairline getting worse (labelled AI visualization automatically). Only man1's stages exist.
+- {"type":"diagram","cue","title"?,"squeeze"?:true}  scalp cross-section with flowing blood; squeeze:true shows the tight layer squeezing the vessels.
+- {"type":"heat","cue","img":"lib:crown_topdown","title"?,"tag"?,"note"?}  top of the head with tension glowing where hair thins. Pair with F01.
+- {"type":"chart","cue","title"?,"bars":[{"label":"Full hair","value":2.5},{"label":"Going bald","value":1}],"tag":"Klemp et al · 1989","note":"Small study"}  only when the script says the F02 line.
+- {"type":"chips","cue","title"?,"items":[...],"strike"?:true,"img"?}  2 to 5 short pills (e.g. "Your genes", "Your shampoo"), strike:true crosses them out.
+- {"type":"trio","cue","title"?,"imgs":[{"src","label"},{"src","label"},{"src","label"}]}  three photos, e.g. example techniques.
+- {"type":"text","cue","lines":[...]}  1 or 2 short italic lines for a quiet beat.
+- {"type":"cta","cue"}  the close (app screens, real results, "Link in bio"). Always last.
+
+Also: "title" (2 to 5 words naming the video), "caseName" (same as title, uppercase), "caption" (one or two plain sentences plus 4 to 6 hashtags), "main_fact" (fact id or "none"), "images" ([] if none).
+
+Answer only by calling save_video.`;
+
+/** Writers sometimes count new photos from 1: when no scene uses gen:0, shift every gen ref down by one. */
+export function normalizeGenRefs(s: FacelessSpec): FacelessSpec {
+  const json = JSON.stringify(s.scenes ?? []);
+  const n = (s.images ?? []).length;
+  const refs = [...json.matchAll(/"gen:(\d+)"/g)].map((m) => Number(m[1]));
+  if (!n || !refs.length || refs.includes(0) || Math.max(...refs) !== n) return s;
+  return { ...s, scenes: JSON.parse(json.replace(/"gen:(\d+)"/g, (_, d) => `"gen:${Number(d) - 1}"`)) };
+}
+
+/** Problems with a Qoves spec, or [] when it's good to render. */
+export function checkQovesSpec(s: FacelessSpec): string[] {
+  const p: string[] = [];
+  const words = s.script.trim().split(/\s+/).length;
+  if (words < 80 || words > 165) p.push(`script is ${words} words (80 to 165)`);
+  if (/[—–]/.test(s.script + s.caption)) p.push("dash character");
+  if (/\b(i|i'm|i've|me)\b|what do i have to lose|\bfollow\b|\bcomment\b|pinned video/i.test(s.script)) p.push("first person, pinned video or a banned ask in the script");
+  if (!/link in (the )?bio/i.test(s.script)) p.push("no link in bio line");
+  if (/(^|[.!?]\s+)(it is|here is|you are|that is)\b|\b(do not|does not|cannot|can not)\b/i.test(s.script)) p.push("use contractions (it's, here's, you're, don't, can't, doesn't, that's)");
+  if (/does ?n.t prove|not medical advice/i.test(s.script)) p.push("no momentum-killing disclaimers");
+  const imgs = Array.isArray(s.images) ? s.images : [];
+  if (imgs.length > 3) p.push("at most 3 new images");
+  imgs.forEach((im, i) => {
+    if (!QOVES_CAST[im?.cast]) p.push(`images[${i}]: unknown cast "${im?.cast}"`);
+    if (!String(im?.pose ?? "").trim()) p.push(`images[${i}]: missing pose`);
+  });
+  const ref = (v: unknown, where: string) => {
+    const r = String(v ?? "");
+    if (r.startsWith("lib:")) {
+      if (!(QOVES_LIBRARY as readonly string[]).includes(r.slice(4))) p.push(`${where}: unknown photo ${r}`);
+    } else if (r.startsWith("gen:")) {
+      const n = Number(r.slice(4));
+      if (!Number.isInteger(n) || n < 0 || n >= imgs.length) p.push(`${where}: ${r} has no matching images entry`);
+    } else p.push(`${where}: image must be lib:<key> or gen:<n>, got "${r}"`);
+  };
+  const scenes = Array.isArray(s.scenes) ? s.scenes : [];
+  if (scenes.length < 7 || scenes.length > 15) p.push("scene count");
+  const script = ` ${norm(s.script)} `;
+  scenes.forEach((sc, i) => {
+    const type = String(sc.type ?? "");
+    const at = `scene ${i + 1}`;
+    if (!(QOVES_TYPES as readonly string[]).includes(type)) p.push(`${at}: unknown type ${type}`);
+    const cue = String(sc.cue ?? "");
+    if (i > 0 && (!cue.trim() || !script.includes(` ${norm(cue)} `))) p.push(`${at}: cue not in script "${cue}"`);
+    if (type === "portrait" || type === "heat") ref(sc.img, at);
+    if (type === "chips" && sc.img) ref(sc.img, at);
+    if (type === "pair") {
+      ref((sc.left as { src?: string })?.src, `${at} left`);
+      ref((sc.right as { src?: string })?.src, `${at} right`);
+    }
+    if (type === "trio") ((sc.imgs as { src?: string }[]) ?? []).forEach((x, k) => ref(x?.src, `${at} img ${k + 1}`));
+    if (type === "stages") ((sc.imgs as string[]) ?? []).forEach((x, k) => ref(x, `${at} img ${k + 1}`));
+    if (type === "chart" && !/two and a half times less blood flow/i.test(s.script)) p.push("chart scene without the F02 line");
+  });
+  if (scenes.length && scenes[scenes.length - 1].type !== "cta") p.push("last scene isn't cta");
+  if (!s.title?.trim() || !s.caption?.trim()) p.push("missing title or caption");
+  if (s.main_fact !== undefined && s.main_fact !== "none" && !CONTENT_FACTS.some((f) => f.id === s.main_fact || f.id.startsWith(`${s.main_fact}_`))) p.push(`main_fact "${s.main_fact}" isn't a library id or "none"`);
+  return p;
+}
+
 const TOOL = {
   name: "save_video",
   description: "Save the adapted faceless video.",
@@ -183,6 +307,7 @@ const TOOL = {
       caption: { type: "string" },
       scenes: { type: "array", items: { type: "object" } },
       main_fact: { type: "string", description: "The one library fact id the video leans on, or \"none\"." },
+      images: { type: "array", items: { type: "object" }, description: "Qoves style only: new photos to make, [{cast, pose}]." },
     },
     required: ["title", "caseName", "script", "caption", "scenes"],
   },
@@ -256,27 +381,33 @@ export function anthropicFaceless(apiKey = process.env.ANTHROPIC_API_KEY ?? ""):
 }
 
 /** Adapts one source, retrying once with the problems listed. */
-export async function adaptSource(src: FacelessSource, generate: FacelessGenerate, earlier: FacelessSpec[] = [], recentFacts: string[] = []): Promise<FacelessSpec> {
+export async function adaptSource(src: FacelessSource, generate: FacelessGenerate, earlier: FacelessSpec[] = [], recentFacts: string[] = [], style?: "qoves"): Promise<FacelessSpec> {
   const studyUses = earlier.filter((e) => /two and a half times/i.test(e.script)).length;
-  const check = (s: FacelessSpec) => [...checkSpec(s), ...(studyUses >= 2 && /two and a half times/i.test(s.script) ? ["the F02 study is already in 2 of today's videos; use a different fact or none"] : [])];
-  let spec = await generate(FACELESS_SYSTEM, facelessUserPrompt(src, "", earlier, recentFacts));
+  const base = style === "qoves" ? checkQovesSpec : checkSpec;
+  const system = style === "qoves" ? QOVES_SYSTEM() : FACELESS_SYSTEM;
+  const check = (s: FacelessSpec) => [...base(s), ...(studyUses >= 2 && /two and a half times/i.test(s.script) ? ["the F02 study is already in 2 of today's videos; use a different fact or none"] : [])];
+  const fix = (sp: FacelessSpec) => (style === "qoves" ? normalizeGenRefs(sp) : sp);
+  let spec = fix(await generate(system, facelessUserPrompt(src, "", earlier, recentFacts)));
   let problems = check(spec);
   if (problems.length) {
-    spec = await generate(FACELESS_SYSTEM, facelessUserPrompt(src, `Your last attempt had these problems, fix them all: ${problems.join("; ")}`, earlier, recentFacts));
+    spec = fix(await generate(system, facelessUserPrompt(src, `Your last attempt had these problems, fix them all: ${problems.join("; ")}`, earlier, recentFacts)));
     problems = check(spec);
   }
   if (problems.length) throw new Error(problems.join("; "));
-  return spec;
+  return style === "qoves" ? { ...spec, style: "qoves", images: spec.images ?? [] } : spec;
 }
 
 /** Drafts today's batch into FacelessVideos, in chunks: fills what's missing until `deadlineMs`, so a later call carries on. */
 export async function draftFacelessDay(
   db: Firestore,
-  opts: { date: string; perDay?: number; generate?: FacelessGenerate; now?: Date; deadlineMs?: number },
+  opts: { date: string; perDay?: number; generate?: FacelessGenerate; now?: Date; deadlineMs?: number; style?: "qoves"; tag?: string },
 ): Promise<{ date: string; drafted: string[]; failed: string[]; total: number; complete: boolean }> {
   const col = db.collection(FACELESS_COLLECTION);
   const n = opts.perDay ?? FACELESS_DEFAULT_PER_DAY;
-  const today = (await col.where("date", "==", opts.date).get()).docs;
+  // tag: an extra batch for the same day (e.g. "Qoves"), stored as date "<date> <tag>" with its own Drive folder.
+  const dayKey = opts.tag ? `${opts.date} ${opts.tag}` : opts.date;
+  const idBase = opts.tag ? `${opts.date}-${opts.tag.toLowerCase().replace(/[^a-z0-9]+/g, "")}` : opts.date;
+  const today = (await col.where("date", "==", dayKey).get()).docs;
   const made: FacelessSpec[] = today.map((d) => d.data() as FacelessSpec);
   if (today.length >= n) return { date: opts.date, drafted: [], failed: [], total: today.length, complete: true };
   const nowMs = (opts.now ?? new Date()).getTime();
@@ -321,11 +452,11 @@ export async function draftFacelessDay(
     if (next >= n) break;
     if (opts.deadlineMs && Date.now() > opts.deadlineMs) break;
     try {
-      const spec = await adaptSource(src, generate, made, recentFacts);
-      const id = `${opts.date}_${next + 1}`;
+      const spec = await adaptSource(src, generate, made, recentFacts, opts.style);
+      const id = `${idBase}_${next + 1}`;
       await col.doc(id).set({
         id,
-        date: opts.date,
+        date: dayKey,
         status: "drafted",
         source_id: src.id,
         source_views: src.views,
@@ -344,5 +475,5 @@ export async function draftFacelessDay(
     }
   }
   const outOfPicks = picks.length === 0 || (drafted.length + failed.length >= picks.length);
-  return { date: opts.date, drafted, failed, total: next, complete: next >= n || outOfPicks };
+  return { date: dayKey, drafted, failed, total: next, complete: next >= n || outOfPicks };
 }

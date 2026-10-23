@@ -24,7 +24,9 @@ export async function GET(req: Request) {
     if (requested) await ref.set({ faceless_draft_requested: false }, { merge: true });
     const perDay = typeof s.faceless_per_day === "number" ? s.faceless_per_day : FACELESS_DEFAULT_PER_DAY;
     // A chunk per call (the next 10-minute call carries on) until the day's batch is complete.
-    const r = await draftFacelessDay(db, { date, perDay, now, deadlineMs: Date.now() + 230_000 });
+    // faceless_style "qoves" switches the daily batch to the Qoves look (renderer src/qoves in ~/keshah-faceless).
+    const style = s.faceless_style === "qoves" ? ("qoves" as const) : undefined;
+    const r = await draftFacelessDay(db, { date, perDay, now, deadlineMs: Date.now() + 230_000, style });
     if (r.complete) await ref.set({ faceless_last_draft: date }, { merge: true });
     return NextResponse.json({ ok: true, ...r });
   } catch (e) {
