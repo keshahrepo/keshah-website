@@ -212,7 +212,19 @@ const QOVES_TYPES = ["portrait", "pair", "stages", "diagram", "heat", "chart", "
  * ~/keshah-faceless, Wikimedia Commons, credits.json there). About half the Qoves videos open on one.
  * Only what's visible is ever said: never treatments, causes, health, or that they use anything.
  */
-export const QOVES_CELEBS: { slug: string; name: string; years: number[]; note: string }[] = [];
+// Left out: LeBron and Affleck (no clear change), Musk and Klopp (hair got fuller, which invites treatment talk).
+export const QOVES_CELEBS: { slug: string; name: string; years: number[]; note: string }[] = [
+  { slug: "william", name: "William, Prince of Wales", years: [2009, 2016, 2023], note: "Hairline recedes at the temples and hair thins on top over the years." },
+  { slug: "harry", name: "Prince Harry, Duke of Sussex", years: [2009, 2018, 2024], note: "Hair is thicker on top in 2009 and thinner on top in later photos." },
+  { slug: "dwayne", name: "Dwayne Johnson", years: [2002, 2009, 2023], note: "Short hair with a visible hairline in early photos; head is shaved in the most recent one." },
+  { slug: "bezos", name: "Jeff Bezos", years: [1986, 2005, 2018], note: "Full hair in 1986, thin on top by 2005, head shaved by 2018." },
+  { slug: "willis", name: "Bruce Willis", years: [1985, 2006, 2018], note: "Receding hairline in 1985; head shaved in later photos." },
+  { slug: "larrydavid", name: "Larry David", years: [1965, 2009, 2026], note: "Full hair in 1965; bald on top with hair at the sides in later photos." },
+  { slug: "connery", name: "Sean Connery", years: [1964, 1976, 1983], note: "Full hair in the 1964 photo; receded hairline and thin top by 1976 and 1983." },
+  { slug: "charles", name: "Charles III", years: [1972, 2015, 2025], note: "Hairline recedes and hair thins on top between 1972 and 2025." },
+  { slug: "guardiola", name: "Pep Guardiola", years: [2009, 2014, 2023], note: "Short, receding hair in 2009; head shaved in later photos." },
+  { slug: "travolta", name: "John Travolta", years: [1983, 2014, 2019], note: "Full hair in 1983; head shaved in 2019." },
+];
 
 const narrationRules = () => FACELESS_SYSTEM.slice(FACELESS_SYSTEM.indexOf("Narration rules:"), FACELESS_SYSTEM.indexOf("Scene plan:"))
   .replace(/- End with one or two lines pointing to the pinned video[^\n]*\n/, "")
