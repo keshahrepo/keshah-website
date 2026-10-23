@@ -190,6 +190,19 @@ export function smooth(a: number[], win = 5): number[] {
   return a.map((_, i) => median(a.slice(Math.max(0, i - h), i + h + 1)));
 }
 
+/**
+ * Knock out single-frame glitches (running median of 3), then average over
+ * 5 frames (~0.2 s). Real slides take far longer, so their size survives;
+ * frame-to-frame jitter shrinks by about half.
+ */
+export function denoise(a: number[]): number[] {
+  const m = smooth(a, 3);
+  return m.map((_, i) => {
+    const w = m.slice(Math.max(0, i - 2), i + 3);
+    return w.reduce((s, v) => s + v, 0) / w.length;
+  });
+}
+
 export type Sample = {
   t: number; // ms since recording start
   phase: "still" | "move";
@@ -214,7 +227,7 @@ export function summarize(samples: Sample[]): Summary {
   const good = move.filter((s) => s.ok);
   const still = samples.filter((s) => s.phase === "still" && s.ok);
   const spread = (v: number[]) => (v.length < 5 ? NaN : percentile(v, 97) - percentile(v, 3));
-  const sm = (k: "hair" | "mesh" | "brow", list: Sample[]) => smooth(list.map((s) => s[k]));
+  const sm = (k: "hair" | "mesh" | "brow", list: Sample[]) => denoise(list.map((s) => s[k]));
   return {
     hairRange: spread(sm("hair", good)),
     meshRange: spread(sm("mesh", good)),

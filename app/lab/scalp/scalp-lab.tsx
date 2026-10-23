@@ -30,7 +30,7 @@ import {
   patch,
   percentile,
   RIGID,
-  smooth,
+  denoise,
   summarize,
   texture,
   toFace,
@@ -49,8 +49,12 @@ const MOVE_MAX_MS = 12000; // finish anyway after this, so a very tight scalp st
 const SWINGS_DONE = 5; // first (partial) swing from rest + 4 full swings
 const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.1/wasm";
 const TICKS = 72;
-const GRID_U = [-0.6, -0.3, 0, 0.3, 0.6];
-const GRID_DV = [-0.05, 0.08, 0.21, 0.34]; // rows, relative to the top of the face mesh
+const GRID_U = [-0.5, -0.25, 0, 0.25, 0.5];
+const GRID_DV = [-0.12, -0.04, 0.04, 0.12, 0.2]; // rows, relative to the top of the face mesh
+const MAX_SPOTS = 12; // the most detailed patches (usually the skin/hair edge) win
+// Head-correction patches: nose and cheekbones. Eye corners are left out,
+// since blinking and eye movement throw them off.
+const ANCHOR_IDS = [168, 6, 197, 195, 5, 4, 1, 116, 345, 123, 352];
 
 type Raw = { t: number; phase: "still" | "move"; ok: boolean; hv: number; mv: number; bv: number; why?: "face" | "pose" | "spots"; n?: number };
 type Spot = { p0: Pt; tpl: Gray; disp: Pt };
@@ -73,7 +77,7 @@ function analyse(raw: Raw[], iris: number[]): Result {
   const base = still.length ? { h: median(still.map((x) => x.hv)), m: median(still.map((x) => x.mv)), b: median(still.map((x) => x.bv)) } : { h: 0, m: 0, b: 0 };
   const samples: Sample[] = raw.map((x) => ({ t: x.t, phase: x.phase, ok: x.ok, hair: (x.hv - base.h) * mmPerPx, mesh: (x.mv - base.m) * mmPerPx, brow: (x.bv - base.b) * mmPerPx }));
   const sum = summarize(samples);
-  const move = smooth(samples.filter((s) => s.phase === "move" && s.ok).map((s) => s.hair));
+  const move = denoise(samples.filter((s) => s.phase === "move" && s.ok).map((s) => s.hair));
   const thr = Math.max(0.8, 3 * (Number.isFinite(sum.stillNoise) ? sum.stillNoise : 0));
   const swings = detectSwings(move, thr);
   const full = swings.slice(1);
@@ -98,6 +102,7 @@ export default function ScalpLab({ labKey }: { labKey: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const workRef = useRef<HTMLCanvasElement | null>(null);
+  const drawnAt = useRef(-1);
   const lmRef = useRef<FaceLandmarker | null>(null);
   const stageRef = useRef<Stage>("intro");
   const run = useRef({
@@ -153,7 +158,11 @@ export default function ScalpLab({ labKey }: { labKey: string }) {
       c.height = H;
     }
     const ctx = c.getContext("2d", { willReadFrequently: true })!;
-    ctx.drawImage(v, 0, 0, W, H);
+    // Draw the frame once per video frame, however many crops we take.
+    if (drawnAt.current !== v.currentTime) {
+      ctx.drawImage(v, 0, 0, W, H);
+      drawnAt.current = v.currentTime;
+    }
     const px = ctx.getImageData(x0, y0, w, h).data;
     const data = new Float32Array(w * h);
     for (let i = 0; i < w * h; i++) data[i] = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
@@ -328,17 +337,18 @@ export default function ScalpLab({ labKey }: { labKey: string }) {
         // Lay a grid of skin patches over the hairline band and keep the ones
         // with enough detail to follow.
         const vTop = toFace(f, pts[LM.foreheadTop]).v;
-        r.patchR = Math.max(5, Math.min(10, Math.round(f.eyeDist * 0.06)));
-        r.radius = Math.max(8, Math.min(16, Math.round(f.eyeDist * 0.12)));
+        r.patchR = Math.max(8, Math.min(18, Math.round(f.eyeDist * 0.12)));
+        r.radius = Math.max(6, Math.min(12, Math.round(f.eyeDist * 0.08)));
         const centres = GRID_DV.flatMap((dv) => GRID_U.map((u) => fromFace(f, { u, v: vTop + dv })));
         const crop = grab(...bounds(centres, r.patchR + 2));
-        const spots: Spot[] = [];
+        let spots: (Spot & { tex: number })[] = [];
         let bright = 0;
         for (const c of centres) {
           const tpl = crop ? patch(crop.g, c.x - crop.x0, c.y - crop.y0, r.patchR) : null;
           if (!tpl) continue;
           bright += tpl.data.reduce((a, b) => a + b, 0) / tpl.data.length;
-          if (texture(tpl) >= 4) spots.push({ p0: c, tpl, disp: { x: 0, y: 0 } });
+          const tex = texture(tpl);
+          if (tex >= 4) spots.push({ p0: c, tpl, disp: { x: 0, y: 0 }, tex });
         }
         if (spots.length < 6) {
           const dark = bright / Math.max(1, centres.length) < 70;
@@ -348,11 +358,13 @@ export default function ScalpLab({ labKey }: { labKey: string }) {
           go("align");
           return;
         }
+        spots = spots.sort((a, b) => b.tex - a.tex).slice(0, MAX_SPOTS);
         r.spots = spots;
         r.rigid0 = RIGID.map((i) => pts[i]);
-        const ar = r.patchR + 2;
-        const acrop = grab(...bounds(r.rigid0, ar + 2));
-        r.anchors = r.rigid0.flatMap((p0) => {
+        const ar = r.patchR;
+        const a0 = ANCHOR_IDS.map((i) => pts[i]);
+        const acrop = grab(...bounds(a0, ar + 2));
+        r.anchors = a0.flatMap((p0) => {
           const tpl = acrop ? patch(acrop.g, p0.x - acrop.x0, p0.y - acrop.y0, ar) : null;
           return tpl && texture(tpl) >= 4 ? [{ p0, tpl }] : [];
         });
@@ -370,7 +382,7 @@ export default function ScalpLab({ labKey }: { labKey: string }) {
       const t = now - r.recAt;
       if (s === "still" && t >= STILL_MS) {
         r.mmPerPx = IRIS_MM / median(r.iris);
-        const still = r.raw.filter((x) => x.ok).map((x) => x.hv * r.mmPerPx);
+        const still = denoise(r.raw.filter((x) => x.ok).map((x) => x.hv * r.mmPerPx));
         const noise = still.length >= 5 ? percentile(still, 97) - percentile(still, 3) : 0;
         r.thr = Math.max(0.8, 3 * noise);
         r.moveAt = now;
@@ -389,7 +401,7 @@ export default function ScalpLab({ labKey }: { labKey: string }) {
       if (M && r.anchors.length >= 5) {
         const guess = M;
         const ap = r.anchors.map((a) => applyAffine(guess, a.p0));
-        const acrop = grab(...bounds(ap, r.patchR + 2 + r.radius + 2));
+        const acrop = grab(...bounds(ap, r.patchR + r.radius + 2));
         const src: Pt[] = [];
         const dst: Pt[] = [];
         ap.forEach((p, i) => {
@@ -399,7 +411,16 @@ export default function ScalpLab({ labKey }: { labKey: string }) {
             dst.push({ x: hit.x + acrop!.x0, y: hit.y + acrop!.y0 });
           }
         });
-        if (src.length >= 5) M = similarityFit(src, dst) ?? M;
+        if (src.length >= 5) {
+          // Fit, drop patches that disagree with the rest, fit again.
+          const first = similarityFit(src, dst);
+          if (first) {
+            const res = src.map((p, i) => Math.hypot(applyAffine(first, p).x - dst[i].x, applyAffine(first, p).y - dst[i].y));
+            const cut = Math.max(1.5, 2.5 * median(res));
+            const keep = res.map((e, i) => (e <= cut ? i : -1)).filter((i) => i >= 0);
+            M = (keep.length >= 5 ? similarityFit(keep.map((i) => src[i]), keep.map((i) => dst[i])) : null) ?? first;
+          }
+        }
       }
       const Minv = M ? invertAffine(M) : null;
       if (!pts || !M || !Minv) {
@@ -445,7 +466,7 @@ export default function ScalpLab({ labKey }: { labKey: string }) {
       else if (!ok) setSub("Keep your fingertips behind your hairline.");
       else setSub("");
       // Count swings so far; the ring fills as you go.
-      const live = smooth(r.raw.filter((x) => x.phase === "move" && x.ok).map((x) => x.hv * r.mmPerPx));
+      const live = denoise(r.raw.filter((x) => x.phase === "move" && x.ok).map((x) => x.hv * r.mmPerPx));
       const swings = detectSwings(live, r.thr).length;
       setLit(Math.round((Math.min(swings, SWINGS_DONE) / SWINGS_DONE) * TICKS));
       if (swings >= SWINGS_DONE) finish();
