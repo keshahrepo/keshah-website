@@ -16,12 +16,15 @@ export async function GET(req: Request) {
   const accounts = ((d.accounts as AccountDays[] | undefined) ?? []);
   const w = windowFor(period);
   const base = { period, tracked_from: VIEWS_TRACKED_FROM, updated_at: d.updated_at ?? null, error: d.error ?? null };
-  if (!w) return NextResponse.json({ ...base, from: null, to: null, overall: per1k(0, 0), accounts: [], weeks: [] });
+  if (!w) return NextResponse.json({ ...base, from: null, to: null, overall: per1k(0, 0), creators: per1k(0, 0), accounts: [], weeks: [] });
   const rows = accounts
     .map((a) => ({ id: a.id, name: a.name, isAadi: a.isAadi, noTag: a.noTag, ...sumDays(a, w.from, w.to), weeks: byWeek([a], w.from, w.to) }))
     .filter((r) => r.views >= 5000) // too few views to say anything yet
     .sort((a, b) => b.views - a.views);
   const tagged = rows.filter((r) => !r.noTag);
   const overall = per1k(tagged.reduce((s, r) => s + r.views, 0), tagged.reduce((s, r) => s + r.installs, 0));
-  return NextResponse.json({ ...base, from: w.from, to: w.to, overall, accounts: rows, weeks: byWeek(accounts.filter((a) => !a.noTag), w.from, w.to) });
+  // The creator program alone (no founder account, every tagged creator however small).
+  const progAll = accounts.filter((a) => !a.noTag && !a.isAadi).map((a) => sumDays(a, w.from, w.to));
+  const creators = per1k(progAll.reduce((s, r) => s + r.views, 0), progAll.reduce((s, r) => s + r.installs, 0));
+  return NextResponse.json({ ...base, from: w.from, to: w.to, overall, creators, accounts: rows, weeks: byWeek(accounts.filter((a) => !a.noTag), w.from, w.to) });
 }
