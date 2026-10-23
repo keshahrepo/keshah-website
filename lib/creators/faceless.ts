@@ -196,7 +196,14 @@ export const QOVES_CAST: Record<string, string> = {
   man3: "white man around 45, greying, clearly balding on top (use rarely)",
   man4: "Black man in his mid 20s, receding hairline (use rarely)",
 };
-const QOVES_TYPES = ["portrait", "pair", "stages", "diagram", "heat", "chart", "chips", "trio", "text", "cta"] as const;
+const QOVES_TYPES = ["portrait", "pair", "stages", "diagram", "heat", "chart", "chips", "trio", "text", "cta", "celeb"] as const;
+
+/**
+ * Public figures with real photos of their hairline over the years (public/qoves/celeb/<slug>/ in
+ * ~/keshah-faceless, Wikimedia Commons, credits.json there). About half the Qoves videos open on one.
+ * Only what's visible is ever said: never treatments, causes, health, or that they use anything.
+ */
+export const QOVES_CELEBS: { slug: string; name: string; years: number[]; note: string }[] = [];
 
 const narrationRules = () => FACELESS_SYSTEM.slice(FACELESS_SYSTEM.indexOf("Narration rules:"), FACELESS_SYSTEM.indexOf("Scene plan:"))
   .replace(/- End with one or two lines pointing to the pinned video[^\n]*\n/, "")
@@ -231,6 +238,7 @@ Scene types (only these, with these fields):
 - {"type":"trio","cue","title"?,"imgs":[{"src","label"},{"src","label"},{"src","label"}]}  three photos, e.g. example techniques.
 - {"type":"text","cue","lines":[...]}  1 or 2 short italic lines for a quiet beat.
 - {"type":"cta","cue"}  the close (app screens, real results, "Link in bio"). Always last.
+- {"type":"celeb","cue","celeb":"<slug>","title"?}  real photos of a public figure's hairline over the years, one after another with the years. ONLY when the input names a celebrity for this video.
 
 Also: "title" (2 to 5 words naming the video), "caseName" (same as title, uppercase), "caption" (one or two plain sentences plus 4 to 6 hashtags), "main_fact" (fact id or "none"), "images" ([] if none).
 
@@ -243,6 +251,12 @@ export function normalizeGenRefs(s: FacelessSpec): FacelessSpec {
   const refs = [...json.matchAll(/"gen:(\d+)"/g)].map((m) => Number(m[1]));
   if (!n || !refs.length || refs.includes(0) || Math.max(...refs) !== n) return s;
   return { ...s, scenes: JSON.parse(json.replace(/"gen:(\d+)"/g, (_, d) => `"gen:${Number(d) - 1}"`)) };
+}
+
+/** The celebrity block added to a writer prompt when a video opens on a public figure. */
+export function celebPrompt(c: { slug: string; name: string; years: number[]; note: string }): string {
+  return `CELEBRITY FOR THIS VIDEO: ${c.name} (slug "${c.slug}", real photos from ${c.years.join(", ")}; visible: ${c.note}).
+Open on them: the FIRST scene is {"type":"celeb","cue":"","celeb":"${c.slug}"} (an optional short title). You may name them once in the hook, neutrally, about what's visible (e.g. "Look at ${c.name}'s hairline over the years."), then go straight to the viewer's own test. Never say anything about their scalp, health, causes, treatments or products, and never connect them to the app or the closing line.`;
 }
 
 /** Problems with a Qoves spec, or [] when it's good to render. */
@@ -288,6 +302,10 @@ export function checkQovesSpec(s: FacelessSpec): string[] {
     if (type === "trio") ((sc.imgs as { src?: string }[]) ?? []).forEach((x, k) => ref(x?.src, `${at} img ${k + 1}`));
     if (type === "stages") ((sc.imgs as string[]) ?? []).forEach((x, k) => ref(x, `${at} img ${k + 1}`));
     if (type === "chart" && !/two and a half times less blood flow/i.test(s.script)) p.push("chart scene without the F02 line");
+    if (type === "celeb") {
+      if (!QOVES_CELEBS.some((c) => c.slug === sc.celeb)) p.push(`${at}: unknown celebrity "${String(sc.celeb)}"`);
+      if (i >= scenes.length - 2) p.push(`${at}: a celebrity can't be next to the closing line`);
+    }
   });
   if (scenes.length && scenes[scenes.length - 1].type !== "cta") p.push("last scene isn't cta");
   if (!s.title?.trim() || !s.caption?.trim()) p.push("missing title or caption");
@@ -381,16 +399,21 @@ export function anthropicFaceless(apiKey = process.env.ANTHROPIC_API_KEY ?? ""):
 }
 
 /** Adapts one source, retrying once with the problems listed. */
-export async function adaptSource(src: FacelessSource, generate: FacelessGenerate, earlier: FacelessSpec[] = [], recentFacts: string[] = [], style?: "qoves"): Promise<FacelessSpec> {
+export async function adaptSource(src: FacelessSource, generate: FacelessGenerate, earlier: FacelessSpec[] = [], recentFacts: string[] = [], style?: "qoves", celeb?: (typeof QOVES_CELEBS)[number]): Promise<FacelessSpec> {
   const studyUses = earlier.filter((e) => /two and a half times/i.test(e.script)).length;
   const base = style === "qoves" ? checkQovesSpec : checkSpec;
   const system = style === "qoves" ? QOVES_SYSTEM() : FACELESS_SYSTEM;
-  const check = (s: FacelessSpec) => [...base(s), ...(studyUses >= 2 && /two and a half times/i.test(s.script) ? ["the F02 study is already in 2 of today's videos; use a different fact or none"] : [])];
+  const celebExtra = celeb ? celebPrompt(celeb) : "";
+  const check = (s: FacelessSpec) => [
+    ...base(s),
+    ...(studyUses >= 2 && /two and a half times/i.test(s.script) ? ["the F02 study is already in 2 of today's videos; use a different fact or none"] : []),
+    ...(celeb && !(s.scenes ?? []).some((x) => x.type === "celeb" && x.celeb === celeb.slug) ? [`open on the celebrity: first scene {"type":"celeb","celeb":"${celeb.slug}"}`] : []),
+  ];
   const fix = (sp: FacelessSpec) => (style === "qoves" ? normalizeGenRefs(sp) : sp);
-  let spec = fix(await generate(system, facelessUserPrompt(src, "", earlier, recentFacts)));
+  let spec = fix(await generate(system, facelessUserPrompt(src, celebExtra, earlier, recentFacts)));
   let problems = check(spec);
   if (problems.length) {
-    spec = fix(await generate(system, facelessUserPrompt(src, `Your last attempt had these problems, fix them all: ${problems.join("; ")}`, earlier, recentFacts)));
+    spec = fix(await generate(system, facelessUserPrompt(src, `${celebExtra}\n\nYour last attempt had these problems, fix them all: ${problems.join("; ")}`, earlier, recentFacts)));
     problems = check(spec);
   }
   if (problems.length) throw new Error(problems.join("; "));
@@ -452,7 +475,9 @@ export async function draftFacelessDay(
     if (next >= n) break;
     if (opts.deadlineMs && Date.now() > opts.deadlineMs) break;
     try {
-      const spec = await adaptSource(src, generate, made, recentFacts, opts.style);
+      // About half the Qoves videos open on a public figure, rotating through the library.
+      const celeb = opts.style === "qoves" && QOVES_CELEBS.length && next % 2 === 0 ? QOVES_CELEBS[(Number(opts.date.replace(/-/g, "")) + next) % QOVES_CELEBS.length] : undefined;
+      const spec = await adaptSource(src, generate, made, recentFacts, opts.style, celeb);
       const id = `${idBase}_${next + 1}`;
       await col.doc(id).set({
         id,
