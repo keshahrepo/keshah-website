@@ -19,7 +19,7 @@ export async function GET(req: Request) {
   if (!w) return NextResponse.json({ ...base, from: null, to: null, overall: per1k(0, 0), accounts: [], weeks: [] });
   const rows = accounts
     .map((a) => ({ id: a.id, name: a.name, isAadi: a.isAadi, noTag: a.noTag, ...sumDays(a, w.from, w.to), weeks: byWeek([a], w.from, w.to) }))
-    .filter((r) => r.views > 0 || r.installs > 0)
+    .filter((r) => r.views >= 5000) // too few views to say anything yet
     .sort((a, b) => b.views - a.views);
   const tagged = rows.filter((r) => !r.noTag);
   const overall = per1k(tagged.reduce((s, r) => s + r.views, 0), tagged.reduce((s, r) => s + r.installs, 0));
