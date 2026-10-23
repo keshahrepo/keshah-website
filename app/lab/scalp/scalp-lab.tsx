@@ -1,9 +1,10 @@
 "use client";
 
-// Scalp mobility lab (hidden, 1-week feasibility test). The front camera
-// follows a patch of skin at the hairline while the tester pushes their scalp
-// or raises their eyebrows, and reports how far it moved in millimetres.
-// Math lives in lib/lab/scalp-measure.ts. Nothing visual leaves the phone;
+// Scalp check (hidden lab, 1-week feasibility test). Face ID-style flow: the
+// front camera finds the face, then guides the tester to slide their scalp
+// forward and back with their fingertips while it follows a patch of skin at
+// the hairline, and reports how far it travelled in millimetres.
+// Math lives in lib/lab/scalp-measure.ts. No video or images leave the phone;
 // only the numbers are saved to LabScalpTests.
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -18,62 +19,64 @@ import {
   median,
   nccMatch,
   patch,
+  repTravel,
   summarize,
   toFace,
   type FaceFrame,
   type Gray,
   type Pt,
   type Sample,
-  type Summary,
+  type Segment,
 } from "@/lib/lab/scalp-measure";
 
-type Test = "push" | "brow";
-type Stage = "setup" | "loading" | "aim" | "still" | "move" | "result" | "error";
+type Stage = "intro" | "loading" | "align" | "place" | "still" | "move" | "result" | "error";
 
-const STILL_MS = 2500;
-const MOVE_MS = 9000;
+const PLACE_MS = 3500;
+const STILL_MS = 1500;
+const SLIDE_MS = 1600;
+const SLIDES = 6; // forward, back, x3
 const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.1/wasm";
+const TICKS = 72;
 
-const INSTRUCTIONS: Record<Test, string> = {
-  push: "Fingertips on top of your head, behind the hairline. Slowly slide your scalp forward and back, 3 times. Keep your hand above the circles.",
-  brow: "Raise your eyebrows as high as you can, then relax. 3 times, slowly.",
-};
+// Recording clock starts when "still" begins.
+const SEGMENTS: Segment[] = Array.from({ length: SLIDES }, (_, i) => ({
+  kind: i % 2 ? "back" : "fwd",
+  start: STILL_MS + i * SLIDE_MS,
+  end: STILL_MS + (i + 1) * SLIDE_MS,
+}));
+const REC_MS = STILL_MS + SLIDES * SLIDE_MS;
 
 type Raw = { t: number; phase: "still" | "move"; ok: boolean; hv: number; mv: number; bv: number };
-type Rep = { test: Test; summary: Summary; saved: boolean | null };
+type Result = { travel: number; reps: number[]; spread: number; noise: number; quality: number; samples: Sample[] };
 
 export default function ScalpLab({ labKey }: { labKey: string }) {
-  const [stage, setStage] = useState<Stage>("setup");
-  const [error, setError] = useState("");
+  const [stage, setStage] = useState<Stage>("intro");
+  const [title, setTitle] = useState("Scalp check");
+  const [sub, setSub] = useState("Measures how far your scalp moves.");
+  const [lit, setLit] = useState(0);
+  const [result, setResult] = useState<Result | null>(null);
   const [name, setName] = useState("");
-  const [test, setTest] = useState<Test>("brow");
-  const [phase, setPhase] = useState("before");
-  const [pinch, setPinch] = useState("");
-  const [ruler, setRuler] = useState("");
-  const [note, setNote] = useState("");
-  const [hint, setHint] = useState("");
-  const [progress, setProgress] = useState(0);
-  const [live, setLive] = useState<number | null>(null);
-  const [reps, setReps] = useState<Rep[]>([]);
+  const [phase, setPhase] = useState<"before" | "after" | "">("");
+  const [saved, setSaved] = useState<"" | "saving" | "ok" | "fail">("");
+  const [error, setError] = useState("");
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const workRef = useRef<HTMLCanvasElement | null>(null);
   const lmRef = useRef<FaceLandmarker | null>(null);
-  const stageRef = useRef<Stage>("setup");
+  const stageRef = useRef<Stage>("intro");
   const run = useRef({
-    points: [] as { u: number; v: number }[], // tracked spots, face coords
+    stageAt: 0,
+    recAt: 0,
+    steady: [] as Pt[],
+    points: [] as { u: number; v: number }[],
     last: [] as { u: number; v: number }[],
     tpls: [] as (Gray | null)[],
     patchR: 10,
-    startAt: 0,
     pose0: null as { pitch: number; yaw: number } | null,
     iris: [] as number[],
     eye: [] as number[],
     raw: [] as Raw[],
-    eyeMm: 0,
-    base: { h: 0, m: 0, b: 0 },
-    lastFrame: null as FaceFrame | null,
   });
 
   useEffect(() => {
@@ -84,10 +87,15 @@ export default function ScalpLab({ labKey }: { labKey: string }) {
 
   const go = (s: Stage) => {
     stageRef.current = s;
+    run.current.stageAt = performance.now();
     setStage(s);
   };
+  const say = (t: string, s = "") => {
+    setTitle(t);
+    setSub(s);
+  };
 
-  // Grab a grayscale crop of the current video frame.
+  // Grayscale crop of the current video frame.
   const grab = useCallback((x0: number, y0: number, w: number, h: number): { g: Gray; x0: number; y0: number } | null => {
     const v = videoRef.current!;
     const W = v.videoWidth;
@@ -112,52 +120,54 @@ export default function ScalpLab({ labKey }: { labKey: string }) {
 
   const finish = useCallback(() => {
     const r = run.current;
-    const eyeMm = r.eyeMm;
-    const samples: Sample[] = r.raw.map((x) => ({
-      t: x.t,
-      phase: x.phase,
-      ok: x.ok,
-      hair: (x.hv - r.base.h) * eyeMm,
-      mesh: (x.mv - r.base.m) * eyeMm,
-      brow: (x.bv - r.base.b) * eyeMm,
-    }));
-    const summary = summarize(samples);
-    const rep: Rep = { test, summary, saved: null };
-    const idx = reps.length;
-    setReps((p) => [...p, rep]);
+    const still = r.raw.filter((x) => x.phase === "still" && x.ok);
+    const eyeMm = median(r.eye) * (IRIS_MM / median(r.iris));
+    const base = still.length ? { h: median(still.map((x) => x.hv)), m: median(still.map((x) => x.mv)), b: median(still.map((x) => x.bv)) } : { h: 0, m: 0, b: 0 };
+    const samples: Sample[] = r.raw.map((x) => ({ t: x.t, phase: x.phase, ok: x.ok, hair: (x.hv - base.h) * eyeMm, mesh: (x.mv - base.m) * eyeMm, brow: (x.bv - base.b) * eyeMm }));
+    const sum = summarize(samples);
+    const reps = repTravel(samples, SEGMENTS);
+    const res: Result = { travel: reps.mean, reps: reps.reps, spread: reps.spread, noise: sum.stillNoise, quality: sum.quality, samples };
+    setResult(res);
+    setLit(TICKS);
+    setSaved("");
+    const good = Number.isFinite(res.travel) && res.reps.length >= 2 && res.quality >= 0.6;
+    if (good) say("Scalp movement", res.reps.map((x) => x.toFixed(1)).join("  ·  ") + " mm");
+    else say("Couldn't get a clean reading", "Keep your fingertips behind your hairline and your face in the circle.");
     go("result");
-    const step = Math.max(1, Math.ceil(samples.length / 400));
-    const trace = samples.filter((_, i) => i % step === 0).map((s) => [Math.round(s.t), s.ok ? 1 : 0, s.hair, s.mesh, s.brow]);
-    const mmPerPx = IRIS_MM / median(r.iris);
-    fetch("/api/lab/scalp", {
+  }, []);
+
+  const save = async () => {
+    const r = run.current;
+    if (!result || !name.trim()) return;
+    try {
+      localStorage.setItem("lab_name", name.trim());
+    } catch {}
+    setSaved("saving");
+    const s = result.samples;
+    const step = Math.max(1, Math.ceil(s.length / 400));
+    const ok = await fetch("/api/lab/scalp", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         key: labKey,
         name,
-        test,
+        test: "push",
         phase,
-        pinch,
-        note,
-        rep: reps.filter((x) => x.test === test).length + 1,
-        ruler_mm: ruler ? Number(ruler) : null,
-        summary,
-        trace,
-        mm_per_px: mmPerPx,
+        summary: { ...summarize(s), reps: result.reps, travel: result.travel, travelSpread: result.spread },
+        trace: s.filter((_, i) => i % step === 0).map((x) => [Math.round(x.t), x.ok ? 1 : 0, x.hair, x.mesh, x.brow]),
+        mm_per_px: IRIS_MM / median(r.iris),
         iris_px: median(r.iris),
         point: r.points[0] ?? null,
         video_w: videoRef.current?.videoWidth,
         video_h: videoRef.current?.videoHeight,
       }),
     })
-      .then((res) => setReps((p) => p.map((x, i) => (i === idx ? { ...x, saved: res.ok } : x))))
-      .catch(() => setReps((p) => p.map((x, i) => (i === idx ? { ...x, saved: false } : x))));
-  }, [labKey, name, test, phase, pinch, note, ruler, reps]);
+      .then((x) => x.ok)
+      .catch(() => false);
+    setSaved(ok ? "ok" : "fail");
+  };
 
-  const finishRef = useRef(finish);
-  finishRef.current = finish;
-
-  // Per-frame loop: face mesh, tracking, drawing.
+  // Per-frame loop: face mesh, alignment, tracking, drawing.
   const loop = useCallback(() => {
     const v = videoRef.current;
     const lm = lmRef.current;
@@ -166,7 +176,7 @@ export default function ScalpLab({ labKey }: { labKey: string }) {
     let lastT = -1;
     const tick = () => {
       const s = stageRef.current;
-      if (s === "setup" || s === "error" || s === "result") return;
+      if (s === "intro" || s === "loading" || s === "error" || s === "result") return;
       requestAnimationFrame(tick);
       if (v.readyState < 2 || v.currentTime === lastT) return;
       lastT = v.currentTime;
@@ -179,128 +189,136 @@ export default function ScalpLab({ labKey }: { labKey: string }) {
       const ctx = cv.getContext("2d")!;
       ctx.clearRect(0, 0, W, H);
       const now = performance.now();
-      const res = lm.detectForVideo(v, now);
       const r = run.current;
+      const res = lm.detectForVideo(v, now);
       const face = res.faceLandmarks?.[0];
-      const rec = s === "still" || s === "move";
-      const t = now - r.startAt;
-      if (s === "still" && t >= STILL_MS) {
-        // Lock in scale and resting position from the still phase.
-        const still = r.raw.filter((x) => x.phase === "still" && x.ok);
-        if (still.length < 10 || !r.iris.length) {
-          setHint("Couldn't see you clearly while still. Better light, phone steady, try again.");
-          go("aim");
-          return;
-        }
-        r.eyeMm = median(r.eye) * (IRIS_MM / median(r.iris));
-        r.base = { h: median(still.map((x) => x.hv)), m: median(still.map((x) => x.mv)), b: median(still.map((x) => x.bv)) };
-        go("move");
-      } else if (s === "move" && t >= STILL_MS + MOVE_MS) {
-        finishRef.current();
-        return;
-      }
-      if (rec) setProgress(Math.min(1, t / (STILL_MS + MOVE_MS)));
-
-      if (!face) {
-        setHint("Can't find your face. Hold the phone at arm's length, face the camera.");
-        if (rec) r.raw.push({ t, phase: stageRef.current === "move" ? "move" : "still", ok: false, hv: 0, mv: 0, bv: 0 });
-        return;
-      }
-      const pts: Pt[] = face.map((p) => ({ x: p.x * W, y: p.y * H }));
-      const f = faceFrame(pts);
-      r.lastFrame = f;
+      const pts: Pt[] | null = face ? face.map((p) => ({ x: p.x * W, y: p.y * H })) : null;
+      const f: FaceFrame | null = pts ? faceFrame(pts) : null;
       const m = res.facialTransformationMatrixes?.[0]?.data;
       const pose = m ? headAngles(m) : null;
+      const inStage = now - r.stageAt;
+      const D = Math.min(W, H);
 
-      // Draw: iris, anchor, up axis.
-      ctx.lineWidth = Math.max(2, W / 400);
-      ctx.strokeStyle = "rgba(255,255,255,0.5)";
-      ctx.beginPath();
-      ctx.moveTo(f.anchor.x, f.anchor.y);
-      const top = fromFace(f, { u: 0, v: 2.6 });
-      ctx.lineTo(top.x, top.y);
-      ctx.stroke();
-      ctx.fillStyle = "#4ADE80";
-      ctx.beginPath();
-      ctx.arc(f.anchor.x, f.anchor.y, ctx.lineWidth * 2, 0, Math.PI * 2);
-      ctx.fill();
+      if (s === "align") {
+        if (!f || !pts) {
+          r.steady = [];
+          say("Position your face in the circle");
+          return;
+        }
+        const off = Math.hypot(f.anchor.x - W / 2, f.anchor.y - H / 2) / D;
+        const size = f.eyeDist / D;
+        const top = fromFace(f, { u: 0, v: toFace(f, pts[LM.foreheadTop]).v + 0.4 });
+        if (size < 0.07) say("Move a little closer");
+        else if (size > 0.2 || top.y < 0) say("Move a little further back", "Your whole hairline needs to be in the circle.");
+        else if (off > 0.12) say("Center your face in the circle");
+        else {
+          r.steady.push(f.anchor);
+          if (r.steady.length > 18) r.steady.shift();
+          const still = r.steady.length >= 18 && Math.max(...r.steady.map((p) => Math.hypot(p.x - f.anchor.x, p.y - f.anchor.y))) < D * 0.012;
+          say("Hold the phone steady");
+          if (still) {
+            say("Put your fingertips on top of your head", "Behind your hairline, so the camera can still see it.");
+            go("place");
+          }
+          return;
+        }
+        r.steady = [];
+        return;
+      }
 
-      if (s === "aim") {
-        setHint(r.points.length ? "Got it. Tap Start when ready, or tap again to move the spot." : "Tap your hairline in the middle (or the dot you drew).");
-        for (const c of r.points) {
-          const p = fromFace(f, c);
-          ctx.strokeStyle = "#FBBF24";
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, r.patchR * 1.4, 0, Math.PI * 2);
-          ctx.stroke();
+      if (s === "place") {
+        setLit(0);
+        if (inStage >= PLACE_MS) {
+          if (!f || !pts) {
+            say("Position your face in the circle");
+            go("align");
+            return;
+          }
+          // Lock the spots on the hairline and take the skin templates.
+          const vTop = toFace(f, pts[LM.foreheadTop]).v;
+          r.points = [-0.3, 0, 0.3].map((u) => ({ u, v: vTop + 0.1 }));
+          r.last = r.points.map((c) => ({ ...c }));
+          r.patchR = Math.max(8, Math.min(16, Math.round(f.eyeDist * 0.09)));
+          const centres = r.points.map((c) => fromFace(f, c));
+          const pad = r.patchR + 2;
+          const xs = centres.map((p) => p.x);
+          const ys = centres.map((p) => p.y);
+          const crop = grab(Math.min(...xs) - pad, Math.min(...ys) - pad, Math.max(...xs) - Math.min(...xs) + 2 * pad, Math.max(...ys) - Math.min(...ys) + 2 * pad);
+          r.tpls = centres.map((p) => (crop ? patch(crop.g, p.x - crop.x0, p.y - crop.y0, r.patchR) : null));
+          r.pose0 = pose ? { pitch: pose.pitch, yaw: pose.yaw } : null;
+          Object.assign(r, { raw: [], iris: [], eye: [], recAt: now });
+          say("Hold still");
+          go("still");
         }
         return;
       }
-      if (!rec) return;
 
-      // First recording frame: take the skin templates.
-      if (!r.tpls.length) {
-        r.patchR = Math.max(8, Math.min(16, Math.round(f.eyeDist * 0.09)));
-        const centres = r.points.map((c) => fromFace(f, c));
-        const pad = r.patchR + 2;
-        const xs = centres.map((p) => p.x);
-        const ys = centres.map((p) => p.y);
-        const crop = grab(Math.min(...xs) - pad, Math.min(...ys) - pad, Math.max(...xs) - Math.min(...xs) + 2 * pad, Math.max(...ys) - Math.min(...ys) + 2 * pad);
-        r.tpls = centres.map((p) => (crop ? patch(crop.g, p.x - crop.x0, p.y - crop.y0, r.patchR) : null));
-        r.last = r.points.map((c) => ({ ...c }));
-        r.pose0 = pose ? { pitch: pose.pitch, yaw: pose.yaw } : null;
+      // Recording: "still" then the guided slides.
+      const t = now - r.recAt;
+      if (s === "still" && t >= STILL_MS) go("move");
+      if (t >= REC_MS) {
+        finish();
+        return;
       }
-
-      // Track each spot near where it was last frame.
-      const radius = Math.max(8, Math.round(r.patchR * 1.2));
+      if (t >= STILL_MS) {
+        const i = Math.min(SLIDES - 1, Math.floor((t - STILL_MS) / SLIDE_MS));
+        if (SEGMENTS[i].kind === "fwd") say("Slide your scalp forward", `${(i >> 1) + 1} of 3`);
+        else say("Now slide it back", `${(i >> 1) + 1} of 3`);
+        setLit(Math.round(((t - STILL_MS) / (REC_MS - STILL_MS)) * TICKS));
+      }
+      const phaseNow: Raw["phase"] = t < STILL_MS ? "still" : "move";
+      if (!f || !pts) {
+        r.raw.push({ t, phase: phaseNow, ok: false, hv: 0, mv: 0, bv: 0 });
+        return;
+      }
+      const radius = Math.max(8, Math.round(r.patchR * 1.3));
       const preds = r.last.map((c) => fromFace(f, c));
       const pad = r.patchR + radius + 2;
       const xs = preds.map((p) => p.x);
       const ys = preds.map((p) => p.y);
       const crop = grab(Math.min(...xs) - pad, Math.min(...ys) - pad, Math.max(...xs) - Math.min(...xs) + 2 * pad, Math.max(...ys) - Math.min(...ys) + 2 * pad);
       const vs: number[] = [];
-      let good = 0;
       preds.forEach((p, i) => {
         const tpl = r.tpls[i];
         const hit = crop && tpl ? nccMatch(crop.g, tpl, p.x - crop.x0, p.y - crop.y0, radius) : null;
         const ok = !!hit && hit.score >= 0.55;
-        const at = hit ? { x: hit.x + crop!.x0, y: hit.y + crop!.y0 } : p;
+        const at = ok ? { x: hit!.x + crop!.x0, y: hit!.y + crop!.y0 } : p;
         if (ok) {
-          good++;
           r.last[i] = toFace(f, at);
           vs.push(r.last[i].v);
         }
-        ctx.strokeStyle = ok ? "#4ADE80" : "#F87171";
-        ctx.strokeRect(at.x - r.patchR, at.y - r.patchR, r.patchR * 2, r.patchR * 2);
+        // Small glowing dot on each tracked spot.
+        ctx.fillStyle = ok ? "rgba(48,209,88,0.95)" : "rgba(255,255,255,0.35)";
+        ctx.shadowColor = ok ? "rgba(48,209,88,0.9)" : "transparent";
+        ctx.shadowBlur = D * 0.02;
+        ctx.beginPath();
+        ctx.arc(at.x, at.y, D * 0.008, 0, Math.PI * 2);
+        ctx.fill();
       });
+      ctx.shadowBlur = 0;
       const poseOk = !r.pose0 || !pose || (Math.abs(pose.pitch - r.pose0.pitch) < 6 && Math.abs(pose.yaw - r.pose0.yaw) < 8);
-      const ok = good >= Math.min(2, r.points.length) && poseOk;
-      const browV = (toFace(f, pts[LM.browR]).v + toFace(f, pts[LM.browL]).v) / 2;
-      const row: Raw = { t, phase: stageRef.current === "move" ? "move" : "still", ok, hv: vs.length ? median(vs) : 0, mv: toFace(f, pts[LM.foreheadTop]).v, bv: browV };
-      r.raw.push(row);
-      if (row.phase === "still") {
+      const ok = vs.length >= 2 && poseOk;
+      r.raw.push({
+        t,
+        phase: phaseNow,
+        ok,
+        hv: vs.length ? median(vs) : 0,
+        mv: toFace(f, pts[LM.foreheadTop]).v,
+        bv: (toFace(f, pts[LM.browR]).v + toFace(f, pts[LM.browL]).v) / 2,
+      });
+      if (phaseNow === "still") {
         r.iris.push(irisDiameterPx(pts));
         r.eye.push(f.eyeDist);
-        setHint("Hold completely still…");
-        setLive(null);
-      } else {
-        setHint(!poseOk ? "Keep your head still, just move the scalp." : ok ? INSTRUCTIONS[test] : "Lost the spot. Keep your hand out of the boxes.");
-        setLive(ok ? (row.hv - r.base.h) * r.eyeMm : null);
       }
+      if (!poseOk) setSub("Keep your head still. Only your scalp moves.");
     };
     requestAnimationFrame(tick);
-  }, [grab, test]);
+  }, [finish, grab]);
 
-  const startCamera = async () => {
-    if (!name.trim()) {
-      setError("Add your name first.");
-      return;
-    }
+  const start = async () => {
     setError("");
-    try {
-      localStorage.setItem("lab_name", name.trim());
-    } catch {}
     go("loading");
+    say("Starting camera…");
     try {
       if (!lmRef.current) {
         const { FaceLandmarker, FilesetResolver } = await import("@mediapipe/tasks-vision");
@@ -318,147 +336,151 @@ export default function ScalpLab({ labKey }: { labKey: string }) {
         v.srcObject = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
         await v.play();
       }
-      run.current.points = [];
-      go("aim");
+      setResult(null);
+      setLit(0);
+      run.current.steady = [];
+      say("Position your face in the circle");
+      go("align");
       loop();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      say("Camera unavailable", "Allow camera access for this page and try again.");
       go("error");
     }
   };
 
-  const onTap = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (stageRef.current !== "aim") return;
-    const v = videoRef.current;
-    const f = run.current.lastFrame;
-    if (!v || !f) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    // The preview is mirrored, so flip x back.
-    const x = ((rect.right - e.clientX) / rect.width) * v.videoWidth;
-    const y = ((e.clientY - rect.top) / rect.height) * v.videoHeight;
-    const c = toFace(f, { x, y });
-    run.current.points = [c, { u: c.u - 0.28, v: c.v }, { u: c.u + 0.28, v: c.v }];
-  };
-
-  const record = () => {
-    const r = run.current;
-    if (!r.points.length) return;
-    Object.assign(r, { tpls: [], raw: [], iris: [], eye: [], pose0: null, startAt: performance.now() });
-    setProgress(0);
-    go("still");
-  };
-
-  const again = () => {
-    go("aim");
-    loop();
-  };
-
-  const mine = reps.filter((r) => r.test === test).map((r) => r.summary.hairRange).filter((x) => Number.isFinite(x));
-  const spread = mine.length > 1 ? Math.max(...mine) - Math.min(...mine) : null;
-  const last = reps[reps.length - 1];
+  const good = !!result && Number.isFinite(result.travel) && result.reps.length >= 2 && result.quality >= 0.6;
+  const live = stage !== "intro" && stage !== "loading" && stage !== "error";
 
   return (
     <main style={S.main}>
-      <h1 style={S.h1}>Scalp mobility lab</h1>
-      {stage === "setup" || stage === "error" ? (
-        <section style={S.card}>
-          <p style={S.sub}>Test version. Phone at arm&apos;s length (or propped up), good light from the front, hair off your forehead.</p>
-          <label style={S.label}>Your name</label>
-          <input style={S.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Noah" />
-          <label style={S.label}>Test</label>
-          <Seg value={test} onChange={(v) => setTest(v as Test)} options={[["brow", "Eyebrow raise"], ["push", "Scalp push"]]} />
-          <label style={S.label}>When</label>
-          <Seg value={phase} onChange={setPhase} options={[["before", "Before a session"], ["after", "Right after a session"], ["other", "Other"]]} />
-          <label style={S.label}>Pinch test: where you&apos;re thinning vs. not</label>
-          <Seg value={pinch} onChange={setPinch} options={[["much", "Much tighter"], ["bit", "A bit tighter"], ["same", "About the same"], ["none", "Not thinning"]]} />
-          <label style={S.label}>Ruler reading, mm (optional)</label>
-          <input style={S.input} inputMode="decimal" value={ruler} onChange={(e) => setRuler(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="Only if you measured with a ruler" />
-          <label style={S.label}>Note (optional)</label>
-          <input style={S.input} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. drew a dot at hairline" />
-          {error && <p style={S.err}>{error}</p>}
-          <button style={S.btn} onClick={startCamera}>Open camera</button>
-        </section>
-      ) : null}
-
-      <div style={{ ...S.stageBox, display: stage === "setup" || stage === "error" ? "none" : "block" }} onPointerDown={onTap}>
-        <video ref={videoRef} playsInline muted style={S.video} />
-        <canvas ref={overlayRef} style={S.overlay} />
-        {(stage === "still" || stage === "move") && <div style={{ ...S.bar, width: `${progress * 100}%` }} />}
+      <style>{CSS}</style>
+      <div style={S.ringBox}>
+        <svg viewBox="-100 -100 200 200" style={S.ring} aria-hidden>
+          {Array.from({ length: TICKS }, (_, i) => {
+            const a = (i / TICKS) * Math.PI * 2 - Math.PI / 2;
+            const on = i < lit;
+            return (
+              <line
+                key={i}
+                x1={r3(Math.cos(a) * 88)}
+                y1={r3(Math.sin(a) * 88)}
+                x2={r3(Math.cos(a) * 97)}
+                y2={r3(Math.sin(a) * 97)}
+                stroke={on ? "#30D158" : "#3A3A3C"}
+                strokeWidth={2.2}
+                strokeLinecap="round"
+                className={stage === "place" ? "pulse" : undefined}
+                style={{ transition: "stroke 0.25s ease", animationDelay: `${(i % 12) * 0.05}s` }}
+              />
+            );
+          })}
+        </svg>
+        <div style={S.circle}>
+          <video ref={videoRef} playsInline muted style={{ ...S.media, opacity: live ? 1 : 0 }} />
+          <canvas ref={overlayRef} style={S.media} />
+          {!live && <div style={S.glyph} />}
+          {stage === "result" && (
+            <div style={S.resultFill} className="fade">
+              {good ? (
+                <>
+                  <div style={S.num}>{result!.travel.toFixed(1)}</div>
+                  <div style={S.unit}>mm</div>
+                </>
+              ) : (
+                <div style={S.unit}>–</div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      {stage === "loading" && <p style={S.sub}>Loading the face tracker…</p>}
-      {(stage === "aim" || stage === "still" || stage === "move") && (
-        <section style={S.card}>
-          <p style={S.hint}>{hint}</p>
-          {stage === "move" && <p style={S.big}>{live == null ? "–" : `${live >= 0 ? "+" : ""}${live.toFixed(1)} mm`}</p>}
-          {stage === "aim" && (
-            <>
-              <p style={S.sub}>{test === "brow" ? INSTRUCTIONS.brow : INSTRUCTIONS.push}</p>
-              <button style={{ ...S.btn, opacity: run.current.points.length ? 1 : 0.4 }} onClick={record}>
-                Start ({(STILL_MS + MOVE_MS) / 1000}s)
-              </button>
-              <button style={S.ghost} onClick={() => go("setup")}>Change details</button>
-            </>
-          )}
-        </section>
-      )}
+      <div key={title} className="fade" style={S.text}>
+        <h1 style={S.title}>{title}</h1>
+        {sub && <p style={S.sub}>{sub}</p>}
+        {error && <p style={S.small}>{error}</p>}
+      </div>
 
-      {stage === "result" && last && (
-        <section style={S.card}>
-          <p style={S.label}>Hairline moved</p>
-          <p style={S.big}>{fmt(last.summary.hairRange)}</p>
-          <p style={S.sub}>
-            Noise while still {fmt(last.summary.stillNoise)} · frames counted {Math.round(last.summary.quality * 100)}% · mesh {fmt(last.summary.meshRange)}
-            {last.test === "brow" ? ` · eyebrows ${fmt(last.summary.browRange)}` : ""}
-          </p>
-          {last.summary.quality < 0.6 && <p style={S.err}>Too many frames lost. Redo this one.</p>}
-          <p style={S.sub}>{last.saved == null ? "Saving…" : last.saved ? "Saved." : "Didn't save. Check your connection."}</p>
-          {mine.length > 0 && (
-            <p style={S.sub}>
-              {test === "brow" ? "Eyebrow" : "Push"} tries so far: {mine.map((x) => x.toFixed(1)).join(", ")} mm
-              {spread != null ? ` (spread ${spread.toFixed(1)} mm)` : ""}
-            </p>
-          )}
-          <p style={S.sub}>{mine.length < 3 ? `Do ${3 - mine.length} more without moving the phone.` : "3 done. Switch test, or change “When” after a session."}</p>
-          <button style={S.btn} onClick={again}>Again</button>
-          <button style={S.ghost} onClick={() => go("setup")}>Change details</button>
-        </section>
-      )}
+      <div style={S.actions}>
+        {(stage === "intro" || stage === "error") && (
+          <button style={S.primary} onClick={start}>
+            {stage === "error" ? "Try again" : "Start"}
+          </button>
+        )}
+        {stage === "result" && (
+          <div className="fade" style={S.form}>
+            {good && saved !== "ok" && (
+              <>
+                <input style={S.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
+                <div style={S.chips}>
+                  {(
+                    [
+                      ["before", "Before a session"],
+                      ["after", "Just did a session"],
+                    ] as const
+                  ).map(([k, l]) => (
+                    <button key={k} style={{ ...S.chip, ...(phase === k ? S.chipOn : null) }} onClick={() => setPhase(k)}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+                <button style={{ ...S.primary, opacity: name.trim() && phase ? 1 : 0.35 }} disabled={!name.trim() || !phase || saved === "saving"} onClick={save}>
+                  {saved === "saving" ? "Saving…" : "Save"}
+                </button>
+                {saved === "fail" && <p style={S.small}>Didn&apos;t save. Check your connection and tap Save again.</p>}
+              </>
+            )}
+            {saved === "ok" && <p style={S.savedTxt}>Saved</p>}
+            <button style={S.secondary} onClick={start}>
+              Measure again
+            </button>
+          </div>
+        )}
+      </div>
     </main>
   );
 }
 
-const fmt = (x: number) => (Number.isFinite(x) ? `${x.toFixed(1)} mm` : "–");
+const r3 = (x: number) => Math.round(x * 1000) / 1000;
 
-function Seg({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: [string, string][] }) {
-  return (
-    <div style={S.seg}>
-      {options.map(([v, l]) => (
-        <button key={v} type="button" onClick={() => onChange(v)} style={{ ...S.segBtn, ...(value === v ? S.segOn : null) }}>
-          {l}
-        </button>
-      ))}
-    </div>
-  );
-}
+const CSS = `
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: none } }
+.fade { animation: fadeIn 0.35s ease both }
+@keyframes pulse { 0%,100% { stroke: #3A3A3C } 50% { stroke: #8E8E93 } }
+.pulse { animation: pulse 1.4s ease-in-out infinite }
+`;
 
 const S: Record<string, React.CSSProperties> = {
-  main: { minHeight: "100vh", background: "#0B0B0C", color: "#fff", fontFamily: "system-ui, -apple-system, sans-serif", padding: "16px 16px 40px", maxWidth: 560, margin: "0 auto" },
-  h1: { fontSize: 20, fontWeight: 700, margin: "4px 0 12px" },
-  card: { background: "#18181B", borderRadius: 16, padding: 16, marginTop: 12, display: "flex", flexDirection: "column", gap: 8 },
-  label: { fontSize: 13, color: "rgba(255,255,255,0.6)", marginTop: 6 },
-  sub: { fontSize: 13, lineHeight: 1.45, color: "rgba(255,255,255,0.6)", margin: 0 },
-  hint: { fontSize: 15, lineHeight: 1.4, margin: 0 },
-  big: { fontSize: 36, fontWeight: 700, margin: "2px 0", letterSpacing: -1 },
-  err: { fontSize: 13, color: "#F87171", margin: 0 },
-  input: { background: "#0B0B0C", border: "1px solid #3F3F46", borderRadius: 10, padding: "10px 12px", color: "#fff", fontSize: 16 },
-  btn: { background: "#4ADE80", color: "#000", border: 0, borderRadius: 12, padding: "14px 16px", fontSize: 16, fontWeight: 600, marginTop: 8 },
-  ghost: { background: "transparent", color: "rgba(255,255,255,0.7)", border: "1px solid #3F3F46", borderRadius: 12, padding: "12px 16px", fontSize: 15 },
-  seg: { display: "flex", flexWrap: "wrap", gap: 6 },
-  segBtn: { background: "#0B0B0C", color: "rgba(255,255,255,0.75)", border: "1px solid #3F3F46", borderRadius: 999, padding: "8px 12px", fontSize: 14 },
-  segOn: { background: "#fff", color: "#000", borderColor: "#fff" },
-  stageBox: { position: "relative", width: "100%", borderRadius: 16, overflow: "hidden", background: "#000", touchAction: "manipulation" },
-  video: { width: "100%", display: "block", transform: "scaleX(-1)" },
-  overlay: { position: "absolute", inset: 0, width: "100%", height: "100%", transform: "scaleX(-1)", pointerEvents: "none" },
-  bar: { position: "absolute", left: 0, bottom: 0, height: 4, background: "#4ADE80" },
+  main: {
+    minHeight: "100dvh",
+    background: "#000",
+    color: "#fff",
+    fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", system-ui, sans-serif',
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    padding: "12vh 24px 40px",
+    boxSizing: "border-box",
+  },
+  ringBox: { position: "relative", width: "min(78vw, 340px)", aspectRatio: "1" },
+  ring: { position: "absolute", inset: 0, width: "100%", height: "100%" },
+  circle: { position: "absolute", inset: "11%", borderRadius: "50%", overflow: "hidden", background: "#0D0D0F" },
+  media: { position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", transform: "scaleX(-1)", transition: "opacity 0.4s ease" },
+  glyph: { position: "absolute", inset: "30%", borderRadius: "50%", border: "1.5px solid #2C2C2E" },
+  resultFill: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" },
+  num: { fontSize: "clamp(56px, 18vw, 84px)", fontWeight: 200, letterSpacing: -2, lineHeight: 1 },
+  unit: { fontSize: 20, fontWeight: 400, color: "#8E8E93", marginTop: 4 },
+  text: { marginTop: 36, textAlign: "center", maxWidth: 320, minHeight: 84 },
+  title: { fontSize: 22, fontWeight: 600, letterSpacing: -0.3, margin: 0, lineHeight: 1.25 },
+  sub: { fontSize: 15, color: "#8E8E93", margin: "8px 0 0", lineHeight: 1.4 },
+  small: { fontSize: 13, color: "#8E8E93", margin: "8px 0 0" },
+  actions: { marginTop: "auto", width: "100%", maxWidth: 340, display: "flex", flexDirection: "column", gap: 10, paddingTop: 24 },
+  form: { display: "flex", flexDirection: "column", gap: 10 },
+  primary: { background: "#fff", color: "#000", border: 0, borderRadius: 14, padding: "16px", fontSize: 17, fontWeight: 600, fontFamily: "inherit" },
+  secondary: { background: "transparent", color: "#0A84FF", border: 0, padding: "12px", fontSize: 17, fontFamily: "inherit" },
+  input: { background: "#1C1C1E", border: 0, borderRadius: 12, padding: "14px 16px", color: "#fff", fontSize: 17, fontFamily: "inherit", outline: "none" },
+  chips: { display: "flex", gap: 8 },
+  chip: { flex: 1, background: "#1C1C1E", color: "#8E8E93", border: 0, borderRadius: 12, padding: "12px 8px", fontSize: 15, fontFamily: "inherit" },
+  chipOn: { background: "#fff", color: "#000" },
+  savedTxt: { textAlign: "center", color: "#30D158", fontSize: 17, margin: "4px 0" },
 };

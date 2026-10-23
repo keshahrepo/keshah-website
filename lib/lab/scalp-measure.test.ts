@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { faceFrame, fromFace, headAngles, LM, nccMatch, patch, summarize, toFace, upPx, type Gray, type Pt, type Sample } from "./scalp-measure";
+import { faceFrame, fromFace, headAngles, LM, nccMatch, patch, repTravel, summarize, toFace, upPx, type Gray, type Pt, type Sample } from "./scalp-measure";
 
 // Smooth random texture, like skin under a camera.
 function texture(w: number, h: number, ox = 0, oy = 0): Gray {
@@ -84,4 +84,24 @@ test("summarize: movement spread, still noise, and quality", () => {
   assert.ok(r.meshRange > 2.6 && r.meshRange < 3.1);
   assert.ok(r.stillNoise <= 0.2);
   assert.ok(Math.abs(r.quality - 0.9) < 1e-9);
+});
+
+test("repTravel: travel per forward/back rep, ignoring reaction time", () => {
+  const segs = [0, 1, 2, 3, 4, 5].map((i) => ({ kind: (i % 2 ? "back" : "fwd") as "fwd" | "back", start: 1000 + i * 1500, end: 2500 + i * 1500 }));
+  const amp = [4, 5, 4.5];
+  const s: Sample[] = [];
+  for (let t = 0; t < 10000; t += 33) {
+    const seg = segs.findIndex((g) => t >= g.start && t < g.end);
+    let hair = 0;
+    if (seg >= 0) {
+      const into = t - segs[seg].start;
+      const target = seg % 2 ? amp[seg >> 1] / 2 : -amp[seg >> 1] / 2;
+      hair = into < 300 ? 0 : target; // slow reaction at the start of each window
+    }
+    s.push({ t, phase: "move", ok: true, hair, mesh: 0, brow: 0 });
+  }
+  const r = repTravel(s, segs);
+  assert.deepEqual(r.reps.map((x) => +x.toFixed(2)), [4, 5, 4.5]);
+  assert.ok(Math.abs(r.mean - 4.5) < 1e-9);
+  assert.ok(Math.abs(r.spread - 1) < 1e-9);
 });

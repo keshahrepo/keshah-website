@@ -224,3 +224,30 @@ export function summarize(samples: Sample[]): Summary {
     frames: samples.length,
   };
 }
+
+export type Segment = { kind: "fwd" | "back"; start: number; end: number }; // ms, same clock as Sample.t
+
+/**
+ * Guided push test: the tester slides the scalp forward, then back, a few
+ * times. Each rep's travel is the gap between where the hairline sits at the
+ * end of "back" and at the end of "forward" (first 40% of each window skipped
+ * for reaction time). Returns per-rep travel in mm plus mean and spread.
+ */
+export function repTravel(samples: Sample[], segments: Segment[]): { reps: number[]; mean: number; spread: number } {
+  const settled = (s: Segment) => {
+    const from = s.start + 0.4 * (s.end - s.start);
+    const v = samples.filter((x) => x.ok && x.t >= from && x.t < s.end).map((x) => x.hair);
+    return v.length >= 3 ? median(v) : NaN;
+  };
+  const reps: number[] = [];
+  for (let i = 0; i + 1 < segments.length; i += 2) {
+    const a = settled(segments[i]);
+    const b = settled(segments[i + 1]);
+    if (Number.isFinite(a) && Number.isFinite(b)) reps.push(Math.abs(b - a));
+  }
+  return {
+    reps,
+    mean: reps.length ? reps.reduce((s, v) => s + v, 0) / reps.length : NaN,
+    spread: reps.length > 1 ? Math.max(...reps) - Math.min(...reps) : NaN,
+  };
+}
