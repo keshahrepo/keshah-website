@@ -69,6 +69,10 @@
       "schedule": "20 5 * * *"
     },
     {
+      "path": "/api/cron/installs-daily",
+      "schedule": "20 * * * *"
+    },
+    {
       "path": "/api/cron/faceless-draft",
       "schedule": "*/10 * * * *"
     },

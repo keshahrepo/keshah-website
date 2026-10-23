@@ -987,6 +987,10 @@ export async function runProvenDaily(opts: {
   out.creators = creators.length;
   const touched = new Set<string>();
   const newSuggestions: { id: string; platform: Platform; url: string }[] = [];
+  // Accounts whose videos creators can't remake (Aadi's AI-made videos): never auto-added.
+  // Settings/creator_portal.proven_excluded_creators: [creator ids].
+  const portal = (await db.collection("Settings").doc("creator_portal").get()).data() ?? {};
+  const excluded = new Set<string>(Array.isArray(portal.proven_excluded_creators) ? portal.proven_excluded_creators.map(String) : []);
 
   for (const c of creators) {
     try {
@@ -997,8 +1001,8 @@ export async function runProvenDaily(opts: {
       const posts = postsSnap.docs.map((d) => ({ docId: d.id, ...(d.data() as CreatorPost) }));
       const normal = { tiktok: normalViews(posts, nowIso, "tiktok"), instagram: normalViews(posts, nowIso, "instagram") };
 
-      // 1. auto-suggest
-      const cands = posts
+      // 1. auto-suggest (not for excluded accounts)
+      const cands = excluded.has(c.id) ? [] : posts
         .map((p) => ({ p, reason: suggestReason(p, normal[p.platform], nowIso) }))
         .filter((x): x is { p: (typeof posts)[number]; reason: string } => !!x.reason);
       if (cands.length) {
