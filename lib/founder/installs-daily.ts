@@ -8,6 +8,7 @@
  */
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { rcChart } from "@/lib/revenue";
+import { PER_1K_DOC, VIEWS_TRACKED_FROM, viewsGainedByDay, type AccountDays, type PostViews } from "./installs-per-1k";
 
 export const INSTALLS_DAYS = 45;
 export const STATS_DOC = "installs_daily";
@@ -68,6 +69,7 @@ export async function refreshInstallsDaily(now = new Date()): Promise<{ days: nu
   const aadiTags = new Set<string>();
   const creatorTags = new Set<string>();
   const views = new Map<string, number>();
+  const accounts: { id: string; name: string; isAadi: boolean; tags: string[]; gained: Map<string, number> }[] = [];
   for (const c of creators.docs) {
     const d = c.data();
     const tags: string[] = Array.isArray(d.campaign_tags) ? d.campaign_tags.map(String) : [];
@@ -79,6 +81,9 @@ export async function refreshInstallsDaily(now = new Date()): Promise<{ days: nu
       if (x.pinned) return;
       views.set(String(x.local_date), (views.get(String(x.local_date)) ?? 0) + Number(x.views ?? 0));
     });
+    // Views gained per day across all their posts, for installs per 1,000 views.
+    const all = await c.ref.collection("posts").select("local_date", "pinned", "views_history").get();
+    if (all.size) accounts.push({ id: c.id, name: String(d.name ?? c.id), isAadi, tags, gained: viewsGainedByDay(all.docs.map((p) => p.data() as PostViews)) });
   }
   let byDay = new Map<string, Map<string, number>>();
   let error: string | undefined;
@@ -106,6 +111,23 @@ export async function refreshInstallsDaily(now = new Date()): Promise<{ days: nu
     }
   }
   await db.collection("Stats").doc(STATS_DOC).set({ days, by_tag, updated_at: now.toISOString(), aadi_tags: [...aadiTags], error: error ?? null });
+
+  // Installs per 1,000 views: views recomputed from snapshots every time;
+  // installs for days RevenueCat answered, older days kept from the last save.
+  const prevDoc = (await db.collection("Stats").doc(PER_1K_DOC).get()).data();
+  const prev = new Map(((prevDoc?.accounts as AccountDays[] | undefined) ?? []).map((a) => [a.id, a]));
+  const per1kAccounts: AccountDays[] = accounts.map((a) => {
+    const out: Record<string, [number, number]> = {};
+    const old = prev.get(a.id)?.days ?? {};
+    const dates = new Set([...a.gained.keys(), ...Object.keys(old)].filter((x) => x >= VIEWS_TRACKED_FROM && x <= end));
+    for (const date of dates) {
+      const segs = byDay.get(date);
+      const installs = segs ? a.tags.reduce((sum, t) => sum + (segs.get(t) ?? 0), 0) : (old[date]?.[1] ?? 0);
+      out[date] = [a.gained.get(date) ?? 0, installs];
+    }
+    return { id: a.id, name: a.name, isAadi: a.isAadi, noTag: a.tags.length === 0, days: out };
+  });
+  await db.collection("Stats").doc(PER_1K_DOC).set({ from: VIEWS_TRACKED_FROM, accounts: per1kAccounts, updated_at: now.toISOString(), error: error ?? null });
   return { days: days.length, ...(error ? { error } : {}) };
 }
 
