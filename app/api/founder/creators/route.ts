@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireDashboardSession } from "@/lib/support/auth";
-import { founderCreators, programOver100k, programTopVideos, programValue } from "@/lib/founder/creators";
+import { founderCreatorsWithAccount, programOver100k, programTopVideos, programValue } from "@/lib/founder/creators";
 import { cached } from "@/lib/founder/cache";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +12,7 @@ export const maxDuration = 120;
 // topVideos: the program's 5 most-viewed videos posted in the period (rows[].topVideos: each creator's).
 // over100k: posts from the period at 100K+ views, one per post/platform, newest first, capped at 50,
 // with creatorId/creatorName; over100kCount is the exact total (rows[].over100k / over100kCount: each creator's).
+// founderAccount: the founder's own account (Aadi's), same shape as a row but unpaid, never in rows or totals.
 export async function GET(req: Request) {
   if (!(await requireDashboardSession())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
@@ -21,8 +22,8 @@ export async function GET(req: Request) {
     const fresh = new URL(req.url).searchParams.get("fresh") === "1";
     const load = (pd: string, f: boolean) =>
       cached(`creators_${pd}`, pd, async () => {
-        const rows = await founderCreators(pd);
-        return { period: pd, rows, program: await programValue(pd, rows) };
+        const { rows, founderAccount } = await founderCreatorsWithAccount(pd);
+        return { period: pd, rows, founderAccount, program: await programValue(pd, rows) };
       }, { fresh: f });
     const thisMonth = `${n.getUTCFullYear()}-${String(n.getUTCMonth() + 1).padStart(2, "0")}`;
     const open = period === thisMonth;

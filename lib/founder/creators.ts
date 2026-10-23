@@ -149,10 +149,22 @@ function monthPay(s: MonthSummary, current: boolean) {
 }
 
 export async function founderCreators(period: string): Promise<FounderCreatorRow[]> {
-  const excluded = new Set(
-    (await db().collection(CREATORS_COLLECTION).where("exclude_from_reports", "==", true).select().get()).docs.map((d) => d.id),
-  );
-  const all = (await listCreators()).filter((c) => (c.pay_ready || c.legal_name) && !excluded.has(c.id));
+  return (await founderCreatorsWithAccount(period)).rows;
+}
+
+/**
+ * The creator rows plus the founder's own account (ContentCreators with
+ * founder_account: true, e.g. Aadi's). That account stays out of the rows, so
+ * it never counts toward program cost, proceeds, ROI, views or top videos; it
+ * comes back separately with no pay (it isn't paid like a creator).
+ */
+export async function founderCreatorsWithAccount(period: string): Promise<{ rows: FounderCreatorRow[]; founderAccount: FounderCreatorRow | null }> {
+  const flagged = await db().collection(CREATORS_COLLECTION).where("exclude_from_reports", "==", true).select("founder_account").get();
+  const excluded = new Set(flagged.docs.map((d) => d.id));
+  const founderId = flagged.docs.find((d) => d.get("founder_account") === true)?.id ?? null;
+  const listed = await listCreators();
+  const all = listed.filter((c) => (c.pay_ready || c.legal_name) && !excluded.has(c.id));
+  const founder = founderId ? listed.find((c) => c.id === founderId) ?? null : null;
   const [from, to] = period === "all" ? [0, Date.now() + DAY_MS] : monthWindow(period);
   const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
   const startDate = clampStart(day(from));
@@ -163,7 +175,31 @@ export async function founderCreators(period: string): Promise<FounderCreatorRow
   } catch (e) {
     console.error("founder creators: RevenueCat by campaign failed:", e instanceof Error ? e.message : e);
   }
-  return Promise.all(all.map((c) => row(c, period, byCampaign)));
+  const [rows, founderRow] = await Promise.all([
+    Promise.all(all.map((c) => row(c, period, byCampaign))),
+    founder ? row(founder, period, byCampaign).catch((e) => (console.error("founder account row:", e), null)) : Promise.resolve(null),
+  ]);
+  return { rows, founderAccount: founderRow ? unpaid(founderRow) : null };
+}
+
+/** The founder's account isn't paid like a creator: no pay, cost, invoices or ROI. */
+function unpaid(r: FounderCreatorRow): FounderCreatorRow {
+  return {
+    ...r,
+    trial: null,
+    levelBaseCents: null,
+    payCents: 0,
+    committedCents: 0,
+    payoutCents: 0,
+    pay: { baseCents: 0, bonusCents: 0, trialCents: 0, adjustmentCents: 0, missedDays: 0, missedCents: 0 },
+    payouts: [],
+    upcomingPayout: null,
+    paidOutCents: 0,
+    roi: null,
+    cpiUsd: null,
+    expectedDays: 0,
+    missedDays: 0,
+  };
 }
 
 async function row(c: AdminCreator, period: string, byCampaign: Map<string, number> | null): Promise<FounderCreatorRow> {
