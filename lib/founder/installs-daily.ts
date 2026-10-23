@@ -108,3 +108,28 @@ export async function refreshInstallsDaily(now = new Date()): Promise<{ days: nu
   await db.collection("Stats").doc(STATS_DOC).set({ days, by_tag, updated_at: now.toISOString(), aadi_tags: [...aadiTags], error: error ?? null });
   return { days: days.length, ...(error ? { error } : {}) };
 }
+
+/** One-off look back: Aadi-tag installs per day from `from` (e.g. "2026-07-01") into Stats/installs_history. */
+export async function backfillAadiInstalls(from: string, now = new Date()): Promise<{ days: number; error?: string }> {
+  const { db } = getFirebaseAdmin();
+  const end = now.toISOString().slice(0, 10);
+  const creators = await db.collection("ContentCreators").get();
+  const aadiTags = new Set<string>();
+  const creatorTags = new Set<string>();
+  creators.docs.forEach((c) => {
+    const d = c.data();
+    const tags: string[] = Array.isArray(d.campaign_tags) ? d.campaign_tags.map(String) : [];
+    tags.forEach((t) => (/^aadi$/i.test(String(d.name ?? "").trim()) ? aadiTags : creatorTags).add(t));
+  });
+  try {
+    const o = await rcChart("customers_new", { resolution: "0", start_date: from, end_date: end, segment: "attribution_campaign" });
+    const byDay = parseDailyBySegment(o);
+    const days = [...byDay.keys()].sort().map((date) => ({ date, ...bucketDay(byDay.get(date)!, aadiTags, creatorTags) }));
+    await db.collection("Stats").doc("installs_history").set({ from, days, updated_at: now.toISOString() });
+    return { days: days.length };
+  } catch (e) {
+    const error = e instanceof Error ? e.message : String(e);
+    await db.collection("Stats").doc("installs_history").set({ from, error, updated_at: now.toISOString() });
+    return { days: 0, error };
+  }
+}
