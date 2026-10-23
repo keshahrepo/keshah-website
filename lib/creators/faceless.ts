@@ -8,12 +8,17 @@
  * renders and uploads them to the shared drive, then marks them "uploaded".
  *
  * Settings/creator_portal: faceless_per_day (default 5), faceless_enabled (default true).
+ *
+ * Daily mix (pickDay): 60% new self-tests from the test bank (lib/creators/test-bank.ts,
+ * each tried up to 3 times in 14 days, not two days running), 20% proven self-tests as
+ * a baseline, 20% other proven formats. One main fact per video, rotated across days.
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import { CONTENT_FACTS } from "./content-facts";
 import { BEATS_MODEL } from "./proven-beats";
 import { PROVEN_COLLECTION } from "./proven";
+import { bankSourceId, ROUTINE_TECHNIQUES, TEST_BANK, type BankTest } from "./test-bank";
 
 export const FACELESS_COLLECTION = "FacelessVideos";
 export const FACELESS_DEFAULT_PER_DAY = 5;
@@ -28,6 +33,8 @@ export interface FacelessSource {
   format: string;
   hook_family: string;
   transcript: string;
+  /** Set when the source is a self-test idea from the bank rather than a proven video. */
+  bank?: BankTest;
 }
 
 export interface FacelessSpec {
@@ -36,6 +43,8 @@ export interface FacelessSpec {
   script: string;
   caption: string;
   scenes: Record<string, unknown>[];
+  /** The one fact the video leans on (a CONTENT_FACTS id) or "none". */
+  main_fact?: string;
 }
 
 /** Proven videos to adapt: strongest first, one per hook family, at most `tests` self-tests. */
@@ -56,18 +65,91 @@ export function pickSources(all: FacelessSource[], usedIds: Set<string>, n: numb
   return out;
 }
 
+
+export type DayTargets = { bank: number; proven: number; other: number };
+export const dayTargets = (n: number): DayTargets => {
+  const bank = Math.round(n * 0.6);
+  const proven = Math.round(n * 0.2);
+  return { bank, proven, other: Math.max(0, n - bank - proven) };
+};
+
+/** Bank tests as sources (format self-test, family "bank:<id>"). */
+export const bankSources = (): FacelessSource[] =>
+  TEST_BANK.map((t) => ({ id: bankSourceId(t.id), views: 0, format: "self-test", hook_family: `bank:${t.id}`, transcript: "", bank: t }));
+
+/**
+ * A day's picks: `need.bank` bank tests (fewest tries in the last 14 days first, at most 3,
+ * none used today, yesterday's last), `need.proven` proven self-tests and `need.other`
+ * other proven formats (strongest first, one per family, families from yesterday last).
+ * Plus a spare of each kind in case a draft fails.
+ */
+export function pickDay(input: {
+  proven: FacelessSource[];
+  usedIds: Set<string>;
+  bankUses: Map<string, number>;
+  todayIds: Set<string>;
+  todayFams: Set<string>;
+  yesterdayFams: Set<string>;
+  need: DayTargets;
+  seed?: number;
+}): FacelessSource[] {
+  const fams = new Set(input.todayFams);
+  const take = (list: FacelessSource[], k: number) => {
+    const out: FacelessSource[] = [];
+    for (const v of list) {
+      if (out.length >= k) break;
+      const fam = v.hook_family || v.id;
+      if (fams.has(fam)) continue;
+      out.push(v);
+      fams.add(fam);
+    }
+    return out;
+  };
+  const fresh = (v: FacelessSource) => (input.yesterdayFams.has(v.hook_family || v.id) ? 1 : 0);
+  const ok = (v: FacelessSource) => !input.usedIds.has(v.id) && FORMATS_OK.has(v.format) && v.transcript.trim().split(/\s+/).length >= 40;
+  const byStrength = (a: FacelessSource, b: FacelessSource) => fresh(a) - fresh(b) || b.views - a.views;
+  const seed = input.seed ?? 0;
+  const jitter = (id: string) => [...id].reduce((h, c) => (h * 31 + c.charCodeAt(0) + seed) % 9973, 7);
+  const bank = bankSources()
+    .filter((b) => !input.todayIds.has(b.id) && (input.bankUses.get(b.id) ?? 0) < 3)
+    .sort((a, b) => fresh(a) - fresh(b) || (input.bankUses.get(a.id) ?? 0) - (input.bankUses.get(b.id) ?? 0) || jitter(a.id) - jitter(b.id));
+  const provenTests = input.proven.filter((v) => ok(v) && v.format === "self-test").sort(byStrength);
+  const others = input.proven.filter((v) => ok(v) && v.format !== "self-test").sort(byStrength);
+  const a = take(bank, input.need.bank + (input.need.bank ? 1 : 0));
+  const b = take(provenTests, input.need.proven + (input.need.proven ? 1 : 0));
+  const c = take(others, input.need.other + (input.need.other ? 1 : 0));
+  // Interleave so a partial day still has a mix: bank, bank, proven, other, ...
+  const out: FacelessSource[] = [];
+  const queues = [a, a, a, b, c];
+  const total = a.length + b.length + c.length;
+  for (let guard = 0; out.length < total && guard < 200; guard++) {
+    const q = queues[guard % queues.length];
+    const v = q.shift();
+    if (v) out.push(v);
+  }
+  return out;
+}
+
 export const FACELESS_SYSTEM = `You adapt a proven hair loss video (a creator talking to camera) into a faceless explainer video: a neutral narrator voice over animated graphics, for the account @aadi.keshah.
 
 Narration rules:
 - Keep the original's hook and the order of its points, word for word where it still works without a person on camera. The hook must be the first sentence.
 - Remove anything first person or personal: no "I", "my hair", "I fixed", "what do I have to lose", "I'm testing this". The narrator is neutral.
-- Keep the mechanism without skipping a beat: tight scalp squeezes the blood vessels underneath, blood can't properly reach the hair, it gets thinner and falls out.
+- Keep the mechanism without skipping a beat, but in one or two short sentences: tight scalp squeezes the blood vessels underneath, blood can't properly reach the hair, it gets thinner and falls out.
+- One main fact per video: pick ONE fact from the library (or none) and build the middle around it. Prefer facts not in the "recently used" list. Put its id in "main_fact" ("none" if you use no fact). The F02 blood flow study may appear in at most 2 of a day's videos.
+- The fix must sound like a full routine, never just a few moves: name 2 or 3 example techniques as a glimpse, chosen from: ${ROUTINE_TECHNIQUES.join(", ")}. Then make clear it's a full daily routine (scalp work and neck work, in a specific order, building up week by week as the scalp loosens). Never give the exact steps, order, durations or how much pressure; that's what the pinned video is for.
 - Facts: only from this library, said with the same meaning, never their NEVER line. Replace any claim in the original that the library doesn't support (for example "minoxidil doesn't grow hair", "products don't reach your follicles", exact numbers not in the library).
 - 90 to 140 words. Short spoken sentences, words a 5-year-old knows, no em dashes or en dashes, no hashtags, no emojis.
-- End with one or two lines pointing to the pinned video that play on the viewer's doubts (is it actually tight, does this work, how to fix it), in fresh wording each video, e.g. "Not sure if yours is actually tight, or if this even works? The pinned video shows you how to check, and how to fix it." No "link in bio", no "follow", no "comment".
+- End with one or two lines pointing to the pinned video that play on the viewer's doubts (is it actually tight, does this work, how to fix it), in fresh wording each video (never reuse the sentence shape of today's earlier endings, e.g. not "Not sure if... The pinned video shows you how to check, and how to fix it." every time), e.g. "Not sure if yours is actually tight, or if this even works? The pinned video shows you how to check, and how to fix it." No "link in bio", no "follow", no "comment".
 - Hedge medical facts lightly ("one small study found", "usually", "can"). Never promise regrowth or results. But never add disclaimers or caveats that kill the momentum ("that does not prove...", "this is not medical advice"). The library wording is already careful enough.
 - Sound like a person talking: always use contractions (it's, here's, you're, don't, can't), short punchy sentences, a little rhythm. Never "it is", "here is", "you are".
-- Keep the original's strongest lines (e.g. "It's not your genetics. It's not your shampoo.", "You can try the drugs, you can try the products, but fix this first.", "pressing, pinching, sliding"), adjusted only to remove first person.
+- Keep the original's strongest lines (e.g. "It's not your genetics. It's not your shampoo.", "You can try the drugs, you can try the products, but fix this first."), adjusted only to remove first person. If the original lists moves like "pressing, pinching, sliding", keep them as examples inside the full-routine framing above.
+
+When the input is a SELF-TEST IDEA instead of an original video, write a fresh script in the same voice:
+- First sentence: the test, as a command the viewer can do right now (you may tighten the wording).
+- Then the fail result, and that it could be why they're losing hair or going bald (hedge with "could", "may", "usually"; never "will").
+- For face, jaw and neck tests, add one bridge sentence: tension there pulls on the same tight layer over the top of the head, or usually comes with a tight scalp. Keep it plain and hedged.
+- Then the mechanism (one or two sentences), the one main fact, the full-routine fix, and the pinned video line, all per the rules above.
 - Don't use the word "galea" or explain the scalp layers unless the original does. Keep it simple: "your scalp gets tight".
 
 Scene plan: 9 to 13 scenes. Each scene has "type" and "cue". "cue" is the exact first 2 to 4 words of the sentence in your script where the scene starts (copy them exactly). The first scene's cue is "". The last scene is {"type":"end","cue":"<first words of the pinned video line>"}. Something new should appear every 2 to 4 seconds of narration. Scene types (use only these, with these fields):
@@ -100,6 +182,7 @@ const TOOL = {
       script: { type: "string" },
       caption: { type: "string" },
       scenes: { type: "array", items: { type: "object" } },
+      main_fact: { type: "string", description: "The one library fact id the video leans on, or \"none\"." },
     },
     required: ["title", "caseName", "script", "caption", "scenes"],
   },
@@ -107,14 +190,17 @@ const TOOL = {
 
 export const factsLibrary = () => CONTENT_FACTS.map((f) => `- ${f.id}: "${f.line}" NEVER: ${f.never}`).join("\n");
 
-export function facelessUserPrompt(src: FacelessSource, extra = "", earlier: FacelessSpec[] = []): string {
+export function facelessUserPrompt(src: FacelessSource, extra = "", earlier: FacelessSpec[] = [], recentFacts: string[] = []): string {
   const day = earlier.length
-    ? `Videos already made today (yours must feel different: a different middle, a different fact or no fact, different scene choices; the F02 blood flow study may appear in at most 3 of the day's videos and it's already in ${earlier.filter((e) => /two and a half times/i.test(e.script)).length}):\n${earlier.map((e, i) => `${i + 1}. ${e.title}: ${e.script.slice(0, 260)}...`).join("\n")}`
+    ? `Videos already made today (yours must feel different: a different middle, a different fact or no fact, different scene choices; the F02 blood flow study may appear in at most 2 of the day's videos and it's already in ${earlier.filter((e) => /two and a half times/i.test(e.script)).length}):\n${earlier.map((e, i) => `${i + 1}. ${e.title}: ${e.script.slice(0, 260)}...`).join("\n")}`
     : "";
   return [
     `Fact library:\n${factsLibrary()}`,
     day,
-    `Original (${src.format}, ${Math.round(src.views / 1000)}K views):\n${src.transcript.slice(0, 3000)}`,
+    recentFacts.length ? `Recently used main facts (pick a different one if you can): ${[...new Set(recentFacts)].join(", ")}` : "",
+    src.bank
+      ? `SELF-TEST IDEA (not a proven video; write a fresh script):\nTest: ${src.bank.test}\nFail result: ${src.bank.fail}\nArea: ${src.bank.area}`
+      : `Original (${src.format}, ${Math.round(src.views / 1000)}K views):\n${src.transcript.slice(0, 3000)}`,
     extra,
   ]
     .filter(Boolean)
@@ -145,6 +231,7 @@ export function checkSpec(s: FacelessSpec): string[] {
   });
   if (s.scenes?.length && s.scenes[s.scenes.length - 1].type !== "end") p.push("last scene isn't end");
   if (!s.title?.trim() || !s.caseName?.trim() || !s.caption?.trim()) p.push("missing title, caseName or caption");
+  if (s.main_fact !== undefined && s.main_fact !== "none" && !CONTENT_FACTS.some((f) => f.id === s.main_fact || f.id.startsWith(`${s.main_fact}_`))) p.push(`main_fact "${s.main_fact}" isn't a library id or "none"`);
   return p;
 }
 
@@ -169,13 +256,13 @@ export function anthropicFaceless(apiKey = process.env.ANTHROPIC_API_KEY ?? ""):
 }
 
 /** Adapts one source, retrying once with the problems listed. */
-export async function adaptSource(src: FacelessSource, generate: FacelessGenerate, earlier: FacelessSpec[] = []): Promise<FacelessSpec> {
+export async function adaptSource(src: FacelessSource, generate: FacelessGenerate, earlier: FacelessSpec[] = [], recentFacts: string[] = []): Promise<FacelessSpec> {
   const studyUses = earlier.filter((e) => /two and a half times/i.test(e.script)).length;
-  const check = (s: FacelessSpec) => [...checkSpec(s), ...(studyUses >= 3 && /two and a half times/i.test(s.script) ? ["the F02 study is already in 3 of today's videos; use a different fact or none"] : [])];
-  let spec = await generate(FACELESS_SYSTEM, facelessUserPrompt(src, "", earlier));
+  const check = (s: FacelessSpec) => [...checkSpec(s), ...(studyUses >= 2 && /two and a half times/i.test(s.script) ? ["the F02 study is already in 2 of today's videos; use a different fact or none"] : [])];
+  let spec = await generate(FACELESS_SYSTEM, facelessUserPrompt(src, "", earlier, recentFacts));
   let problems = check(spec);
   if (problems.length) {
-    spec = await generate(FACELESS_SYSTEM, facelessUserPrompt(src, `Your last attempt had these problems, fix them all: ${problems.join("; ")}`, earlier));
+    spec = await generate(FACELESS_SYSTEM, facelessUserPrompt(src, `Your last attempt had these problems, fix them all: ${problems.join("; ")}`, earlier, recentFacts));
     problems = check(spec);
   }
   if (problems.length) throw new Error(problems.join("; "));
@@ -192,15 +279,40 @@ export async function draftFacelessDay(
   const today = (await col.where("date", "==", opts.date).get()).docs;
   const made: FacelessSpec[] = today.map((d) => d.data() as FacelessSpec);
   if (today.length >= n) return { date: opts.date, drafted: [], failed: [], total: today.length, complete: true };
-  const since = new Date((opts.now ?? new Date()).getTime() - FACELESS_REUSE_DAYS * 86400000).toISOString().slice(0, 10);
-  const used = new Set((await col.where("date", ">=", since).get()).docs.map((d) => String(d.data().source_id ?? "")));
+  const nowMs = (opts.now ?? new Date()).getTime();
+  const since = new Date(nowMs - FACELESS_REUSE_DAYS * 86400000).toISOString().slice(0, 10);
+  const recent = (await col.where("date", ">=", since).get()).docs.map((d) => d.data());
+  const used = new Set(recent.map((d) => String(d.source_id ?? "")));
+  const bankUses = new Map<string, number>();
+  recent.forEach((d) => {
+    const id = String(d.source_id ?? "");
+    if (id.startsWith("bank_")) bankUses.set(id, (bankUses.get(id) ?? 0) + 1);
+  });
+  const yesterday = new Date(Date.parse(opts.date + "T00:00:00Z") - 86400000).toISOString().slice(0, 10);
+  const yDocs = recent.filter((d) => d.date === yesterday);
+  const yesterdayFams = new Set(yDocs.map((d) => String(d.source_family ?? "")));
+  const recentFacts = [...yDocs, ...today.map((d) => d.data())].map((d) => String(d.main_fact ?? "")).filter((f) => f && f !== "none");
   const snap = await db.collection(PROVEN_COLLECTION).where("status", "==", "active").get();
   const all: FacelessSource[] = snap.docs.map((d) => {
     const x = d.data();
     return { id: d.id, views: Number(x.views ?? 0), format: String(x.format ?? ""), hook_family: String(x.hook_family ?? ""), transcript: String(x.transcript ?? "") };
   });
   const todayFams = new Set(today.map((d) => String(d.data().source_family ?? "")));
-  const picks = pickSources(all.filter((a) => !todayFams.has(a.hook_family)), used, n - today.length + 2, Math.max(0, Math.ceil(n * 0.3) - today.filter((d) => d.data().source_format === "self-test").length));
+  const t = dayTargets(n);
+  const isBank = (d: FirebaseFirestore.DocumentData) => String(d.source_id ?? "").startsWith("bank_");
+  const madeBank = today.filter((d) => isBank(d.data())).length;
+  const madeProven = today.filter((d) => !isBank(d.data()) && d.data().source_format === "self-test").length;
+  const madeOther = today.length - madeBank - madeProven;
+  const picks = pickDay({
+    proven: all,
+    usedIds: used,
+    bankUses,
+    todayIds: new Set(today.map((d) => String(d.data().source_id ?? ""))),
+    todayFams,
+    yesterdayFams,
+    need: { bank: Math.max(0, t.bank - madeBank), proven: Math.max(0, t.proven - madeProven), other: Math.max(0, t.other - madeOther) },
+    seed: Number(opts.date.replace(/-/g, "")) % 997,
+  });
   const generate = opts.generate ?? anthropicFaceless();
   const drafted: string[] = [];
   const failed: string[] = [];
@@ -209,7 +321,7 @@ export async function draftFacelessDay(
     if (next >= n) break;
     if (opts.deadlineMs && Date.now() > opts.deadlineMs) break;
     try {
-      const spec = await adaptSource(src, generate, made);
+      const spec = await adaptSource(src, generate, made, recentFacts);
       const id = `${opts.date}_${next + 1}`;
       await col.doc(id).set({
         id,
@@ -219,11 +331,13 @@ export async function draftFacelessDay(
         source_views: src.views,
         source_format: src.format,
         source_family: src.hook_family,
+        ...(src.bank ? { source_test: src.bank.test, source_area: src.bank.area } : {}),
         ...spec,
         created_at: FieldValue.serverTimestamp(),
       });
       drafted.push(id);
       made.push(spec);
+      if (spec.main_fact && spec.main_fact !== "none") recentFacts.push(spec.main_fact);
       next++;
     } catch (e) {
       failed.push(`${src.id}: ${e instanceof Error ? e.message : String(e)}`);

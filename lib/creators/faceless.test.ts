@@ -36,3 +36,36 @@ test("checkSpec passes a good spec and catches the usual problems", () => {
   assert.ok(checkSpec({ ...good, scenes: [...good.scenes.slice(0, 7), { type: "end", cue: "Nope not here" }] }).some((p) => p.includes("cue not in script")));
   assert.ok(checkSpec({ ...good, scenes: good.scenes.slice(0, 7) }).some((p) => p.includes("last scene")));
 });
+
+test("dayTargets: 10 a day is 6 bank tests, 2 proven self-tests, 2 other formats", async () => {
+  const { dayTargets } = await import("./faceless");
+  assert.deepEqual(dayTargets(10), { bank: 6, proven: 2, other: 2 });
+});
+
+test("pickDay: bank tests first and varied, proven baseline, other formats, plus spares", async () => {
+  const { pickDay, bankSources } = await import("./faceless");
+  const long = "word ".repeat(60);
+  const proven: FacelessSource[] = [
+    { id: "p1", views: 900, format: "self-test", hook_family: "pinch", transcript: long },
+    { id: "p2", views: 800, format: "self-test", hook_family: "pinch", transcript: long },
+    { id: "p3", views: 700, format: "self-test", hook_family: "slide", transcript: long },
+    { id: "p4", views: 600, format: "self-test", hook_family: "move", transcript: long },
+    { id: "o1", views: 500, format: "explainer", hook_family: "draw", transcript: long },
+    { id: "o2", views: 400, format: "myth-bust", hook_family: "myth", transcript: long },
+    { id: "o3", views: 300, format: "list", hook_family: "list", transcript: long },
+  ];
+  const all = bankSources();
+  const tried = new Map([[all[0].id, 3]]); // tried 3 times already: skipped
+  const picks = pickDay({ proven, usedIds: new Set(), bankUses: tried, todayIds: new Set([all[1].id]), todayFams: new Set(), yesterdayFams: new Set([all[2].hook_family]), need: { bank: 6, proven: 2, other: 2 } });
+  const bank = picks.filter((p) => p.bank);
+  assert.equal(bank.length, 7);
+  assert.ok(!bank.some((p) => p.id === all[0].id || p.id === all[1].id || p.id === all[2].id));
+  assert.deepEqual(picks.filter((p) => !p.bank && p.format === "self-test").map((p) => p.id), ["p1", "p3", "p4"]);
+  assert.deepEqual(picks.filter((p) => p.format !== "self-test").map((p) => p.id), ["o1", "o2", "o3"]);
+});
+
+test("checkSpec: main_fact must be a library id or none", () => {
+  assert.deepEqual(checkSpec({ ...good, main_fact: "F02" }), []);
+  assert.deepEqual(checkSpec({ ...good, main_fact: "none" }), []);
+  assert.ok(checkSpec({ ...good, main_fact: "F99_made_up" }).some((p) => p.includes("main_fact")));
+});
