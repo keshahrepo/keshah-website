@@ -196,6 +196,15 @@ export const QOVES_CAST: Record<string, string> = {
   man3: "white man around 45, greying, clearly balding on top (use rarely)",
   man4: "Black man in his mid 20s, receding hairline (use rarely)",
 };
+/**
+ * Who leads each video, in order (10 a day): about half white men, two Indian, two women, one East Asian,
+ * matching the audience. Picked in code, because the writer left to itself over-picks one person.
+ */
+export const QOVES_LEAD_ROTATION = ["man1", "man2", "man5", "woman1", "man1", "man2", "woman2", "man6", "man1", "man5"] as const;
+export const qovesLead = (date: string, i: number) =>
+  QOVES_LEAD_ROTATION[(Number(date.replace(/-/g, "")) * 3 + i) % QOVES_LEAD_ROTATION.length];
+export const leadPrompt = (lead: string) =>
+  `CAST FOR THIS VIDEO: ${lead} (${QOVES_CAST[lead]}). Every person shown is ${lead}: their library photos and every new photo ("cast":"${lead}"). The only exceptions: the man1_stage1..4 hair loss stages, crown_topdown, and a celebrity opener.`;
 const QOVES_TYPES = ["portrait", "pair", "stages", "diagram", "heat", "chart", "chips", "trio", "text", "cta", "celeb"] as const;
 
 /**
@@ -224,7 +233,7 @@ Scene plan: 8 to 13 scenes. Each scene has "type" and "cue" (the exact first 2 t
 
 Pictures: an image field is either "lib:<key>" (an existing photo) or "gen:<n>" (an entry of "images", made for this video; counting starts at 0, so the first new photo is "gen:0").
 Existing photos: ${QOVES_LIBRARY.join(", ")}.
-Cast you can ask new photos of (keep the same person through a video when it makes sense; mostly man1, man2, man5, man6 and the women, since the audience is mostly white and Indian men in their 20s to 40s, plus women): ${Object.entries(QOVES_CAST).map(([k, v]) => `${k} (${v})`).join("; ")}.
+Cast (each video names its one cast member; use only them): ${Object.entries(QOVES_CAST).map(([k, v]) => `${k} (${v})`).join("; ")}.
 "images": up to 3 new photos, each {"cast":"<cast id>","pose":"<ONE simple hand action in a few words, e.g. pressing their fingertips into the muscles between their neck and shoulders; no extra details about head angle or expression>"}. Ask for one whenever the test shows a body action the library doesn't have (traps, jaw, ears, neck tilts, hair pulls, eyebrows...). Hands must be simple and natural.
 
 Scene types (only these, with these fields):
@@ -399,14 +408,16 @@ export function anthropicFaceless(apiKey = process.env.ANTHROPIC_API_KEY ?? ""):
 }
 
 /** Adapts one source, retrying once with the problems listed. */
-export async function adaptSource(src: FacelessSource, generate: FacelessGenerate, earlier: FacelessSpec[] = [], recentFacts: string[] = [], style?: "qoves", celeb?: (typeof QOVES_CELEBS)[number]): Promise<FacelessSpec> {
+export async function adaptSource(src: FacelessSource, generate: FacelessGenerate, earlier: FacelessSpec[] = [], recentFacts: string[] = [], style?: "qoves", celeb?: (typeof QOVES_CELEBS)[number], lead?: string): Promise<FacelessSpec> {
   const studyUses = earlier.filter((e) => /two and a half times/i.test(e.script)).length;
   const base = style === "qoves" ? checkQovesSpec : checkSpec;
   const system = style === "qoves" ? QOVES_SYSTEM() : FACELESS_SYSTEM;
-  const celebExtra = celeb ? celebPrompt(celeb) : "";
+  const celebExtra = [celeb ? celebPrompt(celeb) : "", lead ? leadPrompt(lead) : ""].filter(Boolean).join("\n\n");
   const check = (s: FacelessSpec) => [
     ...base(s),
     ...(studyUses >= 2 && /two and a half times/i.test(s.script) ? ["the F02 study is already in 2 of today's videos; use a different fact or none"] : []),
+    ...(lead ? (s.images ?? []).filter((im) => im?.cast !== lead).map((im) => `new photo of "${im?.cast}": every new photo must be "cast":"${lead}"`) : []),
+    ...(lead ? [...new Set(JSON.stringify(s.scenes ?? []).match(/lib:(?:man[1-6]|woman[12])_(?!stage)[a-z_]+/g) ?? [])].filter((r) => !r.startsWith(`lib:${lead}_`)).map((r) => `${r} shows someone else: use ${lead}'s photos only`) : []),
     ...(celeb && !(s.scenes ?? []).some((x) => x.type === "celeb" && x.celeb === celeb.slug) ? [`open on the celebrity: first scene {"type":"celeb","celeb":"${celeb.slug}"}`] : []),
   ];
   const fix = (sp: FacelessSpec) => (style === "qoves" ? normalizeGenRefs(sp) : sp);
@@ -477,7 +488,8 @@ export async function draftFacelessDay(
     try {
       // About half the Qoves videos open on a public figure, rotating through the library.
       const celeb = opts.style === "qoves" && QOVES_CELEBS.length && next % 2 === 0 ? QOVES_CELEBS[(Number(opts.date.replace(/-/g, "")) + next) % QOVES_CELEBS.length] : undefined;
-      const spec = await adaptSource(src, generate, made, recentFacts, opts.style, celeb);
+      const lead = opts.style === "qoves" ? qovesLead(opts.date, next) : undefined;
+      const spec = await adaptSource(src, generate, made, recentFacts, opts.style, celeb, lead);
       const id = `${idBase}_${next + 1}`;
       await col.doc(id).set({
         id,
