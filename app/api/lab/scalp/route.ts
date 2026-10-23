@@ -48,6 +48,8 @@ export async function POST(req: Request) {
       travel_spread_mm: num(s.travelSpread),
       reps_mm: Array.isArray(s.reps) ? s.reps.slice(0, 10).map(num) : [],
     },
+    auto: b.auto === true,
+    diag: b.diag && typeof b.diag === "object" ? Object.fromEntries(Object.entries(b.diag as Record<string, unknown>).slice(0, 30).map(([k, v]) => [k.slice(0, 30), typeof v === "boolean" ? v : num(v)])) : null,
     mm_per_px: num(b.mm_per_px),
     iris_px: num(b.iris_px),
     point: b.point && typeof b.point === "object" ? b.point : null,

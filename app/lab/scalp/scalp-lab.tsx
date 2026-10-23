@@ -52,7 +52,7 @@ const TICKS = 72;
 const GRID_U = [-0.6, -0.3, 0, 0.3, 0.6];
 const GRID_DV = [-0.05, 0.08, 0.21, 0.34]; // rows, relative to the top of the face mesh
 
-type Raw = { t: number; phase: "still" | "move"; ok: boolean; hv: number; mv: number; bv: number };
+type Raw = { t: number; phase: "still" | "move"; ok: boolean; hv: number; mv: number; bv: number; why?: "face" | "pose" | "spots"; n?: number };
 type Spot = { p0: Pt; tpl: Gray; disp: Pt };
 type Result = { travel: number; swings: number[]; small: boolean; noise: number; quality: number; samples: Sample[] };
 
@@ -92,6 +92,8 @@ export default function ScalpLab({ labKey }: { labKey: string }) {
   const [phase, setPhase] = useState<"before" | "after" | "">("");
   const [saved, setSaved] = useState<"" | "saving" | "ok" | "fail">("");
   const [error, setError] = useState("");
+  const [diag, setDiag] = useState("");
+  const keyRef = useRef(labKey);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
@@ -170,7 +172,53 @@ export default function ScalpLab({ labKey }: { labKey: string }) {
     setResult(res);
     setLit(TICKS);
     setSaved("");
-    const good = Number.isFinite(res.travel) && res.quality >= 0.6 && !(res.noise > 1.2);
+    const good = Number.isFinite(res.travel) && res.quality >= 0.5 && !(res.noise > 2);
+    // Diagnostics for every try, good or not, so failures can be understood.
+    const mv = r.raw.filter((x) => x.phase === "move");
+    const pct = (k: Raw["why"]) => (mv.length ? Math.round((mv.filter((x) => x.why === k).length / mv.length) * 100) : 0);
+    const v = videoRef.current;
+    const diag = {
+      good,
+      spots: r.spots.length,
+      anchors: r.anchors.length,
+      w: v?.videoWidth ?? 0,
+      h: v?.videoHeight ?? 0,
+      patch_r: r.patchR,
+      radius: r.radius,
+      move_frames: mv.length,
+      ok_pct: Math.round(res.quality * 100),
+      no_face_pct: pct("face"),
+      head_pct: pct("pose"),
+      lost_spots_pct: pct("spots"),
+      median_spots: median(mv.map((x) => x.n ?? 0)),
+      noise_mm: res.noise,
+      swings: res.swings.length,
+      travel_mm: res.travel,
+    };
+    setDiag(`ok ${diag.ok_pct}% · lost face ${diag.no_face_pct}% · head moved ${diag.head_pct}% · lost hairline ${diag.lost_spots_pct}% · spots ${diag.median_spots}/${diag.spots} · still noise ${Number.isFinite(res.noise) ? res.noise.toFixed(1) : "–"} mm · ${diag.w}×${diag.h}`);
+    let who = "";
+    try {
+      who = localStorage.getItem("lab_name") ?? "";
+    } catch {}
+    const st = res.samples;
+    const step = Math.max(1, Math.ceil(st.length / 400));
+    fetch("/api/lab/scalp", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        key: keyRef.current,
+        name: who || "unknown",
+        test: "push",
+        auto: true,
+        diag,
+        summary: { ...summarize(st), reps: res.swings, travel: res.travel },
+        trace: st.filter((_, i) => i % step === 0).map((x) => [Math.round(x.t), x.ok ? 1 : 0, x.hair, x.mesh, x.brow]),
+        mm_per_px: IRIS_MM / median(r.iris),
+        iris_px: median(r.iris),
+        video_w: diag.w,
+        video_h: diag.h,
+      }),
+    }).catch(() => {});
     if (!good) say("Couldn't get a clean reading", "Keep your head still, your fingertips behind your hairline, and your face in the circle.");
     else if (res.small) say("Very little movement", "Push firmly on top of your head and slide again.");
     else say("Scalp movement", res.swings.map((x) => x.toFixed(1)).join("  ·  ") + " mm");
@@ -355,7 +403,7 @@ export default function ScalpLab({ labKey }: { labKey: string }) {
       }
       const Minv = M ? invertAffine(M) : null;
       if (!pts || !M || !Minv) {
-        r.raw.push({ t, phase: phaseNow, ok: false, hv: 0, mv: 0, bv: 0 });
+        r.raw.push({ t, phase: phaseNow, ok: false, hv: 0, mv: 0, bv: 0, why: "face" });
         return;
       }
       const preds = r.spots.map((sp) => applyAffine(M, { x: sp.p0.x + sp.disp.x, y: sp.p0.y + sp.disp.y }));
@@ -364,7 +412,7 @@ export default function ScalpLab({ labKey }: { labKey: string }) {
       preds.forEach((p, i) => {
         const sp = r.spots[i];
         const hit = crop ? nccMatch(crop.g, sp.tpl, p.x - crop.x0, p.y - crop.y0, r.radius) : null;
-        const ok = !!hit && hit.score >= 0.6;
+        const ok = !!hit && hit.score >= 0.5;
         if (ok) {
           const back = applyAffine(Minv, { x: hit!.x + crop!.x0, y: hit!.y + crop!.y0 });
           sp.disp = sub2(back, sp.p0);
@@ -375,8 +423,9 @@ export default function ScalpLab({ labKey }: { labKey: string }) {
         ctx.arc(ok ? hit!.x + crop!.x0 : p.x, ok ? hit!.y + crop!.y0 : p.y, D * 0.005, 0, Math.PI * 2);
         ctx.fill();
       });
-      const poseOk = !r.pose0 || !pose || (Math.abs(pose.pitch - r.pose0.pitch) < 8 && Math.abs(pose.yaw - r.pose0.yaw) < 10);
-      const ok = du.length >= Math.max(4, Math.ceil(r.spots.length * 0.4)) && poseOk;
+      const poseOk = !r.pose0 || !pose || (Math.abs(pose.pitch - r.pose0.pitch) < 15 && Math.abs(pose.yaw - r.pose0.yaw) < 18);
+      const enough = du.length >= Math.max(3, Math.ceil(r.spots.length * 0.25));
+      const ok = enough && poseOk;
       const browNow = { x: (pts[LM.browR].x + pts[LM.browL].x) / 2, y: (pts[LM.browR].y + pts[LM.browL].y) / 2 };
       r.raw.push({
         t,
@@ -385,6 +434,8 @@ export default function ScalpLab({ labKey }: { labKey: string }) {
         hv: du.length ? robustMedian(du) : 0,
         mv: dot2(sub2(applyAffine(Minv, pts[LM.foreheadTop]), r.top0), r.up0),
         bv: dot2(sub2(applyAffine(Minv, browNow), r.brow0), r.up0),
+        why: !poseOk ? "pose" : !enough ? "spots" : undefined,
+        n: du.length,
       });
       if (phaseNow === "still") {
         r.iris.push(irisDiameterPx(pts));
@@ -436,7 +487,7 @@ export default function ScalpLab({ labKey }: { labKey: string }) {
     }
   };
 
-  const good = !!result && Number.isFinite(result.travel) && result.quality >= 0.6 && !(result.noise > 1.2);
+  const good = !!result && Number.isFinite(result.travel) && result.quality >= 0.5 && !(result.noise > 2);
   const live = stage !== "intro" && stage !== "loading" && stage !== "error";
 
   return (
@@ -486,6 +537,7 @@ export default function ScalpLab({ labKey }: { labKey: string }) {
         <h1 style={S.title}>{title}</h1>
         {sub && <p style={S.sub}>{sub}</p>}
         {error && <p style={S.small}>{error}</p>}
+        {stage === "result" && diag && <p style={S.diag}>{diag}</p>}
       </div>
 
       <div style={S.actions}>
@@ -569,5 +621,6 @@ const S: Record<string, React.CSSProperties> = {
   chips: { display: "flex", gap: 8 },
   chip: { flex: 1, background: "#1C1C1E", color: "#8E8E93", border: 0, borderRadius: 12, padding: "12px 8px", fontSize: 15, fontFamily: "inherit" },
   chipOn: { background: "#fff", color: "#000" },
+  diag: { fontSize: 11, color: "#636366", margin: "10px 0 0", lineHeight: 1.4 },
   savedTxt: { textAlign: "center", color: "#30D158", fontSize: 17, margin: "4px 0" },
 };
