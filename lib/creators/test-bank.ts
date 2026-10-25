@@ -66,3 +66,6 @@ export const TEST_BANK: readonly BankTest[] = [
 export const ROUTINE_TECHNIQUES = ["scalp pressing", "scalp pinching", "scalp stretches", "scalp sliding", "neck presses", "neck stretches", "acupressure points"];
 
 export const bankSourceId = (id: string) => `bank_${id}`;
+
+/** Bank tests creators already filmed before scripts tracked bank_id (the week of 2026-10-19), or classic proven ones. */
+export const CREATOR_TESTED_BANK_IDS: readonly string[] = ["eyebrow_raise", "ear_wiggle", "clench_temples", "hairline_pinch", "side_then_top"];

@@ -16,7 +16,7 @@ import {
   type RawScript,
 } from "./content";
 import { CONTENT_FACTS, factById } from "./content-facts";
-import { CONTENT_SYSTEM, draftSlots, slotGroups, toContentScript, type WriterContext } from "./content-writer";
+import { CONTENT_SYSTEM, draftSlots, slotGroups, sourceBrief, toContentScript, type WriterContext } from "./content-writer";
 
 export const SAMPLE: RawScript = {
   title: "Eyebrow raise",
@@ -46,15 +46,14 @@ test("facts module: 16 verified facts, unique ids, every field filled", () => {
   assert.equal(factById("nope"), null);
 });
 
-test("week mix: 3 adapted, 3 self-tests, 2 new angles, 2 revivals in 10 slots", () => {
+test("week mix: 7 self-tests, 2 new angles, 1 adapted in 10 slots", () => {
   assert.equal(WEEK_MIX.length, 10);
   const count = (s: string) => WEEK_MIX.filter((x) => x === s).length;
-  assert.deepEqual([count("adapted"), count("new-self-test"), count("new-angle"), count("revival")], [3, 3, 2, 2]);
+  assert.deepEqual([count("adapted"), count("new-self-test"), count("new-angle"), count("revival")], [1, 7, 2, 0]);
   assert.deepEqual(slotGroups().map((g) => [g.source, g.slots]), [
-    ["adapted", [1, 2, 3]],
-    ["new-self-test", [4, 5, 6]],
-    ["new-angle", [7, 8]],
-    ["revival", [9, 10]],
+    ["new-self-test", [1, 2, 3, 4, 5, 6, 7]],
+    ["new-angle", [8, 9]],
+    ["adapted", [10]],
   ]);
 });
 
@@ -91,6 +90,7 @@ const ctx: WriterContext = {
   revival_formats: ["authority-story", "myth-bust"],
   learnings: "",
   scan: [{ url: "https://www.tiktok.com/@drrodpt/video/1", handle: "drrodpt", platform: "tiktok", niche: "posture", views: 52600000, caption: "posture test" }],
+  bank_tests: [],
 };
 
 test("draftSlots: retries once with the problems, then succeeds", async () => {
@@ -202,4 +202,10 @@ test("creator picks expose first_frame, on_screen_text and photo only when the i
   assert.deepEqual(withScript.photo, { point: 2, url: "https://x/y.jpg", caption: "Scalp" });
   const plain = publicProven("i2", toProven(base));
   assert.equal("first_frame" in plain || "on_screen_text" in plain || "photo" in plain, false);
+});
+
+test("new self-test brief lists the bank tests in order when there are some", () => {
+  const b = sourceBrief("new-self-test", { ...ctx, bank_tests: [{ id: "tent_test", area: "scalp", test: "Pinch the top and lift it.", fail: "it barely lifts" }] });
+  assert.ok(b.includes("1. [scalp] Pinch the top and lift it. Fail: it barely lifts."));
+  assert.ok(!sourceBrief("new-self-test", ctx).includes("IN THIS ORDER"));
 });

@@ -6,9 +6,10 @@
  *   ContentScripts/{id}       ContentScript (contract "Script")
  *   ContentWeeks/{week_of}    ContentWeek { state, script_ids, drafted_at, pushed_at }
  *
- * A week is 10 scripts for the Monday it runs: 3 adapted from the latest
- * niche scan, 3 new self-tests, 2 new angles on strong proven hook families,
- * 2 revivals of strong under-used formats. On approve a script becomes a
+ * A week is 10 scripts for the Monday it runs: 7 new self-tests (from the
+ * self-test bank, test-bank.ts, ones creators haven't had yet), 2 new angles on
+ * strong proven hook families, 1 adapted from the latest niche scan. Physical
+ * self-tests and new angles produced the winners; adapted and revivals didn't. On approve a script becomes a
  * ProvenVideos idea scheduled into that week (addIdeaBatch semantics).
  */
 import { factById } from "./content-facts";
@@ -60,6 +61,8 @@ export interface ContentScript {
   replaces?: string;
   history: { at: string; kind: HistoryKind; note?: string; changed?: string[] }[];
   idea_id?: string;
+  /** The test-bank test a new self-test was written from (so it isn't reused). */
+  bank_id?: string;
 }
 
 export type WeekState = "none" | "drafting" | "ready" | "approved";
@@ -77,10 +80,9 @@ export interface ContentWeek {
 
 /** Slot -> source for a week of 10. */
 export const WEEK_MIX: readonly ScriptSource[] = [
-  "adapted", "adapted", "adapted",
-  "new-self-test", "new-self-test", "new-self-test",
+  "new-self-test", "new-self-test", "new-self-test", "new-self-test", "new-self-test", "new-self-test", "new-self-test",
   "new-angle", "new-angle",
-  "revival", "revival",
+  "adapted",
 ];
 
 export const sourceForSlot = (slot: number): ScriptSource => WEEK_MIX[slot - 1] ?? "new-self-test";
@@ -342,6 +344,7 @@ export function toScript(id: string, d: Record<string, unknown>): ContentScript 
     ...(typeof d.replaces === "string" ? { replaces: d.replaces } : {}),
     history: Array.isArray(d.history) ? (d.history as ContentScript["history"]) : [],
     ...(typeof d.idea_id === "string" ? { idea_id: d.idea_id } : {}),
+    ...(typeof d.bank_id === "string" ? { bank_id: d.bank_id } : {}),
   };
 }
 

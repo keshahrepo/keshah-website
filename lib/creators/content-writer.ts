@@ -44,6 +44,7 @@ import { CONTENT_SYSTEM } from "./content-prompt";
 
 export { CONTENT_SYSTEM };
 import { PROVEN_COLLECTION, addDaysTo, type ProvenVideo } from "./proven";
+import { CREATOR_TESTED_BANK_IDS, TEST_BANK, type BankTest } from "./test-bank";
 import type { YyyyMmDd } from "./types";
 
 export const CONTENT_MODEL = BEATS_MODEL;
@@ -115,6 +116,8 @@ export interface WriterContext {
   learnings: string;
   /** Scan items allowed for the adapted slots. */
   scan: ScanItem[];
+  /** Test-bank self-tests creators haven't had yet, in bank order (the new self-test slots use these first). */
+  bank_tests: BankTest[];
 }
 
 const k = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : String(n));
@@ -139,6 +142,9 @@ export function sourceBrief(source: ScriptSource, ctx: WriterContext): string {
     case "adapted":
       return `These scripts ADAPT viral videos from next-door niches (list below) to our scalp tension message. Pick the strongest relevant videos, one per script, all different. Keep what made the original work (its test, its setup, its hook shape); when it has a transcript, start from its hook. Set reference_url to the exact url you adapted.\n\nVideos you may adapt:\n${scanBlock(ctx.scan) || "(none this week: write strong self-tests instead and set reference_url to null)"}`;
     case "new-self-test":
+      if (ctx.bank_tests.length) {
+        return `These are NEW self-tests, one per test below, IN THIS ORDER (the first script is test 1, and so on). The hook is that test as a command the viewer does right now at second 0 (tighten the wording if needed), then the fail result. For face, jaw and neck tests, add one hedged bridge: tension there pulls on the same tight layer over the top of the head, or usually comes with a tight scalp. Set reference_url to null.\n\nTests:\n${ctx.bank_tests.map((t, i) => `${i + 1}. [${t.area}] ${t.test} Fail: ${t.fail}.`).join("\n")}`;
+      }
       return "These are NEW self-tests: a physical test the viewer can do right now at second 0 (something they touch, press, move or look at), with a clear fail state. Not one already in the library. Set reference_url to null.";
     case "new-angle":
       return `These are NEW ANGLES on strong proven hook families: same core idea, a fresh setup, wording and test. Use one family per script, all different, and keep that family name as hook_family. Set reference_url to null.\n\nFamilies (median views of the originals, videos remade in the last 3 weeks):\n${ctx.strong_families.map((f) => `- "${f.family}" (${f.format}, median ${k(f.median_views)}, ${f.recent} recent): e.g. "${f.example_hook.slice(0, 160)}"`).join("\n")}`;
@@ -201,6 +207,8 @@ export async function buildContext(weekOf: YyyyMmDd, opts: { db?: Firestore } = 
     .join("\n");
 
   const used = new Set(past.map((s) => s.reference?.url).filter((u): u is string => !!u));
+  // Bank tests already given to creators (any week, any status but replaced) or already proven with creators.
+  const bankUsed = new Set([...CREATOR_TESTED_BANK_IDS, ...past.filter((s) => s.bank_id && s.status !== "replaced").map((s) => s.bank_id!)]);
   return {
     week_of: weekOf,
     library,
@@ -208,6 +216,7 @@ export async function buildContext(weekOf: YyyyMmDd, opts: { db?: Firestore } = 
     revival_formats: revivalFormats(formats),
     learnings,
     scan: adaptCandidates(scanItems(scan?.items ?? null), used),
+    bank_tests: TEST_BANK.filter((t) => !bankUsed.has(t.id)),
   };
 }
 
@@ -325,15 +334,18 @@ export async function draftWeek(
     .filter((g) => g.slots.length);
   const errors: string[] = [];
   const results = await Promise.all(
-    groups.map((g) =>
-      draftSlots(g.source, g.slots, ctx, generate).then(
-        (list) => list.map((d) => toContentScript(d, weekOf, g.source, nowIso)),
+    groups.map((g) => {
+      // New self-tests take the next unused bank tests, one per slot, and remember which.
+      const bank = g.source === "new-self-test" ? ctx.bank_tests.slice(0, g.slots.length) : [];
+      const gctx = bank.length ? { ...ctx, bank_tests: bank } : { ...ctx, bank_tests: [] };
+      return draftSlots(g.source, g.slots, gctx, generate).then(
+        (list) => list.map((d, i) => toContentScript(d, weekOf, g.source, nowIso, bank[i] ? { bank_id: bank[i].id } : {})),
         (e) => {
           errors.push(e instanceof Error ? e.message : String(e));
           return [] as ContentScript[];
         },
-      ),
-    ),
+      );
+    }),
   );
   const batch = db.batch();
   if (opts.force) for (const s of live.filter((x) => x.status === "draft")) batch.set(db.collection(SCRIPTS_COLLECTION).doc(s.id), { status: "replaced" }, { merge: true });
