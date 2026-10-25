@@ -30,12 +30,32 @@ import crypto from "crypto";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { APPLICATIONS, ensureSessionForStart, findApplicationByEmail } from "@/lib/interview";
-import { BOOKING_FIELDS, cancelDecision, isDecided, outsideUsTimezone, statusAfterCancel } from "@/lib/interview-decisions";
+import { BOOKING_FIELDS, OUTSIDE_US_REASON, cancelDecision, isDecided, outsideUsEmail, outsideUsTimezone, statusAfterCancel } from "@/lib/interview-decisions";
+import { emailConfigured, sendEmail } from "@/lib/email";
+import { CREATOR_FROM_NAME } from "@/lib/creators/invite";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
 
 const SIGNING_KEY = process.env.CALENDLY_WEBHOOK_SIGNING_KEY ?? "";
+/** Calendly personal access token, used to cancel bookings from outside the US. Without it they're only denied + emailed. */
+const CALENDLY_API_TOKEN = process.env.CALENDLY_API_TOKEN ?? "";
+
+/** Cancels a scheduled Calendly event (its api.calendly.com URI). Returns whether it worked. */
+async function cancelCalendlyEvent(eventUri: string, reason: string): Promise<boolean> {
+  if (!CALENDLY_API_TOKEN || !/^https:\/\/api\.calendly\.com\/scheduled_events\/[\w-]+$/.test(eventUri)) return false;
+  try {
+    const res = await fetch(`${eventUri}/cancellation`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${CALENDLY_API_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ reason }),
+    });
+    return res.ok;
+  } catch (e) {
+    console.error("calendly webhook: cancel failed:", e instanceof Error ? e.message : e);
+    return false;
+  }
+}
 
 type CalendlyWebhookPayload = {
   event?: string;
@@ -180,6 +200,44 @@ export async function POST(req: Request) {
   }
 
   const ref = db.collection(APPLICATIONS).doc(docId);
+
+  // US-only hiring: a booking from a non-US time zone is cancelled, the application closed, and the applicant told.
+  if (outsideUsTimezone(inviteeTimezone)) {
+    const closed = await db.runTransaction(async (tx) => {
+      const cur = ((await tx.get(ref)).data() ?? {}) as Record<string, unknown>;
+      if (isDecided(cur.status)) return null;
+      tx.set(
+        ref,
+        {
+          status: "denied",
+          denied_reason: OUTSIDE_US_REASON,
+          decided_at: FieldValue.serverTimestamp(),
+          outside_us_timezone: inviteeTimezone,
+          calendly_invitee_timezone: inviteeTimezone,
+          booked_at: FieldValue.serverTimestamp(),
+          calendly_event_start_time: startTime,
+          calendly_event_uri: eventUri,
+          last_updated_at: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      return { email: String(cur.email ?? email ?? "").trim(), first: String(cur.full_name ?? "").trim().split(/\s+/)[0] };
+    });
+    if (!closed) return NextResponse.json({ ok: true, matched: true, id: docId, decided: true });
+    const canceled = eventUri ? await cancelCalendlyEvent(eventUri, "This role is only open to people living in the US for now.") : false;
+    let emailed = false;
+    if (closed.email && emailConfigured()) {
+      try {
+        await sendEmail({ to: closed.email, fromName: CREATOR_FROM_NAME, ...outsideUsEmail(closed.first) });
+        emailed = true;
+      } catch (e) {
+        console.error("calendly webhook: outside-US email failed:", e instanceof Error ? e.message : e);
+      }
+    }
+    await ref.set({ outside_us_booking_canceled: canceled, outside_us_emailed: emailed }, { merge: true });
+    return NextResponse.json({ ok: true, matched: true, id: docId, outside_us: true, canceled, emailed });
+  }
+
   const decided = await db.runTransaction(async (tx) => {
     const cur = ((await tx.get(ref)).data() ?? {}) as Record<string, unknown>;
     if (isDecided(cur.status)) {
@@ -203,8 +261,6 @@ export async function POST(req: Request) {
         calendly_reschedule_url: rescheduleUrl,
         calendly_cancel_url: cancelUrl,
         calendly_invitee_timezone: inviteeTimezone,
-        // US-only hiring: flagged for the dashboard, not auto-denied (could be a US student travelling).
-        outside_us_timezone: outsideUsTimezone(inviteeTimezone) ? inviteeTimezone : FieldValue.delete(),
         booking_canceled_at: FieldValue.delete(),
         booking_canceled_start_time: FieldValue.delete(),
         last_updated_at: FieldValue.serverTimestamp(),

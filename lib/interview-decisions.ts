@@ -67,6 +67,21 @@ export function autoDenyEmail(first: string): { subject: string; text: string } 
   };
 }
 
+export const OUTSIDE_US_REASON = "outside_us";
+
+/** Sent when a booking comes from outside the US: the booking is cancelled and the application closed. */
+export function outsideUsEmail(first: string): { subject: string; text: string } {
+  return {
+    subject: "Your KESHAH application",
+    text: [
+      `Hi ${first || "there"},`,
+      "Thanks for applying to KESHAH. Right now this role is only open to people living in the US, so we've cancelled your interview booking.",
+      "We really appreciate your interest, and we'll let you know if that changes.",
+      `Best,\n${CREATOR_SIGNOFF}`,
+    ].join("\n\n"),
+  };
+}
+
 /**
  * The hiring is US only. True for a Calendly invitee time zone that is clearly outside the US
  * (e.g. Africa/Nairobi), false for US zones and anything ambiguous (empty, Etc/GMT offsets).
