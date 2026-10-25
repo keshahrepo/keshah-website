@@ -538,7 +538,7 @@ export default function ApplyQuiz() {
             <p className={`${styles.subtitle} ${styles.fadeTitle}`}>
               {notFit}, so this role isn&apos;t the right fit right now. If that changes, you&apos;re welcome to apply again.
             </p>
-            <button type="button" className={apply.noBtn} onClick={() => setNotFit(null)}>
+            <button type="button" className={apply.noBtn} style={{ marginTop: 28 }} onClick={() => setNotFit(null)}>
               <span>Change my answer</span>
             </button>
           </div>
