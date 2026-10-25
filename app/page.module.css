@@ -4,6 +4,11 @@
    QR card is inverted (white dots on black) via filter: invert(1). */
 
 .page {
+  /* 100dvh (not min-height) so mobile hits a hard viewport cap and
+     doesn't scroll — the whole landing needs to be visible in one
+     glance on a phone. Overflow is clipped so nothing bleeds below
+     the fold on small devices. */
+  height: 100dvh;
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
@@ -11,19 +16,7 @@
   color: #fff;
   font-family: "Poppins", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
-  /* The results wall is full-bleed (100vw); clip doesn't break the sticky header. */
-  overflow-x: clip;
-}
-
-/* First screen: on mobile a hard viewport cap so the download hero is
-   visible in one glance; the company sections continue below it. */
-.fold {
-  /* Minus the 56px top bar. */
-  height: calc(100dvh - 56px);
-  display: flex;
-  flex-direction: column;
   overflow: hidden;
-  flex-shrink: 0;
 }
 
 .header {
@@ -210,7 +203,7 @@
 /* Desktop — two-column layout, phone on the LEFT, copy + QR on the right.
    720px is the mobile→desktop breakpoint everywhere else in the site. */
 @media (min-width: 720px) {
-  .fold {
+  .page {
     /* Desktop can scroll gracefully — unlock the hard cap. */
     height: auto;
     overflow: visible;

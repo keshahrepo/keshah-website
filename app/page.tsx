@@ -10,15 +10,9 @@
 // buttons on the left; on mobile the phone drops below the headline
 // and the QR hides in favor of store-badge buttons (nothing to scan
 // with on the same device).
-//
-// Below the first screen: why hair falls out, how KESHAH works, Aadi's
-// story, member messages and a KESHAH, Inc. footer (home-sections.tsx) —
-// a real company homepage (Apple Developer enrollment needs one).
 
 import Image from "next/image";
 import styles from "./page.module.css";
-import HomeSections from "./home-sections";
-import SiteHeader from "./site-header";
 
 const APP_STORE_URL = "https://apps.apple.com/us/app/keshah/id6450676544";
 const PLAY_STORE_URL =
@@ -27,8 +21,17 @@ const PLAY_STORE_URL =
 export default function Home() {
   return (
     <main className={styles.page}>
-      <SiteHeader downloadUrl={APP_STORE_URL} />
-      <div className={styles.fold}>
+      <div className={styles.header}>
+        <Image
+          src="/images/logo.png"
+          alt="KESHAH"
+          width={40}
+          height={40}
+          className={styles.logo}
+          priority
+        />
+      </div>
+
       <div className={styles.hero}>
         <div className={styles.copy}>
           <h1 className={styles.title}>Stop your hair loss + keep it.</h1>
@@ -95,8 +98,6 @@ export default function Home() {
           </div>
         </div>
       </div>
-      </div>
-      <HomeSections appStoreUrl={APP_STORE_URL} playStoreUrl={PLAY_STORE_URL} />
     </main>
   );
 }
