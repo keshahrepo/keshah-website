@@ -67,6 +67,18 @@ export function autoDenyEmail(first: string): { subject: string; text: string } 
   };
 }
 
+/**
+ * The hiring is US only. True for a Calendly invitee time zone that is clearly outside the US
+ * (e.g. Africa/Nairobi), false for US zones and anything ambiguous (empty, Etc/GMT offsets).
+ */
+export function outsideUsTimezone(tz: string | null | undefined): boolean {
+  const z = String(tz ?? "").trim();
+  if (!z || z.startsWith("Etc/") || z.startsWith("US/") || z === "UTC") return false;
+  if (z === "Pacific/Honolulu" || z === "America/Puerto_Rico") return false;
+  if (/^America\/(New_York|Chicago|Denver|Los_Angeles|Phoenix|Anchorage|Detroit|Boise|Juneau|Sitka|Nome|Adak|Metlakatla|Yakutat|Menominee|Indiana\/|Kentucky\/|North_Dakota\/)/.test(z)) return false;
+  return true;
+}
+
 // ---------------------------------------------------------------- no-video auto-deny
 
 export const AUTO_DENY_REASON = "no_video";

@@ -50,6 +50,7 @@ type Application = {
   phone: string | null;
   gender: string | null;
   college: string | null;
+  outside_us_timezone?: string | null;
   graduation_year: string | null;
   can_commit: string | null;
   comfortable_on_camera: string | null;
@@ -430,6 +431,11 @@ function ApplicationRow({
           <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 12 }}>
             {row.college ?? "—"}
           </div>
+          {row.outside_us_timezone && (
+            <div style={{ color: "#ff6b6b", fontSize: 12, fontWeight: 600 }}>
+              Outside US ({row.outside_us_timezone})
+            </div>
+          )}
         </div>
         <div style={{ color: "rgba(255,255,255,0.8)" }}>{row.email ?? "—"}</div>
         <div style={{ color: "rgba(255,255,255,0.65)" }}>

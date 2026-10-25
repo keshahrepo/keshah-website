@@ -30,7 +30,7 @@ import crypto from "crypto";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { APPLICATIONS, ensureSessionForStart, findApplicationByEmail } from "@/lib/interview";
-import { BOOKING_FIELDS, cancelDecision, isDecided, statusAfterCancel } from "@/lib/interview-decisions";
+import { BOOKING_FIELDS, cancelDecision, isDecided, outsideUsTimezone, statusAfterCancel } from "@/lib/interview-decisions";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -203,6 +203,8 @@ export async function POST(req: Request) {
         calendly_reschedule_url: rescheduleUrl,
         calendly_cancel_url: cancelUrl,
         calendly_invitee_timezone: inviteeTimezone,
+        // US-only hiring: flagged for the dashboard, not auto-denied (could be a US student travelling).
+        outside_us_timezone: outsideUsTimezone(inviteeTimezone) ? inviteeTimezone : FieldValue.delete(),
         booking_canceled_at: FieldValue.delete(),
         booking_canceled_start_time: FieldValue.delete(),
         last_updated_at: FieldValue.serverTimestamp(),

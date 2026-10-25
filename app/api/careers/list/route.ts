@@ -36,6 +36,7 @@ export async function GET() {
         phone: x.phone ?? null,
         gender: x.gender ?? null,
         college: x.college ?? null,
+        outside_us_timezone: x.outside_us_timezone ?? null,
         graduation_year: x.graduation_year ?? null,
         can_commit: x.can_commit ?? null,
         comfortable_on_camera: x.comfortable_on_camera ?? null,

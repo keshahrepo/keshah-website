@@ -66,6 +66,7 @@ type Form = {
   gender: "" | Gender;
   college: string;
   graduation_year: string;
+  lives_in_us: "" | YesNo;
   can_commit: "" | YesNo;
   has_iphone: "" | YesNo;
   has_us_bank: "" | YesNo;
@@ -82,6 +83,7 @@ const EMPTY: Form = {
   gender: "",
   college: "",
   graduation_year: "",
+  lives_in_us: "",
   can_commit: "",
   has_iphone: "",
   has_us_bank: "",
@@ -113,6 +115,8 @@ const STEPS: Step[] = [
     { value: "2028", label: "2028" }, { value: "2029", label: "2029" },
     { value: "graduated", label: "Already graduated" },
   ] },
+  // Hard filter: US only for now (US college, paid by US bank transfer).
+  { kind: "yesno", key: "lives_in_us", title: "Do you live in the US?", yesLabel: "Yes, I do", noLabel: "No, I don't", noSub: "You'll need to live in the US for this role" },
   { kind: "yesno", key: "can_commit", title: "Can you commit ~1 hr/day, Mon–Fri?", yesLabel: "Yes, I can", noLabel: "No, I can't", noSub: "This role may not be the right fit" },
   // Hard filter: the KESHAH Creators app is iPhone only (TestFlight).
   { kind: "yesno", key: "has_iphone", title: "Do you have an iPhone?", subtitle: "You'll film, post and get paid through our creator app, which is iPhone only for now.", yesLabel: "Yes, I do", noLabel: "No, I don't", noSub: "You'll need an iPhone for this role" },
@@ -211,6 +215,7 @@ export default function ApplyQuiz() {
           gender: merged.gender,
           college: merged.college,
           graduation_year: merged.graduation_year,
+          lives_in_us: merged.lives_in_us,
           can_commit: merged.can_commit,
           has_iphone: merged.has_iphone,
           has_us_bank: merged.has_us_bank,
@@ -307,6 +312,12 @@ export default function ApplyQuiz() {
 
   function advance() {
     if (!canContinue()) return;
+    // US only: a non-US phone number gets the not-a-fit screen.
+    if (step.kind === "text" && step.key === "phone" && phoneCountry !== "US") {
+      saveDraft();
+      setNotFit("You'll need a US phone number for this role");
+      return;
+    }
     saveDraft();
     if (stepIdx < STEPS.length - 1) {
       setStepIdx((i) => i + 1);
@@ -356,6 +367,7 @@ export default function ApplyQuiz() {
           gender: form.gender,
           college: form.college,
           graduation_year: form.graduation_year,
+          lives_in_us: form.lives_in_us,
           can_commit: form.can_commit,
           has_iphone: form.has_iphone,
           has_us_bank: form.has_us_bank,

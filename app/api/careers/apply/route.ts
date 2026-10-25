@@ -21,6 +21,7 @@ type Payload = {
   gender?: string;
   college?: string;
   graduation_year?: string;
+  lives_in_us?: string;
   can_commit?: string;
   comfortable_on_camera?: string;
   has_iphone?: string;
@@ -98,6 +99,7 @@ export async function POST(req: Request) {
       gender: p.gender!.trim(),
       college: p.college!.trim(),
       graduation_year: p.graduation_year!.trim(),
+      lives_in_us: (p.lives_in_us ?? "").trim() || null,
       can_commit: p.can_commit!.trim(),
       comfortable_on_camera: (p.comfortable_on_camera ?? "").trim() || null,
       has_iphone: (p.has_iphone ?? "").trim() || null,

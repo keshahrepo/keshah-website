@@ -9,6 +9,7 @@ import {
   hasInterviewVideo,
   isDecided,
   looksLikeSamePerson,
+  outsideUsTimezone,
   statusAfterCancel,
 } from "./interview-decisions";
 import { endOfNextEasternDayMs } from "./interview";
@@ -147,4 +148,11 @@ test("STOP / START replies", () => {
   for (const t of ["STOP", "stop", " Stop. ", "UNSUBSCRIBE", "Unsubscribe!", "stopall", "QUIT", "end"]) assert.equal(smsKeyword(t), "stop", t);
   for (const t of ["START", "unstop"]) assert.equal(smsKeyword(t), "start", t);
   for (const t of ["stop texting me please", "Sam Lee", "yes", "can I reschedule?", "cancel"]) assert.equal(smsKeyword(t), null, t);
+});
+
+test("outsideUsTimezone flags clear non-US zones only", () => {
+  for (const z of ["America/New_York", "America/Chicago", "America/Los_Angeles", "America/Indiana/Indianapolis", "Pacific/Honolulu", "Etc/GMT+5", "", null])
+    assert.equal(outsideUsTimezone(z), false, String(z));
+  for (const z of ["Africa/Nairobi", "Africa/Cairo", "Asia/Jerusalem", "Europe/London", "America/Toronto"])
+    assert.equal(outsideUsTimezone(z), true, z);
 });
