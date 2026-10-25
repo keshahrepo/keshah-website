@@ -19,7 +19,7 @@
 // Auto-deny (silent): once the video deadline (11:59 PM ET the day after the
 // session, sessionClosesAtMs) has passed, everyone in the session still in the
 // interview stage without a video is set to denied with denied_reason
-// "no_video" and auto_denied_at. No email, no text. Decided applications,
+// "no_video" and auto_denied_at, then a short closing email (no text). Decided applications,
 // canceled bookings and anyone booked into a later call (rescheduled) are
 // left alone (lib/interview-decisions.ts autoDenyDue).
 //
@@ -58,7 +58,7 @@ import {
   formatDeadline,
 } from "@/lib/interview-reminders";
 import { normalizePhone, sendInterviewText, textWasSent } from "@/lib/sms";
-import { AUTO_DENY_REASON, autoDenyDue } from "@/lib/interview-decisions";
+import { AUTO_DENY_REASON, autoDenyDue, autoDenyEmail } from "@/lib/interview-decisions";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -160,6 +160,14 @@ export async function GET(req: Request) {
                 );
             if (won) {
               counts.auto_denied++;
+              // A short, polite close instead of silence. Best effort: the denial already stands.
+              if (!dry && canEmail && email) {
+                try {
+                  await sendEmail({ to: email, fromName: CREATOR_FROM_NAME, ...autoDenyEmail(first) });
+                } catch (e) {
+                  errors.push(`auto-deny email to ${email}: ${String(e)}`);
+                }
+              }
               continue;
             }
           }

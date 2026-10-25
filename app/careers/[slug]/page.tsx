@@ -36,19 +36,25 @@ export async function generateMetadata({
 
 export default async function RoleDetail({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { slug } = await params;
+  // ?src=handshake (or utm_source) rides through to the application so each job board is tracked.
+  const sp = await searchParams;
+  const rawSrc = sp.src ?? sp.utm_source;
+  const src = (Array.isArray(rawSrc) ? rawSrc[0] : rawSrc)?.replace(/[^\w-]/g, "").slice(0, 40);
   const listing = getListing(slug);
   if (!listing) notFound();
 
   const onSite = ON_SITE_APPLY[listing.slug];
   const subject = encodeURIComponent(`Application: ${listing.title}`);
   const body = encodeURIComponent(
-    `Hi KESHAH team,\n\nI'd like to apply for the ${listing.title} role.\n\nName:\nSchool (if applicable):\nTimes I'm free this week for a 30-min group interview:\n\n—`
+    `Hi KESHAH team,\n\nI'd like to apply for the ${listing.title} role.\n\nName:\nSchool (if applicable):\nTimes I'm free this week for a 15-min call:\n\n—`
   );
-  const applyHref = onSite ?? `mailto:${APPLY_EMAIL}?subject=${subject}&body=${body}`;
+  const applyHref = onSite ? (src ? `${onSite}?src=${src}` : onSite) : `mailto:${APPLY_EMAIL}?subject=${subject}&body=${body}`;
 
   return (
     <main className={styles.detailPage}>

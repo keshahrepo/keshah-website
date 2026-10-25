@@ -54,6 +54,19 @@ export function denialEmail(first: string): { subject: string; text: string } {
   };
 }
 
+/** Sent when an application closes without a test video (no-show or never filmed). */
+export function autoDenyEmail(first: string): { subject: string; text: string } {
+  return {
+    subject: "Your KESHAH application",
+    text: [
+      `Hi ${first || "there"},`,
+      "Thanks for applying to KESHAH. We didn't get a test video from you before the deadline, so we've closed your application for now.",
+      "If you'd still like to be considered, you're welcome to apply again.",
+      `Best,\n${CREATOR_SIGNOFF}`,
+    ].join("\n\n"),
+  };
+}
+
 // ---------------------------------------------------------------- no-video auto-deny
 
 export const AUTO_DENY_REASON = "no_video";

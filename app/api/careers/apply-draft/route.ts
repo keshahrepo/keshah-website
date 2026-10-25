@@ -26,6 +26,8 @@ type Payload = {
   wants_virality?: string;
   posted_before?: string;
   social_handle?: string;
+  /** Job board / link the applicant came from (?src=). */
+  source?: string;
   video_object_path?: string;
   video_original_name?: string;
   video_size_bytes?: number;
@@ -82,6 +84,7 @@ export async function POST(req: Request) {
       wants_virality: (p.wants_virality ?? "").trim() || null,
       posted_before: (p.posted_before ?? "").trim() || null,
       social_handle: (p.social_handle ?? "").trim() || null,
+      ...(p.source ? { source: String(p.source).replace(/[^\w-]/g, "").slice(0, 40) } : {}),
       video_object_path: (p.video_object_path ?? "").trim() || null,
       video_original_name: (p.video_original_name ?? "").trim() || null,
       video_size_bytes: p.video_size_bytes ?? null,

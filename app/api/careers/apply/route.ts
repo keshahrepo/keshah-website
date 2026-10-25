@@ -28,6 +28,8 @@ type Payload = {
   wants_virality?: string;
   posted_before?: string;
   social_handle?: string;
+  /** Job board / link the applicant came from (?src=). */
+  source?: string;
   video_object_path?: string;
   video_original_name?: string;
   video_size_bytes?: number;
@@ -103,6 +105,7 @@ export async function POST(req: Request) {
       wants_virality: (p.wants_virality ?? "").trim() || null,
       posted_before: (p.posted_before ?? "").trim() || null,
       social_handle: (p.social_handle ?? "").trim() || null,
+      ...(p.source ? { source: String(p.source).replace(/[^\w-]/g, "").slice(0, 40) } : {}),
       // Video fields kept nullable for compatibility with any lingering
       // records; current flow doesn't collect them.
       video_object_path: (p.video_object_path ?? "").trim() || null,

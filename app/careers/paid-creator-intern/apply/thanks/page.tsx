@@ -18,6 +18,8 @@ import { Suspense, useEffect } from "react";
 
 const DRAFT_STORAGE_KEY = "keshah_careers_draft_id_v1";
 
+// Pre-call walkthrough (role, pay, trial). Set to the video link once recorded; the step hides while empty.
+const WALKTHROUGH_VIDEO_URL = "";
 const APP_STORE_URL = "https://apps.apple.com/us/app/keshah/id6450676544";
 const PLAY_STORE_URL =
   "https://play.google.com/store/apps/details?id=com.keshahapp.hair";
@@ -49,13 +51,13 @@ function googleCalendarUrl(startIso: string | null, endIso: string | null): stri
   const start = new Date(startIso);
   if (Number.isNaN(start.getTime())) return null;
   const endParsed = endIso ? new Date(endIso) : null;
-  const end = endParsed && !Number.isNaN(endParsed.getTime()) ? endParsed : new Date(start.getTime() + 30 * 60_000);
+  const end = endParsed && !Number.isNaN(endParsed.getTime()) ? endParsed : new Date(start.getTime() + 15 * 60_000);
   const z = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
   const q = new URLSearchParams({
     action: "TEMPLATE",
-    text: "KESHAH group interview",
+    text: "KESHAH call with Aadi",
     dates: `${z(start)}/${z(end)}`,
-    details: "30-minute group call with Aadi. We'll text you the link to join. Have your phone charged: you'll film a short video near the end.",
+    details: "15-minute call with Aadi. Your join link is in your Calendly confirmation email. Have your phone charged: you'll film a short video near the end.",
   });
   return `https://calendar.google.com/calendar/render?${q.toString()}`;
 }
@@ -96,13 +98,27 @@ function ThanksInner() {
         <h1 className="thanks-title">You&apos;re booked. Here&apos;s what to do next.</h1>
 
         <ol className="thanks-steps">
+          {WALKTHROUGH_VIDEO_URL && (
+            <li className="thanks-step">
+              <span className="thanks-step-num">1</span>
+              <div className="thanks-step-body">
+                <div className="thanks-step-head">Watch this 3-minute walkthrough before our call.</div>
+                <div className="thanks-step-sub">
+                  Aadi explains the role, the pay and the trial, so we can spend the call on you.{" "}
+                  <a href={WALKTHROUGH_VIDEO_URL} target="_blank" rel="noopener noreferrer" style={{ color: "#fff", textDecoration: "underline" }}>
+                    Watch the walkthrough
+                  </a>
+                </div>
+              </div>
+            </li>
+          )}
           <li className="thanks-step">
-            <span className="thanks-step-num">1</span>
+            <span className="thanks-step-num">{WALKTHROUGH_VIDEO_URL ? 2 : 1}</span>
             <div className="thanks-step-body">
-              <div className="thanks-step-head">Download KESHAH and go through the onboarding and quiz.</div>
+              <div className="thanks-step-head">Optional: download KESHAH and try the onboarding.</div>
               <div className="thanks-step-sub">
-                It&apos;s the app you&apos;ll be making videos about, and we&apos;ll ask about it on the call. It&apos;s
-                free to try. You don&apos;t need to start a trial, just go through the onboarding and quiz.
+                It&apos;s the app you&apos;d be making videos about. It&apos;s free to try, and you don&apos;t need to
+                start a trial.
               </div>
               {/* Desktop CTA — inverted QR card, same pattern as root. */}
               <div className="thanks-qr-card">
@@ -150,22 +166,21 @@ function ThanksInner() {
             </div>
           </li>
           <li className="thanks-step">
-            <span className="thanks-step-num">2</span>
+            <span className="thanks-step-num">{WALKTHROUGH_VIDEO_URL ? 3 : 2}</span>
             <div className="thanks-step-body">
               <div className="thanks-step-head">Save your interview time.</div>
               <div className="thanks-step-sub">
                 {bookingTime ? (
                   <>
-                    Your group interview is on{" "}
+                    Your call is on{" "}
                     <span style={{ color: "#fff", fontWeight: 600 }}>{bookingTime}</span> (your time). It&apos;s a
-                    30-minute call with Aadi, our founder, and a few other applicants. Near the end you&apos;ll film a
-                    short video on your phone, so join from somewhere quiet with good light and your phone charged.
+                    15-minute call with Aadi, our founder. Near the end you&apos;ll film a short video on your phone, so
+                    join from somewhere quiet with good light and your phone charged.
                   </>
                 ) : (
                   <>
-                    It&apos;s a 30-minute call with Aadi, our founder, and a few other applicants. Near the end
-                    you&apos;ll film a short video on your phone, so join from somewhere quiet with good light and your
-                    phone charged.
+                    It&apos;s a 15-minute call with Aadi, our founder. Near the end you&apos;ll film a short video on
+                    your phone, so join from somewhere quiet with good light and your phone charged.
                   </>
                 )}
                 {calendarUrl && (

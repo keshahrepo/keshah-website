@@ -44,6 +44,8 @@ import apply from "./apply.module.css";
 
 const SLUG = "paid-creator-intern";
 const DRAFT_STORAGE_KEY = "keshah_careers_draft_id_v1";
+const SOURCE_STORAGE_KEY = "keshah_apply_source";
+// 15-min 1-1 call. Swap to the new 1-1 event link once it exists in Calendly.
 const CALENDLY_URL = "https://calendly.com/aadi-keshah/group-interview";
 
 function newDraftId(): string {
@@ -126,7 +128,7 @@ const STEPS: Step[] = [
   // screen hands off to Calendly on tap.
   { kind: "analysis", title: "Reviewing your responses…" },
   { kind: "qualified", title: "You've been invited to interview." },
-  { kind: "calendly", title: "Select your interview time.", subtitle: "30-min group interview with Aadi, our founder. Groups of 6-8 applicants." },
+  { kind: "calendly", title: "Select your interview time.", subtitle: "15-min call with Aadi, our founder." },
 ];
 
 // Rotating checklist shown during the analysis beat. Mirrors the
@@ -144,6 +146,8 @@ const ANALYSIS_HOLD_MS = 900;
 
 export default function ApplyQuiz() {
   const [stepIdx, setStepIdx] = useState(0);
+  // Set when a hard-filter question is answered "No": shows a short not-a-fit screen.
+  const [notFit, setNotFit] = useState<string | null>(null);
   const [form, setForm] = useState<Form>(EMPTY);
   const [phoneCountry, setPhoneCountry] = useState<CountryCode>("US");
   const [phoneLocal, setPhoneLocal] = useState("");
@@ -166,6 +170,7 @@ export default function ApplyQuiz() {
   // ANALYSIS_STEPS.length, the step auto-advances to the qualified reveal.
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const draftIdRef = useRef<string>("");
+  const sourceRef = useRef("");
   const submittedRef = useRef<boolean>(false);
   const step = STEPS[stepIdx];
 
@@ -178,6 +183,11 @@ export default function ApplyQuiz() {
       window.localStorage.setItem(DRAFT_STORAGE_KEY, id);
     }
     draftIdRef.current = id;
+    // First-touch source (?src=handshake / utm_source), kept across reloads.
+    const q = new URLSearchParams(window.location.search);
+    const fromUrl = (q.get("src") || q.get("utm_source") || "").replace(/[^\w-]/g, "").slice(0, 40);
+    if (fromUrl && !window.localStorage.getItem(SOURCE_STORAGE_KEY)) window.localStorage.setItem(SOURCE_STORAGE_KEY, fromUrl);
+    sourceRef.current = window.localStorage.getItem(SOURCE_STORAGE_KEY) || fromUrl || "";
   }, []);
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) =>
@@ -208,6 +218,7 @@ export default function ApplyQuiz() {
           wants_virality: merged.wants_virality,
           posted_before: merged.posted_before,
           social_handle: merged.social_handle,
+          source: sourceRef.current || undefined,
         }),
         keepalive: true,
       });
@@ -304,6 +315,10 @@ export default function ApplyQuiz() {
   }
 
   function goBack() {
+    if (notFit) {
+      setNotFit(null);
+      return;
+    }
     if (stepIdx > 0) {
       setStepIdx((i) => i - 1);
       setError(null);
@@ -348,6 +363,7 @@ export default function ApplyQuiz() {
           wants_virality: form.wants_virality,
           posted_before: form.posted_before,
           social_handle: form.social_handle,
+          source: sourceRef.current || undefined,
         }),
       });
       if (!res.ok) {
@@ -504,6 +520,17 @@ export default function ApplyQuiz() {
           remounts on advance — that's what re-fires the CSS fade-in
           animations, matching the mobile app's per-step controllers.
         */}
+        {notFit ? (
+          <div className={apply.stepBody}>
+            <h1 className={`${styles.title} ${styles.fadeTitle}`}>Thanks for your interest.</h1>
+            <p className={`${styles.subtitle} ${styles.fadeTitle}`}>
+              {notFit}, so this role isn&apos;t the right fit right now. If that changes, you&apos;re welcome to apply again.
+            </p>
+            <button type="button" className={apply.noBtn} onClick={() => setNotFit(null)}>
+              <span>Change my answer</span>
+            </button>
+          </div>
+        ) : (
         <div key={stepIdx} className={apply.stepBody}>
           <h1 className={`${styles.title} ${styles.fadeTitle}`}>{step.title}</h1>
           {step.subtitle && (
@@ -625,7 +652,9 @@ export default function ApplyQuiz() {
                     // normal advance on soft steps. Soft = no noSub.
                     set(step.key, "no" as never);
                     saveDraft({ [step.key]: "no" as never });
-                    if (!step.noSub && stepIdx < STEPS.length - 1) {
+                    if (step.noSub) {
+                      setNotFit(step.noSub);
+                    } else if (stepIdx < STEPS.length - 1) {
                       setStepIdx((i) => i + 1);
                       setError(null);
                     }
@@ -926,12 +955,14 @@ export default function ApplyQuiz() {
             {error && <div className={apply.error}>{error}</div>}
           </div>
         </div>
+        )}
 
         <div className={styles.spacerLarge} />
 
         {/* Bottom sticky CTA. Hidden on yesno (auto-advances), analysis
-            (auto-advances on timer), and calendly (handoff). */}
-        {step.kind !== "yesno" &&
+            (auto-advances on timer), calendly (handoff) and the not-a-fit screen. */}
+        {!notFit &&
+          step.kind !== "yesno" &&
           step.kind !== "analysis" &&
           step.kind !== "calendly" && (
           <div className={`${styles.bottom} ${styles.fadeButton}`}>
