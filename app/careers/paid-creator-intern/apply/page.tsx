@@ -6,7 +6,7 @@
 // staggered fade-in matching post_auth_flow_2 (title 0.0-0.4, options
 // 0.2-0.7, button 0.5-1.0, all 700ms easeOut, kicked off at mount).
 //
-// Last step is a Calendly embed where applicants pick a group-interview
+// Last step is a Calendly embed where applicants pick a 1-1 interview
 // time. Prefills name + email from what we already collected so the
 // Calendly form is one click. Submission to Firestore fires the moment
 // the user reaches the Calendly step so we capture the applicant even
@@ -45,8 +45,8 @@ import apply from "./apply.module.css";
 const SLUG = "paid-creator-intern";
 const DRAFT_STORAGE_KEY = "keshah_careers_draft_id_v1";
 const SOURCE_STORAGE_KEY = "keshah_apply_source";
-// 15-min 1-1 call. Swap to the new 1-1 event link once it exists in Calendly.
-const CALENDLY_URL = "https://calendly.com/aadi-keshah/group-interview";
+// 15-min 1-1 call with Aadi.
+const CALENDLY_URL = "https://calendly.com/aadi-keshah/creator-interview";
 
 function newDraftId(): string {
   const t = Date.now().toString(36);
