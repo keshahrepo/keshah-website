@@ -59,8 +59,7 @@ import {
   type ProvenRemake,
   type ProvenStatus,
   type ProvenVideo,
-  type SlotAttribution,
-} from "./proven";
+  type SlotAttribution, cleanLines, type ScriptLine } from "./proven";
 import { fetchRecentPosts, fetchTranscript, fetchVideoViews, postKey, type ScrapedPost } from "./scrape";
 import type { CreatorPost, CreatorProfile, Platform, YyyyMmDd } from "./types";
 
@@ -149,6 +148,7 @@ export function toProven(d: DocumentData): ProvenVideo {
     ...(typeof d.first_frame === "string" && d.first_frame ? { first_frame: d.first_frame } : {}),
     ...(typeof d.on_screen_text === "string" && d.on_screen_text ? { on_screen_text: d.on_screen_text } : {}),
     ...(d.photo && typeof d.photo === "object" && typeof d.photo.url === "string" && d.photo.url ? { photo: d.photo } : {}),
+    ...(cleanLines(d.lines).length ? { lines: cleanLines(d.lines) } : {}),
     ...(typeof d.content_script_id === "string" && d.content_script_id ? { content_script_id: d.content_script_id } : {}),
   };
 }
@@ -635,6 +635,8 @@ export interface PublicProven {
   first_frame?: string;
   on_screen_text?: string;
   photo?: { point: 1 | 2 | 3; url: string; caption: string };
+  /** Line-by-line script (3-step format): when present the app shows these instead of hook/points/ending. */
+  lines?: ScriptLine[];
 }
 
 /** What "I posted it" found for a slot (null until something was attributed). */
@@ -675,6 +677,7 @@ export function publicProven(id: string, v: ProvenVideo): PublicProven {
     ...(v.first_frame ? { first_frame: v.first_frame } : {}),
     ...(v.on_screen_text ? { on_screen_text: v.on_screen_text } : {}),
     ...(v.photo ? { photo: { point: v.photo.point, url: v.photo.url, caption: v.photo.caption ?? "" } } : {}),
+    ...(v.lines?.length ? { lines: v.lines } : {}),
   };
 }
 

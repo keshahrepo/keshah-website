@@ -148,6 +148,34 @@ export interface TiredCheck {
   original_weekly_gain: number | null;
 }
 
+/** One line of a line-by-line script. `label` is a short section name ("Step one"); `photo` is shown on top while it's said. */
+export interface ScriptLine {
+  label?: string;
+  text: string;
+  hands?: string;
+  photo?: { url: string; caption?: string };
+}
+
+/** Cleans stored lines (older or hand-written docs never break readers). */
+export function cleanLines(v: unknown): ScriptLine[] {
+  if (!Array.isArray(v)) return [];
+  const out: ScriptLine[] = [];
+  for (const x of v) {
+    const r = x && typeof x === "object" ? (x as Record<string, unknown>) : {};
+    const text = typeof r.text === "string" ? r.text.trim() : "";
+    if (!text) continue;
+    const p = r.photo && typeof r.photo === "object" ? (r.photo as Record<string, unknown>) : null;
+    const url = p && typeof p.url === "string" ? p.url.trim() : "";
+    out.push({
+      ...(typeof r.label === "string" && r.label.trim() ? { label: r.label.trim() } : {}),
+      text,
+      ...(typeof r.hands === "string" && r.hands.trim() ? { hands: r.hands.trim() } : {}),
+      ...(url ? { photo: { url, ...(p && typeof p.caption === "string" && p.caption ? { caption: p.caption } : {}) } } : {}),
+    });
+  }
+  return out;
+}
+
 export interface ProvenVideo {
   source_url: string | null;
   platform: Platform | null;
@@ -216,6 +244,8 @@ export interface ProvenVideo {
   first_frame?: string;
   on_screen_text?: string;
   photo?: { point: 1 | 2 | 3; url: string; caption: string };
+  /** Line-by-line scripts (the 3-step format): what to say, what to do with the hands, the photo to put on top. */
+  lines?: ScriptLine[];
   /** The ContentScripts doc this idea came from. */
   content_script_id?: string;
   /** Beat generation bookkeeping (proven-beats.ts). */
