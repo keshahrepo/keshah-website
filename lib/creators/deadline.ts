@@ -12,7 +12,7 @@
  * Nothing here ever withdraws an offer on its own: a missed deadline only
  * shows up on the founder's Home ("deadline" need).
  */
-import { CREATOR_SIGNOFF, lightEmailHtml } from "./invite";
+import { CREATOR_FROM_NAME, CREATOR_SIGNOFF, OFFER_FROM_NAME, OFFER_SIGNOFF, creatorKickoffUrl, lightEmailHtml } from "./invite";
 
 export const DEADLINE_TZ = "America/New_York";
 /** Days after the acceptance date (in ET) the deadline falls on. */
@@ -169,6 +169,13 @@ export function firstNameOf(d: OfferDoc): string {
 export function reminderPush(deadlineIso: string, now: Date): { title: string; body: string; data: Record<string, string> } {
   // The window opens the evening before; if the cron only gets to it after midnight ET, "tomorrow" would be wrong.
   const sameDay = dateIn(now) === dateIn(new Date(deadlineIso));
+  if (creatorKickoffUrl()) {
+    return {
+      title: "Your KESHAH offer is waiting",
+      body: "Book your 15-minute kickoff with Aadi to keep your spot. The link is in your offer email.",
+      data: { type: "contract" },
+    };
+  }
   return {
     title: "Your KESHAH offer is waiting",
     body: sameDay
@@ -178,7 +185,18 @@ export function reminderPush(deadlineIso: string, now: Date): { title: string; b
   };
 }
 
-export function reminderEmail(input: { firstName: string; deadlineIso: string }): { subject: string; text: string; html: string } {
+export function reminderEmail(input: { firstName: string; deadlineIso: string; kickoffUrl?: string | null }): { subject: string; text: string; html: string; fromName: string } {
+  const kickoff = input.kickoffUrl === undefined ? creatorKickoffUrl() : input.kickoffUrl;
+  if (kickoff) {
+    const k = [
+      { text: `Hi ${input.firstName || "there"},` },
+      { text: "Quick reminder about your offer. If you haven't booked your 15-minute kickoff with me yet, here's the link:" },
+      { text: kickoff },
+      { text: `Please book a time before ${deadlineLong(input.deadlineIso)} to keep your spot. If we already have a time, you're all set.`, bold: true },
+      { text: "If anything is holding you up, just reply to this email." },
+    ];
+    return { subject: "Your KESHAH offer is waiting", text: [...k.flatMap((x) => [x.text, ""]), OFFER_SIGNOFF].join("\n"), html: lightEmailHtml(k, OFFER_SIGNOFF), fromName: OFFER_FROM_NAME };
+  }
   const paras = [
     { text: `Hi ${input.firstName || "there"},` },
     { text: "Just a quick reminder that your contract still needs your signature." },
@@ -187,7 +205,7 @@ export function reminderEmail(input: { firstName: string; deadlineIso: string })
     { text: "If anything is holding you up, just reply to this email and I'll help." },
   ];
   const text = [...paras.flatMap((x) => [x.text, ""]), CREATOR_SIGNOFF].join("\n");
-  return { subject: "Your KESHAH offer is waiting", text, html: lightEmailHtml(paras) };
+  return { subject: "Your KESHAH offer is waiting", text, html: lightEmailHtml(paras), fromName: CREATOR_FROM_NAME };
 }
 
 export function withdrawEmail(input: { firstName: string; deadlineIso: string | null }): { subject: string; text: string; html: string } {

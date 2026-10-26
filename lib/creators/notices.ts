@@ -145,6 +145,13 @@ export function firstDayEvePush(date: YyyyMmDd, videos: number): PushMessage {
 }
 
 export function warmupReminderPush(day: number, of: number): PushMessage {
+  if (of === 1) {
+    return {
+      title: "Your 20-minute warm-up",
+      body: "Spend 10 minutes on TikTok and 10 on Instagram with your new accounts, like a real user would, then tick it off.",
+      data: { type: "warmup" },
+    };
+  }
   return {
     title: `Warm-up day ${day} of ${of}`,
     body: "Spend 10 minutes on TikTok and 10 on Instagram, like a real user would, then tick it off.",

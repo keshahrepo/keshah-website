@@ -61,6 +61,16 @@ function esc(s: string): string {
 export const CREATOR_FROM_NAME = "McKenzie from KESHAH";
 export const CREATOR_SIGNOFF = "McKenzie\nCreator Coordinator, KESHAH";
 
+/** New offers with a kickoff call come from the founder: they've been talking to him. */
+export const OFFER_FROM_NAME = "Aadi from KESHAH";
+export const OFFER_SIGNOFF = "Aadi\nFounder, KESHAH";
+
+/** The founder's 15-min kickoff booking link (Calendly). Set: the offer email asks them to book it instead of doing setup alone. */
+export function creatorKickoffUrl(): string | null {
+  const u = process.env.CREATOR_KICKOFF_URL?.trim();
+  return u && /^https:\/\//.test(u) ? u : null;
+}
+
 /** The KESHAH Creators app link for acceptance emails (TestFlight now, App Store later). Unset: the web portal. */
 export function creatorAppUrl(): string | null {
   const u = process.env.CREATOR_APP_URL?.trim();
@@ -78,10 +88,14 @@ export function welcomeEmail(input: {
   existing?: boolean;
   /** The contract deadline as text, e.g. "Tuesday, October 14 at 11:59 PM ET" (lib/creators/deadline.ts deadlineLong). New offers only. */
   deadlineText?: string;
+  /** The kickoff booking link (default: CREATOR_KICKOFF_URL). Null: the self-serve offer. */
+  kickoffUrl?: string | null;
 }): {
   subject: string;
   text: string;
   html: string;
+  /** Who it should come from (the founder for a kickoff offer). */
+  fromName: string;
 } {
   const first = input.firstName || "there";
   if (input.existing) {
@@ -111,9 +125,11 @@ export function welcomeEmail(input: {
       "Best,",
       CREATOR_SIGNOFF,
     ].join("\n");
-    return { subject: "Your KESHAH Creators app", text, html: `<pre style="font-family:inherit;white-space:pre-wrap">${esc(text)}</pre>` };
+    return { subject: "Your KESHAH Creators app", text, html: `<pre style="font-family:inherit;white-space:pre-wrap">${esc(text)}</pre>`, fromName: CREATOR_FROM_NAME };
   }
   const app = creatorAppUrl();
+  const kickoff = input.kickoffUrl === undefined ? creatorKickoffUrl() : input.kickoffUrl;
+  if (kickoff) return kickoffOfferEmail(first, kickoff, app, input.link, input.deadlineText);
   // The @keshah.com address isn't in this email on purpose: the app's Accounts
   // step shows it when they need it, with how to use it.
   //
@@ -150,7 +166,7 @@ export function welcomeEmail(input: {
     "",
     "The role",
     "",
-    `• 1-month paid trial: ${trial}`,
+    `• Paid trial: ${trial}`,
     `• If you pass your trial: ${after}`,
     "",
     closing,
@@ -175,14 +191,78 @@ export function welcomeEmail(input: {
     `</ol>`,
     `<p style="margin:0 0 6px"><b>The role</b></p>`,
     `<ul style="margin:0 0 16px;padding-left:20px">`,
-    `<li style="margin-bottom:6px"><b>1-month paid trial:</b> ${esc(trial)}</li>`,
+    `<li style="margin-bottom:6px"><b>Paid trial:</b> ${esc(trial)}</li>`,
     `<li><b>If you pass your trial:</b> ${esc(after)}</li>`,
     `</ul>`,
     p(esc(closing)),
     `<p style="margin:0">${esc(CREATOR_SIGNOFF).replace(/\n/g, "<br>")}</p>`,
     `</div>`,
   ].join("");
-  return { subject: "Your offer from KESHAH", text, html };
+  return { subject: "Your offer from KESHAH", text, html, fromName: CREATOR_FROM_NAME };
+}
+
+/**
+ * The offer when there's a kickoff call: book 15 minutes with Aadi and set
+ * everything up together (contract, app, accounts). The app link is there so
+ * they can read the contract first.
+ */
+function kickoffOfferEmail(
+  first: string,
+  kickoff: string,
+  app: string | null,
+  setPasswordLink: string,
+  deadlineText?: string,
+): { subject: string; text: string; html: string; fromName: string } {
+  const opener = "Congratulations! I'd love to have you on the KESHAH creator team.";
+  const book = "Next step: book a 15-minute kickoff with me. We'll set everything up together on the call: your contract, the app and your new accounts. Have your phone with you.";
+  const deadline = deadlineText ? `Please book a time before ${deadlineText} to confirm your spot.` : null;
+  const read = app
+    ? "If you'd like to read your contract before the call, it's in the KESHAH Creators app. It's in early access through TestFlight, Apple's app for early access, so install TestFlight first if it asks. Sign in with the email this message was sent to."
+    : "If you'd like to read your contract before the call, set your password here and it's in your portal. The link works once and expires in 7 days.";
+  const trial = "20 posting days, 3 videos a weekday, $300 total";
+  const after = "5 videos a weekday, $500/month to start, growing to $1,100, plus bonuses ($15 when a video hits 100K views, $100 total at 1M)";
+  const closing = "If you have any questions before then, just reply to this email.";
+  const text = [
+    `Hi ${first},`,
+    "",
+    opener,
+    "",
+    book,
+    kickoff,
+    "",
+    ...(deadline ? [deadline, ""] : []),
+    read,
+    app ?? setPasswordLink,
+    "",
+    "The role",
+    "",
+    `• Paid trial: ${trial}`,
+    `• If you pass your trial: ${after}`,
+    "",
+    closing,
+    "",
+    OFFER_SIGNOFF,
+  ].join("\n");
+  const p = (inner: string) => `<p style="margin:0 0 16px">${inner}</p>`;
+  const html = [
+    `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#222">`,
+    p(`Hi ${esc(first)},`),
+    p(esc(opener)),
+    p(`<b>Next step:</b> <a href="${esc(kickoff)}">book a 15-minute kickoff with me</a>. We'll set everything up together on the call: your contract, the app and your new accounts. Have your phone with you.`),
+    deadline ? p(`<b>${esc(deadline)}</b>`) : "",
+    p(app
+      ? `If you'd like to read your contract before the call, it's in the <a href="${esc(app)}">KESHAH Creators app</a>. It's in early access through TestFlight, Apple's app for early access, so install TestFlight first if it asks. Sign in with the email this message was sent to.`
+      : `If you'd like to read your contract before the call, <a href="${esc(setPasswordLink)}">set your password</a> and it's in your portal. The link works once and expires in 7 days.`),
+    `<p style="margin:0 0 6px"><b>The role</b></p>`,
+    `<ul style="margin:0 0 16px;padding-left:20px">`,
+    `<li style="margin-bottom:6px"><b>Paid trial:</b> ${esc(trial)}</li>`,
+    `<li><b>If you pass your trial:</b> ${esc(after)}</li>`,
+    `</ul>`,
+    p(esc(closing)),
+    `<p style="margin:0">${esc(OFFER_SIGNOFF).replace(/\n/g, "<br>")}</p>`,
+    `</div>`,
+  ].join("");
+  return { subject: "Your offer from KESHAH", text, html, fromName: OFFER_FROM_NAME };
 }
 
 /**
@@ -190,12 +270,12 @@ export function welcomeEmail(input: {
  * optional bold, McKenzie's sign-off. No images or tracking. Send the plain
  * text alongside.
  */
-export function lightEmailHtml(paragraphs: { text: string; bold?: boolean }[]): string {
+export function lightEmailHtml(paragraphs: { text: string; bold?: boolean }[], signoff: string = CREATOR_SIGNOFF): string {
   const p = (inner: string) => `<p style="margin:0 0 16px">${inner}</p>`;
   return [
     `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#222">`,
     ...paragraphs.map((x) => p(x.bold ? `<b>${esc(x.text)}</b>` : esc(x.text))),
-    `<p style="margin:0">${esc(CREATOR_SIGNOFF).replace(/\n/g, "<br>")}</p>`,
+    `<p style="margin:0">${esc(signoff).replace(/\n/g, "<br>")}</p>`,
     `</div>`,
   ].join("");
 }

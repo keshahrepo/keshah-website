@@ -22,7 +22,7 @@
  * founder's Home ("setup" need), with Give 3 more days / End agreement.
  */
 import { addDaysYmd, dateIn, deadlineLong, firstNameOf, offerOpen, REMINDER_LEAD_MS, type OfferDoc } from "./deadline";
-import { CREATOR_SIGNOFF, lightEmailHtml } from "./invite";
+import { CREATOR_FROM_NAME, CREATOR_SIGNOFF, OFFER_FROM_NAME, OFFER_SIGNOFF, creatorKickoffUrl, lightEmailHtml } from "./invite";
 
 export const SETUP_DAYS = 3;
 export const SETUP_EXTEND_DAYS = 3;
@@ -180,7 +180,17 @@ export function getStartedDue(d: GetStartedDoc, now: Date): boolean {
   return t >= Date.parse(accepted) + GET_STARTED_AFTER_MS && t < deadline - REMINDER_LEAD_MS;
 }
 
-export function getStartedEmail(input: { firstName: string; appUrl: string | null; signInEmail: string; deadlineIso: string }): { subject: string; text: string; html: string } {
+export function getStartedEmail(input: { firstName: string; appUrl: string | null; signInEmail: string; deadlineIso: string; kickoffUrl?: string | null }): { subject: string; text: string; html: string; fromName: string } {
+  const kickoff = input.kickoffUrl === undefined ? creatorKickoffUrl() : input.kickoffUrl;
+  if (kickoff) {
+    const k = [
+      { text: `Hi ${input.firstName || "there"},` },
+      { text: "Just checking you saw my email. If you haven't booked your 15-minute kickoff yet, here's the link. We'll set everything up together on the call." },
+      { text: kickoff },
+      { text: `Your offer is open until ${deadlineLong(input.deadlineIso)}. If we already have a time, see you then!`, bold: true },
+    ];
+    return { subject: "Your KESHAH spot is waiting", text: [...k.flatMap((x) => [x.text, ""]), OFFER_SIGNOFF].join("\n"), html: lightEmailHtml(k, OFFER_SIGNOFF), fromName: OFFER_FROM_NAME };
+  }
   const paras = [
     { text: `Hi ${input.firstName || "there"},` },
     { text: "Just checking you saw your offer. To lock in your spot:" },
@@ -191,7 +201,7 @@ export function getStartedEmail(input: { firstName: string; appUrl: string | nul
     { text: "If anything is holding you up, just reply to this email and I'll help." },
   ];
   const text = [...paras.flatMap((x) => [x.text, ""]), CREATOR_SIGNOFF].join("\n");
-  return { subject: "Your KESHAH spot is waiting", text, html: lightEmailHtml(paras) };
+  return { subject: "Your KESHAH spot is waiting", text, html: lightEmailHtml(paras), fromName: CREATOR_FROM_NAME };
 }
 
 /** SetupInput from a raw ContentCreators doc + its onboarding state and step checks (db.onboardingSteps). */

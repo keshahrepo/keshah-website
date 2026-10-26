@@ -19,7 +19,7 @@ export interface MonthData {
   bonusCents: number;
   totalCents: number;
   nextLevel: { nextBaseCents: number | null; monthsNeeded: number | null; earliestMonth: string | null };
-  trial: { postedDays: number; isInTrial: boolean; trialEndsAfterDate?: string };
+  trial: { postedDays: number; isInTrial: boolean; trialEndsAfterDate?: string; requiredDays?: number };
   days: { date: string; state: "posted" | "off" | "off_requested" | "missed" | "pending"; videos: number }[];
 }
 

@@ -234,7 +234,7 @@ export function creatorProgress(input: ProgressInput, now: Date = new Date()): C
     at: warmupDone ? warmupDays[WARMUP_DAYS - 1] : null,
     done: warmDone,
     waitingOn: "creator",
-    ...(warmDone && !warmupDays.length ? {} : { detail: `${Math.min(warmupDays.length, WARMUP_DAYS)} of ${WARMUP_DAYS} days` }),
+    ...(warmDone && !warmupDays.length ? {} : { detail: `${Math.min(warmupDays.length, WARMUP_DAYS)} of ${WARMUP_DAYS} day${WARMUP_DAYS === 1 ? "" : "s"}` }),
   });
   // The link doesn't hold up the warm-up, only the first posting day. A link
   // without a campaign tag isn't ready either: nothing they bring in would count.
@@ -330,7 +330,7 @@ export function progressStepSummary(p: CreatorProgress): ProgressStepSummary {
   if (step.key === "warmup") {
     const done = Number((step.detail ?? "0").split(" ")[0]) || 0;
     // Days done, same as the detail screen ("1 of 3 days"), not the day they're on.
-    label = `Warm-up · ${Math.min(done, WARMUP_DAYS)} of ${WARMUP_DAYS} days`;
+    label = WARMUP_DAYS === 1 ? "Warm-up" : `Warm-up · ${Math.min(done, WARMUP_DAYS)} of ${WARMUP_DAYS} days`;
   } else if (step.key === "trial" && step.detail?.startsWith("Day ")) {
     label = `Trial ${step.detail.replace(/^Day/, "day").replace(/, your call$/, "")}`;
   }

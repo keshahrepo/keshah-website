@@ -23,7 +23,7 @@ import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { requireCronSecret } from "@/lib/support/auth";
 import { CREATORS_COLLECTION, getOnboarding, listCreators, onboardingSteps, toPostingDay } from "@/lib/creators/db";
 import { emailConfigured, sendEmail } from "@/lib/email";
-import { CREATOR_FROM_NAME } from "@/lib/creators/invite";
+import { CREATOR_FROM_NAME, CREATOR_SIGNOFF, lightEmailHtml } from "@/lib/creators/invite";
 import { SETUP_DAILY_HOUR, SETUP_LAST_DAY_HOUR, setupInputFromDoc, setupNudgeEmail, setupNudgeKind, setupNudgePush, setupState } from "@/lib/creators/setup-deadline";
 import { localDateIn } from "@/lib/creators/time";
 import { completeVideoCount, isScheduledDay, videosRequiredOn } from "@/lib/creators/pay";
@@ -51,12 +51,23 @@ async function sendOnce(markerRef: DocumentReference, field: string, date: strin
     return;
   }
   const r = await notify(target, msg);
-  if (!r || r.sent === 0) {
-    await markerRef.update({ [field]: FieldValue.delete() }).catch(() => {});
-    row.result = r ? "no devices" : "failed";
-  } else {
+  if (r && r.sent > 0) {
     row.result = "sent";
+    return;
   }
+  // No notifications on their phone: the same reminder by email, so it still reaches them.
+  if (target.email && emailConfigured()) {
+    try {
+      const paras = [{ text: "Hi," }, { text: msg.body }, { text: "Open the KESHAH Creators app to see your day." }];
+      await sendEmail({ to: target.email, subject: msg.title, text: [...paras.flatMap((x) => [x.text, ""]), CREATOR_SIGNOFF].join("\n"), html: lightEmailHtml(paras), fromName: CREATOR_FROM_NAME });
+      row.result = "emailed (no devices)";
+      return;
+    } catch (e) {
+      console.error("nudge email failed:", e);
+    }
+  }
+  await markerRef.update({ [field]: FieldValue.delete() }).catch(() => {});
+  row.result = r ? "no devices" : "failed";
 }
 
 export async function GET(req: Request) {

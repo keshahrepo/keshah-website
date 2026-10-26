@@ -160,8 +160,8 @@ export default function MonthTab({ m }: { m: MonthData }) {
       <Eyebrow style={{ marginTop: 32 }}>Trial</Eyebrow>
       <Group style={{ padding: "16px 20px", fontSize: 14 }}>
         {m.trial.isInTrial
-          ? `You've posted ${m.trial.postedDays} of your first 10 days. Keep going.`
-          : `Trial done. Your first 10 posting days were finished on ${fmtDateShort(m.trial.trialEndsAfterDate!)}.`}
+          ? `You've posted ${m.trial.postedDays} of your ${m.trial.requiredDays ?? 10} trial days. Keep going.`
+          : `Trial done. Your ${m.trial.requiredDays ?? 10} trial days were finished on ${fmtDateShort(m.trial.trialEndsAfterDate!)}.`}
       </Group>
 
       <Eyebrow style={{ marginTop: 32 }}>Bonuses this month</Eyebrow>

@@ -16,8 +16,9 @@ import { emailConfigured, sendEmail } from "@/lib/email";
 import { CREATORS_COLLECTION, CreatorDataError, mapCreatorStatus } from "./db";
 import { contractSetupProblem, getContractSettings, getTemplate, sendContract } from "./contract";
 import { groupsClientFromEnv, groupsConfigured, provisionCreatorGroup } from "./google-groups";
-import { CREATOR_FROM_NAME, newInvite, setPasswordUrl, welcomeEmail } from "./invite";
+import { newInvite, setPasswordUrl, welcomeEmail } from "./invite";
 import { contractDeadlineFor, deadlineLong, deadlineOf, getsDeadline } from "./deadline";
+import { assignPooledLink } from "./link-pool";
 import type { AcceptRecord, AcceptStepKey, AcceptStepRecord } from "./types";
 
 export const ACCEPT_STEPS: AcceptStepKey[] = ["group", "invite", "contract"];
@@ -156,7 +157,7 @@ export async function acceptCreator(id: string, opts: AcceptOptions): Promise<Ac
             // Plain text only: reads like a personal Gmail message, which
             // keeps it in Primary instead of Promotions.
             // New offers send the light HTML version (with the plain text alongside); the existing-creator note stays plain.
-            await sendEmail({ to: personal, subject: mail.subject, text: mail.text, html: d.status === "active" || d.status === "leaving" ? undefined : mail.html, fromName: CREATOR_FROM_NAME });
+            await sendEmail({ to: personal, subject: mail.subject, text: mail.text, html: d.status === "active" || d.status === "leaving" ? undefined : mail.html, fromName: mail.fromName });
             inviteEmailedNow = true;
             await record("invite", "done", `Emailed ${personal}. Link expires ${invite.expires_at.slice(0, 10)}.`);
           } catch (e) {
@@ -200,6 +201,10 @@ export async function acceptCreator(id: string, opts: AcceptOptions): Promise<Ac
       }
     }
     await r.update(top);
+    // New offers get a tracking link from the pool now, so the bio step never waits on the founder.
+    if (d.status !== "active" && d.status !== "leaving") {
+      await assignPooledLink(id).catch((e) => console.error("link pool assign failed:", e));
+    }
   } finally {
     await r.update({ "accept.running_until": null }).catch((e) => console.error("accept unlock failed:", e));
   }

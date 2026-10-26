@@ -48,7 +48,7 @@ export async function sendGetStartedEmails(now: Date = new Date(), opts: { dry?:
     }
     try {
       const m = getStartedEmail({ firstName: firstNameOf(d), appUrl: creatorAppUrl(), signInEmail: email, deadlineIso: deadlineOf(d)! });
-      await sendEmail({ to: email, subject: m.subject, text: m.text, html: m.html, fromName: CREATOR_FROM_NAME });
+      await sendEmail({ to: email, subject: m.subject, text: m.text, html: m.html, fromName: m.fromName });
       row.result = "sent";
       await logEvent(doc.id, { type: "get_started_sent", at, actor: "system", detail: "Get started email (24h, app not opened)" }).catch(() => {});
     } catch (e) {

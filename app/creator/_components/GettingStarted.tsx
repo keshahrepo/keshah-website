@@ -223,7 +223,7 @@ export default function GettingStarted({ data, onDone, onProfile }: { data: Port
   const statusLine = allDone
     ? "Every step is done"
     : doneCount === WARM && !warmDone
-      ? `Just your ${cfg.warmup_days}-day warm-up left`
+      ? cfg.warmup_days === 1 ? "Just your 20-minute warm-up left" : `Just your ${cfg.warmup_days}-day warm-up left`
       : doneCount === 0
         ? "Let's get you set up"
         : `${doneByStep.length - doneCount} to go`;
@@ -254,7 +254,7 @@ export default function GettingStarted({ data, onDone, onProfile }: { data: Port
         </div>
       ) : (
         <div className="cp-head-enter" style={{ fontSize: 13, color: C.faint, marginBottom: 24 }}>
-          Do steps 1 to 7 in one sitting. Then step 8, the warm-up, runs over your first {cfg.warmup_days} days. Don&apos;t post any
+          Do steps 1 to 7 in one sitting. Then step 8, the warm-up{cfg.warmup_days === 1 ? ", takes 20 minutes" : `, runs over your first ${cfg.warmup_days} days`}. Don&apos;t post any
           videos until every step here is done. Once they&apos;re all ticked off, your full portal opens up.
         </div>
       )}

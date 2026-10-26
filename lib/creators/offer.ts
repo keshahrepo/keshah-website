@@ -82,7 +82,7 @@ export async function sendContractReminders(now: Date = new Date(), opts: { dry?
     if (email && emailConfigured()) {
       try {
         const m = reminderEmail({ firstName: firstNameOf(d), deadlineIso: deadline });
-        await sendEmail({ to: email, subject: m.subject, text: m.text, html: m.html, fromName: CREATOR_FROM_NAME });
+        await sendEmail({ to: email, subject: m.subject, text: m.text, html: m.html, fromName: m.fromName });
         mailed = true;
       } catch (e) {
         mailErr = errMsg(e);
