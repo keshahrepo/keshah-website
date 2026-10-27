@@ -72,10 +72,6 @@ export function afterTrialText(plan: { videos: number; baseCents: number }): str
 export const AFTER_TRIAL_TEXT =
   "5 videos a weekday for $1,000/month, or 3 a weekday for $600/month, plus bonuses ($15 when a video hits 100K views, $100 total at 1M)";
 
-/** New offers with a kickoff call come from the founder: they've been talking to him. */
-export const OFFER_FROM_NAME = "Aadi from KESHAH";
-export const OFFER_SIGNOFF = "Aadi\nFounder, KESHAH";
-
 /** The founder's 15-min kickoff booking link (Calendly). Set: the offer email asks them to book it instead of doing setup alone. */
 export function creatorKickoffUrl(): string | null {
   const u = process.env.CREATOR_KICKOFF_URL?.trim();
@@ -216,9 +212,9 @@ export function welcomeEmail(input: {
 }
 
 /**
- * The offer when there's a kickoff call: book 15 minutes with Aadi and set
- * everything up together (contract, app, accounts). The app link is there so
- * they can read the contract first.
+ * The offer when there's a kickoff call: the original offer email, with the
+ * next steps changed to "book your kickoff" (contract, app and accounts are
+ * done together on the call).
  */
 function kickoffOfferEmail(
   first: string,
@@ -228,26 +224,28 @@ function kickoffOfferEmail(
   deadlineText?: string,
   afterText: string = AFTER_TRIAL_TEXT,
 ): { subject: string; text: string; html: string; fromName: string } {
-  const opener = "Congratulations! I'd love to have you on the KESHAH creator team.";
-  const book = "Next step: book a 15-minute kickoff with me. We'll set everything up together on the call: your contract, the app and your new accounts. Have your phone with you.";
-  const deadline = deadlineText ? `Please book a time before ${deadlineText} to confirm your spot.` : null;
-  const read = app
-    ? "If you'd like to read your contract before the call, it's in the KESHAH Creators app. It's in early access through TestFlight, Apple's app for early access, so install TestFlight first if it asks. Sign in with the email this message was sent to."
-    : "If you'd like to read your contract before the call, set your password here and it's in your portal. The link works once and expires in 7 days.";
+  const opener =
+    "Congratulations! We've decided to move forward with you for the content creator role at KESHAH. We've reviewed over 250 applications and yours stood out. Fewer than 6% of applicants get into our creator program, so we're excited to have you on board.";
+  const deadline = deadlineText ? `Please book your kickoff call by ${deadlineText} to confirm your spot.` : null;
+  const step2 = "On the call we'll sign your contract and set up your app and accounts together. Have your phone with you.";
+  const step3 = app
+    ? `If you'd like to read your contract before the call, download the KESHAH Creators app: ${app}`
+    : `If you'd like to read your contract before the call, set your password (this link works once and expires in 7 days): ${setPasswordLink}`;
   const trial = TRIAL_TEXT;
   const after = afterText;
-  const closing = "If you have any questions before then, just reply to this email.";
+  const closing = "We are excited to have you on the team. If you have any questions, feel free to reply to this email.";
   const text = [
     `Hi ${first},`,
     "",
     opener,
     "",
-    book,
-    kickoff,
-    "",
     ...(deadline ? [deadline, ""] : []),
-    read,
-    app ?? setPasswordLink,
+    "Next steps",
+    "",
+    `1. Book a 15-minute kickoff call: ${kickoff}`,
+    `2. ${step2}`,
+    `3. ${step3}`,
+    ...(app ? ["   It's in early access through TestFlight, Apple's app for early access, so install TestFlight first if it asks."] : []),
     "",
     "The role",
     "",
@@ -256,28 +254,30 @@ function kickoffOfferEmail(
     "",
     closing,
     "",
-    OFFER_SIGNOFF,
+    CREATOR_SIGNOFF,
   ].join("\n");
   const p = (inner: string) => `<p style="margin:0 0 16px">${inner}</p>`;
   const html = [
     `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#222">`,
     p(`Hi ${esc(first)},`),
     p(esc(opener)),
-    p(`<b>Next step:</b> <a href="${esc(kickoff)}">book a 15-minute kickoff with me</a>. We'll set everything up together on the call: your contract, the app and your new accounts. Have your phone with you.`),
     deadline ? p(`<b>${esc(deadline)}</b>`) : "",
-    p(app
-      ? `If you'd like to read your contract before the call, it's in the <a href="${esc(app)}">KESHAH Creators app</a>. It's in early access through TestFlight, Apple's app for early access, so install TestFlight first if it asks. Sign in with the email this message was sent to.`
-      : `If you'd like to read your contract before the call, <a href="${esc(setPasswordLink)}">set your password</a> and it's in your portal. The link works once and expires in 7 days.`),
+    `<p style="margin:0 0 6px"><b>Next steps</b></p>`,
+    `<ol style="margin:0 0 16px;padding-left:20px">`,
+    `<li style="margin-bottom:6px"><a href="${esc(kickoff)}">Book a 15-minute kickoff call</a>.</li>`,
+    `<li style="margin-bottom:6px">${esc(step2)}</li>`,
+    `<li>${app ? `If you'd like to read your contract before the call, download the <a href="${esc(app)}">KESHAH Creators app</a>. It's in early access through TestFlight, Apple's app for early access, so install TestFlight first if it asks.` : `If you'd like to read your contract before the call, <a href="${esc(setPasswordLink)}">set your password</a> (this link works once and expires in 7 days).`}</li>`,
+    `</ol>`,
     `<p style="margin:0 0 6px"><b>The role</b></p>`,
     `<ul style="margin:0 0 16px;padding-left:20px">`,
     `<li style="margin-bottom:6px"><b>Paid trial:</b> ${esc(trial)}</li>`,
     `<li><b>If you pass your trial:</b> ${esc(after)}</li>`,
     `</ul>`,
     p(esc(closing)),
-    `<p style="margin:0">${esc(OFFER_SIGNOFF).replace(/\n/g, "<br>")}</p>`,
+    `<p style="margin:0">${esc(CREATOR_SIGNOFF).replace(/\n/g, "<br>")}</p>`,
     `</div>`,
   ].join("");
-  return { subject: "Your offer from KESHAH", text, html, fromName: OFFER_FROM_NAME };
+  return { subject: "Your offer from KESHAH", text, html, fromName: CREATOR_FROM_NAME };
 }
 
 /**

@@ -22,7 +22,7 @@
  * founder's Home ("setup" need), with Give 3 more days / End agreement.
  */
 import { addDaysYmd, dateIn, deadlineLong, firstNameOf, offerOpen, REMINDER_LEAD_MS, type OfferDoc } from "./deadline";
-import { CREATOR_FROM_NAME, CREATOR_SIGNOFF, OFFER_FROM_NAME, OFFER_SIGNOFF, creatorKickoffUrl, lightEmailHtml } from "./invite";
+import { CREATOR_FROM_NAME, CREATOR_SIGNOFF, creatorKickoffUrl, lightEmailHtml } from "./invite";
 
 export const SETUP_DAYS = 3;
 export const SETUP_EXTEND_DAYS = 3;
@@ -185,11 +185,12 @@ export function getStartedEmail(input: { firstName: string; appUrl: string | nul
   if (kickoff) {
     const k = [
       { text: `Hi ${input.firstName || "there"},` },
-      { text: "Just checking you saw my email. If you haven't booked your 15-minute kickoff yet, here's the link. We'll set everything up together on the call." },
+      { text: "Just checking you saw your offer. To lock in your spot, book your 15-minute kickoff call:" },
       { text: kickoff },
-      { text: `Your offer is open until ${deadlineLong(input.deadlineIso)}. If we already have a time, see you then!`, bold: true },
+      { text: `Your offer is open until ${deadlineLong(input.deadlineIso)}.`, bold: true },
+      { text: "If anything is holding you up, just reply to this email and I'll help." },
     ];
-    return { subject: "Your KESHAH spot is waiting", text: [...k.flatMap((x) => [x.text, ""]), OFFER_SIGNOFF].join("\n"), html: lightEmailHtml(k, OFFER_SIGNOFF), fromName: OFFER_FROM_NAME };
+    return { subject: "Your KESHAH spot is waiting", text: [...k.flatMap((x) => [x.text, ""]), CREATOR_SIGNOFF].join("\n"), html: lightEmailHtml(k), fromName: CREATOR_FROM_NAME };
   }
   const paras = [
     { text: `Hi ${input.firstName || "there"},` },

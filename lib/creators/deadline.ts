@@ -12,7 +12,7 @@
  * Nothing here ever withdraws an offer on its own: a missed deadline only
  * shows up on the founder's Home ("deadline" need).
  */
-import { CREATOR_FROM_NAME, CREATOR_SIGNOFF, OFFER_FROM_NAME, OFFER_SIGNOFF, creatorKickoffUrl, lightEmailHtml } from "./invite";
+import { CREATOR_FROM_NAME, CREATOR_SIGNOFF, creatorKickoffUrl, lightEmailHtml } from "./invite";
 
 export const DEADLINE_TZ = "America/New_York";
 /** Days after the acceptance date (in ET) the deadline falls on. */
@@ -172,7 +172,7 @@ export function reminderPush(deadlineIso: string, now: Date): { title: string; b
   if (creatorKickoffUrl()) {
     return {
       title: "Your KESHAH offer is waiting",
-      body: "Book your 15-minute kickoff with Aadi to keep your spot. The link is in your offer email.",
+      body: "Book your 15-minute kickoff call to keep your spot. The link is in your offer email.",
       data: { type: "contract" },
     };
   }
@@ -190,12 +190,12 @@ export function reminderEmail(input: { firstName: string; deadlineIso: string; k
   if (kickoff) {
     const k = [
       { text: `Hi ${input.firstName || "there"},` },
-      { text: "Quick reminder about your offer. If you haven't booked your 15-minute kickoff with me yet, here's the link:" },
+      { text: "Just a quick reminder that your kickoff call still needs booking:" },
       { text: kickoff },
-      { text: `Please book a time before ${deadlineLong(input.deadlineIso)} to keep your spot. If we already have a time, you're all set.`, bold: true },
-      { text: "If anything is holding you up, just reply to this email." },
+      { text: `Please book it by ${deadlineLong(input.deadlineIso)} to keep your spot. If you've already booked, you're all set.`, bold: true },
+      { text: "If anything is holding you up, just reply to this email and I'll help." },
     ];
-    return { subject: "Your KESHAH offer is waiting", text: [...k.flatMap((x) => [x.text, ""]), OFFER_SIGNOFF].join("\n"), html: lightEmailHtml(k, OFFER_SIGNOFF), fromName: OFFER_FROM_NAME };
+    return { subject: "Your KESHAH offer is waiting", text: [...k.flatMap((x) => [x.text, ""]), CREATOR_SIGNOFF].join("\n"), html: lightEmailHtml(k), fromName: CREATOR_FROM_NAME };
   }
   const paras = [
     { text: `Hi ${input.firstName || "there"},` },

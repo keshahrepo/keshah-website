@@ -200,17 +200,14 @@ test("welcome email: no em dashes, has link and next steps", () => {
   assert.ok(m.text.includes("If you pass your trial"));
 });
 
-test("kickoff offer: from Aadi, asks them to book the call, no em dashes", () => {
+test("kickoff offer: from McKenzie, original wording, next steps are the kickoff", () => {
   const m = welcomeEmail({ firstName: "Jay", link: "https://x/l", contractReady: true, kickoffUrl: "https://calendly.com/aadi-keshah/kickoff", deadlineText: "Thursday, October 29 at 11:59 PM ET" });
   for (const s of [m.subject, m.text, m.html]) assert.ok(!s.includes("—"), "no em dash");
-  assert.equal(m.fromName, "Aadi from KESHAH");
-  assert.ok(m.text.includes("book a 15-minute kickoff with me"));
-  assert.ok(m.text.includes("https://calendly.com/aadi-keshah/kickoff"));
-  assert.ok(m.text.includes("Please book a time before Thursday, October 29 at 11:59 PM ET"));
-  assert.ok(m.text.includes("Paid trial: 20 posting days, 3 videos a weekday, $30 a day ($600 total)"));
-  assert.ok(m.text.endsWith("Aadi\nFounder, KESHAH"));
-  assert.ok(!m.text.includes("250 applications"));
-  assert.ok(m.html.includes('<a href="https://calendly.com/aadi-keshah/kickoff">book a 15-minute kickoff with me</a>'));
+  assert.equal(m.fromName, "McKenzie from KESHAH");
+  assert.ok(m.text.includes("We've decided to move forward with you"));
+  assert.ok(m.text.includes("1. Book a 15-minute kickoff call: https://calendly.com/aadi-keshah/kickoff"));
+  assert.ok(m.text.includes("Please book your kickoff call by Thursday, October 29 at 11:59 PM ET to confirm your spot."));
+  assert.ok(m.text.endsWith("McKenzie\nCreator Coordinator, KESHAH"));
 });
 
 test("offer names the chosen plan only", () => {
