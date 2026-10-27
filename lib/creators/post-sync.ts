@@ -36,7 +36,7 @@ import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { emailConfigured, sendEmail } from "@/lib/email";
 import { advanceCreatorStatus, getCreator, getOnboarding, isOnboarded, isYyyyMmDd, listCreators, toPostingDay } from "./db";
 import type { BonusPushInfo } from "@/lib/push";
-import { BONUS_100K_CENTS, BONUS_1M_TOTAL_CENTS, BONUS_WINDOW_DAYS, TRIAL_V2_VIDEOS, VIDEOS_PER_WEEKDAY, isWeekday, localDate, trialWindow } from "./pay";
+import { BONUS_100K_CENTS, BONUS_1M_TOTAL_CENTS, BONUS_WINDOW_DAYS, TRIAL_V2_VIDEOS, VIDEOS_PER_WEEKDAY, isWeekday, localDate, planVideos, trialWindow } from "./pay";
 import { ENGAGEMENT_KEYS, fetchRecentPosts, postKey, type FetchPostsResult, type ScrapedPost } from "./scrape";
 import { firstPostingDay, inPostEndWindow } from "./lifecycle";
 import type {
@@ -586,7 +586,7 @@ export async function syncCreatorPosts(creatorOrId: string | CreatorProfile, dep
       .filter((d) => isWeekday(d) && d <= today && d >= coverageFrom && (!creator.ended_on || d <= creator.ended_on))
       .sort();
     // A v2 creator's first day (the trial) needs 3 videos; precise per-day pay rules live in pay.ts.
-    const firstDayNeed = creator.trial_plan === "v2" ? TRIAL_V2_VIDEOS : VIDEOS_PER_WEEKDAY;
+    const firstDayNeed = creator.trial_plan === "v2" ? TRIAL_V2_VIDEOS : planVideos(creator);
     result.posted_days_detected = days.filter((d) => detectDay(buckets.get(d), firstDayNeed).posted);
 
     if (!isYyyyMmDd(startDate)) {

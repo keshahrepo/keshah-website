@@ -30,6 +30,7 @@ import {
   monthOf,
   monthSummary,
   nextLevel,
+  planFieldsOf,
   trialStatus,
   weekdaysBetween,
   type MonthSummary,
@@ -167,6 +168,7 @@ function toProfile(id: string, d: DocumentData, legacyStart: boolean): CreatorPr
     ...(d.trial_outcome === "keep" || d.trial_outcome === "end" ? { trial_outcome: d.trial_outcome } : {}),
     ...(isYyyyMmDd(d.trial_decided_on) ? { trial_decided_on: d.trial_decided_on } : {}),
     ...(isYyyyMmDd(d.trial_completed_on) ? { trial_completed_on: d.trial_completed_on } : {}),
+    ...planFieldsOf(d),
     campaign_tags: Array.isArray(d.campaign_tags) ? d.campaign_tags : [],
     status: mapCreatorStatus(d.status),
     ...(isYyyyMmDd(d.ended_on) ? { ended_on: d.ended_on } : {}),
@@ -485,7 +487,7 @@ export async function getMonthOverview(
  * by an admin, or credited with earlier months (Isai's September).
  */
 export function creatorTrial(
-  creator: Pick<CreatorProfile, "status" | "starting_completed_months" | "start_date" | "trial_plan" | "ended_on" | "trial_outcome" | "trial_decided_on">,
+  creator: Pick<CreatorProfile, "status" | "starting_completed_months" | "start_date" | "trial_plan" | "ended_on" | "trial_outcome" | "trial_decided_on" | "pay_plan" | "custom_base_cents" | "trial_day_cents">,
   postingDays: PostingDay[],
 ) {
   const t = trialStatus(postingDays, creator);
@@ -503,7 +505,7 @@ export type DayState = "posted" | "off" | "off_requested" | "missed" | "pending"
  * the calculator: posted = >= VIDEOS_PER_WEEKDAY videos on BOTH platforms.
  */
 export function monthDayStates(
-  creator: Pick<CreatorProfile, "start_date" | "ended_on" | "timezone" | "trial_plan" | "trial_outcome" | "trial_decided_on">,
+  creator: Pick<CreatorProfile, "start_date" | "ended_on" | "timezone" | "trial_plan" | "trial_outcome" | "trial_decided_on" | "pay_plan" | "custom_base_cents" | "trial_day_cents">,
   month: YyyyMm,
   history: Pick<CreatorHistory, "postingDays" | "daysOff">,
   now: Date = new Date(),
@@ -727,6 +729,7 @@ export async function advanceCreatorStatus(id: string, opts: { db?: Firestore; n
         ...(isYyyyMmDd(d.ended_on) ? { ended_on: d.ended_on as YyyyMmDd } : {}),
         ...(d.trial_outcome === "keep" || d.trial_outcome === "end" ? { trial_outcome: d.trial_outcome as "keep" | "end" } : {}),
         ...(isYyyyMmDd(d.trial_decided_on) ? { trial_decided_on: d.trial_decided_on as YyyyMmDd } : {}),
+        ...planFieldsOf(d),
       }
     : undefined;
   const postingDays = days.docs.map((x) => toPostingDay(x.id, x.data()));

@@ -19,6 +19,7 @@ import { groupsClientFromEnv, groupsConfigured, provisionCreatorGroup } from "./
 import { newInvite, setPasswordUrl, welcomeEmail } from "./invite";
 import { contractDeadlineFor, deadlineLong, deadlineOf, getsDeadline } from "./deadline";
 import { assignPooledLink } from "./link-pool";
+import { TRIAL_NEW_DAY_CENTS } from "./pay";
 import type { AcceptRecord, AcceptStepKey, AcceptStepRecord } from "./types";
 
 export const ACCEPT_STEPS: AcceptStepKey[] = ["group", "invite", "contract"];
@@ -193,7 +194,12 @@ export async function acceptCreator(id: string, opts: AcceptOptions): Promise<Ac
       top.accepted_at = now();
       // New creators start on the 20-day trial (3 videos, $15 a day). Anyone
       // already paid or credited with earlier months (Isai) keeps their terms.
-      if (!d.trial_plan && !d.start_date && !Number(d.starting_completed_months ?? 0)) top.trial_plan = "v2";
+      if (!d.trial_plan && !d.start_date && !Number(d.starting_completed_months ?? 0)) {
+        top.trial_plan = "v2";
+        // New pay (Oct 2026): $30 a trial day, then a flat plan. Full until the founder picks another.
+        if (!d.trial_day_cents) top.trial_day_cents = TRIAL_NEW_DAY_CENTS;
+        if (!d.pay_plan) top.pay_plan = "full";
+      }
       const mapped = mapCreatorStatus(d.status);
       if (mapped === "onboarding" || mapped === "trial") {
         if (d.status !== "onboarding") top.status_changed_at = FieldValue.serverTimestamp();

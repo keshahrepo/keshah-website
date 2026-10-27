@@ -61,6 +61,11 @@ function esc(s: string): string {
 export const CREATOR_FROM_NAME = "McKenzie from KESHAH";
 export const CREATOR_SIGNOFF = "McKenzie\nCreator Coordinator, KESHAH";
 
+/** The pay lines in offer emails (Oct 2026 plans). */
+export const TRIAL_TEXT = "20 posting days, 3 videos a weekday, $30 a day ($600 total)";
+export const AFTER_TRIAL_TEXT =
+  "5 videos a weekday for $1,000/month, or 3 a weekday for $600/month, plus bonuses ($15 when a video hits 100K views, $100 total at 1M)";
+
 /** New offers with a kickoff call come from the founder: they've been talking to him. */
 export const OFFER_FROM_NAME = "Aadi from KESHAH";
 export const OFFER_SIGNOFF = "Aadi\nFounder, KESHAH";
@@ -143,8 +148,8 @@ export function welcomeEmail(input: {
   const step3 = input.contractReady
     ? "Sign your contract. It's the first step in the app, and the app walks you through the rest."
     : "Sign your contract. It'll be the first step in the app shortly, and the app walks you through the rest.";
-  const trial = "20 posting days, 3 videos a weekday, $300 total";
-  const after = "5 videos a weekday, $500/month to start, growing to $1,100, plus bonuses ($15 when a video hits 100K views, $100 total at 1M)";
+  const trial = TRIAL_TEXT;
+  const after = AFTER_TRIAL_TEXT;
   const closing = "We are excited to have you on the team. If you have any questions, feel free to reply to this email.";
 
   const text = [
@@ -219,8 +224,8 @@ function kickoffOfferEmail(
   const read = app
     ? "If you'd like to read your contract before the call, it's in the KESHAH Creators app. It's in early access through TestFlight, Apple's app for early access, so install TestFlight first if it asks. Sign in with the email this message was sent to."
     : "If you'd like to read your contract before the call, set your password here and it's in your portal. The link works once and expires in 7 days.";
-  const trial = "20 posting days, 3 videos a weekday, $300 total";
-  const after = "5 videos a weekday, $500/month to start, growing to $1,100, plus bonuses ($15 when a video hits 100K views, $100 total at 1M)";
+  const trial = TRIAL_TEXT;
+  const after = AFTER_TRIAL_TEXT;
   const closing = "If you have any questions before then, just reply to this email.";
   const text = [
     `Hi ${first},`,

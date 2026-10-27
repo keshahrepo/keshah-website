@@ -48,6 +48,50 @@ export const TRIAL_V2_VIDEOS = 3;
 export const TRIAL_V2_DAY_CENTS = 1500;
 export const TRIAL_V2_TOTAL_CENTS = TRIAL_V2_DAYS * TRIAL_V2_DAY_CENTS;
 
+/**
+ * Monthly plans for creators who start from Oct 2026 (pay_plan on the
+ * profile): a flat base, no ladder. Lite 3 videos a day, Full 5, Format
+ * creator 5 (3 given + 2 own) at a custom base the founder sets.
+ */
+export type PayPlan = "lite" | "full" | "format";
+export const PLAN_BASE_CENTS: Record<"lite" | "full", Cents> = { lite: 60000, full: 100000 };
+export const PLAN_VIDEOS: Record<PayPlan, number> = { lite: 3, full: 5, format: 5 };
+/** Format creator base when the founder hasn't set one. */
+export const FORMAT_DEFAULT_BASE_CENTS: Cents = 120000;
+/** Trial pay per posting day for new offers ($30, $600 for the 20 days). */
+export const TRIAL_NEW_DAY_CENTS: Cents = 3000;
+
+type PlanFields = { pay_plan?: PayPlan; custom_base_cents?: number; trial_day_cents?: number };
+
+/** The plan fields from a raw ContentCreators doc (only valid values). */
+export function planFieldsOf(d: Record<string, unknown>): PlanFields {
+  const plan = d.pay_plan === "lite" || d.pay_plan === "full" || d.pay_plan === "format" ? d.pay_plan : undefined;
+  const custom = Number(d.custom_base_cents);
+  const trialDay = Number(d.trial_day_cents);
+  return {
+    ...(plan ? { pay_plan: plan } : {}),
+    ...(Number.isFinite(custom) && custom > 0 ? { custom_base_cents: Math.round(custom) } : {}),
+    ...(Number.isFinite(trialDay) && trialDay > 0 ? { trial_day_cents: Math.round(trialDay) } : {}),
+  };
+}
+
+/** Videos a weekday needs once past the trial: the plan's count, else 5. */
+export function planVideos(p?: PlanFields): number {
+  return p?.pay_plan ? PLAN_VIDEOS[p.pay_plan] : VIDEOS_PER_WEEKDAY;
+}
+
+/** Trial pay per posting day: the profile's own rate, else the original $15. */
+export function trialDayCents(p?: PlanFields): Cents {
+  return p?.trial_day_cents && p.trial_day_cents > 0 ? p.trial_day_cents : TRIAL_V2_DAY_CENTS;
+}
+
+/** A plan's flat monthly base, or null on the original ladder. */
+export function planBaseCents(p?: PlanFields): Cents | null {
+  if (!p?.pay_plan) return null;
+  if (p.pay_plan === "format") return p.custom_base_cents && p.custom_base_cents > 0 ? p.custom_base_cents : FORMAT_DEFAULT_BASE_CENTS;
+  return PLAN_BASE_CENTS[p.pay_plan];
+}
+
 /** [completed months threshold, monthly base cents], ascending. */
 export const BASE_LADDER: ReadonlyArray<readonly [number, Cents]> = [
   [0, 50000],
@@ -187,7 +231,7 @@ export interface TrialWindow {
 }
 
 type TrialProfile = Pick<PayProfile, "start_date" | "trial_plan"> &
-  Partial<Pick<PayProfile, "ended_on" | "trial_outcome" | "trial_decided_on">>;
+  Partial<Pick<PayProfile, "ended_on" | "trial_outcome" | "trial_decided_on" | "pay_plan" | "custom_base_cents" | "trial_day_cents">>;
 
 /** The v2 trial for this profile, or null on the original plan. */
 export function trialWindow(profile: TrialProfile | undefined, postingDays: PostingDay[]): TrialWindow | null {
@@ -221,10 +265,10 @@ export function isScheduledDay(profile: TrialProfile, postingDays: PostingDay[],
   return !!tw.promotedOn && date >= tw.promotedOn;
 }
 
-/** Videos a weekday needs to count: 3 during a v2 trial, else 5. */
+/** Videos a weekday needs to count: 3 during a v2 trial, else the plan's count (5 without a plan). */
 export function videosRequiredOn(profile: TrialProfile | undefined, postingDays: PostingDay[], date: YyyyMmDd): number {
   const tw = trialWindow(profile, postingDays);
-  if (!tw || (tw.promotedOn && date >= tw.promotedOn)) return VIDEOS_PER_WEEKDAY;
+  if (!tw || (tw.promotedOn && date >= tw.promotedOn)) return planVideos(profile);
   return TRIAL_V2_VIDEOS;
 }
 
@@ -234,7 +278,7 @@ export function videosRequiredOn(profile: TrialProfile | undefined, postingDays:
  */
 function postedWeekdaySet(postingDays: PostingDay[], profile?: TrialProfile): Set<YyyyMmDd> {
   const tw = trialWindow(profile, postingDays);
-  const need = (d: YyyyMmDd) => (!tw || (tw.promotedOn && d >= tw.promotedOn) ? VIDEOS_PER_WEEKDAY : TRIAL_V2_VIDEOS);
+  const need = (d: YyyyMmDd) => (!tw || (tw.promotedOn && d >= tw.promotedOn) ? planVideos(profile) : TRIAL_V2_VIDEOS);
   // After the 20th trial day nothing counts until the promotion date.
   const gap = (d: YyyyMmDd) => !!tw?.completedOn && d > tw.completedOn && (!tw.promotedOn || d < tw.promotedOn);
   const out = new Set<YyyyMmDd>();
@@ -280,8 +324,8 @@ export function trialStatus(
       plan: "v2",
       requiredDays: TRIAL_V2_DAYS,
       videosPerDay: TRIAL_V2_VIDEOS,
-      dayCents: TRIAL_V2_DAY_CENTS,
-      totalCents: TRIAL_V2_TOTAL_CENTS,
+      dayCents: trialDayCents(profile),
+      totalCents: TRIAL_V2_DAYS * trialDayCents(profile),
     };
   }
   const posted = [...postedWeekdaySet(postingDays)].sort();
@@ -374,6 +418,8 @@ export function nextLevel(
   history: PayHistory,
   asOfMonth: YyyyMm,
 ): { nextBaseCents: Cents | null; monthsNeeded: number | null; earliestMonth: YyyyMm | null } {
+  // A flat plan has no ladder.
+  if (planBaseCents(profile) !== null) return { nextBaseCents: null, monthsNeeded: null, earliestMonth: null };
   const have = completedMonthsAsOf(profile, asOfMonth, history);
   if (profile.trial_plan === "v2") profile = fullPlanProfile(profile, trialWindow(profile, history.postingDays));
   const next = BASE_LADDER.find(([t]) => t > have);
@@ -694,9 +740,9 @@ export function monthSummary(
   const b = attendance(full, month, posted, off, opts.today);
   const a = tw ? addAttendance(attendance(trialPart(profile, tw), month, posted, new Set(), opts.today), b) : b;
   const trialDays = tw ? tw.days.filter((d) => monthOf(d) === month).length : 0;
-  const trialCents = trialDays * TRIAL_V2_DAY_CENTS;
+  const trialCents = trialDays * trialDayCents(profile);
   const completedMonthsBefore = completedMonthsAsOf(full, month);
-  const levelBaseCents = baseForCompletedMonths(completedMonthsBefore);
+  const levelBaseCents = planBaseCents(profile) ?? baseForCompletedMonths(completedMonthsBefore);
   const credited = b.postedDays + b.approvedOffDays;
   const baseDueCents = b.calendarWeekdays ? Math.round((levelBaseCents * credited) / b.calendarWeekdays) : 0;
   const claims = tw ? (tw.promotedOn ? bonusClaims.filter((c) => c.posted_on >= tw.promotedOn!) : []) : bonusClaims;
@@ -738,7 +784,7 @@ export function draftInvoiceLines(summary: MonthSummary): InvoiceLine[] {
   if (trialDays > 0) {
     lines.push({
       kind: "trial",
-      label: `Trial ${fmtMonth(summary.month)}: ${trialDays} posting day${trialDays === 1 ? "" : "s"} at ${fmtUsd(TRIAL_V2_DAY_CENTS)}/day`,
+      label: `Trial ${fmtMonth(summary.month)}: ${trialDays} posting day${trialDays === 1 ? "" : "s"} at ${fmtUsd(Math.round(summary.trialCents / trialDays))}/day`,
       amount_cents: summary.trialCents,
     });
   }
@@ -842,9 +888,9 @@ export function dayComplete(
   const nl = nextLevel(profile, { postingDays: after, daysOff }, month);
   return {
     date,
-    dayPayCents: trialDay ? TRIAL_V2_DAY_CENTS : dayPayCents(s.levelBaseCents, month),
+    dayPayCents: trialDay ? trialDayCents(profile) : dayPayCents(s.levelBaseCents, month),
     monthEarnedCents: s.trialCents + s.baseDueCents,
-    ...(tw ? { trial: { day: tw.days.length, of: TRIAL_V2_DAYS, totalCents: TRIAL_V2_TOTAL_CENTS, complete: trialDay && !!tw.completedOn } } : {}),
+    ...(tw ? { trial: { day: tw.days.length, of: TRIAL_V2_DAYS, totalCents: TRIAL_V2_DAYS * trialDayCents(profile), complete: trialDay && !!tw.completedOn } } : {}),
     monthBaseCents: s.levelBaseCents,
     streak: postingStreak(profile, after, daysOff, date),
     nextLevel: nl.nextBaseCents !== null && nl.earliestMonth ? { nextBaseCents: nl.nextBaseCents, earliestMonth: nl.earliestMonth } : null,

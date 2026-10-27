@@ -13,7 +13,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { notify } from "@/lib/push";
 import { CREATORS_COLLECTION, CreatorDataError, isYyyyMmDd, toPostingDay } from "./db";
-import { TRIAL_V2_DAY_CENTS, localDate, monthOf, trialWindow } from "./pay";
+import { localDate, monthOf, planBaseCents, planFieldsOf, planVideos, trialDayCents, trialWindow } from "./pay";
 import { emailConfigured, sendEmail } from "@/lib/email";
 import { CREATOR_FROM_NAME } from "./invite";
 import { payByForMonth, unpaidTrialCents } from "./lifecycle";
@@ -65,7 +65,9 @@ export async function decideTrial(id: string, decision: TrialDecision, opts: { n
       { start_date: d.start_date, trial_plan: "v2", trial_outcome: "keep", trial_decided_on: today },
       days.docs.map((x) => toPostingDay(x.id, x.data())),
     )?.promotedOn ?? today;
-    const mailed = await mail(email, trialPassedEmail({ firstName, fullPlanFrom }));
+    const pf = planFieldsOf(d);
+    const base = planBaseCents(pf);
+    const mailed = await mail(email, trialPassedEmail({ firstName, fullPlanFrom, ...(base !== null ? { plan: { videos: planVideos(pf), baseCents: base } } : {}) }));
     return { outcome: "keep" as const, decided_on: today, email: mailed };
   }
   await ref.update({ trial_outcome: "end", trial_decided_on: today, status_changed_at: at, ended_on: tw.completedOn });
@@ -76,7 +78,7 @@ export async function decideTrial(id: string, decision: TrialDecision, opts: { n
     { title: "Your trial results", body: "Open the app to see the result of your trial.", data: { type: "trial_decision" } },
   );
   const invoices = await ref.collection("invoices").get();
-  const finalPayCents = unpaidTrialCents(tw.days.length, TRIAL_V2_DAY_CENTS, invoices.docs.map((x) => x.data() as Invoice));
+  const finalPayCents = unpaidTrialCents(tw.days.length, trialDayCents(planFieldsOf(d)), invoices.docs.map((x) => x.data() as Invoice));
   const mailed = await mail(email, trialEndedEmail({ firstName, finalPayCents, payBy: payByForMonth(monthOf(tw.completedOn)) }));
   return { outcome: "end" as const, decided_on: today, email: mailed, group: off.group.result };
 }

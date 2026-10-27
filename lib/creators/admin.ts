@@ -28,6 +28,8 @@ import { mapCreatorStatus, normalizeTrackingUrl, onboardingProgress as sharedOnb
 import {
   addMonths,
   baseForCompletedMonths,
+  planBaseCents,
+  planFieldsOf,
   completedMonthsAsOf,
   trialStatus,
   monthSummary,
@@ -188,6 +190,10 @@ export interface AdminCreator {
   trial_plan?: "v2";
   trial_outcome?: "keep" | "end";
   trial_decided_on?: string;
+  /** Monthly plan after the trial (lib/creators/pay.ts PayPlan); unset = the original ladder. */
+  pay_plan?: "lite" | "full" | "format";
+  custom_base_cents?: number;
+  trial_day_cents?: number;
   campaign_tags: string[];
   /** Raw ContentCreators.status (kept for the editor). */
   status: string;
@@ -258,6 +264,7 @@ export function toAdminCreator(id: string, d: DocumentData): AdminCreator {
     ...(d.trial_plan === "v2" ? { trial_plan: "v2" as const } : {}),
     ...(d.trial_outcome === "keep" || d.trial_outcome === "end" ? { trial_outcome: d.trial_outcome as "keep" | "end" } : {}),
     ...(isDate(d.trial_decided_on) ? { trial_decided_on: d.trial_decided_on as string } : {}),
+    ...planFieldsOf(d),
     campaign_tags: Array.isArray(d.campaign_tags) ? d.campaign_tags.map(String) : [],
     status: String(d.status ?? ""),
     status_display: mapCreatorStatus(d.status),
@@ -324,6 +331,9 @@ export function payProfileOf(c: AdminCreator): PayProfile {
     ...(c.trial_outcome ? { trial_outcome: c.trial_outcome } : {}),
     ...(c.trial_decided_on ? { trial_decided_on: c.trial_decided_on } : {}),
     ...(c.ended_on ? { ended_on: c.ended_on } : {}),
+    ...(c.pay_plan ? { pay_plan: c.pay_plan } : {}),
+    ...(c.custom_base_cents ? { custom_base_cents: c.custom_base_cents } : {}),
+    ...(c.trial_day_cents ? { trial_day_cents: c.trial_day_cents } : {}),
     legal_name: c.legal_name,
     timezone: c.timezone || "UTC",
   };
@@ -681,7 +691,7 @@ export async function buildRow(c: AdminCreator, month: YyyyMm): Promise<CreatorR
   if (c.pay_ready) {
     const hist = { postingDays: h.postingDays, daysOff: h.daysOff };
     completedMonths = completedMonthsAsOf(payProfileOf(c), month, hist);
-    level = baseForCompletedMonths(completedMonths);
+    level = planBaseCents(payProfileOf(c)) ?? baseForCompletedMonths(completedMonths);
     const n = nextLevel(payProfileOf(c), hist, month);
     next = { nextBaseCents: n.nextBaseCents, earliestMonth: n.earliestMonth };
   }
@@ -780,6 +790,23 @@ export function sanitizeProfile(
     const n = Number(body.starting_completed_months);
     if (!Number.isInteger(n) || n < 0 || n > 120) return { error: "starting_completed_months must be a whole number" };
     u.starting_completed_months = n;
+  }
+  if (body.pay_plan !== undefined) {
+    const p = String(body.pay_plan ?? "");
+    if (p && p !== "lite" && p !== "full" && p !== "format") return { error: "pay_plan must be lite, full or format" };
+    u.pay_plan = p || null;
+    // Format creators make 2 of their 5 a day as their own concepts (rows 4 and 5).
+    if (p === "format") u.format_creator = true;
+  }
+  if (body.custom_base_cents !== undefined) {
+    const n = Number(body.custom_base_cents);
+    if (body.custom_base_cents !== null && (!Number.isInteger(n) || n < 0 || n > 1_000_000)) return { error: "custom_base_cents must be whole cents" };
+    u.custom_base_cents = body.custom_base_cents === null ? null : n;
+  }
+  if (body.trial_day_cents !== undefined) {
+    const n = Number(body.trial_day_cents);
+    if (body.trial_day_cents !== null && (!Number.isInteger(n) || n < 0 || n > 100_000)) return { error: "trial_day_cents must be whole cents" };
+    u.trial_day_cents = body.trial_day_cents === null ? null : n;
   }
   if (body.campaign_tags !== undefined) {
     const raw = Array.isArray(body.campaign_tags)

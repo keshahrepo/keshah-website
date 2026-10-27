@@ -25,7 +25,8 @@ function monthName(month: YyyyMm): string {
 // ---------------------------------------------------------------- trial result
 
 /** Keep: what changes from their first full-plan day. */
-export function trialPassedEmail(input: { firstName: string; fullPlanFrom: YyyyMmDd }): Mail {
+export function trialPassedEmail(input: { firstName: string; fullPlanFrom: YyyyMmDd; plan?: { videos: number; baseCents: number } }): Mail {
+  const plan = input.plan;
   return {
     subject: "You're a KESHAH Creator",
     text: [
@@ -35,8 +36,17 @@ export function trialPassedEmail(input: { firstName: string; fullPlanFrom: YyyyM
       "",
       "Here's what changes:",
       "",
-      `• From ${fmtWeekdayLong(input.fullPlanFrom)}, you post 5 videos every weekday instead of 3.`,
-      "• Your pay moves to $500 a month to start, and it grows the longer you're with us.",
+      ...(plan
+        ? [
+            plan.videos > 3
+              ? `• From ${fmtWeekdayLong(input.fullPlanFrom)}, you post ${plan.videos} videos every weekday instead of 3.`
+              : `• From ${fmtWeekdayLong(input.fullPlanFrom)}, you keep posting ${plan.videos} videos every weekday.`,
+            `• Your pay moves to ${fmtMoney(plan.baseCents)} a month.`,
+          ]
+        : [
+            `• From ${fmtWeekdayLong(input.fullPlanFrom)}, you post 5 videos every weekday instead of 3.`,
+            "• Your pay moves to $500 a month to start, and it grows the longer you're with us.",
+          ]),
       "• Your videos now earn bonuses: $15 when one passes 100K views, and $100 when it passes 1M.",
       "",
       "Your trial pay is on your next invoice as usual. The app has everything else.",

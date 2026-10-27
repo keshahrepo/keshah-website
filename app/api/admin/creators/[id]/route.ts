@@ -65,7 +65,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   }
   // The month's posting days for the founder's calendar (same states the creator sees).
   const days = monthDayStates(
-    { start_date: creator.start_date ?? "", ended_on: creator.ended_on ?? undefined, timezone: creator.timezone, trial_plan: creator.trial_plan, trial_outcome: creator.trial_outcome, trial_decided_on: creator.trial_decided_on } as Parameters<typeof monthDayStates>[0],
+    { start_date: creator.start_date ?? "", ended_on: creator.ended_on ?? undefined, timezone: creator.timezone, trial_plan: creator.trial_plan, trial_outcome: creator.trial_outcome, trial_decided_on: creator.trial_decided_on, pay_plan: creator.pay_plan, custom_base_cents: creator.custom_base_cents, trial_day_cents: creator.trial_day_cents } as Parameters<typeof monthDayStates>[0],
     month,
     { postingDays: h.postingDays, daysOff: h.daysOff },
   );

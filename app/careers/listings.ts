@@ -74,7 +74,7 @@ export const LISTINGS: Listing[] = [
       },
     ],
     compensation:
-      "$300 paid trial (20 posting days), then $500/mo base growing to $1,100, plus $15 per video at 100K views and $100 total at 1M.",
+      "20-day paid trial at $30 a day, then $1,000/month for 5 videos a weekday (or $600 for 3), plus $15 per video at 100K views and $100 total at 1M.",
     applicationProcess: [
       "Apply",
       "If deemed a fit, book a 15-min call with Aadi, our founder",

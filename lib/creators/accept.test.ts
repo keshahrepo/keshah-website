@@ -207,7 +207,7 @@ test("kickoff offer: from Aadi, asks them to book the call, no em dashes", () =>
   assert.ok(m.text.includes("book a 15-minute kickoff with me"));
   assert.ok(m.text.includes("https://calendly.com/aadi-keshah/kickoff"));
   assert.ok(m.text.includes("Please book a time before Thursday, October 29 at 11:59 PM ET"));
-  assert.ok(m.text.includes("Paid trial: 20 posting days, 3 videos a weekday, $300 total"));
+  assert.ok(m.text.includes("Paid trial: 20 posting days, 3 videos a weekday, $30 a day ($600 total)"));
   assert.ok(m.text.endsWith("Aadi\nFounder, KESHAH"));
   assert.ok(!m.text.includes("250 applications"));
   assert.ok(m.html.includes('<a href="https://calendly.com/aadi-keshah/kickoff">book a 15-minute kickoff with me</a>'));

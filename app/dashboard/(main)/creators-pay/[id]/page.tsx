@@ -57,6 +57,9 @@ interface Creator {
   };
   w9_on_file: boolean;
   format_creator: boolean;
+  pay_plan?: "lite" | "full" | "format";
+  custom_base_cents?: number;
+  trial_day_cents?: number;
   contract_template_version?: string;
   creator_link_id: string;
   tracking_url: string;
@@ -166,7 +169,7 @@ interface Detail {
   completedMonths: number | null;
   nextLevel: { nextBaseCents: number | null; monthsNeeded: number | null; earliestMonth: string | null } | null;
   calendar: { date: string; state: string; videos: number; logged_at: string | null }[];
-  trial: { postedDays: number; requiredDays?: number; completedOn?: string; reviewing?: boolean; ended?: boolean; promotedOn?: string } | null;
+  trial: { postedDays: number; requiredDays?: number; completedOn?: string; reviewing?: boolean; ended?: boolean; promotedOn?: string; dayCents?: number; totalCents?: number } | null;
   postingDays: { date: string; videos: Record<string, unknown>[]; complete: number; logged_at: string | null }[];
   daysOff: { id: string; date: string; status: string; reason?: string }[];
   bonusClaims: Claim[];
@@ -314,10 +317,12 @@ function TrialPanel({ creatorId, t, reload }: { creatorId: string; t: NonNullabl
   }
 
   let status: string;
-  if (t.promotedOn) status = `Kept. Full plan (5 videos, $500/mo) from ${t.promotedOn}.`;
-  else if (t.ended) status = `Not continuing. Agreement ended on ${t.completedOn}; paid for all ${of} trial days ($300).`;
+  const dayPay = fmtMoney(t.dayCents ?? 1500);
+  const trialTotal = fmtMoney(t.totalCents ?? 30000);
+  if (t.promotedOn) status = `Kept. Monthly plan from ${t.promotedOn}.`;
+  else if (t.ended) status = `Not continuing. Agreement ended on ${t.completedOn}; paid for all ${of} trial days (${trialTotal}).`;
   else if (t.reviewing) status = `All ${of} days done on ${t.completedOn}. They aren't posting until you decide.`;
-  else status = `Day ${t.postedDays} of ${of}. 3 videos a day, $15 a day ($300 for the full trial). You decide once all ${of} days are in.`;
+  else status = `Day ${t.postedDays} of ${of}. 3 videos a day, ${dayPay} a day (${trialTotal} for the full trial). You decide once all ${of} days are in.`;
 
   return (
     <div style={{ ...card, ...(t.reviewing ? { border: "1px solid rgba(251,191,36,0.5)" } : {}) }}>
@@ -330,7 +335,7 @@ function TrialPanel({ creatorId, t, reload }: { creatorId: string; t: NonNullabl
           </Btn>
           {confirmEnd ? (
             <>
-              <span style={muted}>They&apos;ll see they didn&apos;t pass and that they&apos;re still paid $300.</span>
+              <span style={muted}>They&apos;ll see they didn&apos;t pass and that they&apos;re still paid for every trial day.</span>
               <Btn kind="danger" disabled={busy} onClick={() => decide("end")}>
                 Yes, don&apos;t continue
               </Btn>
@@ -507,6 +512,8 @@ function ProfileEditor({ c, reload }: { c: Creator; reload: () => void }) {
     tiktok_handle: c.tiktok_handle,
     instagram_handle: c.instagram_handle,
     status: c.status,
+    pay_plan: c.pay_plan ?? "",
+    custom_base: c.custom_base_cents ? String(c.custom_base_cents / 100) : "",
   };
   const [f, setF] = useState(initial);
   const [msg, setMsg] = useState("");
@@ -526,7 +533,15 @@ function ProfileEditor({ c, reload }: { c: Creator; reload: () => void }) {
           Object.fromEntries(
             Object.entries(f)
               .filter(([k, v]) => v !== initial[k as keyof typeof initial])
-              .map(([k, v]) => [k, k === "starting_completed_months" ? Number(v) : v]),
+              .map(([k, v]) =>
+                k === "starting_completed_months"
+                  ? [k, Number(v)]
+                  : k === "pay_plan"
+                    ? [k, v || null]
+                    : k === "custom_base"
+                      ? ["custom_base_cents", v ? Math.round(Number(v) * 100) : null]
+                      : [k, v],
+              ),
           ),
         ),
       });
@@ -554,8 +569,8 @@ function ProfileEditor({ c, reload }: { c: Creator; reload: () => void }) {
       <h3 style={h3}>Profile</h3>
       <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, cursor: "pointer", marginBottom: 14, flexWrap: "wrap" }}>
         <input type="checkbox" checked={c.format_creator} onChange={(e) => toggleFormat(e.target.checked)} />
-        Format creator (invite only, +$500/mo)
-        <span style={muted}>Rows 4 and 5 on their Today tab become their own new concepts. Pay isn&apos;t changed here; add the $500 as an adjustment.</span>
+        Format creator (invite only)
+        <span style={muted}>Rows 4 and 5 on their Today tab become their own new concepts. Their pay comes from the Monthly plan below (Format creator).</span>
       </label>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
         <Field label="Legal name">
@@ -591,6 +606,19 @@ function ProfileEditor({ c, reload }: { c: Creator; reload: () => void }) {
         <Field label="Last working day" hint="Only when leaving">
           <input type="date" style={input} value={f.ended_on} onChange={set("ended_on")} />
         </Field>
+        <Field label="Monthly plan" hint="After the trial. None = the old $500 to $1,100 ladder">
+          <select style={input} value={f.pay_plan} onChange={set("pay_plan")}>
+            <option value="">None (old ladder)</option>
+            <option value="lite">Lite: 3 a day, $600/mo</option>
+            <option value="full">Full: 5 a day, $1,000/mo</option>
+            <option value="format">Format creator: 5 a day, custom</option>
+          </select>
+        </Field>
+        {f.pay_plan === "format" && (
+          <Field label="Format creator pay ($/month)" hint="Blank = $1,200">
+            <input type="number" min={0} style={input} value={f.custom_base} onChange={set("custom_base")} placeholder="1200" />
+          </Field>
+        )}
         <Field label="Starting completed months">
           <input type="number" min={0} style={input} value={f.starting_completed_months} onChange={set("starting_completed_months")} />
         </Field>
