@@ -142,6 +142,7 @@ function ApplicationsInner() {
   async function updateStatus(
     id: string,
     status: "accepted" | "denied" | "booked",
+    plan?: AcceptPlan,
   ) {
     // Optimistic — flip locally, then persist. Rollback on failure.
     const prev = rows;
@@ -152,7 +153,7 @@ function ApplicationsInner() {
       const res = await fetch(`/api/careers/${id}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, ...(plan ?? {}) }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
     } catch (e) {
@@ -214,7 +215,11 @@ function ApplicationsInner() {
             load();
           }}
           onStatus={async (row, status) => {
-            if (status === "accepted" && !confirmAccept(row)) return;
+            if (status === "accepted") {
+              const plan = confirmAccept(row);
+              if (plan) await updateStatus(row.id, status, plan);
+              return;
+            }
             if (status === "denied" && !confirmDeny(row, row.has_video)) return;
             await updateStatus(row.id, status);
           }}
@@ -351,7 +356,8 @@ function ApplicationsInner() {
             expanded={expandedId === row.id}
             onToggle={() => setExpandedId((cur) => (cur === row.id ? null : row.id))}
             onAccept={() => {
-              if (confirmAccept(row)) updateStatus(row.id, "accepted");
+              const plan = confirmAccept(row);
+              if (plan) updateStatus(row.id, "accepted", plan);
             }}
             onDeny={() => {
               if (confirmDeny(row, row.denial_email_due ?? (row.has_video || !!row.interview_video_submitted_at))) updateStatus(row.id, "denied");
@@ -667,12 +673,27 @@ function Detail({ label, value }: { label: string; value: string | null }) {
   );
 }
 
-/** Accept sends emails and sets up accounts, so it always asks first. */
-function confirmAccept(row: { full_name?: string | null; email?: string | null }): boolean {
+type AcceptPlan = { plan: "lite" | "full" | "format"; custom_base_cents?: number };
+
+/**
+ * Accept sends emails and sets up accounts, so it always asks first, and asks
+ * which plan they're on after the trial (the offer email names it).
+ * Null = cancelled.
+ */
+function confirmAccept(row: { full_name?: string | null; email?: string | null }): AcceptPlan | null {
   const name = row.full_name || row.email || "this applicant";
-  return window.confirm(
-    `Accept ${name}?\n\nThis will:\n• make them a creator (they show up in Creator pay)\n• set up their @keshah.com email\n• email them the welcome note with the app link and the contract\n• start their 20-day trial\n\nNothing is sent until you press OK.`,
+  const raw = window.prompt(
+    `Accept ${name}? Their plan after the trial:\n\n  5 = Full: 5 videos a day, $1,000/month\n  3 = Lite: 3 videos a day, $600/month\n  or a monthly $ amount (e.g. 1200) = Format creator\n\nThis makes them a creator, sets up their @keshah.com email, emails the offer (it names this plan) and starts their 20-day trial. Nothing is sent until you press OK.`,
+    "5",
   );
+  if (raw === null) return null;
+  const v = raw.trim().replace(/[$,]/g, "");
+  if (v === "5" || v === "") return { plan: "full" };
+  if (v === "3") return { plan: "lite" };
+  const n = Number(v);
+  if (Number.isFinite(n) && n >= 100) return { plan: "format", custom_base_cents: Math.round(n * 100) };
+  window.alert("Type 5, 3, or a monthly amount like 1200.");
+  return null;
 }
 
 /** Says exactly what Deny sends: an email only to people who sent their video test. */

@@ -213,6 +213,16 @@ test("kickoff offer: from Aadi, asks them to book the call, no em dashes", () =>
   assert.ok(m.html.includes('<a href="https://calendly.com/aadi-keshah/kickoff">book a 15-minute kickoff with me</a>'));
 });
 
+test("offer names the chosen plan only", () => {
+  const full = welcomeEmail({ firstName: "Jay", link: "https://x/l", contractReady: true, kickoffUrl: "https://k", plan: { videos: 5, baseCents: 100000 } });
+  assert.ok(full.text.includes("If you pass your trial: 5 videos a weekday, $1,000/month, plus bonuses"));
+  assert.ok(!full.text.includes("$600/month"));
+  const fmt = welcomeEmail({ firstName: "Jay", link: "https://x/l", contractReady: true, kickoffUrl: "https://k", plan: { videos: 5, baseCents: 120000 } });
+  assert.ok(fmt.text.includes("5 videos a weekday, $1,200/month"));
+  const lite = welcomeEmail({ firstName: "Jay", link: "https://x/l", contractReady: true, kickoffUrl: null, plan: { videos: 3, baseCents: 60000 } });
+  assert.ok(lite.text.includes("If you pass your trial: 3 videos a weekday, $600/month"));
+});
+
 test("no kickoff link: the self-serve offer from McKenzie", () => {
   const m = welcomeEmail({ firstName: "Jen", link: "https://x/l", contractReady: true, kickoffUrl: null });
   assert.equal(m.fromName, "McKenzie from KESHAH");

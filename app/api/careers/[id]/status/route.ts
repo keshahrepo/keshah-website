@@ -16,13 +16,15 @@ import { CreatorExistsError, createCreatorRecord, onCreatorAccepted } from "@/li
 import { claimOnce, releaseClaim } from "@/lib/interview";
 import { emailConfigured, sendEmail } from "@/lib/email";
 import { CREATOR_FROM_NAME, DENIAL_EMAIL_FIELD, denialEmail, denialEmailDue } from "@/lib/interview-decisions";
-import { DEFAULT_TIMEZONE } from "@/lib/creators/db";
+import { CREATORS_COLLECTION, DEFAULT_TIMEZONE } from "@/lib/creators/db";
 import { isValidTimezone } from "@/lib/creators/time";
 
 export const maxDuration = 60;
 
 /** Creates (or finds) the creator for an accepted application and runs Accept. Never throws. */
-async function creatorFromApplication(appId: string, a: Record<string, unknown>, req: Request) {
+type AcceptPlan = { plan?: "lite" | "full" | "format"; custom_base_cents?: number };
+
+async function creatorFromApplication(appId: string, a: Record<string, unknown>, req: Request, chosen: AcceptPlan = {}) {
   const email = String(a.email ?? "").trim().toLowerCase();
   const name = String(a.full_name ?? "").trim();
   if (!email || !name) return { id: "", error: "The application has no name or email, so no creator was made." };
@@ -43,6 +45,13 @@ async function creatorFromApplication(appId: string, a: Record<string, unknown>,
   } catch (e) {
     if (!(e instanceof CreatorExistsError)) return { id: "", error: e instanceof Error ? e.message : String(e) };
     id = e.creatorId;
+  }
+  // The plan picked at Accept (offer email names it). Format creators get their own-concept slots.
+  if (chosen.plan) {
+    await getFirebaseAdmin().db.collection(CREATORS_COLLECTION).doc(id).update({
+      pay_plan: chosen.plan,
+      ...(chosen.plan === "format" ? { format_creator: true, ...(chosen.custom_base_cents ? { custom_base_cents: chosen.custom_base_cents } : {}) } : {}),
+    }).catch((e) => console.error("accept plan save failed:", e));
   }
   try {
     const res = await onCreatorAccepted(id, { siteUrl: process.env.NEXT_PUBLIC_SITE_URL || new URL(req.url).origin });
@@ -90,7 +99,11 @@ export async function POST(
   }
   try {
     const { id } = await params;
-    const body = (await req.json()) as { status?: string };
+    const body = (await req.json()) as { status?: string; plan?: string; custom_base_cents?: number };
+    const chosen: AcceptPlan = {
+      ...(body.plan === "lite" || body.plan === "full" || body.plan === "format" ? { plan: body.plan } : {}),
+      ...(Number.isInteger(body.custom_base_cents) && Number(body.custom_base_cents) > 0 ? { custom_base_cents: Number(body.custom_base_cents) } : {}),
+    };
     const status = (body.status ?? "").trim();
     if (!ALLOWED.has(status)) {
       return NextResponse.json({ error: "Invalid status." }, { status: 400 });
@@ -124,7 +137,7 @@ export async function POST(
     if (status === "accepted" && !wasAccepted) {
       // One tap: the application becomes a creator, then the Accept steps run
       // (keshah.com inbox, welcome email with the app link, v2 contract).
-      creator = await creatorFromApplication(id, before.data() ?? {}, req);
+      creator = await creatorFromApplication(id, before.data() ?? {}, req, chosen);
       // KESHAH Creators app push. notify() never throws.
       await notify({ applicationId: id, email: (before.get("email") as string) || null }, PUSH_COPY.accepted);
     }

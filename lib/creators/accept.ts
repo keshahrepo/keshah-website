@@ -20,10 +20,21 @@ import { newInvite, setPasswordUrl, welcomeEmail } from "./invite";
 import { contractDeadlineFor, deadlineLong, deadlineOf, getsDeadline } from "./deadline";
 import { assignPooledLink } from "./link-pool";
 import { skipPinnedVideo } from "./pinned-video";
-import { TRIAL_NEW_DAY_CENTS } from "./pay";
+import { TRIAL_NEW_DAY_CENTS, planBaseCents, planFieldsOf, planVideos } from "./pay";
 import type { AcceptRecord, AcceptStepKey, AcceptStepRecord } from "./types";
 
 export const ACCEPT_STEPS: AcceptStepKey[] = ["group", "invite", "contract"];
+
+/** A brand-new offer (not someone already paid or credited with months, like Isai). */
+function isNewOffer(d: DocumentData): boolean {
+  return !d.accepted_at && !d.trial_plan && !d.start_date && !Number(d.starting_completed_months ?? 0);
+}
+
+/** The plan an offer email names: the creator's pay_plan, Full by default. */
+export function offerPlan(d: DocumentData): { videos: number; baseCents: number } {
+  const p = planFieldsOf({ pay_plan: d.pay_plan || "full", custom_base_cents: d.custom_base_cents });
+  return { videos: planVideos(p), baseCents: planBaseCents(p) ?? 100000 };
+}
 const LOCK_MS = 120_000;
 
 function ref(id: string) {
@@ -155,6 +166,8 @@ export async function acceptCreator(id: string, opts: AcceptOptions): Promise<Ac
               // Already working with us (migrated): portal intro, not an offer email.
               existing: d.status === "active" || d.status === "leaving",
               ...(deadline && d.contract?.status !== "signed" ? { deadlineText: deadlineLong(deadline) } : {}),
+              // New offers: name their plan (Full unless the founder picked another at Accept).
+              ...(isNewOffer(d) || d.pay_plan ? { plan: offerPlan(d) } : {}),
             });
             // Plain text only: reads like a personal Gmail message, which
             // keeps it in Primary instead of Promotions.

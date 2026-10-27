@@ -63,6 +63,12 @@ export const CREATOR_SIGNOFF = "McKenzie\nCreator Coordinator, KESHAH";
 
 /** The pay lines in offer emails (Oct 2026 plans). */
 export const TRIAL_TEXT = "20 posting days, 3 videos a weekday, $30 a day ($600 total)";
+/** "5 videos a weekday, $1,000/month, plus bonuses (...)" for one plan. */
+export function afterTrialText(plan: { videos: number; baseCents: number }): string {
+  const usd = `$${(plan.baseCents / 100).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+  return `${plan.videos} videos a weekday, ${usd}/month, plus bonuses ($15 when a video hits 100K views, $100 total at 1M)`;
+}
+
 export const AFTER_TRIAL_TEXT =
   "5 videos a weekday for $1,000/month, or 3 a weekday for $600/month, plus bonuses ($15 when a video hits 100K views, $100 total at 1M)";
 
@@ -95,6 +101,8 @@ export function welcomeEmail(input: {
   deadlineText?: string;
   /** The kickoff booking link (default: CREATOR_KICKOFF_URL). Null: the self-serve offer. */
   kickoffUrl?: string | null;
+  /** Their plan after the trial: the email names just this one. Unset: both standard plans. */
+  plan?: { videos: number; baseCents: number };
 }): {
   subject: string;
   text: string;
@@ -134,7 +142,8 @@ export function welcomeEmail(input: {
   }
   const app = creatorAppUrl();
   const kickoff = input.kickoffUrl === undefined ? creatorKickoffUrl() : input.kickoffUrl;
-  if (kickoff) return kickoffOfferEmail(first, kickoff, app, input.link, input.deadlineText);
+  const afterText = input.plan ? afterTrialText(input.plan) : AFTER_TRIAL_TEXT;
+  if (kickoff) return kickoffOfferEmail(first, kickoff, app, input.link, input.deadlineText, afterText);
   // The @keshah.com address isn't in this email on purpose: the app's Accounts
   // step shows it when they need it, with how to use it.
   //
@@ -149,7 +158,7 @@ export function welcomeEmail(input: {
     ? "Sign your contract. It's the first step in the app, and the app walks you through the rest."
     : "Sign your contract. It'll be the first step in the app shortly, and the app walks you through the rest.";
   const trial = TRIAL_TEXT;
-  const after = AFTER_TRIAL_TEXT;
+  const after = afterText;
   const closing = "We are excited to have you on the team. If you have any questions, feel free to reply to this email.";
 
   const text = [
@@ -217,6 +226,7 @@ function kickoffOfferEmail(
   app: string | null,
   setPasswordLink: string,
   deadlineText?: string,
+  afterText: string = AFTER_TRIAL_TEXT,
 ): { subject: string; text: string; html: string; fromName: string } {
   const opener = "Congratulations! I'd love to have you on the KESHAH creator team.";
   const book = "Next step: book a 15-minute kickoff with me. We'll set everything up together on the call: your contract, the app and your new accounts. Have your phone with you.";
@@ -225,7 +235,7 @@ function kickoffOfferEmail(
     ? "If you'd like to read your contract before the call, it's in the KESHAH Creators app. It's in early access through TestFlight, Apple's app for early access, so install TestFlight first if it asks. Sign in with the email this message was sent to."
     : "If you'd like to read your contract before the call, set your password here and it's in your portal. The link works once and expires in 7 days.";
   const trial = TRIAL_TEXT;
-  const after = AFTER_TRIAL_TEXT;
+  const after = afterText;
   const closing = "If you have any questions before then, just reply to this email.";
   const text = [
     `Hi ${first},`,
