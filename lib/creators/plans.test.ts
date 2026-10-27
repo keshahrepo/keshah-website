@@ -53,3 +53,14 @@ test("planFieldsOf keeps only valid values", () => {
   assert.deepEqual(planFieldsOf({ pay_plan: "full", trial_day_cents: 3000 }), { pay_plan: "full", trial_day_cents: 3000 });
   assert.deepEqual(planFieldsOf({ pay_plan: "gold", custom_base_cents: -1, trial_day_cents: "x" }), {});
 });
+
+import { BIO_CTA, ctaFor } from "./proven-db";
+
+test("endings: bio CTA unless the creator uses a pinned video; 3-step scripts keep theirs", () => {
+  const v = { cta_line: "It's all in my pinned video." } as Parameters<typeof ctaFor>[1];
+  assert.equal(ctaFor({}, v).cta_line, BIO_CTA);
+  assert.equal(ctaFor({ cta_style: "bio" }, v).cta_line, BIO_CTA);
+  assert.equal(ctaFor({ cta_style: "pinned" }, v).cta_line, "It's all in my pinned video.");
+  const lined = { ...v, lines: [{ text: "x" }] } as Parameters<typeof ctaFor>[1];
+  assert.equal(ctaFor({}, lined).cta_line, "It's all in my pinned video.");
+});

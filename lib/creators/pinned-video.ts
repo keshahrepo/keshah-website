@@ -29,6 +29,24 @@ export interface PinnedVideo {
   approved_at?: string;
   /** The founder checked it by hand ("Mark as pinned"). */
   marked_pinned_at?: string;
+  /** No pinned video for this creator (Oct 2026: new creators start posting on day one). */
+  skipped?: boolean;
+}
+
+export const SKIPPED_PATH = "skipped";
+
+/**
+ * New creators have no pinned video: their first posting day is a normal day.
+ * The app treats an approved, marked-pinned video as done, so this marker
+ * turns the pinned day off without an app update. Leaves an existing one alone.
+ */
+export async function skipPinnedVideo(id: string, now: Date = new Date(), store?: Firestore): Promise<boolean> {
+  const ref = db(store).collection(CREATORS_COLLECTION).doc(id);
+  const snap = await ref.get();
+  if (snap.data()?.pinned_video) return false;
+  const iso = now.toISOString();
+  await ref.update({ pinned_video: { status: "approved", path: SKIPPED_PATH, skipped: true, submitted_at: iso, approved_at: iso, marked_pinned_at: iso } });
+  return true;
 }
 
 /** Where the approved video is pinned: a pinned post on each app, posted after approval. */
@@ -197,6 +215,6 @@ export async function reviewPinned(id: string, action: "approve" | "changes", no
 /** For the founder's review screen: the video to watch (signed for an hour). */
 export async function pinnedForReview(id: string): Promise<(PinnedVideo & { video_url: string }) | null> {
   const cur = pinnedOf((await db().collection(CREATORS_COLLECTION).doc(id).get()).data());
-  if (!cur) return null;
+  if (!cur || cur.skipped) return null;
   return { ...cur, video_url: cur.path ? await signedReadUrl(cur.path, 60) : "" };
 }

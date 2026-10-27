@@ -19,6 +19,7 @@ import { groupsClientFromEnv, groupsConfigured, provisionCreatorGroup } from "./
 import { newInvite, setPasswordUrl, welcomeEmail } from "./invite";
 import { contractDeadlineFor, deadlineLong, deadlineOf, getsDeadline } from "./deadline";
 import { assignPooledLink } from "./link-pool";
+import { skipPinnedVideo } from "./pinned-video";
 import { TRIAL_NEW_DAY_CENTS } from "./pay";
 import type { AcceptRecord, AcceptStepKey, AcceptStepRecord } from "./types";
 
@@ -210,6 +211,8 @@ export async function acceptCreator(id: string, opts: AcceptOptions): Promise<Ac
     // New offers get a tracking link from the pool now, so the bio step never waits on the founder.
     if (d.status !== "active" && d.status !== "leaving") {
       await assignPooledLink(id).catch((e) => console.error("link pool assign failed:", e));
+      // No pinned video for new creators: day one is a normal posting day.
+      await skipPinnedVideo(id).catch((e) => console.error("pinned skip failed:", e));
     }
   } finally {
     await r.update({ "accept.running_until": null }).catch((e) => console.error("accept unlock failed:", e));

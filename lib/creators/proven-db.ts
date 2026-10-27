@@ -761,6 +761,20 @@ async function pickContext(db: Firestore, creator: CreatorProfile, date: YyyyMmD
   };
 }
 
+/**
+ * The ending for creators without a pinned video (everyone but cta_style
+ * "pinned"): send viewers to the app link in their bio. The founder's wording.
+ */
+export const BIO_CTA =
+  "A lot of people ask me what's the scalp massage app. I've put it in my bio. Please don't DM me that you can't find it, it's the only link there. Go to my profile and you'll see it.";
+
+export function ctaFor(creator: Pick<CreatorProfile, "cta_style">, v: PublicProven): PublicProven {
+  if (creator.cta_style === "pinned") return v;
+  // Line-by-line scripts (the 3-step format) carry their own ending.
+  if (v.lines?.length) return v;
+  return { ...v, cta_line: BIO_CTA };
+}
+
 /** Full docs for just these videos (the day's picks). */
 async function loadFull(db: Firestore, ids: string[]): Promise<Map<string, ProvenVideo>> {
   const out = new Map<string, ProvenVideo>();
@@ -778,13 +792,14 @@ function payload(
   byId: Map<string, ProvenVideo>,
   canSwap: boolean,
   attribution: Record<string, SlotAttribution> = {},
+  creator: Pick<CreatorProfile, "cta_style"> = {},
 ): PicksPayload {
   const shown = picks.filter((p) => byId.has(p.proven_id));
   const pickSlots = new Set(shown.map((p) => p.slot));
   return {
     date,
     given,
-    picks: shown.map((p) => ({ slot: p.slot, video: publicProven(p.proven_id, byId.get(p.proven_id)!), posted: pickPosted(attribution[String(p.slot)]) })),
+    picks: shown.map((p) => ({ slot: p.slot, video: ctaFor(creator, publicProven(p.proven_id, byId.get(p.proven_id)!)), posted: pickPosted(attribution[String(p.slot)]) })),
     extra_posted: Object.entries(attribution)
       .filter(([k]) => !pickSlots.has(Number(k)))
       .map(([k, a]) => ({ slot: Number(k), posted: pickPosted(a) }))
@@ -888,7 +903,7 @@ export async function getDailyPicks(creator: CreatorProfile, opts: { db?: Firest
     current: result.picks.map((p) => p.proven_id),
     swappedOut: result.swappedOut,
   });
-  return payload(date, given, result.picks, all, canSwap, result.attribution);
+  return payload(date, given, result.picks, all, canSwap, result.attribution, creator);
 }
 
 /** Swap the pick in `slot` for the next best active video under the same rules. */
@@ -934,7 +949,7 @@ export async function swapPick(creator: CreatorProfile, slot: number, opts: { db
     swappedOut: res.swappedOut,
   });
   const full = await loadFull(db, res.picks.map((p) => p.proven_id));
-  return payload(date, given, res.picks, full, canSwap, res.attribution);
+  return payload(date, given, res.picks, full, canSwap, res.attribution, creator);
 }
 
 // ================================================================ daily job (after the deep post sync)

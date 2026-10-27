@@ -206,6 +206,12 @@ export interface CreatorPayFields {
 
 /** Portal / onboarding fields added onto a ContentCreators doc. */
 export interface CreatorPortalFields {
+  /**
+   * How their videos end: "pinned" sends viewers to the pinned video on their
+   * profile (Isai); unset/"bio" sends them to the app link in their bio (new
+   * creators have no pinned video).
+   */
+  cta_style?: "pinned" | "bio";
   /** The @keshah.com address KESHAH set up for them (accounts are owned by KESHAH). */
   keshah_email: string;
   tiktok_handle: string;
