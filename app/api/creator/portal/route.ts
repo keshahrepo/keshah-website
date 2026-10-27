@@ -35,7 +35,7 @@ import {
   WARMUP_TEXT,
   publicQuiz,
 } from "@/lib/creators/onboarding-content";
-import { isWeekday, monthOf, videosRequiredOn } from "@/lib/creators/pay";
+import { isWeekday, monthOf, planBaseCents, planVideos, trialDayCents, videosRequiredOn } from "@/lib/creators/pay";
 import { msUntilLocalDeadline } from "@/lib/creators/time";
 import { creatorDeadline } from "@/lib/creators/deadline";
 import { errorResponse, publicCreator, requireCreator } from "../_auth";
@@ -115,6 +115,9 @@ export async function GET(req: NextRequest) {
         posting_rules: POSTING_RULES,
         // 3 during a v2 trial, 5 after (and always 5 on the original plan).
         videos_per_weekday: videosRequiredOn(creator.start_date ? creator : { ...creator, start_date: today }, history.postingDays, today),
+        // Their monthly plan after the trial (null on the original ladder), and their trial day pay.
+        plan: planBaseCents(creator) !== null ? { name: creator.pay_plan, base_cents: planBaseCents(creator), videos_per_weekday: planVideos(creator) } : null,
+        trial_day_cents: trialDayCents(creator),
       },
       today: {
         date: today,
