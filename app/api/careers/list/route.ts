@@ -45,6 +45,9 @@ export async function GET() {
         wants_virality: x.wants_virality ?? null,
         posted_before: x.posted_before ?? null,
         social_handle: x.social_handle ?? null,
+        // Where they came from ("tiktok-outreach" for creators we emailed).
+        source: x.source ?? null,
+        note: x.note ?? null,
         calendly_event_start_time: x.calendly_event_start_time ?? null,
         calendly_join_url: x.calendly_join_url ?? null,
         has_video: !!(typeof x.video_object_path === "string" && x.video_object_path.trim()),
