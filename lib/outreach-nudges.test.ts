@@ -23,11 +23,10 @@ test("inSendWindow: weekday 9 AM to noon ET only", () => {
   assert.equal(inSendWindow(new Date("2026-11-02T15:00:00Z")), true); // Mon 10 AM EST
 });
 
-test("noReplyNudge names their other video, else says they'd be a great fit", () => {
-  const a = noReplyNudge("Hey Abbie,", "move-in day video");
-  assert.match(a, /^Hey Abbie,\n\nQuick update since my last email: we've just added a \$1,000\/month option for select creators, and after seeing your move-in day video, I think you'd be a great fit\./);
+test("noReplyNudge: the $1,000 option, one last time, no video mention", () => {
+  const a = noReplyNudge("Hey Abbie,");
+  assert.match(a, /^Hey Abbie,\n\nQuick update since my last email: we've just added a \$1,000\/month option for select creators\. I wanted to share it with you and reach out one last time because I really think your vibe fits KESHAH\./);
   assert.match(a, /calendly\.com\/aadi-keshah\/creator-interview\n\nAadi$/);
-  assert.match(noReplyNudge("Hey Ben,", null), /select creators, and I think you'd be a great fit\./);
   for (const s of [a, calendarNudge("Hey Raf,")]) assert.ok(!s.includes("—"));
 });
 

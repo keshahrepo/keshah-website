@@ -5,7 +5,7 @@
 import { NextResponse } from "next/server";
 import { requireCronSecret } from "@/lib/support/auth";
 import { sendOutreachNudges, sendQueuedOutreach, syncOutreachReplies } from "@/lib/outreach-db";
-import { writeMissingNotes, writeMissingNudgeVideos } from "@/lib/outreach-notes";
+import { writeMissingNotes } from "@/lib/outreach-notes";
 import { healthError, healthOk, outreachDailyPushes } from "@/lib/outreach-health";
 
 export const dynamic = "force-dynamic";
@@ -31,9 +31,7 @@ export async function GET(req: Request) {
     // The noon check and the 1 PM summary push (weekdays, ET).
     const pushes = dry ? [] : await outreachDailyPushes().catch(() => []);
     const notes = dry ? null : await writeMissingNotes({ limit: 3, deadlineMs: start + 275_000 });
-    // A day in, no reply: pick another of their videos for the follow-up.
-    const nudgeVideos = dry ? null : await writeMissingNudgeVideos({ limit: 5, deadlineMs: start + 290_000 });
-    return NextResponse.json({ ok: true, ...sync, nudges, firstEmails, pushes, notes, nudgeVideos });
+    return NextResponse.json({ ok: true, ...sync, nudges, firstEmails, pushes, notes });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }

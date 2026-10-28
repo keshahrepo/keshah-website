@@ -4,8 +4,7 @@
  * outreach-db.ts sendOutreachNudges). Pure rules and copy here; tests in
  * outreach-nudges.test.ts.
  *
- *   noreply   status "emailed" 48h+ after our email: the $1,000 option, naming
- *             another of their videos (nudge_video) when we have one
+ *   noreply   status "emailed" 48h+ after our email: the $1,000 option, one last time
  *   calendar  status "invited" 48h+ after the founder sent the Calendly link
  *
  * The 48 hours count weekends; sends go out on weekday mornings (US Eastern),
@@ -13,7 +12,6 @@
  * while Settings/outreach_nudges.enabled is true.
  *
  * Fields on careers_applications:
- *   nudge_video              "move-in day video": another video of theirs, for the noreply nudge
  *   nudge_noreply_sent_at    ISO, when the noreply nudge went out
  *   nudge_calendar_sent_at   ISO, when the calendar nudge went out
  *   nudge_skipped            { noreply?: reason, calendar?: reason }: not sent (they or you wrote since)
@@ -67,13 +65,11 @@ export function greeting(app: Record<string, unknown>): string {
   return first ? `Hey ${first},` : "Hey,";
 }
 
-export function noReplyNudge(greet: string, video?: string | null): string {
-  const v = String(video ?? "").trim();
-  const fit = v ? `, and after seeing your ${v}, I think you'd be a great fit.` : `, and I think you'd be a great fit.`;
+export function noReplyNudge(greet: string): string {
   return [
     greet,
     "",
-    `Quick update since my last email: we've just added a $1,000/month option for select creators${fit}`,
+    "Quick update since my last email: we've just added a $1,000/month option for select creators. I wanted to share it with you and reach out one last time because I really think your vibe fits KESHAH.",
     "",
     "If you're interested, you can grab a 15-minute call here:",
     INTERVIEW_URL,

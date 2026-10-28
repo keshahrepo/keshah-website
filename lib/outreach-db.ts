@@ -210,7 +210,7 @@ export async function sendOutreachNudges(opts: { dry?: boolean; now?: Date; dead
         if (!opts.dry) await d.ref.set({ nudge_skipped: { [kind]: reason } }, { merge: true });
         continue;
       }
-      const text = kind === "noreply" ? noReplyNudge(greeting(x), typeof x.nudge_video === "string" ? x.nudge_video : null) : calendarNudge(greeting(x));
+      const text = kind === "noreply" ? noReplyNudge(greeting(x)) : calendarNudge(greeting(x));
       if (!opts.dry) {
         await sendEmail({ to: email, subject: replySubject(last!.subject), text, inReplyTo: last!.id, references: ours.map((o) => o.id) });
         await d.ref.set({ [kind === "noreply" ? "nudge_noreply_sent_at" : "nudge_calendar_sent_at"]: new Date().toISOString(), last_updated_at: FieldValue.serverTimestamp() }, { merge: true });
