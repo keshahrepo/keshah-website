@@ -236,8 +236,10 @@ type TrialProfile = Pick<PayProfile, "start_date" | "trial_plan"> &
 /** The v2 trial for this profile, or null on the original plan. */
 export function trialWindow(profile: TrialProfile | undefined, postingDays: PostingDay[]): TrialWindow | null {
   if (profile?.trial_plan !== "v2") return null;
+  // A trial day: 3+ complete videos, or a day the founder counted (the first-day pinned video).
+  const counted = new Set(postingDays.filter((p) => p.counted_by_founder && isWeekday(p.date)).map((p) => p.date));
   const days = [...weekdayCounts(postingDays)]
-    .filter(([d, n]) => n >= TRIAL_V2_VIDEOS && d >= profile.start_date && (!profile.ended_on || d <= profile.ended_on))
+    .filter(([d, n]) => (n >= TRIAL_V2_VIDEOS || counted.has(d)) && d >= profile.start_date && (!profile.ended_on || d <= profile.ended_on))
     .map(([d]) => d)
     .sort()
     .slice(0, TRIAL_V2_DAYS);

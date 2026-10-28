@@ -111,7 +111,7 @@ export const FIRST_POSTING_DAY_TEXT = "Your first posting day is the weekday aft
 export const WARMUP_DONE_TEXT = "Warm-up done. You can start posting on your first posting day.";
 
 export const POSTING_RULES: string[] = [
-  "Post unique videos every weekday, Monday to Friday: 3 a day during your 20-day paid trial, then 5 a day once you pass.",
+  "Post unique videos every weekday, Monday to Friday: 3 a day during your 20-day paid trial, then the number in your plan once you pass.",
   "Post each video on both TikTok and Instagram.",
   "Your deadline is 11:59 pm in your own timezone.",
   "Log both links for every video on the Today tab before the deadline.",

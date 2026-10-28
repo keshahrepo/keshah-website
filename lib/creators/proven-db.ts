@@ -762,14 +762,14 @@ async function pickContext(db: Firestore, creator: CreatorProfile, date: YyyyMmD
 }
 
 /**
- * The ending for creators without a pinned video (everyone but cta_style
- * "pinned"): send viewers to the app link in their bio. The founder's wording.
+ * The bio-link ending, for creators testing it (cta_style "bio"). Everyone else
+ * keeps the proven ending that sends viewers to their pinned video.
  */
 export const BIO_CTA =
   "A lot of people ask me what's the scalp massage app. I've put it in my bio. Please don't DM me that you can't find it, it's the only link there. Go to my profile and you'll see it.";
 
 export function ctaFor(creator: Pick<CreatorProfile, "cta_style">, v: PublicProven): PublicProven {
-  if (creator.cta_style === "pinned") return v;
+  if (creator.cta_style !== "bio") return v;
   // Line-by-line scripts (the 3-step format) carry their own ending.
   if (v.lines?.length) return v;
   return { ...v, cta_line: BIO_CTA };

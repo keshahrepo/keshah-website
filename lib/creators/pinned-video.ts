@@ -166,10 +166,15 @@ export async function submitPinned(id: string, path: string, now: Date = new Dat
   const onb = await getOnboarding(id);
   // New creators: their first posting day. Asked for by the founder: whichever weekday they send it.
   const counts = !prev?.counted_day && isWeekday(today) && (requested || (!hasStarted(creator) && !!onb.completed_at));
+  // A new creator's first-day pinned video (the founder's proven script) is approved
+  // on upload, so they can post and pin it straight away. One the founder asked
+  // an existing creator for still waits for review.
+  const autoApprove = !requested;
   const next: PinnedVideo = {
-    status: "submitted",
+    status: autoApprove ? "approved" : "submitted",
     path,
     submitted_at: iso,
+    ...(autoApprove ? { approved_at: iso } : {}),
     ...(prev?.counted_day ? { counted_day: prev.counted_day } : counts ? { counted_day: today } : {}),
   };
   await ref.update({ pinned_video: next });
@@ -179,11 +184,18 @@ export async function submitPinned(id: string, path: string, now: Date = new Dat
       await notifyFounder({ title: `${creator.name || "A creator"} started posting`, body: "Their pinned video is in for review.", data: { type: "founder_creator", id } }).catch(() => {});
     }
   }
-  await notifyFounder({
-    title: prev && !requested ? `${creator.name || "A creator"} sent their pinned video again` : `${creator.name || "A creator"} sent their pinned video`,
-    body: "Tap to review it.",
-    data: { type: "founder_pinned", id },
-  }).catch(() => {});
+  if (autoApprove) {
+    await notify(
+      { creatorId: id, email: creator.email || null },
+      { title: "Your pinned video is in", body: "Post it on TikTok and Instagram, then pin it.", data: { type: "pinned_approved" } },
+    );
+  } else {
+    await notifyFounder({
+      title: prev ? `${creator.name || "A creator"} sent their pinned video again` : `${creator.name || "A creator"} sent their pinned video`,
+      body: "Tap to review it.",
+      data: { type: "founder_pinned", id },
+    }).catch(() => {});
+  }
   return next;
 }
 

@@ -56,11 +56,19 @@ test("planFieldsOf keeps only valid values", () => {
 
 import { BIO_CTA, ctaFor } from "./proven-db";
 
-test("endings: bio CTA unless the creator uses a pinned video; 3-step scripts keep theirs", () => {
+test("endings: the proven pinned-video ending unless the creator tests the bio one; 3-step scripts keep theirs", () => {
   const v = { cta_line: "It's all in my pinned video." } as Parameters<typeof ctaFor>[1];
-  assert.equal(ctaFor({}, v).cta_line, BIO_CTA);
-  assert.equal(ctaFor({ cta_style: "bio" }, v).cta_line, BIO_CTA);
+  assert.equal(ctaFor({}, v).cta_line, "It's all in my pinned video.");
   assert.equal(ctaFor({ cta_style: "pinned" }, v).cta_line, "It's all in my pinned video.");
+  assert.equal(ctaFor({ cta_style: "bio" }, v).cta_line, BIO_CTA);
   const lined = { ...v, lines: [{ text: "x" }] } as Parameters<typeof ctaFor>[1];
-  assert.equal(ctaFor({}, lined).cta_line, "It's all in my pinned video.");
+  assert.equal(ctaFor({ cta_style: "bio" }, lined).cta_line, "It's all in my pinned video.");
+});
+
+test("the first-day pinned video (a founder-counted day) is a paid trial day", () => {
+  const pinnedDay: PostingDay = { date: "2026-10-01", videos: [], logged_at: "2026-10-01T20:00:00Z", counted_by_founder: "Pinned video sent for review" } as PostingDay;
+  const rest = weekdaysBetween("2026-10-02", "2026-10-09").map((d) => day(d, 3));
+  const s = monthSummary(prof({ pay_plan: "full" }), "2026-10", [pinnedDay, ...rest], [], [], [], { today: "2026-10-12" });
+  assert.equal(s.trialDays, 7);
+  assert.equal(s.trialCents, 7 * 3000);
 });
