@@ -61,13 +61,17 @@ export function recruitStage(app: Record<string, unknown>, creator?: CreatorLite
 export const INTERVIEW_CALENDLY_URL = "https://calendly.com/aadi-keshah/creator-interview";
 
 /** The first few lines of a reply, without the quoted email under it. */
-export function replySnippet(text: string): string {
+/** What a person wrote in an email, without the thread quoted under it. */
+export function freshText(text: string): string {
   const cut = text.split(/\r?\n(?:On .{5,120}wrote:|-{2,}\s*Original Message|From: )/)[0] ?? "";
-  const lines = cut
+  return cut
     .split(/\r?\n/)
     .filter((l) => !l.trim().startsWith(">"))
-    .join(" ");
-  return lines.replace(/\s+/g, " ").trim().slice(0, 400);
+    .join("\n");
+}
+
+export function replySnippet(text: string): string {
+  return freshText(text).replace(/\s+/g, " ").trim().slice(0, 400);
 }
 
 /** Lowercased address out of "Name <a@b.com>" or "a@b.com". */

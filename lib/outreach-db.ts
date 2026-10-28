@@ -8,7 +8,7 @@ import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
-import { OUTREACH_SOURCE, addressOf, firstOutreachEmail, replySnippet } from "./outreach";
+import { OUTREACH_SOURCE, addressOf, firstOutreachEmail, freshText, replySnippet } from "./outreach";
 import { NUDGE_DAILY_CAP, NUDGE_RUN_LIMIT, calendarNudge, easternNow, greeting, inSendWindow, isAutoNudge, noReplyNudge, nudgeDue, replySubject, type NudgeKind } from "./outreach-nudges";
 import { sendEmail } from "@/lib/email";
 
@@ -126,7 +126,9 @@ export async function syncOutreachReplies(opts: { days?: number; dry?: boolean; 
         if (!who) continue;
         const doc = open.get(who)!;
         const parsed = await simpleParser(msg.source as Buffer);
-        if (!/calendly\.com/i.test(parsed.text ?? "") && !/calendly\.com/i.test(String(parsed.html ?? ""))) continue;
+        // Only the link in what the founder wrote counts, not one in the thread quoted under a reply.
+        const fresh = parsed.text ? freshText(parsed.text) : String(parsed.html ?? "").split(/<div class="gmail_quote/)[0];
+        if (!/calendly\.com/i.test(fresh)) continue;
         // Our automatic follow-up has the link too: that's not the founder sending the calendar.
         if (isAutoNudge(doc.data(), parsed.date ?? null)) continue;
         open.delete(who);

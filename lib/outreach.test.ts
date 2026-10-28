@@ -1,7 +1,7 @@
 // Run: npx tsx --test lib/outreach.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addressOf, recruitStage, replySnippet } from "./outreach";
+import { addressOf, recruitStage, replySnippet, freshText } from "./outreach";
 
 test("stages follow the pipeline", () => {
   assert.equal(recruitStage({ status: "emailed" }), "emailed");
@@ -36,4 +36,10 @@ test("firstOutreachEmail: greeting, their line, $600 pay, no $1,000", async () =
   assert.match(m.text, /pay starts at \$600\/month plus bonuses/);
   assert.ok(!m.text.includes("1,000") && !m.text.includes("—"));
   assert.match(m.text, /Founder, KESHAH · UC Berkeley EECS$/);
+});
+
+test("freshText drops the quoted thread, so a quoted Calendly link isn't the founder sending it", () => {
+  const reply = "Sounds great, talk soon!\n\nOn Wed, Oct 28, 2026 at 10:16 AM Aadi <contact@keshah.com> wrote:\n> grab a 15-minute call here: https://calendly.com/aadi-keshah/creator-interview";
+  assert.equal(/calendly\.com/.test(freshText(reply)), false);
+  assert.equal(/calendly\.com/.test(freshText("Here's my calendar: https://calendly.com/x\n\nOn Tue wrote stuff")), true);
 });
