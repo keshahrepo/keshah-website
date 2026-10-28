@@ -4,11 +4,11 @@
 // (lib/outreach-nudges.ts). GET ?dry=1 reports without writing or sending.
 import { NextResponse } from "next/server";
 import { requireCronSecret } from "@/lib/support/auth";
-import { sendOutreachNudges, syncOutreachReplies } from "@/lib/outreach-db";
+import { sendOutreachNudges, sendQueuedOutreach, syncOutreachReplies } from "@/lib/outreach-db";
 import { writeMissingNotes, writeMissingNudgeVideos } from "@/lib/outreach-notes";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 export async function GET(req: Request) {
   if (!requireCronSecret(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -17,11 +17,13 @@ export async function GET(req: Request) {
     const start = Date.now();
     // Replies first, so nobody who just replied gets a follow-up.
     const sync = await syncOutreachReplies({ dry });
-    const nudges = await sendOutreachNudges({ dry, deadlineMs: start + 60_000 });
-    const notes = dry ? null : await writeMissingNotes({ limit: 3, deadlineMs: start + 80_000 });
+    const nudges = await sendOutreachNudges({ dry, deadlineMs: start + 110_000 });
+    // New creators from the daily search: their first email (weekdays from 11 AM ET).
+    const firstEmails = await sendQueuedOutreach({ dry, deadlineMs: start + 170_000 });
+    const notes = dry ? null : await writeMissingNotes({ limit: 3, deadlineMs: start + 220_000 });
     // A day in, no reply: pick another of their videos for the follow-up.
-    const nudgeVideos = dry ? null : await writeMissingNudgeVideos({ limit: 5, deadlineMs: start + 95_000 });
-    return NextResponse.json({ ok: true, ...sync, nudges, notes, nudgeVideos });
+    const nudgeVideos = dry ? null : await writeMissingNudgeVideos({ limit: 5, deadlineMs: start + 260_000 });
+    return NextResponse.json({ ok: true, ...sync, nudges, firstEmails, notes, nudgeVideos });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }

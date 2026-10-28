@@ -8,7 +8,7 @@ import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
-import { OUTREACH_SOURCE, addressOf, replySnippet } from "./outreach";
+import { OUTREACH_SOURCE, addressOf, firstOutreachEmail, replySnippet } from "./outreach";
 import { NUDGE_DAILY_CAP, NUDGE_RUN_LIMIT, calendarNudge, easternNow, greeting, inSendWindow, noReplyNudge, nudgeDue, replySubject, type NudgeKind } from "./outreach-nudges";
 import { sendEmail } from "@/lib/email";
 
@@ -22,6 +22,8 @@ export interface OutreachCreator {
   /** The line about their video in our email ("I came across your video…"). */
   video_line?: string;
   emailed_at?: string;
+  /** "Hey Abbie," as written in the first email (the follow-ups reuse it). */
+  greet?: string;
 }
 
 /** Adds a creator we just emailed. Never touches someone already in the list (any status). */
@@ -40,6 +42,7 @@ export async function addOutreachCreator(c: OutreachCreator, store?: Firestore):
     ...(c.social_handle ? { social_handle: c.social_handle } : {}),
     ...(typeof c.followers === "number" ? { followers: c.followers } : {}),
     ...(c.video_line ? { outreach_video_line: c.video_line } : {}),
+    ...(c.greet ? { outreach_greet: c.greet } : {}),
     emailed_at: c.emailed_at ?? new Date().toISOString(),
     consent: false,
     submitted_at: now,
@@ -207,4 +210,60 @@ export async function sendOutreachNudges(opts: { dry?: boolean; now?: Date; dead
     await client.logout().catch(() => {});
   }
   return { sent, skipped };
+}
+
+// ---------------------------------------------------------------- daily send queue
+
+/**
+ * outreach_queue/{id}: creators found by the daily search, waiting for their
+ * first email. { email, full_name, greet, line, social_handle, followers,
+ * status: "queued" | "sent" | "skipped", queued_at, sent_at?, skip_reason? }.
+ * Weekdays from 11 AM ET, a few per cron run, up to the daily cap
+ * (Settings/outreach_daily.cap, default 25); each send adds them to the
+ * pipeline as "emailed".
+ */
+export const QUEUE = "outreach_queue";
+export const QUEUE_PER_RUN = 4;
+export const QUEUE_DEFAULT_CAP = 25;
+export const QUEUE_FROM_HOUR = 11;
+export const QUEUE_TO_HOUR = 16;
+
+export async function sendQueuedOutreach(opts: { dry?: boolean; now?: Date; deadlineMs?: number; store?: Firestore } = {}): Promise<{ sent: string[]; skipped: string[]; off?: string; cap?: number; sent_today?: number }> {
+  const db = opts.store ?? getFirebaseAdmin().db;
+  const now = opts.now ?? new Date();
+  const sent: string[] = [];
+  const skipped: string[] = [];
+  const settings = (await db.collection("Settings").doc("outreach_daily").get()).data() ?? {};
+  if (settings.paused === true) return { sent, skipped, off: "paused" };
+  const { weekday, hour, date } = easternNow(now);
+  if (weekday < 1 || weekday > 5 || hour < QUEUE_FROM_HOUR || hour >= QUEUE_TO_HOUR) return { sent, skipped, off: "outside weekdays 11 AM to 4 PM ET" };
+  const cap = typeof settings.cap === "number" ? settings.cap : QUEUE_DEFAULT_CAP;
+  const sentSnap = await db.collection(QUEUE).where("status", "==", "sent").get();
+  const sentToday = sentSnap.docs.filter((d) => typeof d.get("sent_at") === "string" && easternNow(new Date(d.get("sent_at"))).date === date).length;
+  const room = Math.min(QUEUE_PER_RUN, cap - sentToday);
+  if (room <= 0) return { sent, skipped, cap, sent_today: sentToday };
+  const queued = (await db.collection(QUEUE).where("status", "==", "queued").get()).docs.sort((a, b) => String(a.get("queued_at")).localeCompare(String(b.get("queued_at"))));
+  for (const q of queued) {
+    if (sent.length >= room) break;
+    if (opts.deadlineMs && Date.now() > opts.deadlineMs) break;
+    const x = q.data();
+    const email = String(x.email ?? "").trim().toLowerCase();
+    // Never a second first email: anyone already in the pipeline is skipped.
+    const exists = email ? !(await db.collection(APPLICATIONS).where("email", "==", email).limit(1).get()).empty : true;
+    if (exists || !x.line) {
+      skipped.push(email || q.id);
+      if (!opts.dry) await q.ref.set({ status: "skipped", skip_reason: exists ? "already in the pipeline" : "no line" }, { merge: true });
+      continue;
+    }
+    const mail = firstOutreachEmail(String(x.greet ?? ""), String(x.line));
+    if (!opts.dry) {
+      await sendEmail({ to: email, subject: mail.subject, text: mail.text });
+      const at = new Date().toISOString();
+      await addOutreachCreator({ email, full_name: String(x.full_name || x.social_handle || email), social_handle: x.social_handle ? String(x.social_handle) : undefined, followers: typeof x.followers === "number" ? x.followers : undefined, video_line: String(x.line), greet: String(x.greet ?? ""), emailed_at: at }, db);
+      await q.ref.set({ status: "sent", sent_at: at }, { merge: true });
+      await new Promise((r) => setTimeout(r, 3000 + Math.floor(Math.random() * 5000)));
+    }
+    sent.push(email);
+  }
+  return { sent, skipped, cap, sent_today: sentToday + sent.length };
 }

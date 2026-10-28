@@ -73,3 +73,24 @@ export function addressOf(from: string): string {
   const m = from.match(/<([^>]+)>/);
   return (m ? m[1] : from).trim().toLowerCase();
 }
+
+/** The first outreach email (from Aadi). `line` = "I came across your … That's exactly what we look for." */
+export const FIRST_EMAIL_SUBJECT = "Paid collab, $600/month";
+
+export function firstOutreachEmail(greet: string, line: string): { subject: string; text: string } {
+  return {
+    subject: FIRST_EMAIL_SUBJECT,
+    text: [
+      greet.trim() || "Hey,",
+      "",
+      `I'm Aadi, founder of KESHAH, a hair care app. ${line.trim()}`,
+      "",
+      "We're hiring a few creators to film short talking videos. You'd post them on new TikTok and Instagram accounts we set up, so nothing goes on your own page. It takes our creators about an hour a day, and pay starts at $600/month plus bonuses.",
+      "",
+      "Would you be up for a 15-min call this week to hear more? Feel free to reply here and I can share my calendar.",
+      "",
+      "Aadi",
+      "Founder, KESHAH \u00b7 UC Berkeley EECS",
+    ].join("\n"),
+  };
+}

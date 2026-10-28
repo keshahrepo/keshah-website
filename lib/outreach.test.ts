@@ -27,3 +27,13 @@ test("reply snippet drops the quoted email", () => {
   assert.equal(replySnippet(t), "Hi Aadi, I'd love to chat! Best, Jay");
   assert.equal(addressOf("Jay <JaySTedTalk@gmail.com>"), "jaystedtalk@gmail.com");
 });
+
+test("firstOutreachEmail: greeting, their line, $600 pay, no $1,000", async () => {
+  const { firstOutreachEmail, FIRST_EMAIL_SUBJECT } = await import("./outreach");
+  const m = firstOutreachEmail("Hey Abbie,", "I came across your GoodNotes tutorial on TikTok, and you're really good at explaining things simply. That's exactly what we look for.");
+  assert.equal(m.subject, FIRST_EMAIL_SUBJECT);
+  assert.match(m.text, /^Hey Abbie,\n\nI'm Aadi, founder of KESHAH, a hair care app\. I came across your GoodNotes tutorial on TikTok/);
+  assert.match(m.text, /pay starts at \$600\/month plus bonuses/);
+  assert.ok(!m.text.includes("1,000") && !m.text.includes("—"));
+  assert.match(m.text, /Founder, KESHAH · UC Berkeley EECS$/);
+});
