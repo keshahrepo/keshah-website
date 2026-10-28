@@ -25,7 +25,7 @@ test("inSendWindow: weekday 9 AM to noon ET only", () => {
 
 test("noReplyNudge: the $1,000 option, one last time, no video mention", () => {
   const a = noReplyNudge("Hey Abbie,");
-  assert.match(a, /^Hey Abbie,\n\nQuick update since my last email: we've just added a \$1,000\/month option for select creators\. I wanted to share it with you and reach out one last time because I really think your vibe fits KESHAH\./);
+  assert.match(a, /^Hey Abbie,\n\nQuick update since my last email: we've just added a new option for select creators: \$1,000\/month \+ bonuses\. I wanted to share it with you and reach out one last time because I really think your vibe fits KESHAH\./);
   assert.match(a, /calendly\.com\/aadi-keshah\/creator-interview\n\nAadi$/);
   for (const s of [a, calendarNudge("Hey Raf,")]) assert.ok(!s.includes("—"));
 });
