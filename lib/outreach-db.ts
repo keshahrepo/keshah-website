@@ -9,7 +9,7 @@ import { simpleParser } from "mailparser";
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { OUTREACH_SOURCE, addressOf, firstOutreachEmail, replySnippet } from "./outreach";
-import { NUDGE_DAILY_CAP, NUDGE_RUN_LIMIT, calendarNudge, easternNow, greeting, inSendWindow, noReplyNudge, nudgeDue, replySubject, type NudgeKind } from "./outreach-nudges";
+import { NUDGE_DAILY_CAP, NUDGE_RUN_LIMIT, calendarNudge, easternNow, greeting, inSendWindow, isAutoNudge, noReplyNudge, nudgeDue, replySubject, type NudgeKind } from "./outreach-nudges";
 import { sendEmail } from "@/lib/email";
 
 const APPLICATIONS = "careers_applications";
@@ -125,9 +125,11 @@ export async function syncOutreachReplies(opts: { days?: number; dry?: boolean; 
         const who = to.find((t) => open.has(t));
         if (!who) continue;
         const doc = open.get(who)!;
-        open.delete(who);
         const parsed = await simpleParser(msg.source as Buffer);
         if (!/calendly\.com/i.test(parsed.text ?? "") && !/calendly\.com/i.test(String(parsed.html ?? ""))) continue;
+        // Our automatic follow-up has the link too: that's not the founder sending the calendar.
+        if (isAutoNudge(doc.data(), parsed.date ?? null)) continue;
+        open.delete(who);
         invited.push({ email: who, name: String(doc.get("full_name") ?? who) });
         if (opts.dry) continue;
         await doc.ref.set({ status: "invited", calendar_sent_at: (parsed.date ?? new Date()).toISOString(), last_updated_at: FieldValue.serverTimestamp() }, { merge: true });

@@ -74,8 +74,17 @@ export function noReplyNudge(greet: string): string {
     "If you're interested, you can grab a 15-minute call here:",
     INTERVIEW_URL,
     "",
+    "Or just reply if you have any questions.",
+    "",
     "Aadi",
+    "Founder, KESHAH \u00b7 UC Berkeley EECS",
   ].join("\n");
+}
+
+/** A Sent message within 15 minutes of a follow-up we sent them: the automatic follow-up, not the founder. */
+export function isAutoNudge(app: Record<string, unknown>, sentAt: Date | null): boolean {
+  if (!sentAt) return false;
+  return [app.nudge_noreply_sent_at, app.nudge_calendar_sent_at].some((v) => typeof v === "string" && Math.abs(Date.parse(v) - sentAt.getTime()) < 15 * 60_000);
 }
 
 export function calendarNudge(greet: string): string {

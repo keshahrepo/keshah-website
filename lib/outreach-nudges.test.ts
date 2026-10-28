@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { calendarNudge, greeting, inSendWindow, noReplyNudge, nudgeDue, replySubject } from "./outreach-nudges";
+import { calendarNudge, greeting, inSendWindow, isAutoNudge, noReplyNudge, nudgeDue, replySubject } from "./outreach-nudges";
 
 const now = Date.parse("2026-10-29T14:00:00Z"); // Thursday 10 AM ET
 
@@ -26,7 +26,7 @@ test("inSendWindow: weekday 9 AM to noon ET only", () => {
 test("noReplyNudge: the $1,000 option, one last time, no video mention", () => {
   const a = noReplyNudge("Hey Abbie,");
   assert.match(a, /^Hey Abbie,\n\nQuick update since my last email: we've just added a new option for select creators: \$1,000\/month \+ bonuses\. I wanted to share it with you and reach out one last time because I really think your vibe fits KESHAH\./);
-  assert.match(a, /calendly\.com\/aadi-keshah\/creator-interview\n\nAadi$/);
+  assert.match(a, /calendly\.com\/aadi-keshah\/creator-interview\n\nOr just reply if you have any questions\.\n\nAadi\nFounder, KESHAH \u00b7 UC Berkeley EECS$/);
   for (const s of [a, calendarNudge("Hey Raf,")]) assert.ok(!s.includes("—"));
 });
 
@@ -35,4 +35,11 @@ test("greeting and reply subject", () => {
   assert.equal(greeting({ full_name: "Raf" }), "Hey Raf,");
   assert.equal(replySubject("Paid collab, $500/month"), "Re: Paid collab, $500/month");
   assert.equal(replySubject("Re: Paid collab"), "Re: Paid collab");
+});
+
+test("isAutoNudge: a Sent message right when we sent their follow-up is ours, not the founder's calendar", () => {
+  const app = { nudge_noreply_sent_at: "2026-10-28T15:00:00Z" };
+  assert.equal(isAutoNudge(app, new Date("2026-10-28T15:00:04Z")), true);
+  assert.equal(isAutoNudge(app, new Date("2026-10-28T17:00:00Z")), false, "the founder replying later with the link");
+  assert.equal(isAutoNudge({}, new Date("2026-10-28T15:00:00Z")), false);
 });
