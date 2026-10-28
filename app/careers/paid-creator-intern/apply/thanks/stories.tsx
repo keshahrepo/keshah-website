@@ -73,7 +73,7 @@ function BgVideoFit({ src, poster, active }: { src: string; poster: string; acti
 function BgStill({ src, width }: { src: string; width: number }) {
   return (
     <div className="cs-still">
-      <img src={src} alt="" style={{ ["--sw" as string]: `${width}%` }} />
+      <img loading="eager" decoding="async" src={src} alt="" style={{ ["--sw" as string]: `${width}%` }} />
     </div>
   );
 }
@@ -166,7 +166,7 @@ export default function CreatorStories({
               </p>
             )}
             <p className="cs-sub cs-in" style={{ animationDelay: "1.2s" }}>
-              Here&apos;s KESHAH&apos;s story, and where you&apos;d fit in.
+              Here&apos;s KESHAH&apos;s story, and how our creators are helping us build the future of haircare.
             </p>
           </div>
         </>
@@ -177,7 +177,7 @@ export default function CreatorStories({
       ms: 0,
       render: (active) => (
         <>
-          <BgVideoFit src="/creator-call/members.mp4" poster="/creator-call/members-still.webp" active={active} />
+          <BgVideoFit src="/creator-call/members.mp4?v=5" poster="/creator-call/members-still.webp?v=5" active={active} />
           <div className="cs-shade" />
           <div className="cs-bottom">
             <p className="cs-kicker cs-in">KESHAH Creator Program</p>
@@ -204,11 +204,11 @@ export default function CreatorStories({
             </h1>
             <div className="cs-ba cs-vis">
               <figure className="cs-pop" style={{ animationDelay: ".45s" }}>
-                <img src="/creator-call/before.webp" alt="Aadi before" />
+                <img loading="eager" decoding="async" src="/creator-call/before.webp?v=5" alt="Aadi before" />
                 <figcaption>Before</figcaption>
               </figure>
               <figure className="cs-pop" style={{ animationDelay: ".85s" }}>
-                <img src="/creator-call/after.webp" alt="Aadi after" />
+                <img loading="eager" decoding="async" src="/creator-call/after.webp?v=5" alt="Aadi after" />
                 <figcaption className="after">After</figcaption>
               </figure>
             </div>
@@ -262,10 +262,10 @@ export default function CreatorStories({
               <Words text="So I turned it into an app." delay={0.15} />
             </h1>
             <div className="cs-phone cs-rise cs-vis" style={{ animationDelay: ".45s" }}>
-              <img src="/creator-call/app.webp" alt="KESHAH app" />
+              <img loading="eager" decoding="async" src="/creator-call/app.webp?v=5" alt="KESHAH app" />
             </div>
             <p className="cs-sub cs-in center" style={{ animationDelay: "1s" }}>
-              A few minutes of guided scalp exercises a day.
+              A guided daily routine of scalp exercises, about 15 to 20 minutes a day.
             </p>
           </div>
         </>
@@ -283,7 +283,7 @@ export default function CreatorStories({
               <Words text="Then I started teaching people on TikTok." delay={0.15} />
             </h1>
             <figure className="cs-prof cs-pop cs-vis" style={{ animationDelay: ".45s" }}>
-              <img src="/creator-call/aadi.webp" alt="@aadi.keshah on TikTok" />
+              <img loading="eager" decoding="async" src="/creator-call/aadi.webp?v=5" alt="@aadi.keshah on TikTok" />
             </figure>
             <p className="cs-sub cs-in" style={{ animationDelay: ".9s" }}>
               <b>@aadi.keshah</b> · Founder · top video <span className="cs-accent">3.8M views</span>
@@ -300,7 +300,7 @@ export default function CreatorStories({
       ms: 0,
       render: (active) => (
         <>
-          <BgStill src="/creator-call/reviews-still.webp" width={240} />
+          <BgStill src="/creator-call/reviews-still.webp?v=5" width={240} />
           <div className="cs-shade strong" />
           <div className="cs-center">
             <p className="cs-kicker cs-in">Real members</p>
@@ -379,7 +379,7 @@ export default function CreatorStories({
                 { img: "jen", handle: "@jennifer.keshah", top: "798K" },
               ].map((c, k) => (
                 <figure key={c.img} className="cs-pop" style={{ animationDelay: `${0.45 + k * 0.35}s` }}>
-                  <img src={`/creator-call/${c.img}.webp`} alt={`${c.handle} on TikTok`} />
+                  <img loading="eager" decoding="async" src={`/creator-call/${c.img}.webp?v=5`} alt={`${c.handle} on TikTok`} />
                   <figcaption>
                     <b>{c.handle}</b>
                     <span>
@@ -462,10 +462,10 @@ export default function CreatorStories({
   const iRef = useRef(0);
   useEffect(() => {
     const imgs = ["before", "after", "app", "aadi", "isai", "jen", "members-still", "reviews-still"];
-    fetch("/creator-call/members.mp4").catch(() => {});
+    fetch("/creator-call/members.mp4?v=5").catch(() => {});
     imgs.forEach((n) => {
       const im = new Image();
-      im.src = `/creator-call/${n}.webp`;
+      im.src = `/creator-call/${n}.webp?v=5`;
     });
   }, []);
   useEffect(() => {
