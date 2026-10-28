@@ -33,6 +33,7 @@ import { APPLICATIONS, ensureSessionForStart, findApplicationByEmail } from "@/l
 import { BOOKING_FIELDS, OUTSIDE_US_REASON, cancelDecision, isDecided, outsideUsEmail, outsideUsTimezone, statusAfterCancel } from "@/lib/interview-decisions";
 import { emailConfigured, sendEmail } from "@/lib/email";
 import { CREATOR_FROM_NAME } from "@/lib/creators/invite";
+import { OUTREACH_SOURCE } from "@/lib/outreach";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -161,6 +162,25 @@ export async function POST(req: Request) {
     docId = (await findApplicationByEmail(db, email))?.id ?? null;
   }
 
+  // Outreach creators often book with another email than the one we wrote to:
+  // match their name to one outreach creator who hasn't booked yet (only if unique).
+  if (!docId && email) {
+    const q = await db.collection(APPLICATIONS).where("calendly_email", "==", email).limit(1).get();
+    if (!q.empty) docId = q.docs[0].id;
+  }
+  let otherEmail = false;
+  const name = (p.name ?? [p.first_name, p.last_name].filter(Boolean).join(" ")).trim().toLowerCase();
+  if (!docId && name && body.event === "invitee.created") {
+    const snap = await db.collection(APPLICATIONS).where("source", "==", OUTREACH_SOURCE).get();
+    const hits = snap.docs.filter(
+      (d) => ["emailed", "replied", "invited"].includes(String(d.get("status") ?? "")) && String(d.get("full_name") ?? "").trim().toLowerCase() === name,
+    );
+    if (hits.length === 1) {
+      docId = hits[0].id;
+      otherEmail = true;
+    }
+  }
+
   if (body.event === "invitee.canceled") {
     if (p.rescheduled === true) return NextResponse.json({ ok: true, ignored: "reschedule" });
     if (!docId) return NextResponse.json({ ok: true, matched: false });
@@ -261,6 +281,7 @@ export async function POST(req: Request) {
         calendly_reschedule_url: rescheduleUrl,
         calendly_cancel_url: cancelUrl,
         calendly_invitee_timezone: inviteeTimezone,
+        ...(otherEmail && email ? { calendly_email: email } : {}),
         booking_canceled_at: FieldValue.delete(),
         booking_canceled_start_time: FieldValue.delete(),
         last_updated_at: FieldValue.serverTimestamp(),
