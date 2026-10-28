@@ -205,7 +205,7 @@ test("offer with a call: from McKenzie, app, sign, then book the call with Aadi 
   const m = welcomeEmail({ firstName: "Jay", link: "https://x/l", signInEmail: "jay@gmail.com", contractReady: true, kickoffUrl: "https://calendly.com/aadi-keshah/kickoff", deadlineText: "Thursday, October 29 at 11:59 PM ET" });
   for (const s of [m.subject, m.text, m.html]) assert.ok(!s.includes("—"), "no em dash");
   assert.equal(m.fromName, "McKenzie from KESHAH");
-  assert.ok(m.text.includes("Thanks for chatting with Aadi!"));
+  assert.ok(m.text.includes("Thanks for chatting with Aadi! After meeting with several creators, we're excited to offer you a spot on the team."));
   assert.ok(!m.text.includes("250 applications"));
   assert.ok(m.text.includes("Please sign your contract by Thursday, October 29 at 11:59 PM ET to confirm your spot."));
   assert.ok(m.text.includes("2. Read and sign your contract in the app."));
@@ -316,7 +316,7 @@ test("ensureInboxDelivery: admin gets every email (added back if missing), creat
 
 test("Format offer: named as a Format Creator, by invitation, 2 in their own style, their amount", () => {
   const m = welcomeEmail({ firstName: "Jay", link: "https://x/l", contractReady: true, kickoffUrl: "https://k", plan: offerPlan({ pay_plan: "format", custom_base_cents: 125000 }) });
-  assert.ok(m.text.includes("one of our Format Creators, by invitation only"));
+  assert.ok(m.text.includes("we're excited to invite you to join as a Format Creator."));
   assert.ok(m.text.includes("Format Creator plan: 5 videos a weekday (2 of them in your own style), $1,250/month"));
   const full = welcomeEmail({ firstName: "Jay", link: "https://x/l", contractReady: true, kickoffUrl: "https://k", plan: offerPlan({ pay_plan: "full" }) });
   assert.ok(!full.text.includes("Format"));

@@ -234,12 +234,13 @@ function kickoffOfferEmail(
   format = false,
 ): { subject: string; text: string; html: string; fromName: string } {
   const opener = format
-    ? "Thanks for chatting with Aadi! We'd love to have you on board as one of our Format Creators, by invitation only."
-    : "Thanks for chatting with Aadi! We'd love to have you on board as a KESHAH creator.";
+    ? "Thanks for chatting with Aadi! After meeting with several creators, we're excited to invite you to join as a Format Creator."
+    : "Thanks for chatting with Aadi! After meeting with several creators, we're excited to offer you a spot on the team.";
   const deadline = deadlineText ? `Please sign your contract by ${deadlineText} to confirm your spot.` : null;
-  const signIn = signInEmail ? `Then sign in with ${signInEmail}, the email this message was sent to.` : "Then sign in with the email this message was sent to.";
+  const signIn = signInEmail ? `Sign in with ${signInEmail}.` : "Sign in with the email this message was sent to.";
+  const testflight = "It's on TestFlight (Apple's app for early access), so install TestFlight first if it asks.";
   const step1 = app
-    ? `Download the KESHAH Creators app. It's in early access, so it's on TestFlight, Apple's app for early access. Tap the link, install TestFlight if it asks, then tap Install: ${app}`
+    ? `Download the KESHAH Creators app: ${app}`
     : `Set your password for the KESHAH Creators app (this link works once and expires in 7 days): ${setPasswordLink}`;
   const step2 = "Read and sign your contract in the app.";
   const step3 = "Book a 15-minute call with Aadi right in the app. You can set up your accounts before the call, and we'll go over anything you're stuck on.";
@@ -253,7 +254,7 @@ function kickoffOfferEmail(
     "Next steps",
     "",
     `1. ${step1}`,
-    ...(app ? [`   ${signIn}`] : []),
+    ...(app ? [`   ${testflight}`, `   ${signIn}`] : []),
     `2. ${step2}`,
     `3. ${step3}`,
     "",
@@ -275,7 +276,7 @@ function kickoffOfferEmail(
     `<p style="margin:0 0 6px"><b>Next steps</b></p>`,
     `<ol style="margin:0 0 16px;padding-left:20px">`,
     app
-      ? `<li style="margin-bottom:6px">Download the <a href="${esc(app)}">KESHAH Creators app</a>. It's in early access, so it's on TestFlight, Apple's app for early access. Tap the link, install TestFlight if it asks, then tap Install. ${esc(signIn)}</li>`
+      ? `<li style="margin-bottom:6px"><a href="${esc(app)}">Download the KESHAH Creators app</a><br>${esc(testflight)}<br>${esc(signIn)}</li>`
       : `<li style="margin-bottom:6px"><a href="${esc(setPasswordLink)}">Set your password</a> for the KESHAH Creators app (this link works once and expires in 7 days).</li>`,
     `<li style="margin-bottom:6px">${esc(step2)}</li>`,
     `<li>${esc(step3)}</li>`,
