@@ -22,6 +22,7 @@ import { CREATORS_COLLECTION, claimDayComplete, getCreator, hasStarted } from ".
 import { completeVideoCount, dayComplete, isPostedDay, isWeekday, localDate, type DayComplete } from "./pay";
 import { syncCreatorPosts } from "./post-sync";
 import type { SlotAttribution } from "./proven";
+import { DAY1_PINNED_POSTS, countPinnedDay1, day1PinnedFor, onPinnedDay1, pinnedOf } from "./pinned-video";
 import { postKey } from "./scrape";
 import { msUntilLocalDeadline } from "./time";
 import type { CreatorProfile, DayOff, Platform, PostedVideo, PostingDay, YyyyMmDd } from "./types";
@@ -163,6 +164,10 @@ export interface PostCheckDeps {
   attribute(creatorId: string, date: YyyyMmDd, slot: number, provenId: string | null, posts: TodayPost[], nowIso: string): Promise<SlotAttribution | null>;
   claimDayComplete(creatorId: string, date: YyyyMmDd): Promise<boolean>;
   reloadCreator(id: string): Promise<CreatorProfile | null>;
+  /** Day 1 (the 2 pinned posts): pinned posts found today on each app, or null when today isn't their Day 1. */
+  day1?(creator: CreatorProfile, date: YyyyMmDd): Promise<{ tiktok: number; instagram: number } | null>;
+  /** Both pinned posts on both apps: count Day 1 (first posting day, starts pay). */
+  countDay1?(creatorId: string, date: YyyyMmDd, now: Date): Promise<boolean>;
 }
 
 export function parseCheckInput(raw: unknown): PostCheckInput | { error: string } {
@@ -192,8 +197,12 @@ export async function runPostCheck(creator: CreatorProfile, input: PostCheckInpu
   await deps.sync(creator);
   const posts = await deps.todayPosts(creator.id, date);
 
+  // Day 1 is the 2 pinned posts, which the daily counts leave out: count those instead.
+  const day1 = deps.day1 ? await deps.day1(creator, date) : null;
+  if (day1 && day1.tiktok >= DAY1_PINNED_POSTS && day1.instagram >= DAY1_PINNED_POSTS) await deps.countDay1?.(creator.id, date, now);
+
   let found: PostCheckBody["found_for_slot"] = null;
-  if (input.slot !== undefined) {
+  if (input.slot !== undefined && !day1) {
     const a = await deps.attribute(creator.id, date, input.slot, input.proven_id ?? null, posts, nowIso);
     if (a && (a.tiktok_url || a.instagram_url)) {
       const views = [a.tiktok_url, a.instagram_url]
@@ -220,7 +229,9 @@ export async function runPostCheck(creator: CreatorProfile, input: PostCheckInpu
   return {
     status: 200,
     body: {
-      today: todayCounts(posts, log, counted, deadlineIso),
+      today: day1
+        ? { tiktok: day1.tiktok, instagram: day1.instagram, counted, posted_videos: Math.min(day1.tiktok, day1.instagram), deadline_iso: deadlineIso }
+        : todayCounts(posts, log, counted, deadlineIso),
       found_for_slot: found,
       day_complete,
       posts,
@@ -242,6 +253,7 @@ function toPostingDay(id: string, d: DocumentData): PostingDay {
         }))
       : [],
     logged_at: typeof d.logged_at === "string" ? d.logged_at : "",
+    ...(typeof d.counted_by_founder === "string" && d.counted_by_founder ? { counted_by_founder: d.counted_by_founder } : {}),
   };
 }
 
@@ -305,6 +317,12 @@ export function firestoreCheckDeps(opts: { db?: Firestore } = {}): PostCheckDeps
     },
     claimDayComplete: (id, date) => claimDayComplete(id, date, opts.db ? { db: opts.db } : {}),
     reloadCreator: (id) => getCreator(id),
+    day1: async (creator, date) => {
+      const snap = await cref(creator.id).get();
+      if (!onPinnedDay1(hasStarted(creator), pinnedOf(snap.data()))) return null;
+      return day1PinnedFor(creator.id, date, opts.db);
+    },
+    countDay1: (id, date, now) => countPinnedDay1(id, date, now, opts.db),
   };
 }
 

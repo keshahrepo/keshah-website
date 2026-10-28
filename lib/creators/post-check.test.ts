@@ -254,3 +254,29 @@ test("thumbnails parse from TikTok covers and Instagram image candidates", () =>
   // No cover: the field is left out (Firestore never sees undefined).
   assert.equal("thumbnail_url" in parseInstagramPage({ items: [{ media: { code: "DAbc002", taken_at: 1791400000 } }] }).posts[0], false);
 });
+
+test("runPostCheck: Day 1 reports the 2 pinned posts and counts the day once both are up on both apps", async () => {
+  const { state, deps } = memory();
+  let found = { tiktok: 2, instagram: 1 };
+  const counted: string[] = [];
+  const day1Deps: PostCheckDeps = {
+    ...deps,
+    day1: async () => found,
+    countDay1: async (_id, date) => {
+      counted.push(date);
+      state.days = state.days.map((d) => (d.date === date ? { ...d, counted_by_founder: "Day 1" } : d));
+      return true;
+    },
+  };
+  let t = NOW.getTime();
+  const short = await runPostCheck(creator, { slot: 0 }, { ...day1Deps, now: new Date((t += 31_000)) });
+  if (short.status !== 200) return assert.fail("expected 200");
+  assert.deepEqual([short.body.today.tiktok, short.body.today.instagram, short.body.today.posted_videos], [2, 1, 1]);
+  assert.equal(short.body.found_for_slot, null); // no slot attribution on Day 1
+  assert.deepEqual(counted, []);
+  found = { tiktok: 2, instagram: 2 };
+  const both = await runPostCheck(creator, {}, { ...day1Deps, now: new Date((t += 31_000)) });
+  if (both.status !== 200) return assert.fail("expected 200");
+  assert.equal(both.body.today.posted_videos, 2);
+  assert.deepEqual(counted, [TODAY]);
+});

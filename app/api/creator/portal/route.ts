@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
-import { countPinnedIfLive, pinnedLiveFor, pinnedOf } from "@/lib/creators/pinned-video";
+import { DAY1_PINNED_POSTS, countPinnedDay1, day1PinnedFor, onPinnedDay1, pinnedLiveFor, pinnedOf } from "@/lib/creators/pinned-video";
 import {
   CREATORS_COLLECTION,
   assignedHandleFor,
@@ -68,12 +68,15 @@ export async function GET(req: NextRequest) {
       getPortalSettings(),
       getFirebaseAdmin().db.collection(CREATORS_COLLECTION).doc(creator.id).get(),
     ]);
-    const pinned = pinnedOf(raw.data());
-    // No-upload pinned video: pinned on both apps counts their first posting day.
-    const pinnedLive = await pinnedLiveFor(creator.id, pinned);
-    if (await countPinnedIfLive(creator.id, pinned, pinnedLive, now).catch(() => false)) {
-      pinned!.counted_day = creatorToday(creator, now);
+    let pinned = pinnedOf(raw.data());
+    // Day 1: both pinned posts up and pinned on both apps (seen by the post sync) counts it.
+    if (onb.completed_at && onPinnedDay1(hasStarted(creator), pinned)) {
+      const c = await day1PinnedFor(creator.id, today).catch(() => null);
+      if (c && c.tiktok >= DAY1_PINNED_POSTS && c.instagram >= DAY1_PINNED_POSTS && (await countPinnedDay1(creator.id, today, now).catch(() => false))) {
+        pinned = { ...(pinned ?? { path: "", submitted_at: "" }), status: "approved", no_upload: true, counted_day: today };
+      }
     }
+    const pinnedLive = await pinnedLiveFor(creator.id, pinned);
     // Self-heal: a contract marked signed by admin (or a sign whose step write failed) ticks the contract step.
     const onboarding =
       creator.contract.status === "signed" && !onb.contract_signed_at

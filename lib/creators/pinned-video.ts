@@ -142,21 +142,47 @@ export async function startPinned(id: string, now: Date = new Date(), store?: Fi
   return next;
 }
 
+/** Day 1 for a new creator: 2 pinned posts, the pinned video and the results slideshow. */
+export const DAY1_PINNED_POSTS = 2;
+
 /**
- * No-upload pinned video: once it's pinned on both apps, that day counts as
- * their first posting day and starts their pay (what the upload used to do).
+ * Is today their Day 1? Not started yet, and no pinned video or a no-upload
+ * one that hasn't counted (a founder request or an old upload isn't Day 1).
  */
-export async function countPinnedIfLive(id: string, p: PinnedVideo | null, live: PinnedLive, now: Date = new Date(), store?: Firestore): Promise<boolean> {
-  if (!p?.no_upload || !live.done || p.counted_day) return false;
+export function onPinnedDay1(started: boolean, p: PinnedVideo | null): boolean {
+  return !started && (!p || (!!p.no_upload && !p.counted_day));
+}
+
+/** Day 1's posts found on each app: pinned posts posted that day, up to 2 each. */
+export function day1PinnedCounts(posts: { platform?: unknown; pinned?: unknown; local_date?: unknown }[], date: string): { tiktok: number; instagram: number } {
+  const n = (platform: string) => Math.min(DAY1_PINNED_POSTS, posts.filter((x) => x.pinned === true && x.platform === platform && x.local_date === date).length);
+  return { tiktok: n("tiktok"), instagram: n("instagram") };
+}
+
+export async function day1PinnedFor(id: string, date: string, store?: Firestore): Promise<{ tiktok: number; instagram: number }> {
+  const s = await db(store).collection(CREATORS_COLLECTION).doc(id).collection("posts").where("pinned", "==", true).get();
+  return day1PinnedCounts(s.docs.map((d) => d.data()), date);
+}
+
+/**
+ * Both pinned posts are up and pinned on both apps: Day 1 counts as their
+ * first posting day and starts their pay. Once only (counted_day).
+ */
+export async function countPinnedDay1(id: string, date: string, now: Date = new Date(), store?: Firestore): Promise<boolean> {
+  if (!isWeekday(date)) return false;
   const creator = await getCreator(id);
   if (!creator) return false;
-  const today = creatorToday(creator, now);
-  if (!isWeekday(today)) return false;
   const ref = db(store).collection(CREATORS_COLLECTION).doc(id);
-  await ref.update({ "pinned_video.counted_day": today });
-  await ref.collection("posting_days").doc(today).set({ date: today, counted_by_founder: "Pinned video posted and pinned", logged_at: now.toISOString() }, { merge: true });
-  if (await setStartDateIfUnset(id, today)) {
-    await notifyFounder({ title: `${creator.name || "A creator"} started posting`, body: "Their pinned video is up and pinned.", data: { type: "founder_creator", id } }).catch(() => {});
+  const counted = await db(store).runTransaction(async (tx) => {
+    const cur = pinnedOf((await tx.get(ref)).data());
+    if (!onPinnedDay1(hasStarted(creator), cur)) return false;
+    tx.update(ref, { pinned_video: { ...(cur ?? {}), status: "approved", path: cur?.path ?? "", submitted_at: cur?.submitted_at ?? "", approved_at: cur?.approved_at ?? date, no_upload: true, counted_day: date } });
+    return true;
+  });
+  if (!counted) return false;
+  await ref.collection("posting_days").doc(date).set({ date, counted_by_founder: "Day 1: pinned video and results slideshow posted and pinned", logged_at: now.toISOString() }, { merge: true });
+  if (await setStartDateIfUnset(id, date)) {
+    await notifyFounder({ title: `${creator.name || "A creator"} started posting`, body: "Their 2 pinned posts are up on TikTok and Instagram.", data: { type: "founder_creator", id } }).catch(() => {});
   }
   return true;
 }
