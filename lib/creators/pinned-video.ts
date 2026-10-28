@@ -31,6 +31,8 @@ export interface PinnedVideo {
   marked_pinned_at?: string;
   /** No pinned video for this creator (Oct 2026: new creators start posting on day one). */
   skipped?: boolean;
+  /** New creators (Oct 28 2026): no upload. They film, post and pin it; the day counts when it's pinned on both apps. */
+  no_upload?: boolean;
 }
 
 export const SKIPPED_PATH = "skipped";
@@ -66,7 +68,7 @@ function db(store?: Firestore) {
 export function pinnedOf(d: Record<string, unknown> | undefined): PinnedVideo | null {
   const p = d?.pinned_video as Partial<PinnedVideo> | undefined;
   if (!p || typeof p.status !== "string") return null;
-  if (p.status !== "requested" && !p.path) return null;
+  if (p.status !== "requested" && !p.path && !p.no_upload) return null;
   return { path: "", submitted_at: "", ...p } as PinnedVideo;
 }
 
@@ -120,6 +122,43 @@ export async function pinnedLiveFor(id: string, p: PinnedVideo | null, store?: F
   const tiktok = newer.some((x) => x.platform === "tiktok");
   const instagram = newer.some((x) => x.platform === "instagram");
   return { tiktok, instagram, done: tiktok && instagram };
+}
+
+/**
+ * A new creator opens their pinned video on day one: no upload, so it starts
+ * as approved from today and the post sync looks for a pinned post from today
+ * on. Leaves an existing pinned video (or a founder request) alone.
+ */
+export async function startPinned(id: string, now: Date = new Date(), store?: Firestore): Promise<PinnedVideo | null> {
+  const creator = await getCreator(id);
+  if (!creator) throw new CreatorDataError("Creator not found", 404);
+  const ref = db(store).collection(CREATORS_COLLECTION).doc(id);
+  const cur = pinnedOf((await ref.get()).data());
+  if (cur) return cur;
+  if (hasStarted(creator)) return null;
+  const today = creatorToday(creator, now);
+  const next: PinnedVideo = { status: "approved", path: "", submitted_at: "", approved_at: today, no_upload: true };
+  await ref.update({ pinned_video: { ...next, started_at: now.toISOString() } });
+  return next;
+}
+
+/**
+ * No-upload pinned video: once it's pinned on both apps, that day counts as
+ * their first posting day and starts their pay (what the upload used to do).
+ */
+export async function countPinnedIfLive(id: string, p: PinnedVideo | null, live: PinnedLive, now: Date = new Date(), store?: Firestore): Promise<boolean> {
+  if (!p?.no_upload || !live.done || p.counted_day) return false;
+  const creator = await getCreator(id);
+  if (!creator) return false;
+  const today = creatorToday(creator, now);
+  if (!isWeekday(today)) return false;
+  const ref = db(store).collection(CREATORS_COLLECTION).doc(id);
+  await ref.update({ "pinned_video.counted_day": today });
+  await ref.collection("posting_days").doc(today).set({ date: today, counted_by_founder: "Pinned video posted and pinned", logged_at: now.toISOString() }, { merge: true });
+  if (await setStartDateIfUnset(id, today)) {
+    await notifyFounder({ title: `${creator.name || "A creator"} started posting`, body: "Their pinned video is up and pinned.", data: { type: "founder_creator", id } }).catch(() => {});
+  }
+  return true;
 }
 
 /** Founder: checked their profiles by hand. */

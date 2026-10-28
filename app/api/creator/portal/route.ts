@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
-import { pinnedLiveFor, pinnedOf } from "@/lib/creators/pinned-video";
+import { countPinnedIfLive, pinnedLiveFor, pinnedOf } from "@/lib/creators/pinned-video";
 import {
   CREATORS_COLLECTION,
   assignedHandleFor,
@@ -69,6 +69,11 @@ export async function GET(req: NextRequest) {
       getFirebaseAdmin().db.collection(CREATORS_COLLECTION).doc(creator.id).get(),
     ]);
     const pinned = pinnedOf(raw.data());
+    // No-upload pinned video: pinned on both apps counts their first posting day.
+    const pinnedLive = await pinnedLiveFor(creator.id, pinned);
+    if (await countPinnedIfLive(creator.id, pinned, pinnedLive, now).catch(() => false)) {
+      pinned!.counted_day = creatorToday(creator, now);
+    }
     // Self-heal: a contract marked signed by admin (or a sign whose step write failed) ticks the contract step.
     const onboarding =
       creator.contract.status === "signed" && !onb.contract_signed_at
@@ -105,8 +110,8 @@ export async function GET(req: NextRequest) {
       // The call with Aadi, booked from the app right after signing (until they start posting).
       kickoff_call: started ? null : kickoffCallOf(raw.data() ?? {}),
       // The first-posting-day pinned video: status, the founder's note, and whether a post is pinned yet.
-      pinned_video: pinned ? { status: pinned.status, note: pinned.note ?? null, counted_day: pinned.counted_day ?? null, requested_day: pinned.requested_day ?? null, ...(pinned.skipped ? { skipped: true } : {}) } : null,
-      pinned_live: await pinnedLiveFor(creator.id, pinned),
+      pinned_video: pinned ? { status: pinned.status, note: pinned.note ?? null, counted_day: pinned.counted_day ?? null, requested_day: pinned.requested_day ?? null, ...(pinned.skipped ? { skipped: true } : {}), ...(pinned.no_upload ? { no_upload: true } : {}) } : null,
+      pinned_live: pinnedLive,
       config: {
         slack_invite_url: settings.slack_invite_url,
         pinned_reference_url: settings.pinned_reference_url,
