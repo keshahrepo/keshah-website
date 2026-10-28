@@ -63,10 +63,18 @@ export const CREATOR_SIGNOFF = "McKenzie\nCreator Coordinator, KESHAH";
 
 /** The pay lines in offer emails (Oct 2026 plans). */
 export const TRIAL_TEXT = "your first 20 posting days, 3 videos a weekday, $600";
-/** "5 videos a weekday, $1,000/month, plus bonuses (...)" for one plan. */
-export function afterTrialText(plan: { videos: number; baseCents: number }): string {
+/** The plan an offer names. format: a Format Creator (by invitation, 2 of the videos in their own style). */
+export interface OfferPlan {
+  videos: number;
+  baseCents: number;
+  format?: boolean;
+}
+
+/** "5 videos a weekday, $1,000/month, plus bonuses (...)" for one plan ("Format Creator plan: ..." for Format). */
+export function afterTrialText(plan: OfferPlan): string {
   const usd = `$${(plan.baseCents / 100).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
-  return `${plan.videos} videos a weekday, ${usd}/month, plus bonuses ($15 when a video hits 100K views, $100 total at 1M)`;
+  const videos = plan.format ? `Format Creator plan: ${plan.videos} videos a weekday (2 of them in your own style)` : `${plan.videos} videos a weekday`;
+  return `${videos}, ${usd}/month, plus bonuses ($15 when a video hits 100K views, $100 total at 1M)`;
 }
 
 export const AFTER_TRIAL_TEXT =
@@ -98,7 +106,7 @@ export function welcomeEmail(input: {
   /** The kickoff booking link (default: CREATOR_KICKOFF_URL). Null: the self-serve offer. */
   kickoffUrl?: string | null;
   /** Their plan after the trial: the email names just this one. Unset: both standard plans. */
-  plan?: { videos: number; baseCents: number };
+  plan?: OfferPlan;
 }): {
   subject: string;
   text: string;
@@ -139,7 +147,7 @@ export function welcomeEmail(input: {
   const app = creatorAppUrl();
   const kickoff = input.kickoffUrl === undefined ? creatorKickoffUrl() : input.kickoffUrl;
   const afterText = input.plan ? afterTrialText(input.plan) : AFTER_TRIAL_TEXT;
-  if (kickoff) return kickoffOfferEmail(first, app, input.link, input.signInEmail, input.deadlineText, afterText);
+  if (kickoff) return kickoffOfferEmail(first, app, input.link, input.signInEmail, input.deadlineText, afterText, !!input.plan?.format);
   // The @keshah.com address isn't in this email on purpose: the app's Accounts
   // step shows it when they need it, with how to use it.
   //
@@ -223,8 +231,11 @@ function kickoffOfferEmail(
   signInEmail?: string,
   deadlineText?: string,
   afterText: string = AFTER_TRIAL_TEXT,
+  format = false,
 ): { subject: string; text: string; html: string; fromName: string } {
-  const opener = "Thanks for chatting with Aadi! We'd love to have you on board as a KESHAH creator.";
+  const opener = format
+    ? "Thanks for chatting with Aadi! We'd love to have you on board as one of our Format Creators, by invitation only."
+    : "Thanks for chatting with Aadi! We'd love to have you on board as a KESHAH creator.";
   const deadline = deadlineText ? `Please sign your contract by ${deadlineText} to confirm your spot.` : null;
   const signIn = signInEmail ? `Then sign in with ${signInEmail}, the email this message was sent to.` : "Then sign in with the email this message was sent to.";
   const step1 = app

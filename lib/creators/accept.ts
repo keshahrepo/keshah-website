@@ -16,7 +16,7 @@ import { emailConfigured, sendEmail } from "@/lib/email";
 import { CREATORS_COLLECTION, CreatorDataError, mapCreatorStatus } from "./db";
 import { contractSetupProblem, getContractSettings, getTemplate, sendContract } from "./contract";
 import { groupsClientFromEnv, groupsConfigured, provisionCreatorGroup } from "./google-groups";
-import { newInvite, setPasswordUrl, welcomeEmail } from "./invite";
+import { newInvite, setPasswordUrl, welcomeEmail, type OfferPlan } from "./invite";
 import { contractDeadlineFor, deadlineLong, deadlineOf, getsDeadline } from "./deadline";
 import { assignPooledLink } from "./link-pool";
 import { TRIAL_NEW_DAY_CENTS, planBaseCents, planFieldsOf, planVideos } from "./pay";
@@ -30,9 +30,9 @@ function isNewOffer(d: DocumentData): boolean {
 }
 
 /** The plan an offer email names: the creator's pay_plan, Full by default. */
-export function offerPlan(d: DocumentData): { videos: number; baseCents: number } {
+export function offerPlan(d: DocumentData): OfferPlan {
   const p = planFieldsOf({ pay_plan: d.pay_plan || "full", custom_base_cents: d.custom_base_cents });
-  return { videos: planVideos(p), baseCents: planBaseCents(p) ?? 100000 };
+  return { videos: planVideos(p), baseCents: planBaseCents(p) ?? 100000, ...((d.pay_plan || "full") === "format" ? { format: true } : {}) };
 }
 const LOCK_MS = 120_000;
 

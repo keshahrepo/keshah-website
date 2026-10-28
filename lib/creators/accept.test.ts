@@ -15,6 +15,7 @@ import {
 import { hashInviteToken, inviteProblem, newInvite, passwordProblem, setPasswordUrl, welcomeEmail } from "./invite";
 import { hashPassword, verifyPassword } from "../password";
 import { contractDeadlineFor, deadlineLong } from "./deadline";
+import { offerPlan } from "./accept";
 
 type Call = { method: string; url: string; body?: unknown };
 
@@ -311,4 +312,12 @@ test("ensureInboxDelivery: admin gets every email (added back if missing), creat
   await ensureInboxDelivery(client, { groupEmail: "jane@keshah.com", personalEmail: "jane@gmail.com" });
   assert.equal(members["admin@keshah.com"].role, "OWNER");
   assert.equal(members["jane@gmail.com"], undefined);
+});
+
+test("Format offer: named as a Format Creator, by invitation, 2 in their own style, their amount", () => {
+  const m = welcomeEmail({ firstName: "Jay", link: "https://x/l", contractReady: true, kickoffUrl: "https://k", plan: offerPlan({ pay_plan: "format", custom_base_cents: 125000 }) });
+  assert.ok(m.text.includes("one of our Format Creators, by invitation only"));
+  assert.ok(m.text.includes("Format Creator plan: 5 videos a weekday (2 of them in your own style), $1,250/month"));
+  const full = welcomeEmail({ firstName: "Jay", link: "https://x/l", contractReady: true, kickoffUrl: "https://k", plan: offerPlan({ pay_plan: "full" }) });
+  assert.ok(!full.text.includes("Format"));
 });
