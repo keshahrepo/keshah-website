@@ -725,7 +725,8 @@ const CSS = `
 .cs-profiles p{font-size:13px}
 .cs-rates{max-width:560px}
 .cs-actions{max-width:420px}
-.cs-wall-track{width:100%;display:grid;grid-template-columns:repeat(var(--cols),1fr)}
+.cs-wall-track{width:108%;margin-left:-4%;display:grid;grid-template-columns:repeat(var(--cols),1fr)}
+.cs-wall video,.cs-wall img{margin-right:-10%;-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 14%,#000 86%,transparent 100%),linear-gradient(90deg,transparent 0,#000 12%,#000 88%,transparent 100%);-webkit-mask-composite:source-in;mask-image:linear-gradient(180deg,transparent 0,#000 14%,#000 86%,transparent 100%),linear-gradient(90deg,transparent 0,#000 12%,#000 88%,transparent 100%);mask-composite:intersect}
 .cs-arrow{display:grid;place-items:center;position:absolute;z-index:6;top:50%;transform:translateY(-50%);width:56px;height:56px;border-radius:50%;border:0;background:rgba(255,255,255,.1);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);color:#fff;font-size:30px;line-height:1;cursor:pointer;transition:background .2s}
 .cs-arrow:hover{background:rgba(255,255,255,.2)}
 .cs-arrow.left{left:28px}.cs-arrow.right{right:28px}
