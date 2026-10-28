@@ -131,6 +131,11 @@ export async function GET(req: Request) {
       for (const a of applicants) {
         const x = (a.data() ?? {}) as Record<string, unknown>;
         if (x.interview_video_submitted_at) continue;
+        // Creators we reached out to film their test on the call; no "send your video" or auto-deny emails.
+        if (x.source === "tiktok-outreach") {
+          counts.skipped++;
+          continue;
+        }
         if (x.status === "denied" || x.status === "accepted") {
           counts.skipped++;
           continue;

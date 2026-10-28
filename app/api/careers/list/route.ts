@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import { requireDashboardSession } from "@/lib/support/auth";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { denialEmailDue } from "@/lib/interview-decisions";
+import { recruitStage, type CreatorLite } from "@/lib/outreach";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,18 @@ export async function GET() {
       .orderBy("last_updated_at", "desc")
       .limit(500)
       .get();
+    // The creator each accepted application became, for Offered / Onboarding / Posting.
+    const creators = new Map<string, CreatorLite>();
+    const cs = await db.collection("ContentCreators").select("application_id", "status", "start_date", "contract").get();
+    for (const c of cs.docs) {
+      const appId = c.get("application_id");
+      if (typeof appId !== "string" || !appId) continue;
+      creators.set(appId, {
+        contract_signed: c.get("contract")?.status === "signed",
+        started: typeof c.get("start_date") === "string" && /^\d{4}-\d{2}-\d{2}$/.test(c.get("start_date")),
+        status: String(c.get("status") ?? ""),
+      });
+    }
     const rows = snap.docs.map((d) => {
       const x = d.data() as Record<string, unknown>;
       const toIso = (v: unknown) =>
@@ -48,6 +61,13 @@ export async function GET() {
         // Where they came from ("tiktok-outreach" for creators we emailed).
         source: x.source ?? null,
         note: x.note ?? null,
+        // Outreach pipeline (lib/outreach.ts): stage, their TikTok, our email and their reply.
+        stage: recruitStage(x, creators.get(d.id) ?? null),
+        followers: typeof x.followers === "number" ? x.followers : null,
+        outreach_video_line: x.outreach_video_line ?? null,
+        emailed_at: x.emailed_at ?? null,
+        replied_at: x.replied_at ?? null,
+        reply_snippet: x.reply_snippet ?? null,
         calendly_event_start_time: x.calendly_event_start_time ?? null,
         calendly_join_url: x.calendly_join_url ?? null,
         has_video: !!(typeof x.video_object_path === "string" && x.video_object_path.trim()),
