@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { requireCronSecret } from "@/lib/support/auth";
 import { sendOutreachNudges, sendQueuedOutreach, syncOutreachReplies } from "@/lib/outreach-db";
 import { writeMissingNotes, writeMissingNudgeVideos } from "@/lib/outreach-notes";
+import { healthError, healthOk, outreachDailyPushes } from "@/lib/outreach-health";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -19,11 +20,20 @@ export async function GET(req: Request) {
     const sync = await syncOutreachReplies({ dry });
     const nudges = await sendOutreachNudges({ dry, deadlineMs: start + 110_000 });
     // New creators from the daily search: their first email (weekdays from 11 AM ET).
-    const firstEmails = await sendQueuedOutreach({ dry, deadlineMs: start + 170_000 });
+    let firstEmails: Awaited<ReturnType<typeof sendQueuedOutreach>> | { error: string };
+    try {
+      firstEmails = await sendQueuedOutreach({ dry, deadlineMs: start + 170_000 });
+      if (!dry && !firstEmails.off) await healthOk("send");
+    } catch (e) {
+      firstEmails = { error: e instanceof Error ? e.message : String(e) };
+      if (!dry) await healthError("send", e).catch(() => {});
+    }
+    // The noon check and the 1 PM summary push (weekdays, ET).
+    const pushes = dry ? [] : await outreachDailyPushes().catch(() => []);
     const notes = dry ? null : await writeMissingNotes({ limit: 3, deadlineMs: start + 220_000 });
     // A day in, no reply: pick another of their videos for the follow-up.
     const nudgeVideos = dry ? null : await writeMissingNudgeVideos({ limit: 5, deadlineMs: start + 260_000 });
-    return NextResponse.json({ ok: true, ...sync, nudges, firstEmails, notes, nudgeVideos });
+    return NextResponse.json({ ok: true, ...sync, nudges, firstEmails, pushes, notes, nudgeVideos });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }

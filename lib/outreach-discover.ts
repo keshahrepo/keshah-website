@@ -115,8 +115,11 @@ async function sc(path: string, apiKey: string): Promise<any> {
     try {
       const res = await fetch(`${SCRAPECREATORS_BASE}${path}`, { headers: { "x-api-key": apiKey }, cache: "no-store" });
       if (res.ok) return await res.json();
-    } catch {
-      // retry once
+      // Out of credits or a bad key: stop and say so (the founder sees it in Recruit).
+      if ([401, 402, 403].includes(res.status)) throw new Error(`ScrapeCreators ${res.status}: ${(await res.text()).slice(0, 120)}`);
+    } catch (e) {
+      if (e instanceof Error && /^ScrapeCreators 40[123]/.test(e.message)) throw e;
+      // otherwise retry once
     }
   }
   return {};

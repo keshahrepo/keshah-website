@@ -11,6 +11,7 @@ import { denialEmailDue } from "@/lib/interview-decisions";
 import { recruitStage, type CreatorLite } from "@/lib/outreach";
 import { QUEUE, QUEUE_DEFAULT_CAP } from "@/lib/outreach-db";
 import { easternNow } from "@/lib/outreach-nudges";
+import { warningsOf } from "@/lib/outreach-health";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,7 @@ async function outreachStats(db: FirebaseFirestore.Firestore) {
     sent_total: sentAt.length,
     cap,
     paused: settings.get("paused") === true,
+    warnings: warningsOf({ health: settings.get("health") ?? {}, paused: settings.get("paused") === true, queued: queued.data().count, sentToday: sentAt.filter((s) => s && easternNow(new Date(s)).date === today).length, cap, now: new Date() }),
   };
 }
 
