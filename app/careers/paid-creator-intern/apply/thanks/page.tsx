@@ -14,7 +14,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
+import CreatorStories from "./stories";
 
 const DRAFT_STORAGE_KEY = "keshah_careers_draft_id_v1";
 
@@ -75,7 +76,12 @@ function ThanksInner() {
     } catch {}
   }, []);
 
+  // The full-screen intro opens right after booking; closing it shows this page.
+  const [stories, setStories] = useState(true);
+
   return (
+    <>
+    {stories && <CreatorStories bookingTime={bookingTime} startIso={startIso} calendarUrl={calendarUrl} appStoreUrl={APP_STORE_URL} playStoreUrl={PLAY_STORE_URL} onClose={() => setStories(false)} />}
     <div className="thanks-hero">
       {/* Phone mockup — same CSS frame as keshah.com root, wrapping the
           existing app-screenshot. */}
@@ -96,6 +102,9 @@ function ThanksInner() {
       {/* Right column — booking confirmation + numbered next steps. */}
       <div className="thanks-copy">
         <h1 className="thanks-title">You&apos;re booked. Here&apos;s what to do next.</h1>
+        <button type="button" className="thanks-replay" onClick={() => setStories(true)}>
+          ▶ Watch the 1-minute intro
+        </button>
 
         <ol className="thanks-steps">
           {WALKTHROUGH_VIDEO_URL && (
@@ -200,6 +209,7 @@ function ThanksInner() {
         </p>
       </div>
     </div>
+    </>
   );
 }
 
@@ -272,6 +282,19 @@ export default function ThanksPage() {
           text-align: center;
         }
 
+        .thanks-replay {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          margin: 0 0 28px;
+          padding: 12px 20px;
+          border-radius: 999px;
+          border: 1px solid rgba(255, 255, 255, 0.18);
+          background: rgba(255, 255, 255, 0.06);
+          color: #fff;
+          font: 600 15px Poppins, system-ui, sans-serif;
+          cursor: pointer;
+        }
         .thanks-title {
           font-family: "Poppins", sans-serif;
           font-size: 30px;
