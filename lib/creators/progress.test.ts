@@ -110,20 +110,18 @@ test("warm-up: day count, clock from the last tick", () => {
     accounts_done_at: "2026-10-06T00:00:00Z",
     link_seen_at: "2026-10-06T01:00:00Z",
     rules_ack_at: "2026-10-06T02:00:00Z",
-    warmup_days: [] as string[],
+    warmup_days: ["2026-10-13"],
   };
-  // One warm-up day: waiting on it until it's ticked.
   const p = creatorProgress({ ...accepted, contract: { status: "signed" }, onboarding }, NOW);
   assert.equal(p.current, "warmup");
-  assert.equal(p.steps.find((s) => s.key === "warmup")!.detail, "0 of 1 day");
-  assert.equal(progressStepSummary(p).label, "Warm-up");
-  const done = creatorProgress({ ...accepted, contract: { status: "signed" }, onboarding: { ...onboarding, warmup_days: ["2026-10-13"] } }, NOW);
-  assert.equal(done.steps.find((s) => s.key === "warmup")!.state, "done");
-  assert.equal(done.steps.find((s) => s.key === "warmup")!.at, "2026-10-13");
+  assert.equal(p.steps.find((s) => s.key === "warmup")!.detail, "1 of 3 days");
+  assert.equal(p.currentSince, "2026-10-13");
+  assert.equal(p.stuck, false);
+  assert.equal(progressStepSummary(p).label, "Warm-up · 1 of 3 days");
 });
 
 test("onboarded, waiting for the first posting day counts weekdays only", () => {
-  const onboarding = { completed_at: "2026-10-09T15:00:00Z", warmup_days: ["2026-10-09"] }; // a Friday
+  const onboarding = { completed_at: "2026-10-09T15:00:00Z", warmup_days: ["2026-10-07", "2026-10-08", "2026-10-09"] }; // a Friday
   const p = creatorProgress({ ...accepted, status: "trial", contract: { status: "signed" }, onboarding }, new Date("2026-10-11T12:00:00Z"));
   assert.equal(p.current, "first_post");
   assert.equal(p.steps.find((s) => s.key === "slack")!.state, "done");

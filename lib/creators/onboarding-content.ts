@@ -103,10 +103,10 @@ export const ACCOUNTS_GUIDE_URL = "";
 // PLACEHOLDER: link to the full posting guide.
 export const POSTING_GUIDE_URL = "";
 
-export const WARMUP_DAYS = 1;
-export const WARMUP_HEADLINE = "Warm up your accounts for 20 minutes today. Don't post yet.";
+export const WARMUP_DAYS: number = 3;
+export const WARMUP_HEADLINE = "Warm up your accounts for 3 days. Don't post yet.";
 export const WARMUP_TEXT =
-  "Before your first posting day, spend 10 minutes on TikTok and 10 minutes on Instagram using your new accounts. Scroll, like and comment on hair loss and hair care videos, like a normal person would. This tells the apps what your account is about. Then tick it off.";
+  "For the next 3 days, don't post anything. Each day, spend 10 minutes on TikTok and 10 minutes on Instagram using your new accounts. Scroll, like and comment on hair loss and hair care videos, like a normal person would. This tells the apps what your account is about, so your videos get shown to the right people later. Come back each day and tick it off.";
 export const FIRST_POSTING_DAY_TEXT = "Your first posting day is the weekday after your warm-up.";
 export const WARMUP_DONE_TEXT = "Warm-up done. You can start posting on your first posting day.";
 

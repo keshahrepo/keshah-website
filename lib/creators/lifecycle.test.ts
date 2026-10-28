@@ -236,11 +236,10 @@ test("first-day eve and warm-up reminders", () => {
   assert.equal(firstDayEveDate(c(), EVE, "2026-10-15", null), null); // already started
 
   const six = new Date("2026-10-14T23:05:00Z"); // 6:05 PM Chicago
-  // One warm-up day (WARMUP_DAYS = 1): nudged until it's ticked.
-  const onb = { accounts_done_at: "2026-10-12T00:00:00Z", warmup_days: [] as string[] };
+  const onb = { accounts_done_at: "2026-10-12T00:00:00Z", warmup_days: ["2026-10-13"] };
   assert.equal(warmupNudgeDate(c({ status: "onboarding" }), six, onb, null), "2026-10-14");
-  assert.equal(warmupNudgeDate(c({ status: "onboarding" }), six, { ...onb, warmup_days: ["2026-10-14"] }, null), null);
-  assert.equal(warmupNudgeDate(c({ status: "onboarding" }), six, { ...onb, warmup_days: ["a"] }, null), null);
+  assert.equal(warmupNudgeDate(c({ status: "onboarding" }), six, { ...onb, warmup_days: ["2026-10-13", "2026-10-14"] }, null), null);
+  assert.equal(warmupNudgeDate(c({ status: "onboarding" }), six, { ...onb, warmup_days: ["a", "b", "c"] }, null), null);
   assert.equal(warmupNudgeDate(c({ status: "onboarding" }), six, { warmup_days: [] }, null), null); // no accounts yet
   assert.equal(warmupNudgeDate(c({ status: "onboarding" }), six, onb, "2026-10-14"), null);
   assert.equal(warmupNudgeDate(c({ status: "onboarding" }), EVE, onb, null), null); // 8 PM, not 6
