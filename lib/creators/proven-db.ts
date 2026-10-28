@@ -761,18 +761,21 @@ async function pickContext(db: Firestore, creator: CreatorProfile, date: YyyyMmD
   };
 }
 
+/** The ending every video uses (Oct 28 2026): one short ask to the pinned video, the same each time. */
+export const PINNED_CTA =
+  "If you want my routine that shows how to stop your hair loss without medication, check my pinned video. It's the one that says watch this first, right at the top of my profile. Please don't DM me saying you can't find it.";
+
 /**
  * The bio-link ending, for creators testing it (cta_style "bio"). Everyone else
- * keeps the proven ending that sends viewers to their pinned video.
+ * gets PINNED_CTA.
  */
 export const BIO_CTA =
   "A lot of people ask me what's the scalp massage app. I've put it in my bio. Please don't DM me that you can't find it, it's the only link there. Go to my profile and you'll see it.";
 
 export function ctaFor(creator: Pick<CreatorProfile, "cta_style">, v: PublicProven): PublicProven {
-  if (creator.cta_style !== "bio") return v;
   // Line-by-line scripts (the 3-step format) carry their own ending.
   if (v.lines?.length) return v;
-  return { ...v, cta_line: BIO_CTA };
+  return { ...v, cta_line: creator.cta_style === "bio" ? BIO_CTA : PINNED_CTA };
 }
 
 /** Full docs for just these videos (the day's picks). */
