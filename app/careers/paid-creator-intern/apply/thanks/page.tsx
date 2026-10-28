@@ -57,7 +57,7 @@ function googleCalendarUrl(startIso: string | null, endIso: string | null): stri
     action: "TEMPLATE",
     text: "KESHAH call with Aadi",
     dates: `${z(start)}/${z(end)}`,
-    details: "15-minute call with Aadi. Your join link is in your Calendly confirmation email. Have your phone charged: you'll film a short video near the end.",
+    details: "15-minute call with Aadi. Your join link is in your Calendly confirmation email.",
   });
   return `https://calendar.google.com/calendar/render?${q.toString()}`;
 }
@@ -168,19 +168,17 @@ function ThanksInner() {
           <li className="thanks-step">
             <span className="thanks-step-num">{WALKTHROUGH_VIDEO_URL ? 3 : 2}</span>
             <div className="thanks-step-body">
-              <div className="thanks-step-head">Save your interview time.</div>
+              <div className="thanks-step-head">Save your call time.</div>
               <div className="thanks-step-sub">
                 {bookingTime ? (
                   <>
                     Your call is on{" "}
                     <span style={{ color: "#fff", fontWeight: 600 }}>{bookingTime}</span> (your time). It&apos;s a
-                    15-minute call with Aadi, our founder. Near the end you&apos;ll film a short video on your phone, so
-                    join from somewhere quiet with good light and your phone charged.
+                    15-minute call with Aadi, our founder. Join from somewhere quiet with your camera on.
                   </>
                 ) : (
                   <>
-                    It&apos;s a 15-minute call with Aadi, our founder. Near the end you&apos;ll film a short video on
-                    your phone, so join from somewhere quiet with good light and your phone charged.
+                    It&apos;s a 15-minute call with Aadi, our founder. Join from somewhere quiet with your camera on.
                   </>
                 )}
                 {calendarUrl && (
