@@ -34,6 +34,8 @@ export function appVersionFrom(headers: Headers): string | null {
 export function provesRelease(p: { pending?: string; version: string | null; claims: MobileClaims | null; staff: boolean }): boolean {
   if (!p.pending || !p.version || !p.claims) return false;
   if (p.claims.role !== "creator" || p.claims.amr === "demo" || p.staff) return false;
+  // Test accounts (aaditya.agrawal36+test2@...) run local builds before they're on TestFlight.
+  if (/\+test/i.test(String(p.claims.sub ?? "").split("@")[0])) return false;
   return compareVersions(p.version, p.pending) >= 0;
 }
 

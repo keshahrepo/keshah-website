@@ -25,6 +25,7 @@ test("only a real creator on the pending build or newer proves the release", () 
   assert.equal(provesRelease({ ...base, staff: true }), false, "the founder gets internal builds before Apple's review");
   assert.equal(provesRelease({ ...base, claims: { ...creator, amr: "demo" } }), false, "App Review's demo account");
   assert.equal(provesRelease({ ...base, claims: { sub: "a@x.com", role: "applicant" } }), false);
+  assert.equal(provesRelease({ ...base, claims: { ...creator, sub: "aaditya.agrawal36+test2@gmail.com" } }), false, "test accounts run local builds");
   assert.equal(provesRelease({ ...base, claims: null }), false);
   assert.equal(provesRelease({ ...base, pending: undefined }), false);
 });
