@@ -71,7 +71,7 @@ export function noReplyNudge(greet: string): string {
     "",
     "Quick update since my last email: we've just added a new option for select creators: $1,000/month + bonuses. I wanted to share it with you and reach out one last time because I really think your vibe fits KESHAH.",
     "",
-    "If you're interested, you can grab a 15-minute call here:",
+    "If you're interested, you can find a 15-minute call here:",
     INTERVIEW_URL,
     "",
     "Aadi",
