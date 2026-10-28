@@ -8,7 +8,7 @@
  *   replied    they replied: send the calendar link (status "replied", set by the reply sync)
  *   invited    calendar sent, not booked yet        (status "invited", set when the founder's Gmail reply has the Calendly link)
  *   booked     call coming up                       (status "booked", set by the Calendly webhook)
- *   called     call is over, no test video yet      (status "booked", call start + 20 min has passed)
+ *   called     call is over: Accept or Pass         (status "booked", call start + 20 min has passed; no test video step)
  *   review     test video in: Accept or Pass        (interview_video_submitted_at)
  *   offered    accepted, setup not started          (creator: contract not signed)
  *   onboarding signed, setting up and warming up    (creator: no start_date yet)

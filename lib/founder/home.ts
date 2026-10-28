@@ -244,13 +244,13 @@ export async function founderHome(now = new Date()): Promise<FounderHome> {
       });
       continue;
     }
-    // Call over a day ago and still no test video: nudge them or pass.
-    if (!a.interview_video_submitted_at && callOver(a) && callOver(a, Date.now() - 86_400_000)) {
+    // Call is over: decide (no test video step for outreach creators).
+    if (!a.interview_video_submitted_at && callOver(a)) {
       needs.push({
         kind: "application",
         id: d.id,
         title: String(a.full_name || "Creator"),
-        subtitle: "Had the call, no test video yet",
+        subtitle: "Had the call. Accept or Pass",
         at: String(a.calendly_event_start_time),
       });
       continue;
