@@ -125,7 +125,9 @@ export async function GET(req: Request) {
         const row: Row = { id: c.id, name: c.name, kind: "first_day_eve", date: eve, first_day: firstDay };
         report.push(row);
         const need = videosRequiredOn(c.trial_plan === "v2" ? { start_date: firstDay, trial_plan: "v2" } : undefined, [], firstDay);
-        if (!dry) await sendOnce(markerRef, "first_day_eve_date", eve, target, firstDayEvePush(firstDay, need), row, now);
+        // New creators' Day 1 is the 2 pinned posts (unless their pinned video was turned off).
+        const pinnedDay = (await ref.get()).get("pinned_video.skipped") !== true;
+        if (!dry) await sendOnce(markerRef, "first_day_eve_date", eve, target, firstDayEvePush(firstDay, need, pinnedDay), row, now);
       }
 
       // ---- posting nudge (8 PM)

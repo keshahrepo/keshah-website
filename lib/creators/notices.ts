@@ -145,10 +145,12 @@ export function linkReadyPush(): PushMessage {
   return { title: "Your link is ready", body: "Add it to your TikTok and Instagram bio, then tick it off in the app.", data: { type: "onboarding" } };
 }
 
-export function firstDayEvePush(date: YyyyMmDd, videos: number): PushMessage {
+export function firstDayEvePush(date: YyyyMmDd, videos: number, pinnedDay = false): PushMessage {
   return {
     title: "Tomorrow is your first posting day",
-    body: `It's Day 1 of your trial. ${fmtWeekdayLong(date)}: ${videos} videos on TikTok and Instagram by 11:59 PM.`,
+    body: pinnedDay
+      ? `It's Day 1 of your trial. ${fmtWeekdayLong(date)}: your 2 pinned posts, the video and the results slideshow, by 11:59 PM.`
+      : `It's Day 1 of your trial. ${fmtWeekdayLong(date)}: ${videos} videos on TikTok and Instagram by 11:59 PM.`,
     data: { type: "first_day" },
   };
 }
