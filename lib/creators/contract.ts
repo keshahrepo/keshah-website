@@ -40,7 +40,7 @@ import type { DocumentData } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { waitUntil } from "@vercel/functions";
 import { emailConfigured, sendEmail } from "@/lib/email";
-import { CREATOR_FROM_NAME, CREATOR_SIGNOFF } from "./invite";
+import { SYSTEM_FOOTER, SYSTEM_FROM_NAME } from "./invite";
 import { CREATORS_COLLECTION, CreatorDataError, DEFAULT_TIMEZONE, STORAGE_BUCKET, markContractStepDone } from "./db";
 import { adoptedSignatureText } from "./signature";
 import { isValidTimezone } from "./time";
@@ -622,7 +622,7 @@ async function emailSignedCopies(
       who: "creator",
       to: x.audit.signer_email,
       subject: "Your signed KESHAH contract",
-      text: `Hey ${x.firstName || "there"},\n\nThanks for signing. Your copy of the contract is attached, and you can always download it again from Profile, then Contract, in the KESHAH Creators app.\n\n${facts}\n\n${CREATOR_SIGNOFF}`,
+      text: `Hi ${x.firstName || "there"},\n\nThanks for signing. Your copy of the contract is attached, and you can download it again anytime from Profile, then Contract, in the KESHAH Creators app.\n\n${SYSTEM_FOOTER}`,
     });
   }
   await notifyFounder({ title: "Contract signed", body: `${x.audit.signer_legal_name} signed (${x.audit.template_version}).`, data: { type: "founder_contract" } });
@@ -637,7 +637,7 @@ async function emailSignedCopies(
   }
   for (const j of jobs) {
     try {
-      await sendEmail({ to: j.to, subject: j.subject, text: j.text, attachments, fromName: CREATOR_FROM_NAME });
+      await sendEmail({ to: j.to, subject: j.subject, text: j.text, attachments, fromName: SYSTEM_FROM_NAME });
       result[j.who] = true;
       await logEvent(id, { type: "emailed", at: new Date().toISOString(), actor: "system", detail: `${j.who}: ${j.to}`, signed_sha256: x.signedSha });
     } catch (e) {

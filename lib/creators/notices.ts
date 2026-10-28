@@ -5,7 +5,7 @@
  * CREATOR_FROM_NAME) and lib/push notify(), which never throws.
  */
 import type { PushMessage } from "../push";
-import { CREATOR_SIGNOFF } from "./invite";
+import { CREATOR_SIGNOFF, SYSTEM_FOOTER } from "./invite";
 import { fmtShort, fmtWeekdayLong } from "./lifecycle";
 import { fmtMoney } from "./time";
 import type { YyyyMm, YyyyMmDd } from "./types";
@@ -45,7 +45,7 @@ export function trialPassedEmail(input: { firstName: string; fullPlanFrom: YyyyM
           ]
         : [
             `• From ${fmtWeekdayLong(input.fullPlanFrom)}, you post 5 videos every weekday instead of 3.`,
-            "• Your pay moves to $500 a month to start, and it grows the longer you're with us.",
+            "• Your pay moves to $1,000 a month.",
           ]),
       "• Your videos now earn bonuses: $15 when one passes 100K views, and $100 when it passes 1M.",
       "",
@@ -96,10 +96,9 @@ export function invoicePaidEmail(input: { firstName: string; month: YyyyMm; cent
       "",
       `Your ${monthName(input.month)} pay of ${fmtMoney(input.cents)} has been sent to your bank. It usually shows up within a few business days.`,
       "",
-      `Invoice ${input.number}`,
+      `Invoice number: ${input.number}`,
       "",
-      "Best,",
-      CREATOR_SIGNOFF,
+      SYSTEM_FOOTER,
     ].join("\n"),
   };
 }

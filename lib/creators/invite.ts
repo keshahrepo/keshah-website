@@ -61,6 +61,10 @@ function esc(s: string): string {
 export const CREATOR_FROM_NAME = "McKenzie from KESHAH";
 export const CREATOR_SIGNOFF = "McKenzie\nCreator Coordinator, KESHAH";
 
+/** Routine notices (receipts, invoices, reminders) come from the app, not a person. */
+export const SYSTEM_FROM_NAME = "KESHAH Creators";
+export const SYSTEM_FOOTER = "This is an automatic email from the KESHAH Creators app. Questions? Just reply.";
+
 /** The pay lines in offer emails (Oct 2026 plans). */
 export const TRIAL_TEXT = "your first 20 posting days, 3 videos a weekday, $600";
 /** The plan an offer names. format: a Format Creator (by invitation, 2 of the videos in their own style). */

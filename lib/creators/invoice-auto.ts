@@ -15,6 +15,7 @@
  * Pure helpers + the cron core with injected deps (tests: invoice-auto.test.ts).
  * Nothing here imports Firestore.
  */
+import { SYSTEM_FOOTER } from "./invite";
 import { addMonths, monthOf } from "./pay";
 import { lastInvoiceMonth } from "./lifecycle";
 import { fmtUsd, localDateIn } from "./time";
@@ -172,7 +173,9 @@ export function invoiceReadyEmail(
       "",
       `If anything looks wrong, tap "Something's off?" in the app by ${disputeBy}.`,
       "",
-      `Invoice ${inv.number}`,
+      `Invoice number: ${inv.number}`,
+      "",
+      SYSTEM_FOOTER,
     ].join("\n"),
   };
 }

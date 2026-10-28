@@ -16,7 +16,7 @@ import { requireCronSecret } from "@/lib/support/auth";
 import { CREATORS_COLLECTION, autoSubmitInvoice, draftOrGetInvoice, listCreators, listInvoices } from "@/lib/creators/db";
 import { bankOnFile } from "@/lib/creators/payments";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
-import { CREATOR_FROM_NAME } from "@/lib/creators/invite";
+import { SYSTEM_FROM_NAME } from "@/lib/creators/invite";
 import { runInvoiceAutoSubmit } from "@/lib/creators/invoice-auto";
 import { emailConfigured, sendEmail } from "@/lib/email";
 import { notify } from "@/lib/push";
@@ -48,7 +48,7 @@ export async function GET(req: Request) {
         autoSubmit: (id, number, now) => autoSubmitInvoice(id, number, { now }),
         sendEmail: async (to, subject, text) => {
           if (!emailConfigured()) throw new Error("email not configured");
-          await sendEmail({ to, subject, text, fromName: CREATOR_FROM_NAME });
+          await sendEmail({ to, subject, text, fromName: SYSTEM_FROM_NAME });
         },
         push: (target, msg) => notify(target, msg),
       },

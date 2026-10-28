@@ -23,7 +23,7 @@ import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { requireCronSecret } from "@/lib/support/auth";
 import { CREATORS_COLLECTION, getOnboarding, listCreators, onboardingSteps, toPostingDay } from "@/lib/creators/db";
 import { emailConfigured, sendEmail } from "@/lib/email";
-import { CREATOR_FROM_NAME, CREATOR_SIGNOFF, lightEmailHtml } from "@/lib/creators/invite";
+import { CREATOR_FROM_NAME, SYSTEM_FOOTER, SYSTEM_FROM_NAME, lightEmailHtml } from "@/lib/creators/invite";
 import { SETUP_DAILY_HOUR, SETUP_LAST_DAY_HOUR, setupInputFromDoc, setupNudgeEmail, setupNudgeKind, setupNudgePush, setupState } from "@/lib/creators/setup-deadline";
 import { localDateIn } from "@/lib/creators/time";
 import { completeVideoCount, isScheduledDay, videosRequiredOn } from "@/lib/creators/pay";
@@ -42,6 +42,14 @@ export const maxDuration = 300;
 
 type Row = Record<string, unknown>;
 
+/** A reminder email's subject: a plain sentence rather than the push title. */
+function reminderSubject(msg: PushMessage): string {
+  const type = String((msg.data as Record<string, unknown> | undefined)?.type ?? "");
+  if (type === "warmup") return "Your warm-up for today";
+  if (type === "first_day") return "Tomorrow is your first posting day";
+  return `Today on KESHAH: ${msg.title}`;
+}
+
 /** Claim the marker for `date`, send, free it again when nothing could be delivered. */
 async function sendOnce(markerRef: DocumentReference, field: string, date: string, target: { creatorId: string; email: string | null }, msg: PushMessage, row: Row, now: Date) {
   const { db } = getFirebaseAdmin();
@@ -58,8 +66,9 @@ async function sendOnce(markerRef: DocumentReference, field: string, date: strin
   // No notifications on their phone: the same reminder by email, so it still reaches them.
   if (target.email && emailConfigured()) {
     try {
-      const paras = [{ text: "Hi," }, { text: msg.body }, { text: "Open the KESHAH Creators app to see your day." }];
-      await sendEmail({ to: target.email, subject: msg.title, text: [...paras.flatMap((x) => [x.text, ""]), CREATOR_SIGNOFF].join("\n"), html: lightEmailHtml(paras), fromName: CREATOR_FROM_NAME });
+      const first = String(row.name ?? "").trim().split(/\s+/)[0];
+      const paras = [{ text: `Hi ${first || "there"},` }, { text: msg.body }, { text: "Open the KESHAH Creators app to see your day." }, { text: SYSTEM_FOOTER }];
+      await sendEmail({ to: target.email, subject: reminderSubject(msg), text: paras.map((x) => x.text).join("\n\n"), html: lightEmailHtml(paras, ""), fromName: SYSTEM_FROM_NAME });
       row.result = "emailed (no devices)";
       return;
     } catch (e) {

@@ -8,7 +8,7 @@ import { emailConfigured, sendEmail } from "@/lib/email";
 import { notify, type PushMessage } from "@/lib/push";
 import { notifyFounder } from "@/lib/staff";
 import { CREATORS_COLLECTION } from "./db";
-import { CREATOR_FROM_NAME } from "./invite";
+import { SYSTEM_FROM_NAME } from "./invite";
 import {
   bonusDecisionPush,
   dayExcusedPush,
@@ -51,7 +51,8 @@ async function mail(w: Who, m: Mail): Promise<string> {
   if (!w.email) return "no email";
   if (!emailConfigured()) return "email not set up";
   try {
-    await sendEmail({ to: w.email, subject: m.subject, text: m.text, fromName: CREATOR_FROM_NAME });
+    // Only the invoice-paid notice goes through here: a routine notice from the app.
+    await sendEmail({ to: w.email, subject: m.subject, text: m.text, fromName: SYSTEM_FROM_NAME });
     return "emailed";
   } catch (e) {
     console.error("lifecycle email failed:", e);
