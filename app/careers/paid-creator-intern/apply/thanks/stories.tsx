@@ -656,8 +656,8 @@ const CSS = `
 .cs-ba img{display:block;width:100%;height:min(42dvh,calc((min(100vw,460px) - 58px) / 2 * 1.835));object-fit:cover;border-radius:18px;box-shadow:0 18px 44px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.1)}
 .cs-ba figcaption{text-align:center;font-size:13px;font-weight:600;color:rgba(255,255,255,.6)}
 .cs-ba figcaption.after{color:#E8B530}
-.cs-phone{align-self:center;width:58%;max-width:230px;border-radius:32px;padding:7px;background:linear-gradient(160deg,#2a2a2a,#0d0d0d);box-shadow:0 30px 80px rgba(218,165,32,.16),0 0 0 1px rgba(255,255,255,.1)}
-.cs-phone img{width:100%;display:block;border-radius:26px}
+.cs-phone{align-self:center;width:auto;max-width:62%;border-radius:32px;padding:7px;background:linear-gradient(160deg,#2a2a2a,#0d0d0d);box-shadow:0 30px 80px rgba(218,165,32,.16),0 0 0 1px rgba(255,255,255,.1)}
+.cs-phone img{display:block;width:auto;max-width:100%;max-height:min(44dvh,420px);border-radius:26px;margin:0 auto}
 .cs-facts{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:12px}
 .cs-facts li{display:grid;grid-template-columns:34px 1fr;gap:3px 12px;padding:15px 16px;border-radius:18px;background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
 .cs-facts b{grid-row:span 2;color:#DAA520;font-size:14px;padding-top:2px}
@@ -770,6 +770,6 @@ const CSS = `
 .cs-arrow.left{left:28px}.cs-arrow.right{right:28px}
 .cs-hint{bottom:36px}
 }
-@media(max-height:720px) and (max-width:899px){.cs-ba img{height:min(36dvh,calc((100vw - 58px) / 2 * 1.835))}.cs-h1{font-size:35px}.cs-h2{font-size:27px}.cs-line{font-size:29px}.cs-sub{font-size:14px}.cs-big{font-size:56px}.cs-facts li{padding:11px 14px}.cs-rate b{font-size:28px}}
+@media(max-height:720px) and (max-width:899px){.cs-phone img{max-height:36dvh}.cs-ba img{height:min(36dvh,calc((100vw - 58px) / 2 * 1.835))}.cs-h1{font-size:35px}.cs-h2{font-size:27px}.cs-line{font-size:29px}.cs-sub{font-size:14px}.cs-big{font-size:56px}.cs-facts li{padding:11px 14px}.cs-rate b{font-size:28px}}
 @media(prefers-reduced-motion:reduce){*{animation-duration:.01s!important;animation-delay:0s!important}}
 `;
