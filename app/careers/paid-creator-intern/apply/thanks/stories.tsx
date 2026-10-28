@@ -53,35 +53,11 @@ function CountUp({ to, active, suffix = "", decimals = 0, ms = 1400, delay = 300
   );
 }
 
-/** A video shown small and tiled down the screen, drifting up slowly: reads as a wall of many clips. */
-function BgWall({ src, poster, ratio, scale, cols, active }: { src: string; poster: string; ratio: number; scale: number; cols: number; active: boolean }) {
-  const refs = useRef<(HTMLVideoElement | null)[]>([]);
-  useEffect(() => {
-    refs.current.forEach((v, k) => {
-      if (!v) return;
-      if (active) {
-        // Each copy starts at a different moment so the tiles don't repeat in sync.
-        try {
-          v.currentTime = (k * 7) % 30;
-        } catch {}
-        v.play().catch(() => {});
-      } else v.pause();
-    });
-  }, [active]);
-  // Two moving tiles, the rest still frames from the same clip: reads as a busy wall, loads fast.
-  const base = src.replace(/\.mp4$/, "");
-  const tiles = ["video", "f2", "f3", "f4", "f1", "video", "f3", "f1", "f2", "f4", "video", "f1"];
+/** One still of the members / reviews grid, shown whole and fading into the background. */
+function BgStill({ src, width }: { src: string; width: number }) {
   return (
-    <div className="cs-wall" style={{ ["--w" as string]: `${scale * 100}%`, ["--cols" as string]: String(cols) }}>
-      <div className="cs-wall-track">
-        {tiles.map((x, k) =>
-          x === "video" ? (
-            <video key={k} ref={(el) => { refs.current[k] = el; }} src={src} poster={poster} muted loop playsInline preload="auto" style={{ aspectRatio: String(ratio) }} />
-          ) : (
-            <img key={k} src={`${base}-${x}.webp`} alt="" style={{ aspectRatio: String(ratio) }} />
-          ),
-        )}
-      </div>
+    <div className="cs-still">
+      <img src={src} alt="" style={{ ["--sw" as string]: `${width}%` }} />
     </div>
   );
 }
@@ -154,7 +130,7 @@ export default function CreatorStories({
   const cards: Card[] = [
     {
       key: "booked",
-      ms: 5000,
+      ms: 0,
       render: () => (
         <>
           <div className="cs-aurora" />
@@ -174,7 +150,7 @@ export default function CreatorStories({
               </p>
             )}
             <p className="cs-sub cs-in" style={{ animationDelay: "1.2s" }}>
-              Here&apos;s what we&apos;re building at KESHAH.
+              Here&apos;s KESHAH&apos;s story, and where you&apos;d fit in.
             </p>
           </div>
         </>
@@ -182,10 +158,10 @@ export default function CreatorStories({
     },
     {
       key: "cover",
-      ms: 8500,
-      render: (active) => (
+      ms: 0,
+      render: () => (
         <>
-          <BgWall src="/creator-call/members.mp4" poster="/creator-call/members-poster.webp" ratio={960 / 1080} scale={1} cols={4} active={active} />
+          <BgStill src="/creator-call/members-still.webp" width={100} />
           <div className="cs-shade" />
           <div className="cs-bottom">
             <p className="cs-kicker cs-in">KESHAH Creator Program</p>
@@ -201,7 +177,7 @@ export default function CreatorStories({
     },
     {
       key: "story",
-      ms: 10000,
+      ms: 0,
       render: () => (
         <>
           <div className="cs-aurora" />
@@ -231,29 +207,8 @@ export default function CreatorStories({
       ),
     },
     {
-      key: "app",
-      ms: 7500,
-      render: () => (
-        <>
-          <div className="cs-aurora warm" />
-          <div className="cs-stack">
-            <p className="cs-kicker cs-in">The app</p>
-            <h1 className="cs-h2">
-              <Words text="So I turned it into an app." delay={0.15} />
-            </h1>
-            <div className="cs-phone cs-rise cs-vis" style={{ animationDelay: ".45s" }}>
-              <img src="/creator-call/app.webp" alt="KESHAH app" />
-            </div>
-            <p className="cs-sub cs-in center" style={{ animationDelay: "1s" }}>
-              A few minutes of guided scalp exercises a day.
-            </p>
-          </div>
-        </>
-      ),
-    },
-    {
       key: "why",
-      ms: 10500,
+      ms: 0,
       render: () => (
         <>
           <div className="cs-aurora" />
@@ -280,11 +235,53 @@ export default function CreatorStories({
       ),
     },
     {
+      key: "app",
+      ms: 0,
+      render: () => (
+        <>
+          <div className="cs-aurora warm" />
+          <div className="cs-stack">
+            <p className="cs-kicker cs-in">The app</p>
+            <h1 className="cs-h2">
+              <Words text="So I turned it into an app." delay={0.15} />
+            </h1>
+            <div className="cs-phone cs-rise cs-vis" style={{ animationDelay: ".45s" }}>
+              <img src="/creator-call/app.webp" alt="KESHAH app" />
+            </div>
+            <p className="cs-sub cs-in center" style={{ animationDelay: "1s" }}>
+              A few minutes of guided scalp exercises a day.
+            </p>
+          </div>
+        </>
+      ),
+    },
+    {
+      key: "aadi",
+      ms: 0,
+      render: () => (
+        <>
+          <div className="cs-aurora" />
+          <div className="cs-stack">
+            <p className="cs-kicker cs-in">How it grew</p>
+            <h1 className="cs-h2">
+              <Words text="Then I started teaching people on TikTok." delay={0.15} />
+            </h1>
+            <figure className="cs-prof cs-pop cs-vis" style={{ animationDelay: ".45s" }}>
+              <img src="/creator-call/aadi.webp" alt="@aadi.keshah on TikTok" />
+            </figure>
+            <p className="cs-sub cs-in" style={{ animationDelay: ".9s" }}>
+              <b>@aadi.keshah</b> · Founder · top video <span className="cs-accent">3.8M views</span>
+            </p>
+          </div>
+        </>
+      ),
+    },
+    {
       key: "members",
-      ms: 8500,
+      ms: 0,
       render: (active) => (
         <>
-          <BgWall src="/creator-call/reviews.mp4" poster="/creator-call/reviews-poster.webp" ratio={1920 / 1080} scale={1.3} cols={3} active={active} />
+          <BgStill src="/creator-call/reviews-still.webp" width={240} />
           <div className="cs-shade strong" />
           <div className="cs-center">
             <p className="cs-kicker cs-in">Real members</p>
@@ -315,7 +312,7 @@ export default function CreatorStories({
     },
     {
       key: "reviews",
-      ms: 9000,
+      ms: 0,
       render: () => (
         <>
           <div className="cs-aurora warm" />
@@ -347,43 +344,42 @@ export default function CreatorStories({
       ),
     },
     {
-      key: "reach",
-      ms: 9500,
-      render: (active) => (
+      key: "isai",
+      ms: 0,
+      render: () => (
         <>
           <div className="cs-aurora" />
           <div className="cs-stack">
-            <p className="cs-kicker cs-in">The reach</p>
+            <p className="cs-kicker cs-in">Our creators</p>
             <h1 className="cs-h2">
-              <span className="cs-num">
-                <CountUp to={80} active={active} suffix="M+" />
-              </span>{" "}
-              views so far.
+              <Words text="Now creators teach it too." delay={0.15} />
             </h1>
-            <div className="cs-profiles cs-vis">
-              {[
-                { img: "aadi", handle: "@aadi.keshah", role: "Founder", top: "3.8M" },
-                { img: "isai", handle: "@isai.trujillo01", role: "Creator", top: "1.5M" },
-                { img: "jen", handle: "@jennifer.keshah", role: "Creator", top: "798K" },
-              ].map((p, k) => (
-                <figure key={p.handle} className="cs-pop" style={{ animationDelay: `${0.6 + k * 0.25}s` }}>
-                  <div className="cs-pimg">
-                    <img src={`/creator-call/${p.img}.webp`} alt={p.handle} />
-                    <figcaption>
-                      <b>{p.top}</b>
-                      <span>top video</span>
-                    </figcaption>
-                  </div>
-                  <p>
-                    {p.handle}
-                    <br />
-                    <em>{p.role}</em>
-                  </p>
-                </figure>
-              ))}
-            </div>
-            <p className="cs-sub cs-in center" style={{ animationDelay: "1.5s" }}>
-              Isai and Jen are creators in this exact program.
+            <figure className="cs-prof cs-pop cs-vis" style={{ animationDelay: ".45s" }}>
+              <img src="/creator-call/isai.webp" alt="@isai.trujillo01 on TikTok" />
+            </figure>
+            <p className="cs-sub cs-in" style={{ animationDelay: ".9s" }}>
+              <b>@isai.trujillo01</b> · Creator in this program · top video <span className="cs-accent">1.5M views</span>
+            </p>
+          </div>
+        </>
+      ),
+    },
+    {
+      key: "jen",
+      ms: 0,
+      render: () => (
+        <>
+          <div className="cs-aurora" />
+          <div className="cs-stack">
+            <p className="cs-kicker cs-in">Our creators</p>
+            <h1 className="cs-h2">
+              <Words text="Same simple format, real reach." delay={0.15} />
+            </h1>
+            <figure className="cs-prof cs-pop cs-vis" style={{ animationDelay: ".45s" }}>
+              <img src="/creator-call/jen.webp" alt="@jennifer.keshah on TikTok" />
+            </figure>
+            <p className="cs-sub cs-in" style={{ animationDelay: ".9s" }}>
+              <b>@jennifer.keshah</b> · Creator in this program · top video <span className="cs-accent">798K views</span>
             </p>
           </div>
         </>
@@ -391,19 +387,19 @@ export default function CreatorStories({
     },
     {
       key: "role",
-      ms: 9000,
+      ms: 0,
       render: () => (
         <>
           <div className="cs-aurora warm" />
           <div className="cs-stack">
-            <p className="cs-kicker cs-in">What you&apos;d do</p>
+            <p className="cs-kicker cs-in">Where you come in</p>
             <div className="cs-lines">
-              <h2 className="cs-line l1">Film on your phone.</h2>
+              <h2 className="cs-line l1">Film short videos on your phone.</h2>
               <h2 className="cs-line l2">Post on accounts we set up.</h2>
               <h2 className="cs-line l3">Get paid every month.</h2>
             </div>
             <p className="cs-sub cs-in" style={{ animationDelay: "3.4s" }}>
-              Scripts and hooks are ready for you. Monday to Friday, from anywhere, and nothing goes on your own page.
+              You&apos;d be one of the faces teaching people this. Scripts and hooks are ready for you, Monday to Friday, from anywhere.
             </p>
           </div>
         </>
@@ -411,7 +407,7 @@ export default function CreatorStories({
     },
     {
       key: "call",
-      ms: 60000,
+      ms: 0,
       render: () => (
         <>
           <div className="cs-aurora warm" />
@@ -454,14 +450,10 @@ export default function CreatorStories({
   const [ripples, setRipples] = useState<{ id: number; x: number; y: number }[]>([]);
   const iRef = useRef(0);
   useEffect(() => {
-    const imgs = ["before", "after", "app", "aadi", "isai", "jen", "members-poster", "reviews-poster", "members-f1", "members-f2", "members-f3", "members-f4", "reviews-f1", "reviews-f2", "reviews-f3", "reviews-f4"];
+    const imgs = ["before", "after", "app", "aadi", "isai", "jen", "members-still", "reviews-still"];
     imgs.forEach((n) => {
       const im = new Image();
       im.src = `/creator-call/${n}.webp`;
-    });
-    // Videos next, in the background, so the walls play the moment they appear.
-    ["members", "reviews"].forEach((v) => {
-      fetch(`/creator-call/${v}.mp4`).catch(() => {});
     });
   }, []);
   useEffect(() => {
@@ -638,10 +630,12 @@ const CSS = `
 .cs-landed{display:inline-block;animation:cs-land .5s ease-out}
 @keyframes cs-land{40%{transform:scale(1.08);text-shadow:0 0 30px rgba(218,165,32,.6)}100%{transform:none}}
 .cs-float{opacity:0;transform:translateY(24px) scale(.96);animation:cs-up .7s cubic-bezier(.2,.9,.25,1.15) forwards}
-.cs-wall{position:absolute;inset:0;z-index:0;overflow:hidden;display:flex;justify-content:center}
-.cs-wall-track{width:var(--w);flex:none;display:flex;flex-direction:column;animation:cs-wallup 40s linear infinite}
-.cs-wall video,.cs-wall img{display:block;width:100%;object-fit:cover;margin-bottom:-14%;-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 14%,#000 86%,transparent 100%);mask-image:linear-gradient(180deg,transparent 0,#000 14%,#000 86%,transparent 100%)}
-@keyframes cs-wallup{to{transform:translateY(-50%)}}
+.cs-still{position:absolute;inset:0;z-index:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#000}
+.cs-still img{flex:none;width:var(--sw);height:auto;max-width:none;animation:cs-kenburns 14s ease-out forwards}
+.cs-cover .cs-still{align-items:flex-start}
+.cs-prof{margin:0;align-self:center}
+.cs-prof img{display:block;height:min(52dvh,560px);width:auto;max-width:100%;object-fit:contain;border-radius:18px;box-shadow:0 22px 56px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.12)}
+.cs-sub b{color:#fff;font-weight:600}
 .cs-rates{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;margin-top:10px}
 .cs-rate{display:flex;flex-direction:column;align-items:center;gap:2px;padding:14px 10px;border-radius:18px;background:rgba(255,255,255,.1);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
 .cs-rate small{font-size:12px;color:rgba(255,255,255,.65);font-weight:500}
@@ -649,15 +643,6 @@ const CSS = `
 .cs-stars5{color:#DAA520;letter-spacing:2px;font-size:13px}
 .cs-rate i{font-style:normal;font-size:12px;color:rgba(255,255,255,.6)}
 .cs-num{color:#fff}
-.cs-profiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.cs-profiles figure{margin:0}
-.cs-pimg{position:relative}
-.cs-profiles img{display:block;width:100%;aspect-ratio:804/1353;object-fit:cover;object-position:top;border-radius:14px;box-shadow:0 14px 36px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.1)}
-.cs-profiles figcaption{position:absolute;left:6px;right:6px;bottom:6px;padding:6px 8px;border-radius:10px;background:rgba(0,0,0,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);text-align:center}
-.cs-profiles figcaption b{display:block;font-size:17px;font-weight:700;color:#E8B530;line-height:1.1}
-.cs-profiles figcaption span{font-size:10px;color:rgba(255,255,255,.65)}
-.cs-profiles p{margin:8px 0 0;font-size:11px;line-height:1.35;color:rgba(255,255,255,.85);text-align:center;overflow-wrap:anywhere}
-.cs-profiles em{font-style:normal;color:rgba(255,255,255,.5)}
 .cs-lines{display:flex;flex-direction:column;gap:6px}
 .cs-line{margin:0;font-size:34px;line-height:1.1;font-weight:700;letter-spacing:-.03em;opacity:0;transform:translateY(18px)}
 .cs-line.l1{animation:cs-up .6s .3s cubic-bezier(.2,.8,.2,1) forwards,cs-dim .6s 1.4s forwards}
@@ -696,6 +681,12 @@ const CSS = `
 .cs-hint .mouse,.cs-arrow{display:none}
 @media(hover:hover) and (pointer:fine){.cs-hint .touch{display:none}.cs-hint .mouse{display:inline}.cs-hint span{display:none}}
 @media(min-width:900px){
+.cs-prof img{height:min(72dvh,700px)}
+.cs-still img{width:100%!important}
+.cs-cover .cs-still{justify-content:flex-end;align-items:center}
+.cs-cover .cs-still img{width:auto!important;height:100%}
+.cs-cover .cs-shade{background:linear-gradient(90deg,#000 0%,rgba(0,0,0,.85) 38%,rgba(0,0,0,.15) 70%,rgba(0,0,0,.35) 100%)}
+.cs-cover .cs-bottom{margin:auto 0}
 .cs-frame{max-width:none;height:100dvh;border-radius:0;box-shadow:none}
 .cs-bars{top:22px;left:50%;right:auto;width:min(1100px,84vw);transform:translateX(-50%)}
 .cs-close{top:40px;right:32px;width:44px;height:44px;font-size:17px}
@@ -720,13 +711,8 @@ const CSS = `
 .cs-phone img{max-height:68dvh;width:auto;max-width:100%;margin:0 auto}
 .cs-facts span{font-size:17px}
 .cs-review p{font-size:15px}
-.cs-profiles{gap:18px;max-width:560px}
-.cs-profiles figcaption b{font-size:22px}
-.cs-profiles p{font-size:13px}
 .cs-rates{max-width:560px}
 .cs-actions{max-width:420px}
-.cs-wall-track{width:108%;margin-left:-4%;display:grid;grid-template-columns:repeat(var(--cols),1fr)}
-.cs-wall video,.cs-wall img{margin-right:-10%;-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 14%,#000 86%,transparent 100%),linear-gradient(90deg,transparent 0,#000 12%,#000 88%,transparent 100%);-webkit-mask-composite:source-in;mask-image:linear-gradient(180deg,transparent 0,#000 14%,#000 86%,transparent 100%),linear-gradient(90deg,transparent 0,#000 12%,#000 88%,transparent 100%);mask-composite:intersect}
 .cs-arrow{display:grid;place-items:center;position:absolute;z-index:6;top:50%;transform:translateY(-50%);width:56px;height:56px;border-radius:50%;border:0;background:rgba(255,255,255,.1);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);color:#fff;font-size:30px;line-height:1;cursor:pointer;transition:background .2s}
 .cs-arrow:hover{background:rgba(255,255,255,.2)}
 .cs-arrow.left{left:28px}.cs-arrow.right{right:28px}
