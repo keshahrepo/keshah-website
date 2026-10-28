@@ -196,7 +196,7 @@ test("welcome email: no em dashes, has link and next steps", () => {
   assert.ok(!m.text.includes("jen@keshah.com"));
   assert.ok(m.text.includes("It'll be the first step in the app shortly"));
   assert.ok(m.text.includes("Next steps"));
-  assert.ok(m.text.includes("Paid trial: 20 posting days"));
+  assert.ok(m.text.includes("Paid trial: your first 20 posting days"));
   assert.ok(m.text.includes("If you pass your trial"));
 });
 

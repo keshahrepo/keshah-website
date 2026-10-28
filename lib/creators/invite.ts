@@ -62,7 +62,7 @@ export const CREATOR_FROM_NAME = "McKenzie from KESHAH";
 export const CREATOR_SIGNOFF = "McKenzie\nCreator Coordinator, KESHAH";
 
 /** The pay lines in offer emails (Oct 2026 plans). */
-export const TRIAL_TEXT = "20 posting days, 3 videos a weekday, $30 a day ($600 total)";
+export const TRIAL_TEXT = "your first 20 posting days, 3 videos a weekday, $600";
 /** "5 videos a weekday, $1,000/month, plus bonuses (...)" for one plan. */
 export function afterTrialText(plan: { videos: number; baseCents: number }): string {
   const usd = `$${(plan.baseCents / 100).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
