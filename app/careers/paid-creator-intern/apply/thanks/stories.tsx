@@ -583,7 +583,7 @@ const CSS = `
 .cs-bars{position:absolute;z-index:5;top:calc(env(safe-area-inset-top,0px) + 10px);left:10px;right:10px;display:flex;gap:4px}
 .cs-bar{flex:1;height:3px;border-radius:3px;background:rgba(255,255,255,.22);overflow:hidden}
 .cs-bar>div{height:100%;width:100%;background:#fff;border-radius:3px;transform-origin:left}
-.cs-close{position:absolute;z-index:6;top:calc(env(safe-area-inset-top,0px) + 22px);right:12px;width:36px;height:36px;border-radius:50%;border:0;background:rgba(0,0,0,.35);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:#fff;font-size:15px;cursor:pointer}
+.cs-close{position:absolute;z-index:6;top:calc(env(safe-area-inset-top,0px) + 22px);right:12px;width:36px;height:36px;border-radius:50%;border:0;background:rgba(255,255,255,.16);box-shadow:inset 0 0 0 1px rgba(255,255,255,.22);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:#fff;font-size:15px;cursor:pointer}
 .cs-card{position:absolute;inset:0;box-sizing:border-box;width:100%;padding:calc(env(safe-area-inset-top,0px) + 72px) 24px calc(env(safe-area-inset-bottom,0px) + 80px);display:flex;flex-direction:column;overflow:hidden;background:#050505;backface-visibility:hidden}
 .cs-in-next{animation:cs-enter-next .52s cubic-bezier(.2,.8,.2,1) both;z-index:2}
 .cs-in-back{animation:cs-enter-back .52s cubic-bezier(.2,.8,.2,1) both;z-index:2}
@@ -623,7 +623,7 @@ const CSS = `
 .cs-check path{fill:none;stroke:#fff;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:40;stroke-dashoffset:40;animation:cs-draw .4s .6s ease-out forwards}
 .cs-ba{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .cs-ba figure{margin:0;display:flex;flex-direction:column;gap:8px}
-.cs-ba img{display:block;width:100%;aspect-ratio:872/1600;max-height:42dvh;object-fit:cover;border-radius:18px;box-shadow:0 18px 44px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.1)}
+.cs-ba img{display:block;width:100%;height:min(42dvh,calc((min(100vw,460px) - 58px) / 2 * 1.835));object-fit:cover;border-radius:18px;box-shadow:0 18px 44px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.1)}
 .cs-ba figcaption{text-align:center;font-size:13px;font-weight:600;color:rgba(255,255,255,.6)}
 .cs-ba figcaption.after{color:#E8B530}
 .cs-phone{align-self:center;width:58%;max-width:230px;border-radius:32px;padding:7px;background:linear-gradient(160deg,#2a2a2a,#0d0d0d);box-shadow:0 30px 80px rgba(218,165,32,.16),0 0 0 1px rgba(255,255,255,.1)}
@@ -640,7 +640,7 @@ const CSS = `
 .cs-float{opacity:0;transform:translateY(24px) scale(.96);animation:cs-up .7s cubic-bezier(.2,.9,.25,1.15) forwards}
 .cs-wall{position:absolute;inset:0;z-index:0;overflow:hidden;display:flex;justify-content:center}
 .cs-wall-track{width:var(--w);flex:none;display:flex;flex-direction:column;animation:cs-wallup 40s linear infinite}
-.cs-wall video,.cs-wall img{display:block;width:100%;object-fit:cover}
+.cs-wall video,.cs-wall img{display:block;width:100%;object-fit:cover;margin-bottom:-14%;-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 14%,#000 86%,transparent 100%);mask-image:linear-gradient(180deg,transparent 0,#000 14%,#000 86%,transparent 100%)}
 @keyframes cs-wallup{to{transform:translateY(-50%)}}
 .cs-rates{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;margin-top:10px}
 .cs-rate{display:flex;flex-direction:column;align-items:center;gap:2px;padding:14px 10px;border-radius:18px;background:rgba(255,255,255,.1);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
@@ -715,7 +715,7 @@ const CSS = `
 .cs-sub{font-size:19px}
 .cs-kicker{font-size:13px}
 .cs-big{font-size:110px}
-.cs-ba{gap:18px}.cs-ba img{max-height:62dvh}
+.cs-ba{gap:18px}.cs-ba img{height:min(62dvh,560px)}
 .cs-phone{width:auto;max-width:300px}
 .cs-phone img{max-height:68dvh;width:auto;max-width:100%;margin:0 auto}
 .cs-facts span{font-size:17px}
@@ -731,6 +731,6 @@ const CSS = `
 .cs-arrow.left{left:28px}.cs-arrow.right{right:28px}
 .cs-hint{bottom:36px}
 }
-@media(max-height:720px) and (max-width:899px){.cs-h1{font-size:35px}.cs-h2{font-size:27px}.cs-line{font-size:29px}.cs-sub{font-size:14px}.cs-big{font-size:56px}.cs-ba{height:38dvh}.cs-facts li{padding:11px 14px}.cs-rate b{font-size:28px}}
+@media(max-height:720px) and (max-width:899px){.cs-ba img{height:min(36dvh,calc((100vw - 58px) / 2 * 1.835))}.cs-h1{font-size:35px}.cs-h2{font-size:27px}.cs-line{font-size:29px}.cs-sub{font-size:14px}.cs-big{font-size:56px}.cs-facts li{padding:11px 14px}.cs-rate b{font-size:28px}}
 @media(prefers-reduced-motion:reduce){*{animation-duration:.01s!important;animation-delay:0s!important}}
 `;
