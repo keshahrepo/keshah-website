@@ -8,6 +8,11 @@ test("stages follow the pipeline", () => {
   assert.equal(recruitStage({ status: "replied" }), "replied");
   assert.equal(recruitStage({ status: "invited" }), "invited");
   assert.equal(recruitStage({ status: "booked" }), "booked");
+  const now = Date.parse("2026-10-28T12:00:00Z");
+  assert.equal(recruitStage({ status: "booked", calendly_event_start_time: "2026-10-28T13:00:00Z" }, null, now), "booked");
+  assert.equal(recruitStage({ status: "booked", calendly_event_start_time: "2026-10-28T11:50:00Z" }, null, now), "booked");
+  assert.equal(recruitStage({ status: "booked", calendly_event_start_time: "2026-10-28T11:40:00Z" }, null, now), "called");
+  assert.equal(recruitStage({ status: "booked", calendly_event_start_time: "2026-10-27T11:40:00Z", interview_video_submitted_at: "x" }, null, now), "review");
   assert.equal(recruitStage({ status: "booked", interview_video_submitted_at: "x" }), "review");
   assert.equal(recruitStage({ status: "denied" }), "passed");
   assert.equal(recruitStage({ status: "accepted" }, { contract_signed: false, started: false, status: "onboarding" }), "offered");

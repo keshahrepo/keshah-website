@@ -7,7 +7,8 @@
  *   emailed    we emailed them, no reply yet        (status "emailed")
  *   replied    they replied: send the calendar link (status "replied", set by the reply sync)
  *   invited    calendar sent, not booked yet        (status "invited", set when the founder's Gmail reply has the Calendly link)
- *   booked     they booked a call                   (status "booked", set by the Calendly webhook)
+ *   booked     call coming up                       (status "booked", set by the Calendly webhook)
+ *   called     call is over, no test video yet      (status "booked", call start + 20 min has passed)
  *   review     test video in: Accept or Pass        (interview_video_submitted_at)
  *   offered    accepted, setup not started          (creator: contract not signed)
  *   onboarding signed, setting up and warming up    (creator: no start_date yet)
@@ -19,7 +20,7 @@
 
 export const OUTREACH_SOURCE = "tiktok-outreach";
 
-export type RecruitStage = "emailed" | "replied" | "invited" | "booked" | "review" | "offered" | "onboarding" | "posting" | "passed" | "applied";
+export type RecruitStage = "emailed" | "replied" | "invited" | "booked" | "called" | "review" | "offered" | "onboarding" | "posting" | "passed" | "applied";
 
 /** The creator a decided application became (ContentCreators, matched by application_id). */
 export interface CreatorLite {
@@ -28,7 +29,16 @@ export interface CreatorLite {
   status: string;
 }
 
-export function recruitStage(app: Record<string, unknown>, creator?: CreatorLite | null): RecruitStage {
+/** A 15-minute call, plus a little slack, before it counts as over. */
+export const CALL_OVER_MS = 20 * 60_000;
+
+/** Is their booked call over (start + 20 min passed)? False with no call time. */
+export function callOver(app: Record<string, unknown>, now = Date.now()): boolean {
+  const start = Date.parse(String(app.calendly_event_start_time ?? ""));
+  return Number.isFinite(start) && start + CALL_OVER_MS <= now;
+}
+
+export function recruitStage(app: Record<string, unknown>, creator?: CreatorLite | null, now = Date.now()): RecruitStage {
   const status = String(app.status ?? "");
   if (status === "denied" || status === "rejected" || status === "withdrawn") return "passed";
   if (status === "accepted") {
@@ -38,7 +48,7 @@ export function recruitStage(app: Record<string, unknown>, creator?: CreatorLite
     return "offered";
   }
   if (app.interview_video_submitted_at) return "review";
-  if (status === "booked" || status === "completed") return "booked";
+  if (status === "booked" || status === "completed") return callOver(app, now) ? "called" : "booked";
   if (status === "replied") return "replied";
   if (status === "invited") return "invited";
   if (status === "emailed") return "emailed";

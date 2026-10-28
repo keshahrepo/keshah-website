@@ -16,6 +16,7 @@ import { listAwaitingConversations } from "@/lib/support/repo";
 import { groupConversations } from "@/lib/applicant-inbox";
 import { listInboxMessages } from "@/lib/applicant-inbox-firestore";
 import { revenueOverview, type RevenueOverview } from "@/lib/revenue";
+import { callOver } from "@/lib/outreach";
 
 export type NeedKind =
   | "trial_decision"
@@ -240,6 +241,17 @@ export async function founderHome(now = new Date()): Promise<FounderHome> {
         title: String(a.full_name || "Creator"),
         subtitle: "Replied. Send your calendar",
         at: typeof a.replied_at === "string" ? a.replied_at : toIso(a.last_updated_at),
+      });
+      continue;
+    }
+    // Call over a day ago and still no test video: nudge them or pass.
+    if (!a.interview_video_submitted_at && callOver(a) && callOver(a, Date.now() - 86_400_000)) {
+      needs.push({
+        kind: "application",
+        id: d.id,
+        title: String(a.full_name || "Creator"),
+        subtitle: "Had the call, no test video yet",
+        at: String(a.calendly_event_start_time),
       });
       continue;
     }
