@@ -73,7 +73,7 @@ export interface OfferPlan {
 /** "5 videos a weekday, $1,000/month, plus bonuses (...)" for one plan ("Format Creator plan: ..." for Format). */
 export function afterTrialText(plan: OfferPlan): string {
   const usd = `$${(plan.baseCents / 100).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
-  const videos = plan.format ? `Format Creator plan: ${plan.videos} videos a weekday (2 of them in your own style)` : `${plan.videos} videos a weekday`;
+  const videos = plan.format ? `the Format Creator plan, ${plan.videos} videos a weekday (2 of them in your own style)` : `${plan.videos} videos a weekday`;
   return `${videos}, ${usd}/month, plus bonuses ($15 when a video hits 100K views, $100 total at 1M)`;
 }
 
@@ -234,7 +234,7 @@ function kickoffOfferEmail(
   format = false,
 ): { subject: string; text: string; html: string; fromName: string } {
   const opener = format
-    ? "Thanks for chatting with Aadi! After meeting with several creators, we're excited to invite you to join as a Format Creator."
+    ? "Thanks for chatting with Aadi! After meeting with several creators, we're excited to invite you to join as one of our Format Creators. It's a small group we invite because we love their style, so 2 of your daily videos can be in your own format instead of our scripts."
     : "Thanks for chatting with Aadi! After meeting with several creators, we're excited to offer you a spot on the team.";
   const deadline = deadlineText ? `Please sign your contract by ${deadlineText} to confirm your spot.` : null;
   const signIn = signInEmail ? `Sign in with ${signInEmail}.` : "Sign in with the email this message was sent to.";

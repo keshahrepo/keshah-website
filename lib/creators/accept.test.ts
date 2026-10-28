@@ -316,8 +316,8 @@ test("ensureInboxDelivery: admin gets every email (added back if missing), creat
 
 test("Format offer: named as a Format Creator, by invitation, 2 in their own style, their amount", () => {
   const m = welcomeEmail({ firstName: "Jay", link: "https://x/l", contractReady: true, kickoffUrl: "https://k", plan: offerPlan({ pay_plan: "format", custom_base_cents: 125000 }) });
-  assert.ok(m.text.includes("we're excited to invite you to join as a Format Creator."));
-  assert.ok(m.text.includes("Format Creator plan: 5 videos a weekday (2 of them in your own style), $1,250/month"));
+  assert.ok(m.text.includes("we're excited to invite you to join as one of our Format Creators. It's a small group we invite because we love their style"));
+  assert.ok(m.text.includes("If you pass your trial: the Format Creator plan, 5 videos a weekday (2 of them in your own style), $1,250/month"));
   const full = welcomeEmail({ firstName: "Jay", link: "https://x/l", contractReady: true, kickoffUrl: "https://k", plan: offerPlan({ pay_plan: "full" }) });
   assert.ok(!full.text.includes("Format"));
 });
