@@ -237,12 +237,13 @@ function kickoffOfferEmail(
     ? "Thanks for chatting with Aadi! After meeting with several creators, we're excited to invite you to join as one of our Format Creators. It's a small group we invite because we love their style, so 2 of your daily videos can be in your own format instead of our scripts."
     : "Thanks for chatting with Aadi! After meeting with several creators, we're excited to offer you a spot on the team.";
   const deadline = deadlineText ? `Please sign your contract by ${deadlineText} to confirm your spot.` : null;
-  const signIn = signInEmail ? `Sign in with ${signInEmail}.` : "Sign in with the email this message was sent to.";
-  const testflight = "It's on TestFlight (Apple's app for early access), so install TestFlight first if it asks.";
+  const testflight = "It's on TestFlight, Apple's app for early access, so install TestFlight first if it asks.";
   const step1 = app
-    ? `Download the KESHAH Creators app: ${app}`
+    ? `Download the KESHAH Creators app (${app}). ${testflight}`
     : `Set your password for the KESHAH Creators app (this link works once and expires in 7 days): ${setPasswordLink}`;
-  const step2 = "Read and sign your contract in the app.";
+  const step2 = app
+    ? `Sign in with ${signInEmail || "the email this message was sent to"}, then read and sign your contract.`
+    : "Read and sign your contract in the app.";
   const step3 = "Book a 15-minute call with Aadi right in the app. You can set up your accounts before the call, and we'll go over anything you're stuck on.";
   const closing = "We're excited to have you on the team. If you have any questions, just reply to this email.";
   const text = [
@@ -254,7 +255,6 @@ function kickoffOfferEmail(
     "Next steps",
     "",
     `1. ${step1}`,
-    ...(app ? [`   ${testflight}`, `   ${signIn}`] : []),
     `2. ${step2}`,
     `3. ${step3}`,
     "",
@@ -276,7 +276,7 @@ function kickoffOfferEmail(
     `<p style="margin:0 0 6px"><b>Next steps</b></p>`,
     `<ol style="margin:0 0 16px;padding-left:20px">`,
     app
-      ? `<li style="margin-bottom:6px"><a href="${esc(app)}">Download the KESHAH Creators app</a><br>${esc(testflight)}<br>${esc(signIn)}</li>`
+      ? `<li style="margin-bottom:6px"><a href="${esc(app)}"><b>Download the KESHAH Creators app.</b></a> ${esc(testflight)}</li>`
       : `<li style="margin-bottom:6px"><a href="${esc(setPasswordLink)}">Set your password</a> for the KESHAH Creators app (this link works once and expires in 7 days).</li>`,
     `<li style="margin-bottom:6px">${esc(step2)}</li>`,
     `<li>${esc(step3)}</li>`,

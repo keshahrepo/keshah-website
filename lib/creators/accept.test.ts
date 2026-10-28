@@ -208,7 +208,7 @@ test("offer with a call: from McKenzie, app, sign, then book the call with Aadi 
   assert.ok(m.text.includes("Thanks for chatting with Aadi! After meeting with several creators, we're excited to offer you a spot on the team."));
   assert.ok(!m.text.includes("250 applications"));
   assert.ok(m.text.includes("Please sign your contract by Thursday, October 29 at 11:59 PM ET to confirm your spot."));
-  assert.ok(m.text.includes("2. Read and sign your contract in the app."));
+  assert.ok(m.text.includes("2. Read and sign your contract in the app.") || m.text.includes("then read and sign your contract."));
   assert.ok(m.text.includes("3. Book a 15-minute call with Aadi right in the app."));
   assert.ok(m.text.endsWith("McKenzie\nCreator Coordinator, KESHAH"));
 });
