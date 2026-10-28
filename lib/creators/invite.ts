@@ -139,7 +139,7 @@ export function welcomeEmail(input: {
   const app = creatorAppUrl();
   const kickoff = input.kickoffUrl === undefined ? creatorKickoffUrl() : input.kickoffUrl;
   const afterText = input.plan ? afterTrialText(input.plan) : AFTER_TRIAL_TEXT;
-  if (kickoff) return kickoffOfferEmail(first, kickoff, app, input.link, input.deadlineText, afterText);
+  if (kickoff) return kickoffOfferEmail(first, app, input.link, input.signInEmail, input.deadlineText, afterText);
   // The @keshah.com address isn't in this email on purpose: the app's Accounts
   // step shows it when they need it, with how to use it.
   //
@@ -212,28 +212,27 @@ export function welcomeEmail(input: {
 }
 
 /**
- * The offer when there's a kickoff call: the original offer email, with the
- * next steps changed to "book your kickoff" (contract, app and accounts are
- * done together on the call).
+ * The offer when there's a call with Aadi: download the app, sign the
+ * contract in it, then book the call from the app (accounts and warm-up can
+ * go ahead before the call).
  */
 function kickoffOfferEmail(
   first: string,
-  kickoff: string,
   app: string | null,
   setPasswordLink: string,
+  signInEmail?: string,
   deadlineText?: string,
   afterText: string = AFTER_TRIAL_TEXT,
 ): { subject: string; text: string; html: string; fromName: string } {
-  const opener =
-    "Congratulations! We've decided to move forward with you for the content creator role at KESHAH. We've reviewed over 250 applications and yours stood out. Fewer than 6% of applicants get into our creator program, so we're excited to have you on board.";
-  const deadline = deadlineText ? `Please book your kickoff call by ${deadlineText} to confirm your spot.` : null;
-  const step2 = "On the call we'll sign your contract and set up your app and accounts together. Have your phone with you.";
-  const step3 = app
-    ? `If you'd like to read your contract before the call, download the KESHAH Creators app: ${app}`
-    : `If you'd like to read your contract before the call, set your password (this link works once and expires in 7 days): ${setPasswordLink}`;
-  const trial = TRIAL_TEXT;
-  const after = afterText;
-  const closing = "We are excited to have you on the team. If you have any questions, feel free to reply to this email.";
+  const opener = "Thanks for chatting with Aadi! We'd love to have you on board as a KESHAH creator.";
+  const deadline = deadlineText ? `Please sign your contract by ${deadlineText} to confirm your spot.` : null;
+  const signIn = signInEmail ? `Then sign in with ${signInEmail}, the email this message was sent to.` : "Then sign in with the email this message was sent to.";
+  const step1 = app
+    ? `Download the KESHAH Creators app. It's in early access, so it's on TestFlight, Apple's app for early access. Tap the link, install TestFlight if it asks, then tap Install: ${app}`
+    : `Set your password for the KESHAH Creators app (this link works once and expires in 7 days): ${setPasswordLink}`;
+  const step2 = "Read and sign your contract in the app.";
+  const step3 = "Book a 15-minute call with Aadi right in the app. You can set up your accounts before the call, and we'll go over anything you're stuck on.";
+  const closing = "We're excited to have you on the team. If you have any questions, just reply to this email.";
   const text = [
     `Hi ${first},`,
     "",
@@ -242,15 +241,15 @@ function kickoffOfferEmail(
     ...(deadline ? [deadline, ""] : []),
     "Next steps",
     "",
-    `1. Book a 15-minute kickoff call: ${kickoff}`,
+    `1. ${step1}`,
+    ...(app ? [`   ${signIn}`] : []),
     `2. ${step2}`,
     `3. ${step3}`,
-    ...(app ? ["   It's in early access through TestFlight, Apple's app for early access, so install TestFlight first if it asks."] : []),
     "",
     "The role",
     "",
-    `• Paid trial: ${trial}`,
-    `• If you pass your trial: ${after}`,
+    `• Paid trial: ${TRIAL_TEXT}`,
+    `• If you pass your trial: ${afterText}`,
     "",
     closing,
     "",
@@ -264,14 +263,16 @@ function kickoffOfferEmail(
     deadline ? p(`<b>${esc(deadline)}</b>`) : "",
     `<p style="margin:0 0 6px"><b>Next steps</b></p>`,
     `<ol style="margin:0 0 16px;padding-left:20px">`,
-    `<li style="margin-bottom:6px"><a href="${esc(kickoff)}">Book a 15-minute kickoff call</a>.</li>`,
+    app
+      ? `<li style="margin-bottom:6px">Download the <a href="${esc(app)}">KESHAH Creators app</a>. It's in early access, so it's on TestFlight, Apple's app for early access. Tap the link, install TestFlight if it asks, then tap Install. ${esc(signIn)}</li>`
+      : `<li style="margin-bottom:6px"><a href="${esc(setPasswordLink)}">Set your password</a> for the KESHAH Creators app (this link works once and expires in 7 days).</li>`,
     `<li style="margin-bottom:6px">${esc(step2)}</li>`,
-    `<li>${app ? `If you'd like to read your contract before the call, download the <a href="${esc(app)}">KESHAH Creators app</a>. It's in early access through TestFlight, Apple's app for early access, so install TestFlight first if it asks.` : `If you'd like to read your contract before the call, <a href="${esc(setPasswordLink)}">set your password</a> (this link works once and expires in 7 days).`}</li>`,
+    `<li>${esc(step3)}</li>`,
     `</ol>`,
     `<p style="margin:0 0 6px"><b>The role</b></p>`,
     `<ul style="margin:0 0 16px;padding-left:20px">`,
-    `<li style="margin-bottom:6px"><b>Paid trial:</b> ${esc(trial)}</li>`,
-    `<li><b>If you pass your trial:</b> ${esc(after)}</li>`,
+    `<li style="margin-bottom:6px"><b>Paid trial:</b> ${esc(TRIAL_TEXT)}</li>`,
+    `<li><b>If you pass your trial:</b> ${esc(afterText)}</li>`,
     `</ul>`,
     p(esc(closing)),
     `<p style="margin:0">${esc(CREATOR_SIGNOFF).replace(/\n/g, "<br>")}</p>`,

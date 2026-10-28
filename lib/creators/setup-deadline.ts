@@ -181,23 +181,12 @@ export function getStartedDue(d: GetStartedDoc, now: Date): boolean {
 }
 
 export function getStartedEmail(input: { firstName: string; appUrl: string | null; signInEmail: string; deadlineIso: string; kickoffUrl?: string | null }): { subject: string; text: string; html: string; fromName: string } {
-  const kickoff = input.kickoffUrl === undefined ? creatorKickoffUrl() : input.kickoffUrl;
-  if (kickoff) {
-    const k = [
-      { text: `Hi ${input.firstName || "there"},` },
-      { text: "Just checking you saw your offer. To lock in your spot, book your 15-minute kickoff call:" },
-      { text: kickoff },
-      { text: `Your offer is open until ${deadlineLong(input.deadlineIso)}.`, bold: true },
-      { text: "If anything is holding you up, just reply to this email and I'll help." },
-    ];
-    return { subject: "Your KESHAH spot is waiting", text: [...k.flatMap((x) => [x.text, ""]), CREATOR_SIGNOFF].join("\n"), html: lightEmailHtml(k), fromName: CREATOR_FROM_NAME };
-  }
   const paras = [
     { text: `Hi ${input.firstName || "there"},` },
     { text: "Just checking you saw your offer. To lock in your spot:" },
-    { text: input.appUrl ? `1. Download the KESHAH Creators app: ${input.appUrl}` : "1. Download the KESHAH Creators app (link in your offer email)" },
+    { text: input.appUrl ? `1. Download the KESHAH Creators app (it's on TestFlight, so install TestFlight first if it asks): ${input.appUrl}` : "1. Download the KESHAH Creators app (link in your offer email)" },
     { text: `2. Sign in with ${input.signInEmail}` },
-    { text: "3. Sign your contract. It's the first thing the app shows you." },
+    { text: "3. Sign your contract. It's the first thing the app shows you. Then book your call with Aadi right in the app." },
     { text: `Your offer is open until ${deadlineLong(input.deadlineIso)}.`, bold: true },
     { text: "If anything is holding you up, just reply to this email and I'll help." },
   ];

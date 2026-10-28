@@ -34,6 +34,8 @@ import { BOOKING_FIELDS, OUTSIDE_US_REASON, cancelDecision, isDecided, outsideUs
 import { emailConfigured, sendEmail } from "@/lib/email";
 import { CREATOR_FROM_NAME } from "@/lib/creators/invite";
 import { OUTREACH_SOURCE } from "@/lib/outreach";
+import { CREATORS_COLLECTION } from "@/lib/creators/db";
+import { findCreatorByEmail } from "@/lib/mobile/firestore";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -147,6 +149,32 @@ export async function POST(req: Request) {
   const inviteeTimezone = p.timezone ?? null;
 
   const { db } = getFirebaseAdmin();
+
+  // The creator onboarding call (booked from the app after signing): saved on
+  // the creator as kickoff_call, never touches applications.
+  if (/onboarding|kickoff/i.test(p.scheduled_event?.name ?? "")) {
+    let creatorId = email ? (await findCreatorByEmail(db, email))?.id ?? null : null;
+    const name = (p.name ?? "").trim().toLowerCase();
+    if (!creatorId && name) {
+      const snap = await db.collection(CREATORS_COLLECTION).where("is_active", "==", true).get();
+      const hits = snap.docs.filter((d) => [d.get("name"), d.get("legal_name")].some((n) => String(n ?? "").trim().toLowerCase() === name));
+      if (hits.length === 1) creatorId = hits[0].id;
+    }
+    if (!creatorId) return NextResponse.json({ ok: true, kickoff: true, matched: false });
+    const ref = db.collection(CREATORS_COLLECTION).doc(creatorId);
+    if (body.event === "invitee.canceled") {
+      if (p.rescheduled === true) return NextResponse.json({ ok: true, kickoff: true, ignored: "reschedule" });
+      const cur = (await ref.get()).get("kickoff_call") ?? {};
+      // Only a cancel of the booking we have (not an older one).
+      if (cur.event_uri && eventUri && cur.event_uri !== eventUri) return NextResponse.json({ ok: true, kickoff: true, ignored: "other booking" });
+      await ref.set({ kickoff_call: { canceled_at: new Date().toISOString(), canceled_start_time: cur.start_time ?? null } }, { merge: true });
+      await ref.update({ "kickoff_call.start_time": FieldValue.delete(), "kickoff_call.event_uri": FieldValue.delete() });
+      return NextResponse.json({ ok: true, kickoff: true, id: creatorId, canceled: true });
+    }
+    await ref.set({ kickoff_call: { start_time: startTime, event_uri: eventUri, join_url: joinUrl, booked_at: new Date().toISOString(), canceled_at: null } }, { merge: true });
+    return NextResponse.json({ ok: true, kickoff: true, id: creatorId });
+  }
+
   let docId: string | null = null;
 
   // Match by draft_id first (most reliable — set from our apply page

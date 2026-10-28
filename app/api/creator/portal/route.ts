@@ -38,10 +38,22 @@ import {
 import { isWeekday, monthOf, planBaseCents, planVideos, trialDayCents, videosRequiredOn } from "@/lib/creators/pay";
 import { msUntilLocalDeadline } from "@/lib/creators/time";
 import { creatorDeadline } from "@/lib/creators/deadline";
+import { creatorKickoffUrl } from "@/lib/creators/invite";
 import { errorResponse, publicCreator, requireCreator } from "../_auth";
 import { monthPayload } from "../_payload";
 
 export const dynamic = "force-dynamic";
+
+/** { url (Calendly, their name and email filled in), start_time when booked }; null without a booking link. */
+function kickoffCallOf(d: Record<string, unknown>): { url: string; start_time: string | null } | null {
+  const base = creatorKickoffUrl();
+  if (!base) return null;
+  const q = new URLSearchParams();
+  if (d.name) q.set("name", String(d.name));
+  if (d.email) q.set("email", String(d.email));
+  const call = (d.kickoff_call ?? {}) as Record<string, unknown>;
+  return { url: q.size ? `${base}${base.includes("?") ? "&" : "?"}${q}` : base, start_time: typeof call.start_time === "string" ? call.start_time : null };
+}
 
 // GET: everything the portal needs on load.
 export async function GET(req: NextRequest) {
@@ -90,6 +102,8 @@ export async function GET(req: NextRequest) {
       // deadline_at / deadline_date (ET): the 72-hour signing deadline, while it's unsigned (null otherwise).
       contract: { status: creator.contract.status, signed_at: creator.contract.signed_at ?? null, ...(creatorDeadline(creator) ?? { deadline_at: null, deadline_date: null }) },
       tracking_url: creator.tracking_url || null,
+      // The call with Aadi, booked from the app right after signing (until they start posting).
+      kickoff_call: started ? null : kickoffCallOf(raw.data() ?? {}),
       // The first-posting-day pinned video: status, the founder's note, and whether a post is pinned yet.
       pinned_video: pinned ? { status: pinned.status, note: pinned.note ?? null, counted_day: pinned.counted_day ?? null, requested_day: pinned.requested_day ?? null, ...(pinned.skipped ? { skipped: true } : {}) } : null,
       pinned_live: await pinnedLiveFor(creator.id, pinned),

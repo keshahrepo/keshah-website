@@ -245,6 +245,8 @@ export interface AdminCreator {
   /** First time they saved the TikTok verification image (null = never). */
   business_image_at: string | null;
   /** The first-day pinned video: status, note, when (no storage path). */
+  /** The call with Aadi after signing: when it's booked for (null: not booked). */
+  kickoff_call_at: string | null;
   pinned_video: { status: string; note: string | null; submitted_at: string | null; approved_at: string | null; requested_day: string | null; skipped?: boolean } | null;
   reactivated_at: string | null;
 }
@@ -309,6 +311,7 @@ export function toAdminCreator(id: string, d: DocumentData): AdminCreator {
     passwords_reset_pending: passwordsResetPending(d),
     phone_check_pending: phoneCheckPending(d),
     business_image_at: typeof d.business_image_at === "string" ? d.business_image_at : null,
+    kickoff_call_at: d.kickoff_call && typeof d.kickoff_call === "object" && typeof d.kickoff_call.start_time === "string" ? d.kickoff_call.start_time : null,
     pinned_video:
       d.pinned_video && typeof d.pinned_video === "object" && typeof d.pinned_video.status === "string"
         ? {

@@ -169,13 +169,6 @@ export function firstNameOf(d: OfferDoc): string {
 export function reminderPush(deadlineIso: string, now: Date): { title: string; body: string; data: Record<string, string> } {
   // The window opens the evening before; if the cron only gets to it after midnight ET, "tomorrow" would be wrong.
   const sameDay = dateIn(now) === dateIn(new Date(deadlineIso));
-  if (creatorKickoffUrl()) {
-    return {
-      title: "Your KESHAH offer is waiting",
-      body: "Book your 15-minute kickoff call to keep your spot. The link is in your offer email.",
-      data: { type: "contract" },
-    };
-  }
   return {
     title: "Your KESHAH offer is waiting",
     body: sameDay
@@ -186,17 +179,6 @@ export function reminderPush(deadlineIso: string, now: Date): { title: string; b
 }
 
 export function reminderEmail(input: { firstName: string; deadlineIso: string; kickoffUrl?: string | null }): { subject: string; text: string; html: string; fromName: string } {
-  const kickoff = input.kickoffUrl === undefined ? creatorKickoffUrl() : input.kickoffUrl;
-  if (kickoff) {
-    const k = [
-      { text: `Hi ${input.firstName || "there"},` },
-      { text: "Just a quick reminder that your kickoff call still needs booking:" },
-      { text: kickoff },
-      { text: `Please book it by ${deadlineLong(input.deadlineIso)} to keep your spot. If you've already booked, you're all set.`, bold: true },
-      { text: "If anything is holding you up, just reply to this email and I'll help." },
-    ];
-    return { subject: "Your KESHAH offer is waiting", text: [...k.flatMap((x) => [x.text, ""]), CREATOR_SIGNOFF].join("\n"), html: lightEmailHtml(k), fromName: CREATOR_FROM_NAME };
-  }
   const paras = [
     { text: `Hi ${input.firstName || "there"},` },
     { text: "Just a quick reminder that your contract still needs your signature." },
