@@ -244,7 +244,7 @@ function kickoffOfferEmail(
   const step2 = app
     ? `Sign in with ${signInEmail || "the email this message was sent to"}, then read and sign your contract.`
     : "Read and sign your contract in the app.";
-  const step3 = "Book a 15-minute call with Aadi right in the app. You can set up your accounts before the call, and we'll go over anything you're stuck on.";
+  const step3 = "Book a 15-minute call with Aadi right in the app. Go through onboarding before the call, and we'll go over anything you're stuck on.";
   const closing = "We're excited to have you on the team. If you have any questions, just reply to this email.";
   const text = [
     `Hi ${first},`,
