@@ -166,7 +166,8 @@ export async function sendOutreachNudges(opts: { dry?: boolean; now?: Date; dead
   // Daily cap: nudges already sent today (US Eastern).
   const today = easternNow(now).date;
   const sentToday = all.filter((d) => [d.get("nudge_noreply_sent_at"), d.get("nudge_calendar_sent_at")].some((v) => typeof v === "string" && easternNow(new Date(v)).date === today)).length;
-  const room = Math.min(NUDGE_RUN_LIMIT, NUDGE_DAILY_CAP - sentToday);
+  // A random 3 to 6 per run (NUDGE_RUN_LIMIT at most), spaced 15 to 45 seconds apart.
+  const room = Math.min(3 + Math.floor(Math.random() * 4), NUDGE_RUN_LIMIT, NUDGE_DAILY_CAP - sentToday);
   const due = all.map((d) => ({ d, kind: nudgeDue(d.data(), now.getTime()) })).filter((x): x is { d: typeof x.d; kind: NudgeKind } => !!x.kind);
   if (room <= 0 || !due.length) return { sent, skipped };
 
@@ -175,7 +176,7 @@ export async function sendOutreachNudges(opts: { dry?: boolean; now?: Date; dead
   try {
     for (const { d, kind } of due) {
       if (sent.length >= room) break;
-      if (opts.deadlineMs && Date.now() > opts.deadlineMs) break;
+      if (opts.deadlineMs && Date.now() > opts.deadlineMs - 50_000) break;
       const x = d.data();
       const email = String(x.email ?? "").toLowerCase();
       const name = String(x.full_name || email);
@@ -213,8 +214,8 @@ export async function sendOutreachNudges(opts: { dry?: boolean; now?: Date; dead
       if (!opts.dry) {
         await sendEmail({ to: email, subject: replySubject(last!.subject), text, inReplyTo: last!.id, references: ours.map((o) => o.id) });
         await d.ref.set({ [kind === "noreply" ? "nudge_noreply_sent_at" : "nudge_calendar_sent_at"]: new Date().toISOString(), last_updated_at: FieldValue.serverTimestamp() }, { merge: true });
-        // A few seconds between sends, so they don't go out as one burst.
-        await new Promise((r) => setTimeout(r, 2000 + Math.floor(Math.random() * 4000)));
+        // A random 15 to 45 seconds between sends, so they don't go out as one burst.
+        if (sent.length + 1 < room) await gap();
       }
       sent.push({ name, kind });
     }
@@ -235,7 +236,11 @@ export async function sendOutreachNudges(opts: { dry?: boolean; now?: Date; dead
  * pipeline as "emailed".
  */
 export const QUEUE = "outreach_queue";
+/** First emails per cron run: a random 2 to 4, so they don't go out in even bursts. */
 export const QUEUE_PER_RUN = 4;
+const QUEUE_MIN_PER_RUN = 2;
+/** A random 15 to 45 seconds between sends. */
+const gap = () => new Promise((r) => setTimeout(r, 15_000 + Math.floor(Math.random() * 30_000)));
 export const QUEUE_DEFAULT_CAP = 25;
 export const QUEUE_FROM_HOUR = 11;
 export const QUEUE_TO_HOUR = 16;
@@ -252,12 +257,13 @@ export async function sendQueuedOutreach(opts: { dry?: boolean; now?: Date; dead
   const cap = typeof settings.cap === "number" ? settings.cap : QUEUE_DEFAULT_CAP;
   const sentSnap = await db.collection(QUEUE).where("status", "==", "sent").get();
   const sentToday = sentSnap.docs.filter((d) => typeof d.get("sent_at") === "string" && easternNow(new Date(d.get("sent_at"))).date === date).length;
-  const room = Math.min(QUEUE_PER_RUN, cap - sentToday);
+  const perRun = QUEUE_MIN_PER_RUN + Math.floor(Math.random() * (QUEUE_PER_RUN - QUEUE_MIN_PER_RUN + 1));
+  const room = Math.min(perRun, cap - sentToday);
   if (room <= 0) return { sent, skipped, cap, sent_today: sentToday };
   const queued = (await db.collection(QUEUE).where("status", "==", "queued").get()).docs.sort((a, b) => String(a.get("queued_at")).localeCompare(String(b.get("queued_at"))));
   for (const q of queued) {
     if (sent.length >= room) break;
-    if (opts.deadlineMs && Date.now() > opts.deadlineMs) break;
+    if (opts.deadlineMs && Date.now() > opts.deadlineMs - 50_000) break;
     const x = q.data();
     const email = String(x.email ?? "").trim().toLowerCase();
     // Never a second first email: anyone already in the pipeline is skipped.
@@ -273,7 +279,7 @@ export async function sendQueuedOutreach(opts: { dry?: boolean; now?: Date; dead
       const at = new Date().toISOString();
       await addOutreachCreator({ email, full_name: String(x.full_name || x.social_handle || email), social_handle: x.social_handle ? String(x.social_handle) : undefined, followers: typeof x.followers === "number" ? x.followers : undefined, video_line: String(x.line), greet: String(x.greet ?? ""), emailed_at: at }, db);
       await q.ref.set({ status: "sent", sent_at: at }, { merge: true });
-      await new Promise((r) => setTimeout(r, 3000 + Math.floor(Math.random() * 5000)));
+      if (sent.length + 1 < room) await gap();
     }
     sent.push(email);
   }

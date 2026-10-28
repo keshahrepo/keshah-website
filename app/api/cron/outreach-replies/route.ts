@@ -18,11 +18,11 @@ export async function GET(req: Request) {
     const start = Date.now();
     // Replies first, so nobody who just replied gets a follow-up.
     const sync = await syncOutreachReplies({ dry });
-    const nudges = await sendOutreachNudges({ dry, deadlineMs: start + 110_000 });
+    const nudges = await sendOutreachNudges({ dry, deadlineMs: start + 130_000 });
     // New creators from the daily search: their first email (weekdays from 11 AM ET).
     let firstEmails: Awaited<ReturnType<typeof sendQueuedOutreach>> | { error: string };
     try {
-      firstEmails = await sendQueuedOutreach({ dry, deadlineMs: start + 170_000 });
+      firstEmails = await sendQueuedOutreach({ dry, deadlineMs: start + 250_000 });
       if (!dry && !firstEmails.off) await healthOk("send");
     } catch (e) {
       firstEmails = { error: e instanceof Error ? e.message : String(e) };
@@ -30,9 +30,9 @@ export async function GET(req: Request) {
     }
     // The noon check and the 1 PM summary push (weekdays, ET).
     const pushes = dry ? [] : await outreachDailyPushes().catch(() => []);
-    const notes = dry ? null : await writeMissingNotes({ limit: 3, deadlineMs: start + 220_000 });
+    const notes = dry ? null : await writeMissingNotes({ limit: 3, deadlineMs: start + 275_000 });
     // A day in, no reply: pick another of their videos for the follow-up.
-    const nudgeVideos = dry ? null : await writeMissingNudgeVideos({ limit: 5, deadlineMs: start + 260_000 });
+    const nudgeVideos = dry ? null : await writeMissingNudgeVideos({ limit: 5, deadlineMs: start + 290_000 });
     return NextResponse.json({ ok: true, ...sync, nudges, firstEmails, pushes, notes, nudgeVideos });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
