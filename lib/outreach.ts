@@ -5,6 +5,7 @@
  * "tiktok-outreach", so the founder app's Recruit tab is one list:
  *
  *   emailed    we emailed them, no reply yet        (status "emailed")
+ *   bounced    the address didn't work              (status "bounced", from Gmail's bounce notice)
  *   replied    they replied: send the calendar link (status "replied", set by the reply sync)
  *   invited    calendar sent, not booked yet        (status "invited", set when the founder's Gmail reply has the Calendly link)
  *   booked     call coming up                       (status "booked", set by the Calendly webhook)
@@ -20,7 +21,7 @@
 
 export const OUTREACH_SOURCE = "tiktok-outreach";
 
-export type RecruitStage = "emailed" | "replied" | "invited" | "booked" | "called" | "review" | "offered" | "onboarding" | "posting" | "passed" | "applied";
+export type RecruitStage = "emailed" | "bounced" | "replied" | "invited" | "booked" | "called" | "review" | "offered" | "onboarding" | "posting" | "passed" | "applied";
 
 /** The creator a decided application became (ContentCreators, matched by application_id). */
 export interface CreatorLite {
@@ -52,6 +53,7 @@ export function recruitStage(app: Record<string, unknown>, creator?: CreatorLite
   if (status === "replied") return "replied";
   if (status === "invited") return "invited";
   if (status === "emailed") return "emailed";
+  if (status === "bounced") return "bounced";
   return "applied";
 }
 

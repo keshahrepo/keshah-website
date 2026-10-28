@@ -58,7 +58,7 @@ export async function addOutreachCreator(c: OutreachCreator, store?: Firestore):
  *          or "replied" moves them to "invited" (calendar sent, not booked yet).
  * So the founder just replies in Gmail as usual.
  */
-export async function syncOutreachReplies(opts: { days?: number; dry?: boolean; store?: Firestore } = {}): Promise<{ checked: number; replied: { email: string; name: string }[]; invited: { email: string; name: string }[] }> {
+export async function syncOutreachReplies(opts: { days?: number; dry?: boolean; store?: Firestore } = {}): Promise<{ checked: number; replied: { email: string; name: string }[]; invited: { email: string; name: string }[]; bounced: string[] }> {
   const db = opts.store ?? getFirebaseAdmin().db;
   const user = process.env.KESHAH_GMAIL_USER;
   const pass = process.env.KESHAH_GMAIL_APP_PASSWORD;
@@ -73,7 +73,8 @@ export async function syncOutreachReplies(opts: { days?: number; dry?: boolean; 
   const open = new Map([...emailed, ...repliedSnap.docs.map((d) => [String(d.get("email") ?? "").toLowerCase(), d] as const)]);
   const replied: { email: string; name: string }[] = [];
   const invited: { email: string; name: string }[] = [];
-  if (!open.size) return { checked: 0, replied, invited };
+  const bounced: string[] = [];
+  if (!open.size) return { checked: 0, replied, invited, bounced };
 
   const since = new Date(Date.now() - (opts.days ?? 3) * 86_400_000);
   const client = new ImapFlow({ host: "imap.gmail.com", port: 993, secure: true, auth: { user, pass }, logger: false });
@@ -88,6 +89,17 @@ export async function syncOutreachReplies(opts: { days?: number; dry?: boolean; 
         for await (const msg of client.fetch(uids, { envelope: true, source: true }, { uid: true })) {
           checked++;
           const from = addressOf(String(msg.envelope?.from?.[0]?.address ?? ""));
+          // Gmail's "couldn't be delivered" notice: mark that address bounced (no follow-up to it).
+          if (/^(mailer-daemon|postmaster)@/i.test(from)) {
+            const body = (await simpleParser(msg.source as Buffer)).text ?? "";
+            for (const [addr, bdoc] of emailed) {
+              if (!body.toLowerCase().includes(addr)) continue;
+              emailed.delete(addr);
+              bounced.push(addr);
+              if (!opts.dry) await bdoc.ref.set({ status: "bounced", bounced_at: new Date().toISOString(), last_updated_at: FieldValue.serverTimestamp() }, { merge: true });
+            }
+            continue;
+          }
           const doc = emailed.get(from);
           if (!doc) continue;
           emailed.delete(from);
@@ -126,7 +138,7 @@ export async function syncOutreachReplies(opts: { days?: number; dry?: boolean; 
   } finally {
     await client.logout().catch(() => {});
   }
-  return { checked, replied, invited };
+  return { checked, replied, invited, bounced };
 }
 
 /**

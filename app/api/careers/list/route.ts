@@ -9,8 +9,29 @@ import { requireDashboardSession } from "@/lib/support/auth";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { denialEmailDue } from "@/lib/interview-decisions";
 import { recruitStage, type CreatorLite } from "@/lib/outreach";
+import { QUEUE, QUEUE_DEFAULT_CAP } from "@/lib/outreach-db";
+import { easternNow } from "@/lib/outreach-nudges";
 
 export const dynamic = "force-dynamic";
+
+/** The Recruit header: today's first emails against the daily cap, what's queued, and totals. */
+async function outreachStats(db: FirebaseFirestore.Firestore) {
+  const [queued, sent, settings] = await Promise.all([
+    db.collection(QUEUE).where("status", "==", "queued").count().get(),
+    db.collection(QUEUE).where("status", "==", "sent").get(),
+    db.collection("Settings").doc("outreach_daily").get(),
+  ]);
+  const today = easternNow().date;
+  const sentAt = sent.docs.map((d) => String(d.get("sent_at") ?? ""));
+  const cap = typeof settings.get("cap") === "number" ? settings.get("cap") : QUEUE_DEFAULT_CAP;
+  return {
+    queued: queued.data().count,
+    sent_today: sentAt.filter((s) => s && easternNow(new Date(s)).date === today).length,
+    sent_total: sentAt.length,
+    cap,
+    paused: settings.get("paused") === true,
+  };
+}
 
 export async function GET() {
   if (!(await requireDashboardSession())) {
@@ -102,7 +123,7 @@ export async function GET() {
         decided_at: toIso(x.decided_at),
       };
     });
-    return NextResponse.json({ applications: rows });
+    return NextResponse.json({ applications: rows, outreach: await outreachStats(db) });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ error: msg }, { status: 500 });
