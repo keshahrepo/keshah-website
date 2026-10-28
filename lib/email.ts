@@ -32,6 +32,9 @@ export async function sendEmail(opts: {
   attachments?: { filename: string; content: Buffer; contentType?: string }[];
   /** Display name on the From line. Defaults to "Aadi from KESHAH". */
   fromName?: string;
+  /** Reply in an existing thread: the Message-ID being answered (and the thread's IDs). */
+  inReplyTo?: string;
+  references?: string[];
 }): Promise<void> {
   if (!emailConfigured()) {
     throw new Error("Email not configured (KESHAH_GMAIL_USER / KESHAH_GMAIL_APP_PASSWORD).");
@@ -43,5 +46,6 @@ export async function sendEmail(opts: {
     text: opts.text,
     html: opts.html,
     ...(opts.attachments?.length ? { attachments: opts.attachments } : {}),
+    ...(opts.inReplyTo ? { inReplyTo: opts.inReplyTo, references: opts.references?.length ? opts.references : [opts.inReplyTo] } : {}),
   });
 }

@@ -69,6 +69,9 @@ export async function GET() {
         replied_at: x.replied_at ?? null,
         reply_snippet: x.reply_snippet ?? null,
         calendar_sent_at: x.calendar_sent_at ?? null,
+        // 48-hour follow-ups (lib/outreach-nudges.ts).
+        nudge_noreply_sent_at: x.nudge_noreply_sent_at ?? null,
+        nudge_calendar_sent_at: x.nudge_calendar_sent_at ?? null,
         // Research on their TikTok (fit, what to mention, watch-outs, questions).
         research_notes: x.research_notes && typeof x.research_notes === "object" ? x.research_notes : null,
         calendly_event_start_time: x.calendly_event_start_time ?? null,
