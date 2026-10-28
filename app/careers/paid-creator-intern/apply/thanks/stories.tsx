@@ -53,15 +53,31 @@ function CountUp({ to, active, suffix = "", decimals = 0, ms = 1400, delay = 300
   );
 }
 
-function BgVideo({ src, poster, active }: { src: string; poster: string; active: boolean }) {
-  const ref = useRef<HTMLVideoElement>(null);
+/** A video shown small and tiled down the screen, drifting up slowly: reads as a wall of many clips. */
+function BgWall({ src, poster, ratio, scale, active }: { src: string; poster: string; ratio: number; scale: number; active: boolean }) {
+  const refs = useRef<(HTMLVideoElement | null)[]>([]);
   useEffect(() => {
-    const v = ref.current;
-    if (!v) return;
-    if (active) v.play().catch(() => {});
-    else v.pause();
+    refs.current.forEach((v, k) => {
+      if (!v) return;
+      if (active) {
+        // Each copy starts at a different moment so the tiles don't repeat in sync.
+        try {
+          v.currentTime = (k * 7) % 30;
+        } catch {}
+        v.play().catch(() => {});
+      } else v.pause();
+    });
   }, [active]);
-  return <video ref={ref} className="cs-bgvideo" src={src} poster={poster} muted loop playsInline preload="auto" />;
+  const copies = 6;
+  return (
+    <div className="cs-wall" style={{ ["--w" as string]: `${scale * 100}%` }}>
+      <div className="cs-wall-track">
+        {Array.from({ length: copies }, (_, k) => (
+          <video key={k} ref={(el) => { refs.current[k] = el; }} src={src} poster={poster} muted loop playsInline preload="auto" style={{ aspectRatio: String(ratio) }} />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 /** "Thursday, 6:30 PM" from Calendly's event_start_time (their local time). */
@@ -72,10 +88,6 @@ export function shortCallTime(iso: string | null): string | null {
   return new Intl.DateTimeFormat("en-US", { weekday: "long", hour: "numeric", minute: "2-digit" }).format(d);
 }
 
-const QUOTES = [
-  { q: "My hair looks better than ever, it is thicker, and my hair fall has stopped!!", by: "App Store" },
-  { q: "My scalp is no longer too tight, and I'm starting to see new hair growth!", by: "Google Play" },
-];
 
 export default function CreatorStories({
   bookingTime,
@@ -96,7 +108,7 @@ export default function CreatorStories({
   const cards: Card[] = [
     {
       key: "booked",
-      ms: 4000,
+      ms: 5000,
       render: () => (
         <>
           <div className="cs-aurora" />
@@ -124,10 +136,10 @@ export default function CreatorStories({
     },
     {
       key: "cover",
-      ms: 6000,
+      ms: 8500,
       render: (active) => (
         <>
-          <BgVideo src="/creator-call/members.mp4" poster="/creator-call/members-poster.jpg" active={active} />
+          <BgWall src="/creator-call/members.mp4" poster="/creator-call/members-poster.jpg" ratio={960 / 1080} scale={1} active={active} />
           <div className="cs-shade" />
           <div className="cs-bottom">
             <p className="cs-kicker cs-in">KESHAH Creator Program</p>
@@ -143,28 +155,28 @@ export default function CreatorStories({
     },
     {
       key: "story",
-      ms: 7000,
+      ms: 10000,
       render: () => (
         <>
-          <div className="cs-ba">
-            <img className="cs-kb" src="/creator-call/before.webp" alt="" />
-            <div className="cs-ba-after">
-              <img className="cs-kb" src="/creator-call/after.webp" alt="" />
-            </div>
-            <div className="cs-ba-line" />
-            <span className="cs-tag left">Before</span>
-            <span className="cs-tag right">After</span>
-          </div>
-          <div className="cs-shade" />
-          <div className="cs-bottom">
+          <div className="cs-aurora" />
+          <div className="cs-stack">
             <p className="cs-kicker cs-in">Where it started</p>
             <h1 className="cs-h2">
-              <Words text="It started with my own hair loss." delay={0.2} />
+              <Words text="It started with my own hair loss." delay={0.15} />
             </h1>
-            <p className="cs-sub cs-in" style={{ animationDelay: "1s" }}>
+            <div className="cs-ba cs-pop" style={{ animationDelay: ".4s" }}>
+              <img src="/creator-call/before.webp" alt="Aadi before" />
+              <div className="cs-ba-after">
+                <img src="/creator-call/after.webp" alt="Aadi after" />
+              </div>
+              <div className="cs-ba-line" />
+              <span className="cs-tag left">Before</span>
+              <span className="cs-tag right">After</span>
+            </div>
+            <p className="cs-sub cs-in" style={{ animationDelay: "1.2s" }}>
               No drugs. Just scalp exercises every day. My hair fall stopped by around day 60.
             </p>
-            <p className="cs-sign cs-in" style={{ animationDelay: "1.3s" }}>
+            <p className="cs-sign cs-in" style={{ animationDelay: "1.4s" }}>
               Aadi Agrawal, founder · UC Berkeley EECS
             </p>
           </div>
@@ -173,10 +185,10 @@ export default function CreatorStories({
     },
     {
       key: "app",
-      ms: 5500,
+      ms: 7500,
       render: () => (
         <>
-          <div className="cs-aurora green" />
+          <div className="cs-aurora warm" />
           <div className="cs-stack">
             <p className="cs-kicker cs-in">The app</p>
             <h1 className="cs-h2">
@@ -194,7 +206,7 @@ export default function CreatorStories({
     },
     {
       key: "why",
-      ms: 7500,
+      ms: 10500,
       render: () => (
         <>
           <div className="cs-aurora" />
@@ -209,7 +221,7 @@ export default function CreatorStories({
                 { n: "02", t: <>Balding areas get about <em>2.6× less blood</em>.</>, s: "Klemp & Peters, 1989" },
                 { n: "03", t: <><em>68.9%</em> stabilized their hair loss with daily scalp massage.</>, s: "English & Barazesh, 2019" },
               ].map((f, k) => (
-                <li key={f.n} className="cs-slide" style={{ animationDelay: `${0.8 + k * 0.35}s` }}>
+                <li key={f.n} className="cs-slide" style={{ animationDelay: `${0.9 + k * 0.45}s` }}>
                   <b>{f.n}</b>
                   <span>{f.t}</span>
                   <i>{f.s}</i>
@@ -222,10 +234,10 @@ export default function CreatorStories({
     },
     {
       key: "members",
-      ms: 7500,
+      ms: 8500,
       render: (active) => (
         <>
-          <BgVideo src="/creator-call/reviews.mp4" poster="/creator-call/reviews-poster.jpg" active={active} />
+          <BgWall src="/creator-call/reviews.mp4" poster="/creator-call/reviews-poster.jpg" ratio={1920 / 1080} scale={1.3} active={active} />
           <div className="cs-shade strong" />
           <div className="cs-center">
             <p className="cs-kicker cs-in">Real members</p>
@@ -235,20 +247,19 @@ export default function CreatorStories({
             <p className="cs-h3 cs-in" style={{ animationDelay: ".5s" }}>
               people have started KESHAH
             </p>
-            <div className="cs-stars cs-in" style={{ animationDelay: ".8s" }}>
-              <span>★★★★★</span>
-              <b>
-                <CountUp to={4.8} decimals={1} active={active} ms={900} delay={900} />
-              </b>
-              <small>from 12,000+ ratings</small>
-            </div>
-            <div className="cs-quotes">
-              {QUOTES.map((x, k) => (
-                <blockquote key={k} className="cs-float" style={{ animationDelay: `${1.4 + k * 0.5}s` }}>
-                  <span className="cs-qstars">★★★★★</span>
-                  {x.q}
-                  <cite>{x.by}</cite>
-                </blockquote>
+            <div className="cs-rates">
+              {[
+                { store: "App Store", score: 4.9, n: "1.1K ratings" },
+                { store: "Google Play", score: 4.8, n: "10.6K reviews" },
+              ].map((r, k) => (
+                <div key={r.store} className="cs-rate cs-float" style={{ animationDelay: `${1 + k * 0.3}s` }}>
+                  <small>{r.store}</small>
+                  <b>
+                    <CountUp to={r.score} decimals={1} active={active} ms={900} delay={1100 + k * 300} />
+                  </b>
+                  <span className="cs-stars5">★★★★★</span>
+                  <i>{r.n}</i>
+                </div>
               ))}
             </div>
           </div>
@@ -256,35 +267,61 @@ export default function CreatorStories({
       ),
     },
     {
+      key: "reviews",
+      ms: 9000,
+      render: () => (
+        <>
+          <div className="cs-aurora warm" />
+          <div className="cs-stack">
+            <p className="cs-kicker cs-in">In their words</p>
+            <h1 className="cs-h2">
+              <Words text="Straight from the App Store and Google Play." delay={0.15} />
+            </h1>
+            <div className="cs-shots">
+              <img className="cs-shot cs-pop" style={{ animationDelay: ".7s" }} src="/creator-call/appstore.webp" alt="App Store reviews: 4.9 from 1.1K ratings" />
+              <img className="cs-shot cs-pop" style={{ animationDelay: "1.2s" }} src="/creator-call/play.webp" alt="Google Play: 4.8 from 10.6K reviews" />
+            </div>
+          </div>
+        </>
+      ),
+    },
+    {
       key: "reach",
-      ms: 7500,
+      ms: 9500,
       render: (active) => (
         <>
-          <div className="cs-aurora green" />
+          <div className="cs-aurora" />
           <div className="cs-stack">
             <p className="cs-kicker cs-in">The reach</p>
             <h1 className="cs-h2">
-              <span className="cs-accent cs-in">
+              <span className="cs-num">
                 <CountUp to={80} active={active} suffix="M+" />
               </span>{" "}
-              <Words text="views so far." delay={0.3} />
+              views so far.
             </h1>
-            <div className="cs-fan">
+            <div className="cs-profiles">
               {[
-                { img: "aadi", handle: "@aadi.keshah", top: "3.8M" },
-                { img: "isai", handle: "@isai.trujillo01", top: "1.5M" },
-                { img: "jen", handle: "@jennifer.keshah", top: "798K" },
+                { img: "aadi", handle: "@aadi.keshah", role: "Founder", top: "3.8M" },
+                { img: "isai", handle: "@isai.trujillo01", role: "Creator", top: "1.5M" },
+                { img: "jen", handle: "@jennifer.keshah", role: "Creator", top: "798K" },
               ].map((p, k) => (
-                <figure key={p.handle} className={`cs-fan-${k}`}>
-                  <img src={`/creator-call/${p.img}.webp`} alt={p.handle} />
-                  <figcaption>
-                    <b>{p.handle}</b>
-                    <span>up to {p.top} views</span>
-                  </figcaption>
+                <figure key={p.handle} className="cs-pop" style={{ animationDelay: `${0.6 + k * 0.25}s` }}>
+                  <div className="cs-pimg">
+                    <img src={`/creator-call/${p.img}.webp`} alt={p.handle} />
+                    <figcaption>
+                      <b>{p.top}</b>
+                      <span>top video</span>
+                    </figcaption>
+                  </div>
+                  <p>
+                    {p.handle}
+                    <br />
+                    <em>{p.role}</em>
+                  </p>
                 </figure>
               ))}
             </div>
-            <p className="cs-sub cs-in center" style={{ animationDelay: "1.6s" }}>
+            <p className="cs-sub cs-in center" style={{ animationDelay: "1.5s" }}>
               Isai and Jen are creators in this exact program.
             </p>
           </div>
@@ -293,23 +330,20 @@ export default function CreatorStories({
     },
     {
       key: "role",
-      ms: 7000,
+      ms: 9000,
       render: () => (
         <>
-          <div className="cs-aurora" />
+          <div className="cs-aurora warm" />
           <div className="cs-stack">
             <p className="cs-kicker cs-in">What you&apos;d do</p>
-            <h1 className="cs-h2">
-              <Words text="Short talking videos. From anywhere." delay={0.15} />
-            </h1>
-            <ul className="cs-list">
-              {["A few videos each weekday, on your phone", "Scripts and hooks, ready for you", "New accounts we set up. Nothing on your page.", "Paid from day one, plus bonuses when videos go viral"].map((x, k) => (
-                <li key={k} className="cs-slide" style={{ animationDelay: `${0.7 + k * 0.3}s` }}>
-                  <span className="cs-tick">✓</span>
-                  {x}
-                </li>
-              ))}
-            </ul>
+            <div className="cs-lines">
+              <h2 className="cs-line l1">Film on your phone.</h2>
+              <h2 className="cs-line l2">Post on accounts we set up.</h2>
+              <h2 className="cs-line l3">Get paid every month.</h2>
+            </div>
+            <p className="cs-sub cs-in" style={{ animationDelay: "3.4s" }}>
+              Scripts and hooks are ready for you. Monday to Friday, from anywhere, and nothing goes on your own page.
+            </p>
           </div>
         </>
       ),
@@ -319,7 +353,7 @@ export default function CreatorStories({
       ms: 60000,
       render: () => (
         <>
-          <div className="cs-aurora green" />
+          <div className="cs-aurora warm" />
           <div className="cs-center">
             <p className="cs-kicker cs-in">Your call</p>
             <h1 className="cs-h1">
@@ -529,68 +563,73 @@ const CSS = `
 .cs-sub{margin:0;font-size:16px;line-height:1.5;color:rgba(255,255,255,.75)}
 .cs-sub.center{text-align:center}
 .cs-sign{margin:0;font-size:13px;color:rgba(255,255,255,.55)}
-.cs-accent{background:linear-gradient(90deg,#8CF7A8,#2FD484);-webkit-background-clip:text;background-clip:text;color:transparent}
-.cs-pill{margin:0;padding:9px 18px;border-radius:999px;background:rgba(124,242,154,.14);color:#8CF7A8;font-weight:600;font-size:14px;box-shadow:inset 0 0 0 1px rgba(124,242,154,.25)}
+.cs-accent{color:#E8B530}
+.cs-pill{margin:0;padding:9px 18px;border-radius:999px;background:rgba(255,255,255,.1);color:#fff;font-weight:600;font-size:14px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.16)}
 .cs-hint{position:absolute;z-index:4;bottom:calc(env(safe-area-inset-bottom,0px) + 18px);left:0;right:0;text-align:center;font-size:12px;letter-spacing:.06em;color:rgba(255,255,255,.45);animation:cs-blink 1.8s 2s ease-in-out infinite both}
 .cs-w{display:inline-block;opacity:0;transform:translateY(.45em);filter:blur(6px);animation:cs-word .55s cubic-bezier(.2,.8,.2,1) forwards}
 @keyframes cs-word{to{opacity:1;transform:none;filter:none}}
-.cs-aurora{position:absolute;inset:-20%;z-index:0;background:radial-gradient(40% 35% at 25% 20%,rgba(255,255,255,.08),transparent 70%),radial-gradient(45% 40% at 80% 85%,rgba(120,120,255,.10),transparent 70%);animation:cs-drift 14s ease-in-out infinite alternate}
-.cs-aurora.green{background:radial-gradient(40% 35% at 25% 25%,rgba(47,212,132,.20),transparent 70%),radial-gradient(45% 40% at 80% 80%,rgba(140,247,168,.10),transparent 70%)}
+.cs-aurora{position:absolute;inset:-20%;z-index:0;background:radial-gradient(40% 35% at 25% 20%,rgba(255,255,255,.08),transparent 70%),radial-gradient(45% 40% at 80% 85%,rgba(255,255,255,.05),transparent 70%);animation:cs-drift 14s ease-in-out infinite alternate}
+.cs-aurora.warm{background:radial-gradient(40% 35% at 25% 25%,rgba(218,165,32,.13),transparent 70%),radial-gradient(45% 40% at 80% 80%,rgba(255,255,255,.06),transparent 70%)}
 @keyframes cs-drift{to{transform:translate(4%,-3%) scale(1.08)}}
 .cs-bgvideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;animation:cs-kenburns 9s ease-out forwards}
 .cs-shade{position:absolute;inset:0;z-index:1;background:linear-gradient(180deg,rgba(0,0,0,.45) 0%,rgba(0,0,0,0) 22%,rgba(0,0,0,0) 45%,rgba(0,0,0,.88) 78%,#000 100%)}
 .cs-shade.strong{background:radial-gradient(80% 60% at 50% 50%,rgba(0,0,0,.62),rgba(0,0,0,.88))}
 .cs-kb{animation:cs-kenburns 9s ease-out forwards}
 @keyframes cs-kenburns{from{transform:scale(1.02)}to{transform:scale(1.14)}}
-.cs-check svg{width:88px;height:88px;filter:drop-shadow(0 0 24px rgba(124,242,154,.45))}
-.cs-check circle{fill:none;stroke:#8CF7A8;stroke-width:3;stroke-dasharray:151;stroke-dashoffset:151;animation:cs-draw .7s .1s ease-out forwards}
-.cs-check path{fill:none;stroke:#8CF7A8;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:40;stroke-dashoffset:40;animation:cs-draw .4s .6s ease-out forwards}
-.cs-ba{position:absolute;inset:0;z-index:0;overflow:hidden}
-.cs-ba img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 30%}
-.cs-ba-after{position:absolute;inset:0;clip-path:inset(0 0 0 100%);animation:cs-sweep 2.4s .9s cubic-bezier(.65,0,.35,1) forwards}
-.cs-ba-line{position:absolute;top:0;bottom:0;width:2px;left:100%;background:#fff;box-shadow:0 0 18px rgba(255,255,255,.9);animation:cs-line 2.4s .9s cubic-bezier(.65,0,.35,1) forwards}
+.cs-check svg{width:88px;height:88px;filter:drop-shadow(0 0 22px rgba(255,255,255,.35))}
+.cs-check circle{fill:none;stroke:#fff;stroke-width:3;stroke-dasharray:151;stroke-dashoffset:151;animation:cs-draw .7s .1s ease-out forwards}
+.cs-check path{fill:none;stroke:#fff;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:40;stroke-dashoffset:40;animation:cs-draw .4s .6s ease-out forwards}
+.cs-ba{position:relative;align-self:center;height:min(44dvh,400px);aspect-ratio:872/1600;max-width:100%;border-radius:22px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.1)}
+.cs-ba img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center}
+.cs-ba-after{position:absolute;inset:0;clip-path:inset(0 0 0 100%);animation:cs-sweep 2.6s 1.1s cubic-bezier(.65,0,.35,1) forwards}
+.cs-ba-line{position:absolute;top:0;bottom:0;width:2px;left:100%;background:#fff;box-shadow:0 0 16px rgba(255,255,255,.9);animation:cs-line 2.6s 1.1s cubic-bezier(.65,0,.35,1) forwards}
 @keyframes cs-sweep{to{clip-path:inset(0 0 0 50%)}}
 @keyframes cs-line{to{left:50%}}
-.cs-tag{position:absolute;z-index:2;top:calc(env(safe-area-inset-top,0px) + 74px);padding:5px 12px;border-radius:999px;background:rgba(0,0,0,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);font-size:12px;font-weight:600;opacity:0;animation:cs-fade .5s 3.2s forwards}
-.cs-tag.left{left:16px}.cs-tag.right{right:16px}
-.cs-phone{align-self:center;width:58%;max-width:230px;border-radius:32px;padding:7px;background:linear-gradient(160deg,#2a2a2a,#0d0d0d);box-shadow:0 30px 80px rgba(47,212,132,.25),0 0 0 1px rgba(255,255,255,.1)}
+.cs-tag{position:absolute;z-index:2;top:10px;padding:4px 10px;border-radius:999px;background:rgba(0,0,0,.6);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);font-size:11px;font-weight:600;opacity:0;animation:cs-fade .5s 3.6s forwards}
+.cs-tag.left{left:10px}.cs-tag.right{right:10px}
+.cs-phone{align-self:center;width:58%;max-width:230px;border-radius:32px;padding:7px;background:linear-gradient(160deg,#2a2a2a,#0d0d0d);box-shadow:0 30px 80px rgba(218,165,32,.16),0 0 0 1px rgba(255,255,255,.1)}
 .cs-phone img{width:100%;display:block;border-radius:26px}
 .cs-facts{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:12px}
 .cs-facts li{display:grid;grid-template-columns:34px 1fr;gap:3px 12px;padding:15px 16px;border-radius:18px;background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
-.cs-facts b{grid-row:span 2;color:#8CF7A8;font-size:14px;padding-top:2px}
+.cs-facts b{grid-row:span 2;color:#DAA520;font-size:14px;padding-top:2px}
 .cs-facts span{font-size:15px;line-height:1.4}
-.cs-facts em{font-style:normal;color:#8CF7A8;font-weight:700}
+.cs-facts em{font-style:normal;color:#DAA520;font-weight:700}
 .cs-facts i{font-style:normal;font-size:11px;color:rgba(255,255,255,.42)}
 .cs-big{font-size:68px;font-weight:700;letter-spacing:-.045em;line-height:1}
 .cs-landed{display:inline-block;animation:cs-land .5s ease-out}
-@keyframes cs-land{40%{transform:scale(1.08);text-shadow:0 0 30px rgba(140,247,168,.6)}100%{transform:none}}
-.cs-stars{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:4px;padding:10px 16px;border-radius:999px;background:rgba(255,255,255,.1);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
-.cs-stars span{color:#FFD15C;letter-spacing:2px}
-.cs-stars b{font-size:18px}
-.cs-stars small{color:rgba(255,255,255,.65);font-size:13px}
-.cs-quotes{display:flex;flex-direction:column;gap:10px;margin-top:14px;width:100%}
-.cs-quotes blockquote{margin:0;text-align:left;padding:13px 15px;border-radius:16px;background:rgba(255,255,255,.1);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);font-size:14px;line-height:1.45;box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
-.cs-quotes blockquote:nth-child(2){margin-left:22px}
-.cs-quotes cite{display:block;margin-top:5px;font-style:normal;font-size:11px;color:rgba(255,255,255,.5)}
-.cs-qstars{display:block;color:#FFD15C;font-size:11px;letter-spacing:2px;margin-bottom:4px}
+@keyframes cs-land{40%{transform:scale(1.08);text-shadow:0 0 30px rgba(218,165,32,.6)}100%{transform:none}}
 .cs-float{opacity:0;transform:translateY(24px) scale(.96);animation:cs-up .7s cubic-bezier(.2,.9,.25,1.15) forwards}
-.cs-fan{position:relative;height:300px;margin:8px 0 4px}
-.cs-fan figure{position:absolute;top:0;margin:0;width:46%;border-radius:18px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.1);opacity:0}
-.cs-fan img{display:block;width:100%;height:230px;object-fit:cover;object-position:top}
-.cs-fan figcaption{padding:8px 10px;background:#111}
-.cs-fan figcaption b{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cs-fan figcaption span{font-size:11px;color:#8CF7A8;font-weight:600}
-.cs-fan-0{left:0;transform-origin:bottom right;animation:cs-fan0 .8s .5s cubic-bezier(.2,.9,.25,1.1) forwards}
-.cs-fan-1{left:27%;z-index:2;animation:cs-fan1 .8s .8s cubic-bezier(.2,.9,.25,1.1) forwards}
-.cs-fan-2{right:0;transform-origin:bottom left;animation:cs-fan2 .8s 1.1s cubic-bezier(.2,.9,.25,1.1) forwards}
-@keyframes cs-fan0{from{opacity:0;transform:translateY(40px) rotate(0)}to{opacity:1;transform:translateY(22px) rotate(-8deg)}}
-@keyframes cs-fan1{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:none}}
-@keyframes cs-fan2{from{opacity:0;transform:translateY(40px) rotate(0)}to{opacity:1;transform:translateY(22px) rotate(8deg)}}
-.cs-list{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}
-.cs-list li{display:flex;gap:12px;align-items:flex-start;padding:15px 16px;border-radius:18px;background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);font-size:15px;line-height:1.4}
-.cs-tick{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:rgba(124,242,154,.16);color:#8CF7A8;font-size:12px;font-weight:700;margin-top:-1px}
+.cs-wall{position:absolute;inset:0;z-index:0;overflow:hidden;display:flex;justify-content:center}
+.cs-wall-track{width:var(--w);flex:none;display:flex;flex-direction:column;animation:cs-wallup 40s linear infinite}
+.cs-wall video{display:block;width:100%;object-fit:cover}
+@keyframes cs-wallup{to{transform:translateY(-50%)}}
+.cs-rates{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;margin-top:10px}
+.cs-rate{display:flex;flex-direction:column;align-items:center;gap:2px;padding:14px 10px;border-radius:18px;background:rgba(255,255,255,.1);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.cs-rate small{font-size:12px;color:rgba(255,255,255,.65);font-weight:500}
+.cs-rate b{font-size:34px;font-weight:700;letter-spacing:-.03em;line-height:1.1}
+.cs-stars5{color:#DAA520;letter-spacing:2px;font-size:13px}
+.cs-rate i{font-style:normal;font-size:12px;color:rgba(255,255,255,.6)}
+.cs-shots{display:flex;flex-direction:column;gap:12px}
+.cs-shot{display:block;max-width:100%;max-height:min(30dvh,300px);width:auto;align-self:flex-start;border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.1)}
+.cs-shot:nth-child(2){align-self:flex-end}
+.cs-num{color:#fff}
+.cs-profiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.cs-profiles figure{margin:0}
+.cs-pimg{position:relative}
+.cs-profiles img{display:block;width:100%;aspect-ratio:804/1353;object-fit:cover;object-position:top;border-radius:14px;box-shadow:0 14px 36px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.1)}
+.cs-profiles figcaption{position:absolute;left:6px;right:6px;bottom:6px;padding:6px 8px;border-radius:10px;background:rgba(0,0,0,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);text-align:center}
+.cs-profiles figcaption b{display:block;font-size:17px;font-weight:700;color:#E8B530;line-height:1.1}
+.cs-profiles figcaption span{font-size:10px;color:rgba(255,255,255,.65)}
+.cs-profiles p{margin:8px 0 0;font-size:11px;line-height:1.35;color:rgba(255,255,255,.85);text-align:center;overflow-wrap:anywhere}
+.cs-profiles em{font-style:normal;color:rgba(255,255,255,.5)}
+.cs-lines{display:flex;flex-direction:column;gap:6px}
+.cs-line{margin:0;font-size:34px;line-height:1.1;font-weight:700;letter-spacing:-.03em;opacity:0;transform:translateY(18px)}
+.cs-line.l1{animation:cs-up .6s .3s cubic-bezier(.2,.8,.2,1) forwards,cs-dim .6s 1.4s forwards}
+.cs-line.l2{animation:cs-up .6s 1.3s cubic-bezier(.2,.8,.2,1) forwards,cs-dim .6s 2.4s forwards}
+.cs-line.l3{animation:cs-up .6s 2.3s cubic-bezier(.2,.8,.2,1) forwards}
+@keyframes cs-dim{to{opacity:.4;transform:none}}
 .cs-expect{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:8px;font-size:15px;color:rgba(255,255,255,.82)}
-.cs-expect li::before{content:"✓  ";color:#8CF7A8;font-weight:700}
+.cs-expect li::before{content:"✓  ";color:#DAA520;font-weight:700}
 .cs-actions{display:flex;flex-direction:column;gap:10px;width:100%;margin-top:14px}
 .cs-btn{display:block;text-align:center;padding:16px 18px;border-radius:999px;font-weight:600;font-size:15px;text-decoration:none;color:#fff;background:rgba(255,255,255,.1);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
 .cs-btn.primary{background:#fff;color:#000;box-shadow:0 10px 30px rgba(255,255,255,.15)}
@@ -606,6 +645,6 @@ const CSS = `
 @keyframes cs-fade{to{opacity:1}}
 @keyframes cs-draw{to{stroke-dashoffset:0}}
 @keyframes cs-blink{0%,100%{opacity:.45}50%{opacity:.12}}
-@media(max-height:720px){.cs-h1{font-size:35px}.cs-h2{font-size:27px}.cs-sub{font-size:14px}.cs-big{font-size:56px}.cs-fan{height:250px}.cs-fan img{height:185px}.cs-facts li,.cs-list li{padding:11px 14px}.cs-quotes blockquote{font-size:13px;padding:10px 12px}}
+@media(max-height:720px){.cs-h1{font-size:35px}.cs-h2{font-size:27px}.cs-line{font-size:29px}.cs-sub{font-size:14px}.cs-big{font-size:56px}.cs-ba{height:38dvh}.cs-facts li{padding:11px 14px}.cs-rate b{font-size:28px}}
 @media(prefers-reduced-motion:reduce){*{animation-duration:.01s!important;animation-delay:0s!important}}
 `;
