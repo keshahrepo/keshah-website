@@ -174,7 +174,7 @@ export default function CreatorStories({
               </p>
             )}
             <p className="cs-sub cs-in" style={{ animationDelay: "1.2s" }}>
-              Here&apos;s who we are. It takes a minute.
+              Here&apos;s what we&apos;re building at KESHAH.
             </p>
           </div>
         </>
@@ -451,8 +451,6 @@ export default function CreatorStories({
   // Rendered only in the browser: the call time is in the viewer's own timezone.
   const [mounted, setMounted] = useState(false);
   const [prev, setPrev] = useState<{ i: number; dir: Dir } | null>(null);
-  const [paused, setPaused] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [ripples, setRipples] = useState<{ id: number; x: number; y: number }[]>([]);
   const iRef = useRef(0);
   useEffect(() => {
@@ -475,20 +473,13 @@ export default function CreatorStories({
     setMounted(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const prog = useRef(0);
-  const holdTimer = useRef<number | null>(null);
-  const held = useRef(false);
 
   /** Move by d cards (stays put at the ends; back on the first card restarts it). */
   const go = useCallback(
     (d: Dir) => {
       const cur = iRef.current;
       const n = cur + d;
-      if (n < 0 || n > last) {
-        prog.current = 0;
-        setProgress(0);
-        return;
-      }
+      if (n < 0 || n > last) return;
       iRef.current = n;
       setPrev({ i: cur, dir: d });
       setI(n);
@@ -502,31 +493,6 @@ export default function CreatorStories({
     const t = window.setTimeout(() => setPrev(null), 520);
     return () => window.clearTimeout(t);
   }, [prev]);
-
-  // Progress + auto-advance.
-  useEffect(() => {
-    prog.current = 0;
-    setProgress(0);
-  }, [i]);
-  useEffect(() => {
-    if (paused || !mounted) return;
-    let raf = 0;
-    let t0 = performance.now();
-    const ms = cards[i].ms;
-    const tick = (t: number) => {
-      prog.current = Math.min(1, prog.current + (t - t0) / ms);
-      t0 = t;
-      setProgress(prog.current);
-      if (prog.current >= 1) {
-        if (i < last) go(1);
-        return;
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [i, paused, mounted]);
 
   // Keyboard on desktop; no page scroll behind the overlay.
   useEffect(() => {
@@ -544,19 +510,7 @@ export default function CreatorStories({
     };
   }, [go, onClose]);
 
-  const down = () => {
-    held.current = false;
-    holdTimer.current = window.setTimeout(() => {
-      held.current = true;
-      setPaused(true);
-    }, 220);
-  };
-  const up = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (holdTimer.current) window.clearTimeout(holdTimer.current);
-    if (held.current) {
-      setPaused(false);
-      return;
-    }
+  const tap = (e: React.PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - r.left;
     const id = Date.now();
@@ -569,7 +523,7 @@ export default function CreatorStories({
 
   return (
     <div className="cs-root" role="dialog" aria-label="About KESHAH">
-      <div className={`cs-frame${paused ? " is-paused" : ""}`} onPointerDown={down} onPointerUp={up} onPointerCancel={() => setPaused(false)} onContextMenu={(e) => e.preventDefault()}>
+      <div className="cs-frame" onPointerUp={tap} onContextMenu={(e) => e.preventDefault()}>
         {prev && (
           <div key={`out-${cards[prev.i].key}`} className={`cs-card cs-${cards[prev.i].key} cs-out-${prev.dir === 1 ? "next" : "back"}`}>
             {cards[prev.i].render(false)}
@@ -581,7 +535,7 @@ export default function CreatorStories({
         <div className="cs-bars">
           {cards.map((c, k) => (
             <div key={c.key} className="cs-bar">
-              <div style={{ transform: `scaleX(${k < i ? 1 : k === i ? progress : 0})` }} />
+              <div style={{ transform: `scaleX(${k <= i ? 1 : 0})` }} />
             </div>
           ))}
         </div>
@@ -600,7 +554,11 @@ export default function CreatorStories({
         {ripples.map((p) => (
           <span key={p.id} className="cs-ripple" style={{ left: p.x, top: p.y }} />
         ))}
-        {i === 0 && <p className="cs-hint">Tap to continue</p>}
+        {i < last && (
+          <p className="cs-hint">
+            Tap to continue <span>→</span>
+          </p>
+        )}
       </div>
       <style>{CSS}</style>
     </div>
@@ -615,7 +573,7 @@ const CSS = `
 .cs-bar{flex:1;height:3px;border-radius:3px;background:rgba(255,255,255,.22);overflow:hidden}
 .cs-bar>div{height:100%;width:100%;background:#fff;border-radius:3px;transform-origin:left}
 .cs-close{position:absolute;z-index:6;top:calc(env(safe-area-inset-top,0px) + 22px);right:12px;width:36px;height:36px;border-radius:50%;border:0;background:rgba(0,0,0,.35);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:#fff;font-size:15px;cursor:pointer}
-.cs-card{position:absolute;inset:0;box-sizing:border-box;width:100%;padding:calc(env(safe-area-inset-top,0px) + 72px) 24px calc(env(safe-area-inset-bottom,0px) + 34px);display:flex;flex-direction:column;overflow:hidden;background:#050505;backface-visibility:hidden}
+.cs-card{position:absolute;inset:0;box-sizing:border-box;width:100%;padding:calc(env(safe-area-inset-top,0px) + 72px) 24px calc(env(safe-area-inset-bottom,0px) + 80px);display:flex;flex-direction:column;overflow:hidden;background:#050505;backface-visibility:hidden}
 .cs-in-next{animation:cs-enter-next .52s cubic-bezier(.2,.8,.2,1) both;z-index:2}
 .cs-in-back{animation:cs-enter-back .52s cubic-bezier(.2,.8,.2,1) both;z-index:2}
 .cs-out-next{animation:cs-exit-next .52s cubic-bezier(.2,.8,.2,1) both;z-index:1;pointer-events:none}
@@ -624,7 +582,6 @@ const CSS = `
 @keyframes cs-enter-back{from{transform:translateX(-100%) scale(.96);filter:brightness(.6)}to{transform:none;filter:none}}
 @keyframes cs-exit-next{to{transform:translateX(-28%) scale(.9);filter:brightness(.35)}}
 @keyframes cs-exit-back{to{transform:translateX(28%) scale(.9);filter:brightness(.35)}}
-.is-paused *{animation-play-state:paused!important}
 .cs-center{margin:auto 0;display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px;position:relative;z-index:2;width:100%}
 .cs-stack{display:flex;flex-direction:column;gap:14px;margin:auto 0;position:relative;z-index:2;width:100%}
 .cs-bottom{margin-top:auto;position:relative;z-index:2;display:flex;flex-direction:column;gap:12px;width:100%}
@@ -637,7 +594,9 @@ const CSS = `
 .cs-sign{margin:0;font-size:13px;color:rgba(255,255,255,.55)}
 .cs-accent{color:#E8B530}
 .cs-pill{margin:0;padding:9px 18px;border-radius:999px;background:rgba(255,255,255,.1);color:#fff;font-weight:600;font-size:14px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.16)}
-.cs-hint{position:absolute;z-index:4;bottom:calc(env(safe-area-inset-bottom,0px) + 18px);left:0;right:0;text-align:center;font-size:12px;letter-spacing:.06em;color:rgba(255,255,255,.45);animation:cs-blink 1.8s 2s ease-in-out infinite both}
+.cs-hint{position:absolute;z-index:4;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);left:50%;transform:translateX(-50%);margin:0;padding:10px 18px;border-radius:999px;background:rgba(255,255,255,.14);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.2);font-size:14px;font-weight:600;color:#fff;white-space:nowrap;pointer-events:none;opacity:0;animation:cs-fade .5s 1.2s forwards}
+.cs-hint span{display:inline-block;margin-left:4px;animation:cs-nudge 1.4s 1.7s ease-in-out infinite}
+@keyframes cs-nudge{0%,100%{transform:none}50%{transform:translateX(4px)}}
 .cs-w{display:inline-block;opacity:0;transform:translateY(.45em);filter:blur(6px);animation:cs-word .55s cubic-bezier(.2,.8,.2,1) forwards}
 @keyframes cs-word{to{opacity:1;transform:none;filter:none}}
 .cs-aurora{position:absolute;inset:-20%;z-index:0;background:radial-gradient(40% 35% at 25% 20%,rgba(255,255,255,.08),transparent 70%),radial-gradient(45% 40% at 80% 85%,rgba(255,255,255,.05),transparent 70%);animation:cs-drift 14s ease-in-out infinite alternate}
