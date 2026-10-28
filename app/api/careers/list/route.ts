@@ -69,6 +69,8 @@ export async function GET() {
         replied_at: x.replied_at ?? null,
         reply_snippet: x.reply_snippet ?? null,
         calendar_sent_at: x.calendar_sent_at ?? null,
+        // Research on their TikTok (fit, what to mention, watch-outs, questions).
+        research_notes: x.research_notes && typeof x.research_notes === "object" ? x.research_notes : null,
         calendly_event_start_time: x.calendly_event_start_time ?? null,
         calendly_join_url: x.calendly_join_url ?? null,
         has_video: !!(typeof x.video_object_path === "string" && x.video_object_path.trim()),
