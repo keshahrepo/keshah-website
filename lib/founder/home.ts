@@ -78,7 +78,7 @@ export async function founderHome(now = new Date()): Promise<FounderHome> {
   const [creatorsSnap, offboardedSnap, appsSnap, support, revenue, inbox] = await Promise.all([
     db.collection(CREATORS_COLLECTION).where("is_active", "==", true).get(),
     db.collection(CREATORS_COLLECTION).where("offboard.passwords_reset_at", "==", null).get(),
-    db.collection("careers_applications").where("status", "in", ["booked", "completed", "awaiting_booking", "pending"]).get(),
+    db.collection("careers_applications").where("status", "in", ["booked", "completed", "replied"]).get(),
     listAwaitingConversations({ limit: 1000 }).catch(() => []),
     revenueOverview(),
     listInboxMessages(db).then(groupConversations).catch(() => []),
@@ -229,14 +229,26 @@ export async function founderHome(now = new Date()): Promise<FounderHome> {
   let open = 0;
   for (const d of appsSnap.docs) {
     const a = d.data();
+    // Only the TikTok outreach pipeline (the old applications channel is closed).
+    if (a.source !== "tiktok-outreach") continue;
     open++;
-    // Only applicants who've submitted their interview video can be decided.
+    if (a.status === "replied" && !a.interview_video_submitted_at) {
+      needs.push({
+        kind: "application",
+        id: d.id,
+        title: String(a.full_name || "Creator"),
+        subtitle: "Replied. Send your calendar",
+        at: typeof a.replied_at === "string" ? a.replied_at : toIso(a.last_updated_at),
+      });
+      continue;
+    }
+    // Only creators who've submitted their test video can be decided.
     if (a.interview_video_submitted_at) {
       needs.push({
         kind: "application",
         id: d.id,
         title: String(a.full_name || "Applicant"),
-        subtitle: "Interview video in",
+        subtitle: "Test video in",
         at: toIso(a.interview_video_submitted_at) || toIso(a.last_updated_at),
       });
     }
@@ -246,10 +258,8 @@ export async function founderHome(now = new Date()): Promise<FounderHome> {
   if (support.length) {
     needs.push({ kind: "support", id: "", title: "Support", subtitle: `${support.length} repl${support.length === 1 ? "y" : "ies"} waiting`, at: "" });
   }
-  const unread = inbox.filter((c) => c.unread > 0);
-  for (const c of unread.slice(0, 10)) {
-    needs.push({ kind: "applicant_text", id: c.application_id, title: "Applicant text", subtitle: c.last_text.slice(0, 80), at: c.last_at_ms > 0 ? new Date(c.last_at_ms).toISOString() : "" });
-  }
+  // Applicant texts belonged to the old applications channel: no longer listed.
+  void inbox;
 
   const order: NeedKind[] = [
     "trial_decision",
