@@ -54,7 +54,7 @@ function CountUp({ to, active, suffix = "", decimals = 0, ms = 1400, delay = 300
 }
 
 /** A video shown small and tiled down the screen, drifting up slowly: reads as a wall of many clips. */
-function BgWall({ src, poster, ratio, scale, active }: { src: string; poster: string; ratio: number; scale: number; active: boolean }) {
+function BgWall({ src, poster, ratio, scale, cols, active }: { src: string; poster: string; ratio: number; scale: number; cols: number; active: boolean }) {
   const refs = useRef<(HTMLVideoElement | null)[]>([]);
   useEffect(() => {
     refs.current.forEach((v, k) => {
@@ -70,9 +70,9 @@ function BgWall({ src, poster, ratio, scale, active }: { src: string; poster: st
   }, [active]);
   // Two moving tiles, the rest still frames from the same clip: reads as a busy wall, loads fast.
   const base = src.replace(/\.mp4$/, "");
-  const tiles = ["video", "f2", "f3", "video", "f4", "f1"];
+  const tiles = ["video", "f2", "f3", "f4", "f1", "video", "f3", "f1", "f2", "f4", "video", "f1"];
   return (
-    <div className="cs-wall" style={{ ["--w" as string]: `${scale * 100}%` }}>
+    <div className="cs-wall" style={{ ["--w" as string]: `${scale * 100}%`, ["--cols" as string]: String(cols) }}>
       <div className="cs-wall-track">
         {tiles.map((x, k) =>
           x === "video" ? (
@@ -185,7 +185,7 @@ export default function CreatorStories({
       ms: 8500,
       render: (active) => (
         <>
-          <BgWall src="/creator-call/members.mp4" poster="/creator-call/members-poster.webp" ratio={960 / 1080} scale={1} active={active} />
+          <BgWall src="/creator-call/members.mp4" poster="/creator-call/members-poster.webp" ratio={960 / 1080} scale={1} cols={4} active={active} />
           <div className="cs-shade" />
           <div className="cs-bottom">
             <p className="cs-kicker cs-in">KESHAH Creator Program</p>
@@ -210,7 +210,7 @@ export default function CreatorStories({
             <h1 className="cs-h2">
               <Words text="It started with my own hair loss." delay={0.15} />
             </h1>
-            <div className="cs-ba">
+            <div className="cs-ba cs-vis">
               <figure className="cs-pop" style={{ animationDelay: ".45s" }}>
                 <img src="/creator-call/before.webp" alt="Aadi before" />
                 <figcaption>Before</figcaption>
@@ -241,7 +241,7 @@ export default function CreatorStories({
             <h1 className="cs-h2">
               <Words text="So I turned it into an app." delay={0.15} />
             </h1>
-            <div className="cs-phone cs-rise" style={{ animationDelay: ".45s" }}>
+            <div className="cs-phone cs-rise cs-vis" style={{ animationDelay: ".45s" }}>
               <img src="/creator-call/app.webp" alt="KESHAH app" />
             </div>
             <p className="cs-sub cs-in center" style={{ animationDelay: "1s" }}>
@@ -262,7 +262,7 @@ export default function CreatorStories({
             <h1 className="cs-h2">
               <Words text="A tight scalp starves your hair of blood." accent={["starves"]} delay={0.15} />
             </h1>
-            <ol className="cs-facts">
+            <ol className="cs-facts cs-vis">
               {[
                 { n: "01", t: <>Tension squeezes the vessels that feed your hair.</>, s: "English, 2018" },
                 { n: "02", t: <>Balding areas get about <em>2.6× less blood</em>.</>, s: "Klemp & Peters, 1989" },
@@ -284,7 +284,7 @@ export default function CreatorStories({
       ms: 8500,
       render: (active) => (
         <>
-          <BgWall src="/creator-call/reviews.mp4" poster="/creator-call/reviews-poster.webp" ratio={1920 / 1080} scale={1.3} active={active} />
+          <BgWall src="/creator-call/reviews.mp4" poster="/creator-call/reviews-poster.webp" ratio={1920 / 1080} scale={1.3} cols={3} active={active} />
           <div className="cs-shade strong" />
           <div className="cs-center">
             <p className="cs-kicker cs-in">Real members</p>
@@ -324,7 +324,7 @@ export default function CreatorStories({
             <h1 className="cs-h2">
               <Words text="What members say." delay={0.15} />
             </h1>
-            <div className="cs-reviews">
+            <div className="cs-rlist cs-vis">
               {REVIEWS.map((r, k) => (
                 <article key={r.store} className="cs-review cs-float" style={{ animationDelay: `${0.7 + k * 0.5}s` }}>
                   <header>
@@ -360,7 +360,7 @@ export default function CreatorStories({
               </span>{" "}
               views so far.
             </h1>
-            <div className="cs-profiles">
+            <div className="cs-profiles cs-vis">
               {[
                 { img: "aadi", handle: "@aadi.keshah", role: "Founder", top: "3.8M" },
                 { img: "isai", handle: "@isai.trujillo01", role: "Creator", top: "1.5M" },
@@ -551,12 +551,23 @@ export default function CreatorStories({
         >
           ✕
         </button>
+        {i > 0 && (
+          <button className="cs-arrow left" aria-label="Back" onPointerUp={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); go(-1); }}>
+            ‹
+          </button>
+        )}
+        {i < last && (
+          <button className="cs-arrow right" aria-label="Next" onPointerUp={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); go(1); }}>
+            ›
+          </button>
+        )}
         {ripples.map((p) => (
           <span key={p.id} className="cs-ripple" style={{ left: p.x, top: p.y }} />
         ))}
         {i < last && (
           <p className="cs-hint">
-            Tap to continue <span>→</span>
+            <em className="touch">Tap to continue</em>
+            <em className="mouse">Click or press → to continue</em> <span>→</span>
           </p>
         )}
       </div>
@@ -653,7 +664,7 @@ const CSS = `
 .cs-line.l2{animation:cs-up .6s 1.3s cubic-bezier(.2,.8,.2,1) forwards,cs-dim .6s 2.4s forwards}
 .cs-line.l3{animation:cs-up .6s 2.3s cubic-bezier(.2,.8,.2,1) forwards}
 @keyframes cs-dim{to{opacity:.4;transform:none}}
-.cs-reviews{display:flex;flex-direction:column;gap:12px}
+.cs-rlist{display:flex;flex-direction:column;gap:12px}
 .cs-review{padding:16px;border-radius:20px;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
 .cs-review header{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .cs-review header svg{width:22px;height:22px;flex:none}
@@ -681,6 +692,45 @@ const CSS = `
 @keyframes cs-fade{to{opacity:1}}
 @keyframes cs-draw{to{stroke-dashoffset:0}}
 @keyframes cs-blink{0%,100%{opacity:.45}50%{opacity:.12}}
-@media(max-height:720px){.cs-h1{font-size:35px}.cs-h2{font-size:27px}.cs-line{font-size:29px}.cs-sub{font-size:14px}.cs-big{font-size:56px}.cs-ba{height:38dvh}.cs-facts li{padding:11px 14px}.cs-rate b{font-size:28px}}
+.cs-hint em{font-style:normal}
+.cs-hint .mouse,.cs-arrow{display:none}
+@media(hover:hover) and (pointer:fine){.cs-hint .touch{display:none}.cs-hint .mouse{display:inline}.cs-hint span{display:none}}
+@media(min-width:900px){
+.cs-frame{max-width:none;height:100dvh;border-radius:0;box-shadow:none}
+.cs-bars{top:22px;left:50%;right:auto;width:min(1100px,84vw);transform:translateX(-50%)}
+.cs-close{top:40px;right:32px;width:44px;height:44px;font-size:17px}
+.cs-card{padding:110px max(7vw,56px) 120px;align-items:center}
+.cs-card>.cs-stack,.cs-card>.cs-center,.cs-card>.cs-bottom{max-width:1100px}
+.cs-card>.cs-stack{width:100%;align-self:center}
+.cs-rlist.cs-vis{width:100%;max-width:520px}
+.cs-stack .cs-sub.center{text-align:left}
+.cs-stack{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:72px;row-gap:18px;align-items:center;align-content:center}
+.cs-stack>*{grid-column:1}
+.cs-stack>.cs-vis{grid-column:2;grid-row:1/span 6;align-self:center;justify-self:center;width:100%}
+.cs-center{max-width:760px}
+.cs-bottom{align-self:flex-start;max-width:760px!important}
+.cs-h1{font-size:68px}
+.cs-h2{font-size:52px;line-height:1.06}
+.cs-line{font-size:58px}
+.cs-sub{font-size:19px}
+.cs-kicker{font-size:13px}
+.cs-big{font-size:110px}
+.cs-ba{gap:18px}.cs-ba img{max-height:62dvh}
+.cs-phone{width:auto;max-width:300px}
+.cs-phone img{max-height:68dvh;width:auto;max-width:100%;margin:0 auto}
+.cs-facts span{font-size:17px}
+.cs-review p{font-size:15px}
+.cs-profiles{gap:18px;max-width:560px}
+.cs-profiles figcaption b{font-size:22px}
+.cs-profiles p{font-size:13px}
+.cs-rates{max-width:560px}
+.cs-actions{max-width:420px}
+.cs-wall-track{width:100%;display:grid;grid-template-columns:repeat(var(--cols),1fr)}
+.cs-arrow{display:grid;place-items:center;position:absolute;z-index:6;top:50%;transform:translateY(-50%);width:56px;height:56px;border-radius:50%;border:0;background:rgba(255,255,255,.1);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);color:#fff;font-size:30px;line-height:1;cursor:pointer;transition:background .2s}
+.cs-arrow:hover{background:rgba(255,255,255,.2)}
+.cs-arrow.left{left:28px}.cs-arrow.right{right:28px}
+.cs-hint{bottom:36px}
+}
+@media(max-height:720px) and (max-width:899px){.cs-h1{font-size:35px}.cs-h2{font-size:27px}.cs-line{font-size:29px}.cs-sub{font-size:14px}.cs-big{font-size:56px}.cs-ba{height:38dvh}.cs-facts li{padding:11px 14px}.cs-rate b{font-size:28px}}
 @media(prefers-reduced-motion:reduce){*{animation-duration:.01s!important;animation-delay:0s!important}}
 `;
