@@ -6,6 +6,7 @@ import { addressOf, recruitStage, replySnippet } from "./outreach";
 test("stages follow the pipeline", () => {
   assert.equal(recruitStage({ status: "emailed" }), "emailed");
   assert.equal(recruitStage({ status: "replied" }), "replied");
+  assert.equal(recruitStage({ status: "invited" }), "invited");
   assert.equal(recruitStage({ status: "booked" }), "booked");
   assert.equal(recruitStage({ status: "booked", interview_video_submitted_at: "x" }), "review");
   assert.equal(recruitStage({ status: "denied" }), "passed");

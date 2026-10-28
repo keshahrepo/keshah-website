@@ -6,6 +6,7 @@
  *
  *   emailed    we emailed them, no reply yet        (status "emailed")
  *   replied    they replied: send the calendar link (status "replied", set by the reply sync)
+ *   invited    calendar sent, not booked yet        (status "invited", set when the founder's Gmail reply has the Calendly link)
  *   booked     they booked a call                   (status "booked", set by the Calendly webhook)
  *   review     test video in: Accept or Pass        (interview_video_submitted_at)
  *   offered    accepted, setup not started          (creator: contract not signed)
@@ -18,7 +19,7 @@
 
 export const OUTREACH_SOURCE = "tiktok-outreach";
 
-export type RecruitStage = "emailed" | "replied" | "booked" | "review" | "offered" | "onboarding" | "posting" | "passed" | "applied";
+export type RecruitStage = "emailed" | "replied" | "invited" | "booked" | "review" | "offered" | "onboarding" | "posting" | "passed" | "applied";
 
 /** The creator a decided application became (ContentCreators, matched by application_id). */
 export interface CreatorLite {
@@ -39,9 +40,13 @@ export function recruitStage(app: Record<string, unknown>, creator?: CreatorLite
   if (app.interview_video_submitted_at) return "review";
   if (status === "booked" || status === "completed") return "booked";
   if (status === "replied") return "replied";
+  if (status === "invited") return "invited";
   if (status === "emailed") return "emailed";
   return "applied";
 }
+
+/** The interview booking page. */
+export const INTERVIEW_CALENDLY_URL = "https://calendly.com/aadi-keshah/creator-interview";
 
 /** The first few lines of a reply, without the quoted email under it. */
 export function replySnippet(text: string): string {

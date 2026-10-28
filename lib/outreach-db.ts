@@ -7,7 +7,6 @@ import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
-import { notifyFounder } from "@/lib/staff";
 import { OUTREACH_SOURCE, addressOf, replySnippet } from "./outreach";
 
 const APPLICATIONS = "careers_applications";
@@ -47,50 +46,73 @@ export async function addOutreachCreator(c: OutreachCreator, store?: Firestore):
 }
 
 /**
- * Replies in contact@keshah.com from creators still at "emailed" move them to
- * "replied" with the first lines of their reply. Looks back `days` days.
+ * Reads contact@keshah.com (the last `days` days):
+ *   Inbox: a reply from someone at "emailed" moves them to "replied".
+ *   Sent:  the founder's reply with a calendly.com link to someone at "emailed"
+ *          or "replied" moves them to "invited" (calendar sent, not booked yet).
+ * So the founder just replies in Gmail as usual.
  */
-export async function syncOutreachReplies(opts: { days?: number; dry?: boolean; store?: Firestore } = {}): Promise<{ checked: number; replied: { email: string; name: string }[] }> {
+export async function syncOutreachReplies(opts: { days?: number; dry?: boolean; store?: Firestore } = {}): Promise<{ checked: number; replied: { email: string; name: string }[]; invited: { email: string; name: string }[] }> {
   const db = opts.store ?? getFirebaseAdmin().db;
   const user = process.env.KESHAH_GMAIL_USER;
   const pass = process.env.KESHAH_GMAIL_APP_PASSWORD;
   if (!user || !pass) throw new Error("Email not configured (KESHAH_GMAIL_USER / KESHAH_GMAIL_APP_PASSWORD).");
 
-  // Who we're waiting on: status "emailed" (single-field query, no index needed).
-  const waiting = await db.collection(APPLICATIONS).where("status", "==", "emailed").get();
-  const byEmail = new Map(waiting.docs.map((d) => [String(d.get("email") ?? "").toLowerCase(), d]));
-  const out: { email: string; name: string }[] = [];
-  if (!byEmail.size) return { checked: 0, replied: out };
+  // Single-field queries (no composite index needed).
+  const [emailedSnap, repliedSnap] = await Promise.all([
+    db.collection(APPLICATIONS).where("status", "==", "emailed").get(),
+    db.collection(APPLICATIONS).where("status", "==", "replied").get(),
+  ]);
+  const emailed = new Map(emailedSnap.docs.map((d) => [String(d.get("email") ?? "").toLowerCase(), d]));
+  const open = new Map([...emailed, ...repliedSnap.docs.map((d) => [String(d.get("email") ?? "").toLowerCase(), d] as const)]);
+  const replied: { email: string; name: string }[] = [];
+  const invited: { email: string; name: string }[] = [];
+  if (!open.size) return { checked: 0, replied, invited };
 
+  const since = new Date(Date.now() - (opts.days ?? 3) * 86_400_000);
   const client = new ImapFlow({ host: "imap.gmail.com", port: 993, secure: true, auth: { user, pass }, logger: false });
   await client.connect();
   let checked = 0;
   try {
-    const lock = await client.getMailboxLock("INBOX");
+    // ---- Inbox: their replies
+    if (emailed.size) {
+      const lock = await client.getMailboxLock("INBOX");
+      try {
+        const uids = (await client.search({ since }, { uid: true })) || [];
+        for await (const msg of client.fetch(uids, { envelope: true, source: true }, { uid: true })) {
+          checked++;
+          const from = addressOf(String(msg.envelope?.from?.[0]?.address ?? ""));
+          const doc = emailed.get(from);
+          if (!doc) continue;
+          emailed.delete(from);
+          const parsed = await simpleParser(msg.source as Buffer);
+          replied.push({ email: from, name: String(doc.get("full_name") ?? from) });
+          if (opts.dry) continue;
+          await doc.ref.set(
+            { status: "replied", replied_at: (parsed.date ?? new Date()).toISOString(), reply_snippet: replySnippet(parsed.text ?? ""), last_updated_at: FieldValue.serverTimestamp() },
+            { merge: true },
+          );
+        }
+      } finally {
+        lock.release();
+      }
+    }
+    // ---- Sent: the founder's replies with the calendar link
+    const lock = await client.getMailboxLock("[Gmail]/Sent Mail");
     try {
-      const since = new Date(Date.now() - (opts.days ?? 3) * 86_400_000);
-      const uids = (await client.search({ since }, { uid: true })) || [];
+      const uids = (await client.search({ since, body: "calendly.com" }, { uid: true })) || [];
       for await (const msg of client.fetch(uids, { envelope: true, source: true }, { uid: true })) {
         checked++;
-        const from = msg.envelope?.from?.[0]?.address ? String(msg.envelope.from[0].address).toLowerCase() : "";
-        const doc = byEmail.get(addressOf(from));
-        if (!doc) continue;
-        byEmail.delete(addressOf(from));
+        const to = (msg.envelope?.to ?? []).map((t) => addressOf(String(t.address ?? "")));
+        const who = to.find((t) => open.has(t));
+        if (!who) continue;
+        const doc = open.get(who)!;
+        open.delete(who);
         const parsed = await simpleParser(msg.source as Buffer);
-        const snippet = replySnippet(parsed.text ?? "");
-        const name = String(doc.get("full_name") ?? from);
-        out.push({ email: from, name });
+        if (!/calendly\.com/i.test(parsed.text ?? "") && !/calendly\.com/i.test(String(parsed.html ?? ""))) continue;
+        invited.push({ email: who, name: String(doc.get("full_name") ?? who) });
         if (opts.dry) continue;
-        await doc.ref.set(
-          {
-            status: "replied",
-            replied_at: (parsed.date ?? new Date()).toISOString(),
-            reply_snippet: snippet,
-            last_updated_at: FieldValue.serverTimestamp(),
-          },
-          { merge: true },
-        );
-        await notifyFounder({ title: `${name.split(" ")[0]} replied`, body: snippet.slice(0, 120) || "Open Recruit to send your calendar.", data: { type: "founder_recruit", id: doc.id } }).catch(() => {});
+        await doc.ref.set({ status: "invited", calendar_sent_at: (parsed.date ?? new Date()).toISOString(), last_updated_at: FieldValue.serverTimestamp() }, { merge: true });
       }
     } finally {
       lock.release();
@@ -98,5 +120,5 @@ export async function syncOutreachReplies(opts: { days?: number; dry?: boolean; 
   } finally {
     await client.logout().catch(() => {});
   }
-  return { checked, replied: out };
+  return { checked, replied, invited };
 }

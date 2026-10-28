@@ -233,6 +233,7 @@ export async function founderHome(now = new Date()): Promise<FounderHome> {
     if (a.source !== "tiktok-outreach") continue;
     open++;
     if (a.status === "replied" && !a.interview_video_submitted_at) {
+      // Replied: waiting on your calendar.
       needs.push({
         kind: "application",
         id: d.id,
