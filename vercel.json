@@ -95,6 +95,10 @@
     {
       "path": "/api/cron/outreach-replies",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/outreach-discover",
+      "schedule": "*/30 * * * *"
     }
   ]
 }
