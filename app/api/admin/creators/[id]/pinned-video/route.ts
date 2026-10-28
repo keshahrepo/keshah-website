@@ -28,7 +28,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   if (body.action === "request") {
     try {
       const when = (body as { when?: string }).when === "today" ? "today" : "next";
-      return NextResponse.json({ pinned_video: await requestPinned(id, when) });
+      return NextResponse.json({ pinned_video: await requestPinned(id, when, new Date(), typeof body.note === "string" ? body.note : "") });
     } catch (e) {
       if (e instanceof CreatorDataError) return NextResponse.json({ error: e.message }, { status: e.status });
       throw e;

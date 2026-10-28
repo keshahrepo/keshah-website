@@ -85,7 +85,7 @@ function weekdayFrom(d: string): string {
  * Founder asks an existing creator for a pinned video: `when` today or their
  * next weekday becomes a pinned video day (only that video, counted on upload).
  */
-export async function requestPinned(id: string, when: "today" | "next", now: Date = new Date()): Promise<PinnedVideo> {
+export async function requestPinned(id: string, when: "today" | "next", now: Date = new Date(), note: string = ""): Promise<PinnedVideo> {
   const creator = await getCreator(id);
   if (!creator) throw new CreatorDataError("Creator not found", 404);
   const ref = db().collection(CREATORS_COLLECTION).doc(id);
@@ -95,11 +95,13 @@ export async function requestPinned(id: string, when: "today" | "next", now: Dat
   const t = new Date(`${today}T12:00:00Z`);
   if (when === "next") t.setUTCDate(t.getUTCDate() + 1);
   const day = weekdayFrom(t.toISOString().slice(0, 10));
-  const next: PinnedVideo = { status: "requested", path: "", submitted_at: "", requested_day: day };
-  await ref.update({ pinned_video: { status: "requested", requested_day: day, requested_at: now.toISOString() } });
+  // The founder's feedback for the redo ("slow down in clip 3"), shown on their pinned video screen.
+  const clean = note.trim().slice(0, 1000);
+  const next: PinnedVideo = { status: "requested", path: "", submitted_at: "", requested_day: day, ...(clean ? { note: clean } : {}) };
+  await ref.update({ pinned_video: { status: "requested", requested_day: day, requested_at: now.toISOString(), ...(clean ? { note: clean } : {}) } });
   await notify(
     { creatorId: id, email: creator.email || null },
-    { title: "Your pinned video", body: day === today ? "Today your only video is your pinned video. Open the app to start." : "Your pinned video day is coming up. That day, it's your only video.", data: { type: "pinned_requested" } },
+    { title: "Your pinned video", body: `${day === today ? "Today your only video is your pinned video." : "Your pinned video day is coming up. That day, it's your only video."}${clean ? " There's a note on what to change." : ""}`, data: { type: "pinned_requested" } },
   );
   return next;
 }
