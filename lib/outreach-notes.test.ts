@@ -45,3 +45,11 @@ test("researchPrompt includes our line, their reply and the transcript", () => {
   assert.match(p, /I am a waitress/);
   assert.match(p, /1,000,000 plays/);
 });
+
+test("cleanVideoPhrase: short natural phrase, no 'your', hashtags or em dashes", async () => {
+  const { cleanVideoPhrase } = await import("./outreach-notes");
+  assert.equal(cleanVideoPhrase("your move-in day video."), "move-in day video");
+  assert.equal(cleanVideoPhrase("storytime — the man in a suit #storytime"), "storytime, the man in a suit");
+  assert.equal(cleanVideoPhrase(""), "");
+  assert.equal(cleanVideoPhrase("a very long phrase that goes on and on about many many things in the video"), "");
+});

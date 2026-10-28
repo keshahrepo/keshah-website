@@ -5,7 +5,7 @@
 import { NextResponse } from "next/server";
 import { requireCronSecret } from "@/lib/support/auth";
 import { sendOutreachNudges, syncOutreachReplies } from "@/lib/outreach-db";
-import { writeMissingNotes } from "@/lib/outreach-notes";
+import { writeMissingNotes, writeMissingNudgeVideos } from "@/lib/outreach-notes";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -18,8 +18,10 @@ export async function GET(req: Request) {
     // Replies first, so nobody who just replied gets a follow-up.
     const sync = await syncOutreachReplies({ dry });
     const nudges = await sendOutreachNudges({ dry, deadlineMs: start + 60_000 });
-    const notes = dry ? null : await writeMissingNotes({ limit: 3, deadlineMs: start + 85_000 });
-    return NextResponse.json({ ok: true, ...sync, nudges, notes });
+    const notes = dry ? null : await writeMissingNotes({ limit: 3, deadlineMs: start + 80_000 });
+    // A day in, no reply: pick another of their videos for the follow-up.
+    const nudgeVideos = dry ? null : await writeMissingNudgeVideos({ limit: 5, deadlineMs: start + 95_000 });
+    return NextResponse.json({ ok: true, ...sync, nudges, notes, nudgeVideos });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }

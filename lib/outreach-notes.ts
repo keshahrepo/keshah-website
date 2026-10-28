@@ -207,3 +207,75 @@ export async function writeMissingNotes(opts: { limit?: number; deadlineMs?: num
   }
   return { written, failed };
 }
+
+// ---------------------------------------------------------------- nudge video
+
+const VIDEO_SYSTEM = `You pick one TikTok video to mention in a short follow-up email to a creator who hasn't replied yet. The email says: "after seeing your ___, I think you'd be a great fit."
+
+Pick a different video from the one our first email mentioned (and not the same topic), ideally one with good views from the last few months. Write the blank as a short, natural phrase a person would say, 3 to 8 words, ending in "video" or "storytime" (for example: "move-in day video", "storytime about the man in a suit at 2am"). Plain words, no hashtags, no quotes unless it's a catchphrase from the video, no em dashes.
+
+Never pick anything about grief or loss, health conditions, bodies, sex or dating counts, money troubles, or anything that could feel personal or awkward to have a stranger bring up. If nothing fits, answer with an empty phrase. Answer only by calling save_video.`;
+
+const VIDEO_TOOL = {
+  name: "save_video",
+  description: "Save the video phrase (empty if nothing fits).",
+  input_schema: { type: "object" as const, properties: { phrase: { type: "string" } }, required: ["phrase"] },
+};
+
+/** Claude's phrase → clean ("" when unusable). */
+export function cleanVideoPhrase(raw: unknown): string {
+  let s = str(raw).replace(/\s*[—–]\s*/g, ", ").replace(/#\w+/g, "").replace(/\s+/g, " ").trim().replace(/[.!]+$/, "");
+  s = s.replace(/^(your|my|the)\s+/i, "");
+  if (!s || s.length > 60 || s.split(" ").length > 10) return "";
+  return s;
+}
+
+export async function pickNudgeVideo(ourLine: string, videos: CreatorVideo[], apiKey = process.env.ANTHROPIC_API_KEY ?? ""): Promise<string> {
+  if (!apiKey || !videos.length) return "";
+  const client = new Anthropic({ apiKey });
+  const list = [...videos].sort((a, b) => b.plays - a.plays).slice(0, 15).map((v) => `- ${v.plays.toLocaleString("en-US")} plays, ${v.days_ago}d ago: ${v.desc || "(no caption)"}`);
+  const r = await client.messages.create({
+    model: BEATS_MODEL,
+    max_tokens: 400,
+    system: VIDEO_SYSTEM,
+    tools: [VIDEO_TOOL],
+    tool_choice: { type: "auto" },
+    messages: [{ role: "user", content: `Our first email said: ${ourLine || "(nothing about a video)"}\n\nTheir videos:\n${list.join("\n")}\n\nAnswer by calling save_video.` }],
+  });
+  const call = r.content.find((b) => b.type === "tool_use");
+  return call && call.type === "tool_use" ? cleanVideoPhrase((call.input as { phrase?: string }).phrase) : "";
+}
+
+/**
+ * A day after we email someone who hasn't replied, picks another of their
+ * videos for the 48-hour follow-up (nudge_video; empty means the generic
+ * line). One video pull (1 credit) and one short Claude call each.
+ */
+export async function writeMissingNudgeVideos(opts: { limit?: number; deadlineMs?: number; now?: number; store?: Firestore } = {}): Promise<{ written: string[]; none: string[] }> {
+  const db = opts.store ?? getFirebaseAdmin().db;
+  const apiKey = process.env.SCRAPECREATORS_API_KEY ?? "";
+  const written: string[] = [];
+  const none: string[] = [];
+  if (!apiKey || !process.env.ANTHROPIC_API_KEY) return { written, none };
+  const now = opts.now ?? Date.now();
+  const snap = await db.collection("careers_applications").where("status", "==", "emailed").get();
+  const todo = snap.docs.filter((d) => {
+    const at = Date.parse(str(d.get("emailed_at")));
+    return d.get("source") === OUTREACH_SOURCE && !d.get("nudge_video_checked_at") && str(d.get("social_handle")) && Number.isFinite(at) && at + 24 * 3_600_000 <= now;
+  });
+  for (const d of todo.slice(0, opts.limit ?? 5)) {
+    if (opts.deadlineMs && Date.now() > opts.deadlineMs) break;
+    const name = str(d.get("full_name")) || str(d.get("social_handle"));
+    let phrase = "";
+    try {
+      const handle = cleanHandle(str(d.get("social_handle")));
+      const videos = await scrape(`/v3/tiktok/profile/videos?handle=${encodeURIComponent(handle)}`, apiKey);
+      phrase = await pickNudgeVideo(str(d.get("outreach_video_line")), parseResearch(handle, {}, videos).videos);
+    } catch {
+      // No phrase: the follow-up uses the generic line.
+    }
+    await d.ref.set({ nudge_video_checked_at: new Date().toISOString(), ...(phrase ? { nudge_video: phrase } : {}) }, { merge: true });
+    (phrase ? written : none).push(name);
+  }
+  return { written, none };
+}
