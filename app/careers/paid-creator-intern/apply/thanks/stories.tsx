@@ -397,6 +397,24 @@ export default function CreatorStories({
       ),
     },
     {
+      key: "whyyou",
+      ms: 0,
+      render: () => (
+        <>
+          <div className="cs-aurora warm" />
+          <div className="cs-center">
+            <p className="cs-kicker cs-in">Why you</p>
+            <h1 className="cs-h1">
+              <Words text="We didn't post a job ad. We found you." accent={["found", "you"]} delay={0.2} step={0.09} />
+            </h1>
+            <p className="cs-sub cs-in" style={{ animationDelay: "1.3s" }}>
+              We look through thousands of creators and reach out to about 1 in 50, because of how they come across on camera.
+            </p>
+          </div>
+        </>
+      ),
+    },
+    {
       key: "role",
       ms: 0,
       render: () => (
@@ -410,7 +428,7 @@ export default function CreatorStories({
               <h2 className="cs-line l3">Get paid every month.</h2>
             </div>
             <p className="cs-sub cs-in" style={{ animationDelay: "3.4s" }}>
-              You&apos;d be one of the faces teaching people this. Scripts and hooks are ready for you, Monday to Friday, from anywhere.
+              You&apos;d be one of the faces helping millions of people understand their hair loss. Scripts and hooks are ready for you, Monday to Friday, from anywhere.
             </p>
           </div>
         </>
@@ -423,10 +441,18 @@ export default function CreatorStories({
         <>
           <div className="cs-aurora warm" />
           <div className="cs-center">
+            <div className="cs-sparkles" aria-hidden>
+              {Array.from({ length: 18 }, (_, k) => (
+                <i key={k} style={{ ["--a" as string]: `${(k * 360) / 18}deg`, ["--d" as string]: `${90 + (k % 4) * 28}px`, animationDelay: `${0.35 + (k % 3) * 0.08}s` }} />
+              ))}
+            </div>
             <p className="cs-kicker cs-in">Your call</p>
             <h1 className="cs-h1">
               <Words text={when ? `See you ${when}.` : "See you on the call."} delay={0.15} />
             </h1>
+            <p className="cs-h3 cs-in" style={{ animationDelay: ".7s" }}>
+              We&apos;re really excited to meet you.
+            </p>
             <ul className="cs-expect">
               {["15 minutes with Aadi, the founder", "Camera on, from somewhere quiet", "Nothing to prepare"].map((x, k) => (
                 <li key={k} className="cs-in" style={{ animationDelay: `${0.8 + k * 0.2}s` }}>
@@ -680,6 +706,10 @@ const CSS = `
 .cs-review h3{margin:0 0 4px;font-size:15px;font-weight:600}
 .cs-review p{margin:0;font-size:14px;line-height:1.5;color:rgba(255,255,255,.8)}
 .cs-review footer{margin-top:8px;font-size:12px;color:rgba(255,255,255,.45)}
+.cs-sparkles{position:absolute;left:50%;top:38%;width:0;height:0;pointer-events:none;z-index:0}
+.cs-sparkles i{position:absolute;left:0;top:0;width:6px;height:6px;margin:-3px;border-radius:50%;background:#E8B530;box-shadow:0 0 10px rgba(232,181,48,.9);opacity:0;animation:cs-burst 1.4s cubic-bezier(.15,.8,.3,1) forwards}
+.cs-sparkles i:nth-child(3n){width:4px;height:4px;background:#fff;box-shadow:0 0 8px rgba(255,255,255,.9)}
+@keyframes cs-burst{0%{opacity:0;transform:rotate(var(--a)) translateY(0) scale(.4)}15%{opacity:1}100%{opacity:0;transform:rotate(var(--a)) translateY(calc(var(--d) * -1)) scale(1)}}
 .cs-expect{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:8px;font-size:15px;color:rgba(255,255,255,.82)}
 .cs-expect li::before{content:"✓  ";color:#DAA520;font-weight:700}
 .cs-actions{display:flex;flex-direction:column;gap:10px;width:100%;margin-top:14px}
