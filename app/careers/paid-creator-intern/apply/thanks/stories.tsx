@@ -53,6 +53,22 @@ function CountUp({ to, active, suffix = "", decimals = 0, ms = 1400, delay = 300
   );
 }
 
+/** The members video once, at its natural size (the whole grid shows), soft at the edges. */
+function BgVideoFit({ src, poster, active }: { src: string; poster: string; active: boolean }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    if (active) v.play().catch(() => {});
+    else v.pause();
+  }, [active]);
+  return (
+    <div className="cs-vfit">
+      <video ref={ref} src={src} poster={poster} muted loop playsInline autoPlay preload="auto" />
+    </div>
+  );
+}
+
 /** One still of the members / reviews grid, shown whole and fading into the background. */
 function BgStill({ src, width }: { src: string; width: number }) {
   return (
@@ -159,9 +175,9 @@ export default function CreatorStories({
     {
       key: "cover",
       ms: 0,
-      render: () => (
+      render: (active) => (
         <>
-          <BgStill src="/creator-call/members-still.webp" width={100} />
+          <BgVideoFit src="/creator-call/members.mp4" poster="/creator-call/members-still.webp" active={active} />
           <div className="cs-shade" />
           <div className="cs-bottom">
             <p className="cs-kicker cs-in">KESHAH Creator Program</p>
@@ -272,6 +288,9 @@ export default function CreatorStories({
             <p className="cs-sub cs-in" style={{ animationDelay: ".9s" }}>
               <b>@aadi.keshah</b> · Founder · top video <span className="cs-accent">3.8M views</span>
             </p>
+            <p className="cs-sub cs-in" style={{ animationDelay: "1.2s" }}>
+              That&apos;s how most of our members found KESHAH.
+            </p>
           </div>
         </>
       ),
@@ -344,7 +363,7 @@ export default function CreatorStories({
       ),
     },
     {
-      key: "isai",
+      key: "creators",
       ms: 0,
       render: () => (
         <>
@@ -354,32 +373,24 @@ export default function CreatorStories({
             <h1 className="cs-h2">
               <Words text="Now creators teach it too." delay={0.15} />
             </h1>
-            <figure className="cs-prof cs-pop cs-vis" style={{ animationDelay: ".45s" }}>
-              <img src="/creator-call/isai.webp" alt="@isai.trujillo01 on TikTok" />
-            </figure>
-            <p className="cs-sub cs-in" style={{ animationDelay: ".9s" }}>
-              <b>@isai.trujillo01</b> · Creator in this program · top video <span className="cs-accent">1.5M views</span>
-            </p>
-          </div>
-        </>
-      ),
-    },
-    {
-      key: "jen",
-      ms: 0,
-      render: () => (
-        <>
-          <div className="cs-aurora" />
-          <div className="cs-stack">
-            <p className="cs-kicker cs-in">Our creators</p>
-            <h1 className="cs-h2">
-              <Words text="Same simple format, real reach." delay={0.15} />
-            </h1>
-            <figure className="cs-prof cs-pop cs-vis" style={{ animationDelay: ".45s" }}>
-              <img src="/creator-call/jen.webp" alt="@jennifer.keshah on TikTok" />
-            </figure>
-            <p className="cs-sub cs-in" style={{ animationDelay: ".9s" }}>
-              <b>@jennifer.keshah</b> · Creator in this program · top video <span className="cs-accent">798K views</span>
+            <div className="cs-duo cs-vis">
+              {[
+                { img: "isai", handle: "@isai.trujillo01", top: "1.5M" },
+                { img: "jen", handle: "@jennifer.keshah", top: "798K" },
+              ].map((c, k) => (
+                <figure key={c.img} className="cs-pop" style={{ animationDelay: `${0.45 + k * 0.35}s` }}>
+                  <img src={`/creator-call/${c.img}.webp`} alt={`${c.handle} on TikTok`} />
+                  <figcaption>
+                    <b>{c.handle}</b>
+                    <span>
+                      top video <em className="cs-accent">{c.top}</em>
+                    </span>
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+            <p className="cs-sub cs-in" style={{ animationDelay: "1.2s" }}>
+              Isai and Jen are creators in this exact program, with the same simple format.
             </p>
           </div>
         </>
@@ -451,6 +462,7 @@ export default function CreatorStories({
   const iRef = useRef(0);
   useEffect(() => {
     const imgs = ["before", "after", "app", "aadi", "isai", "jen", "members-still", "reviews-still"];
+    fetch("/creator-call/members.mp4").catch(() => {});
     imgs.forEach((n) => {
       const im = new Image();
       im.src = `/creator-call/${n}.webp`;
@@ -633,6 +645,14 @@ const CSS = `
 .cs-still{position:absolute;inset:0;z-index:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#000}
 .cs-still img{flex:none;width:var(--sw);height:auto;max-width:none;animation:cs-kenburns 14s ease-out forwards}
 .cs-cover .cs-still{align-items:flex-start}
+.cs-vfit{position:absolute;inset:0;z-index:0;display:flex;align-items:flex-start;justify-content:center;overflow:hidden;background:#000}
+.cs-vfit video{width:100%;height:auto;-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 10%,#000 80%,transparent 100%);mask-image:linear-gradient(180deg,transparent 0,#000 10%,#000 80%,transparent 100%)}
+.cs-duo{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cs-duo figure{margin:0;display:flex;flex-direction:column;gap:8px}
+.cs-duo img{display:block;width:100%;height:auto;border-radius:14px;box-shadow:0 18px 44px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.12)}
+.cs-duo figcaption{display:flex;flex-direction:column;align-items:center;font-size:12px;color:rgba(255,255,255,.65);text-align:center}
+.cs-duo figcaption b{color:#fff;font-size:12px;overflow-wrap:anywhere}
+.cs-duo em{font-style:normal;font-weight:700}
 .cs-prof{margin:0;align-self:center}
 .cs-prof img{display:block;height:min(52dvh,560px);width:auto;max-width:100%;object-fit:contain;border-radius:18px;box-shadow:0 22px 56px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.12)}
 .cs-sub b{color:#fff;font-weight:600}
@@ -683,8 +703,10 @@ const CSS = `
 @media(min-width:900px){
 .cs-prof img{height:min(72dvh,700px)}
 .cs-still img{width:100%!important}
-.cs-cover .cs-still{justify-content:flex-end;align-items:center}
-.cs-cover .cs-still img{width:auto!important;height:100%}
+.cs-vfit{justify-content:flex-end;align-items:center}
+.cs-vfit video{width:auto;height:100%;-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 18%,#000 100%);mask-image:linear-gradient(90deg,transparent 0,#000 18%,#000 100%)}
+.cs-duo{gap:22px;max-width:620px}
+.cs-duo figcaption,.cs-duo figcaption b{font-size:14px}
 .cs-cover .cs-shade{background:linear-gradient(90deg,#000 0%,rgba(0,0,0,.85) 38%,rgba(0,0,0,.15) 70%,rgba(0,0,0,.35) 100%)}
 .cs-cover .cs-bottom{margin:auto 0}
 .cs-frame{max-width:none;height:100dvh;border-radius:0;box-shadow:none}
