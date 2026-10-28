@@ -68,15 +68,61 @@ function BgWall({ src, poster, ratio, scale, active }: { src: string; poster: st
       } else v.pause();
     });
   }, [active]);
-  const copies = 6;
+  // Two moving tiles, the rest still frames from the same clip: reads as a busy wall, loads fast.
+  const base = src.replace(/\.mp4$/, "");
+  const tiles = ["video", "f2", "f3", "video", "f4", "f1"];
   return (
     <div className="cs-wall" style={{ ["--w" as string]: `${scale * 100}%` }}>
       <div className="cs-wall-track">
-        {Array.from({ length: copies }, (_, k) => (
-          <video key={k} ref={(el) => { refs.current[k] = el; }} src={src} poster={poster} muted loop playsInline preload="auto" style={{ aspectRatio: String(ratio) }} />
-        ))}
+        {tiles.map((x, k) =>
+          x === "video" ? (
+            <video key={k} ref={(el) => { refs.current[k] = el; }} src={src} poster={poster} muted loop playsInline preload="auto" style={{ aspectRatio: String(ratio) }} />
+          ) : (
+            <img key={k} src={`${base}-${x}.webp`} alt="" style={{ aspectRatio: String(ratio) }} />
+          ),
+        )}
       </div>
     </div>
+  );
+}
+
+const REVIEWS = [
+  {
+    store: "App Store",
+    score: "4.9",
+    count: "1.1K ratings",
+    title: "After 10+ Years of Hair Loss, I Finally S…",
+    text: "I've struggled with hair loss and thinning for 10-plus years. I've tried so many things: supplements, serums, shampoos, anything that my hairdresser recommended. But the Keshah app and approach to hair loss is the FIRST thing I found that actually made sense.",
+    by: "JenZ3322",
+    date: "Sep 4",
+  },
+  {
+    store: "Google Play",
+    score: "4.8",
+    count: "10.6K reviews",
+    title: "",
+    text: "It actually IS beneficial specially the introductions it really helps with the understanding of it entirely and it is also relaxing when someone with the same problems can relate to it… so yeah you guys can try it.",
+    by: "Shakirul Islam",
+    date: "Sep 11",
+  },
+];
+
+function AppleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden fill="#fff">
+      <path d="M16.37 12.73c-.02-2.2 1.8-3.26 1.88-3.31-1.03-1.5-2.62-1.7-3.18-1.73-1.35-.14-2.64.8-3.33.8-.69 0-1.74-.78-2.86-.76-1.47.02-2.83.86-3.59 2.17-1.53 2.65-.39 6.58 1.1 8.73.73 1.05 1.6 2.23 2.73 2.19 1.1-.04 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.07 2.65-2.13.84-1.22 1.18-2.4 1.2-2.46-.03-.01-2.29-.88-2.3-3.48zM14.2 6.27c.6-.73 1.01-1.75.9-2.77-.87.04-1.92.58-2.54 1.31-.56.65-1.05 1.69-.92 2.69.97.07 1.96-.49 2.56-1.23z" />
+    </svg>
+  );
+}
+
+function PlayIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden>
+      <path d="M3.6 2.3 13.5 12l-9.9 9.7c-.4-.2-.6-.6-.6-1.1V3.4c0-.5.2-.9.6-1.1z" fill="#00D7FE" />
+      <path d="M16.8 8.7 13.5 12 3.6 2.3c.2-.1.5-.1.8.1l12.4 6.3z" fill="#00F076" />
+      <path d="M16.8 15.3 4.4 21.6c-.3.2-.6.2-.8.1l9.9-9.7 3.3 3.3z" fill="#FF3A44" />
+      <path d="m20.4 12.9-3.6 2.4-3.3-3.3 3.3-3.3 3.6 2.4c.7.5.7 1.3 0 1.8z" fill="#FFD400" />
+    </svg>
   );
 }
 
@@ -139,7 +185,7 @@ export default function CreatorStories({
       ms: 8500,
       render: (active) => (
         <>
-          <BgWall src="/creator-call/members.mp4" poster="/creator-call/members-poster.jpg" ratio={960 / 1080} scale={1} active={active} />
+          <BgWall src="/creator-call/members.mp4" poster="/creator-call/members-poster.webp" ratio={960 / 1080} scale={1} active={active} />
           <div className="cs-shade" />
           <div className="cs-bottom">
             <p className="cs-kicker cs-in">KESHAH Creator Program</p>
@@ -164,14 +210,15 @@ export default function CreatorStories({
             <h1 className="cs-h2">
               <Words text="It started with my own hair loss." delay={0.15} />
             </h1>
-            <div className="cs-ba cs-pop" style={{ animationDelay: ".4s" }}>
-              <img src="/creator-call/before.webp" alt="Aadi before" />
-              <div className="cs-ba-after">
+            <div className="cs-ba">
+              <figure className="cs-pop" style={{ animationDelay: ".45s" }}>
+                <img src="/creator-call/before.webp" alt="Aadi before" />
+                <figcaption>Before</figcaption>
+              </figure>
+              <figure className="cs-pop" style={{ animationDelay: ".85s" }}>
                 <img src="/creator-call/after.webp" alt="Aadi after" />
-              </div>
-              <div className="cs-ba-line" />
-              <span className="cs-tag left">Before</span>
-              <span className="cs-tag right">After</span>
+                <figcaption className="after">After</figcaption>
+              </figure>
             </div>
             <p className="cs-sub cs-in" style={{ animationDelay: "1.2s" }}>
               No drugs. Just scalp exercises every day. My hair fall stopped by around day 60.
@@ -237,7 +284,7 @@ export default function CreatorStories({
       ms: 8500,
       render: (active) => (
         <>
-          <BgWall src="/creator-call/reviews.mp4" poster="/creator-call/reviews-poster.jpg" ratio={1920 / 1080} scale={1.3} active={active} />
+          <BgWall src="/creator-call/reviews.mp4" poster="/creator-call/reviews-poster.webp" ratio={1920 / 1080} scale={1.3} active={active} />
           <div className="cs-shade strong" />
           <div className="cs-center">
             <p className="cs-kicker cs-in">Real members</p>
@@ -275,11 +322,25 @@ export default function CreatorStories({
           <div className="cs-stack">
             <p className="cs-kicker cs-in">In their words</p>
             <h1 className="cs-h2">
-              <Words text="Straight from the App Store and Google Play." delay={0.15} />
+              <Words text="What members say." delay={0.15} />
             </h1>
-            <div className="cs-shots">
-              <img className="cs-shot cs-pop" style={{ animationDelay: ".7s" }} src="/creator-call/appstore.webp" alt="App Store reviews: 4.9 from 1.1K ratings" />
-              <img className="cs-shot cs-pop" style={{ animationDelay: "1.2s" }} src="/creator-call/play.webp" alt="Google Play: 4.8 from 10.6K reviews" />
+            <div className="cs-reviews">
+              {REVIEWS.map((r, k) => (
+                <article key={r.store} className="cs-review cs-float" style={{ animationDelay: `${0.7 + k * 0.5}s` }}>
+                  <header>
+                    {r.store === "App Store" ? <AppleIcon /> : <PlayIcon />}
+                    <span>{r.store}</span>
+                    <b>{r.score}★</b>
+                    <small>{r.count}</small>
+                  </header>
+                  <p className="cs-stars5">★★★★★</p>
+                  {r.title && <h3>{r.title}</h3>}
+                  <p>{r.text}</p>
+                  <footer>
+                    {r.by} · {r.date}
+                  </footer>
+                </article>
+              ))}
             </div>
           </div>
         </>
@@ -394,6 +455,17 @@ export default function CreatorStories({
   const [progress, setProgress] = useState(0);
   const [ripples, setRipples] = useState<{ id: number; x: number; y: number }[]>([]);
   const iRef = useRef(0);
+  useEffect(() => {
+    const imgs = ["before", "after", "app", "aadi", "isai", "jen", "members-poster", "reviews-poster", "members-f1", "members-f2", "members-f3", "members-f4", "reviews-f1", "reviews-f2", "reviews-f3", "reviews-f4"];
+    imgs.forEach((n) => {
+      const im = new Image();
+      im.src = `/creator-call/${n}.webp`;
+    });
+    // Videos next, in the background, so the walls play the moment they appear.
+    ["members", "reviews"].forEach((v) => {
+      fetch(`/creator-call/${v}.mp4`).catch(() => {});
+    });
+  }, []);
   useEffect(() => {
     const n = Number(new URLSearchParams(window.location.search).get("card"));
     if (Number.isInteger(n) && n > 0) {
@@ -579,14 +651,11 @@ const CSS = `
 .cs-check svg{width:88px;height:88px;filter:drop-shadow(0 0 22px rgba(255,255,255,.35))}
 .cs-check circle{fill:none;stroke:#fff;stroke-width:3;stroke-dasharray:151;stroke-dashoffset:151;animation:cs-draw .7s .1s ease-out forwards}
 .cs-check path{fill:none;stroke:#fff;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:40;stroke-dashoffset:40;animation:cs-draw .4s .6s ease-out forwards}
-.cs-ba{position:relative;align-self:center;height:min(44dvh,400px);aspect-ratio:872/1600;max-width:100%;border-radius:22px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.1)}
-.cs-ba img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center}
-.cs-ba-after{position:absolute;inset:0;clip-path:inset(0 0 0 100%);animation:cs-sweep 2.6s 1.1s cubic-bezier(.65,0,.35,1) forwards}
-.cs-ba-line{position:absolute;top:0;bottom:0;width:2px;left:100%;background:#fff;box-shadow:0 0 16px rgba(255,255,255,.9);animation:cs-line 2.6s 1.1s cubic-bezier(.65,0,.35,1) forwards}
-@keyframes cs-sweep{to{clip-path:inset(0 0 0 50%)}}
-@keyframes cs-line{to{left:50%}}
-.cs-tag{position:absolute;z-index:2;top:10px;padding:4px 10px;border-radius:999px;background:rgba(0,0,0,.6);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);font-size:11px;font-weight:600;opacity:0;animation:cs-fade .5s 3.6s forwards}
-.cs-tag.left{left:10px}.cs-tag.right{right:10px}
+.cs-ba{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cs-ba figure{margin:0;display:flex;flex-direction:column;gap:8px}
+.cs-ba img{display:block;width:100%;aspect-ratio:872/1600;max-height:42dvh;object-fit:cover;border-radius:18px;box-shadow:0 18px 44px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.1)}
+.cs-ba figcaption{text-align:center;font-size:13px;font-weight:600;color:rgba(255,255,255,.6)}
+.cs-ba figcaption.after{color:#E8B530}
 .cs-phone{align-self:center;width:58%;max-width:230px;border-radius:32px;padding:7px;background:linear-gradient(160deg,#2a2a2a,#0d0d0d);box-shadow:0 30px 80px rgba(218,165,32,.16),0 0 0 1px rgba(255,255,255,.1)}
 .cs-phone img{width:100%;display:block;border-radius:26px}
 .cs-facts{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:12px}
@@ -601,7 +670,7 @@ const CSS = `
 .cs-float{opacity:0;transform:translateY(24px) scale(.96);animation:cs-up .7s cubic-bezier(.2,.9,.25,1.15) forwards}
 .cs-wall{position:absolute;inset:0;z-index:0;overflow:hidden;display:flex;justify-content:center}
 .cs-wall-track{width:var(--w);flex:none;display:flex;flex-direction:column;animation:cs-wallup 40s linear infinite}
-.cs-wall video{display:block;width:100%;object-fit:cover}
+.cs-wall video,.cs-wall img{display:block;width:100%;object-fit:cover}
 @keyframes cs-wallup{to{transform:translateY(-50%)}}
 .cs-rates{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;margin-top:10px}
 .cs-rate{display:flex;flex-direction:column;align-items:center;gap:2px;padding:14px 10px;border-radius:18px;background:rgba(255,255,255,.1);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
@@ -609,9 +678,6 @@ const CSS = `
 .cs-rate b{font-size:34px;font-weight:700;letter-spacing:-.03em;line-height:1.1}
 .cs-stars5{color:#DAA520;letter-spacing:2px;font-size:13px}
 .cs-rate i{font-style:normal;font-size:12px;color:rgba(255,255,255,.6)}
-.cs-shots{display:flex;flex-direction:column;gap:12px}
-.cs-shot{display:block;max-width:100%;max-height:min(30dvh,300px);width:auto;align-self:flex-start;border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.1)}
-.cs-shot:nth-child(2){align-self:flex-end}
 .cs-num{color:#fff}
 .cs-profiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .cs-profiles figure{margin:0}
@@ -628,6 +694,17 @@ const CSS = `
 .cs-line.l2{animation:cs-up .6s 1.3s cubic-bezier(.2,.8,.2,1) forwards,cs-dim .6s 2.4s forwards}
 .cs-line.l3{animation:cs-up .6s 2.3s cubic-bezier(.2,.8,.2,1) forwards}
 @keyframes cs-dim{to{opacity:.4;transform:none}}
+.cs-reviews{display:flex;flex-direction:column;gap:12px}
+.cs-review{padding:16px;border-radius:20px;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
+.cs-review header{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.cs-review header svg{width:22px;height:22px;flex:none}
+.cs-review header span{font-weight:600;font-size:14px}
+.cs-review header b{margin-left:auto;font-size:15px}
+.cs-review header small{font-size:12px;color:rgba(255,255,255,.55)}
+.cs-review .cs-stars5{margin:0 0 4px}
+.cs-review h3{margin:0 0 4px;font-size:15px;font-weight:600}
+.cs-review p{margin:0;font-size:14px;line-height:1.5;color:rgba(255,255,255,.8)}
+.cs-review footer{margin-top:8px;font-size:12px;color:rgba(255,255,255,.45)}
 .cs-expect{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:8px;font-size:15px;color:rgba(255,255,255,.82)}
 .cs-expect li::before{content:"✓  ";color:#DAA520;font-weight:700}
 .cs-actions{display:flex;flex-direction:column;gap:10px;width:100%;margin-top:14px}
