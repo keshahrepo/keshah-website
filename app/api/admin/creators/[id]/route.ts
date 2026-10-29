@@ -69,9 +69,11 @@ export async function GET(req: NextRequest, { params }: Ctx) {
     month,
     { postingDays: h.postingDays, daysOff: h.daysOff },
   );
+  // The founder's notes from their interview call (copied on Accept).
+  const hireNotes = (await db().collection(CREATORS_COLLECTION).doc(id).get()).get("hire_notes") ?? null;
   return NextResponse.json({
     days,
-    creator: { ...creator, pinned_live: pinnedLive, pinned_overdue: pinnedOverdue, pinned_missing_since: pinnedMissingSince },
+    creator: { ...creator, pinned_live: pinnedLive, pinned_overdue: pinnedOverdue, pinned_missing_since: pinnedMissingSince, hire_notes: hireNotes },
     month,
     today,
     summary,

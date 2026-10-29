@@ -46,6 +46,13 @@ async function creatorFromApplication(appId: string, a: Record<string, unknown>,
     if (!(e instanceof CreatorExistsError)) return { id: "", error: e instanceof Error ? e.message : String(e) };
     id = e.creatorId;
   }
+  // The founder's call notes go with them, so the creator's page still has them later.
+  if (typeof a.call_notes === "string" && a.call_notes.trim()) {
+    await getFirebaseAdmin().db.collection(CREATORS_COLLECTION).doc(id).set(
+      { hire_notes: { text: a.call_notes, tidy: (a.call_notes_tidy as { text?: string } | undefined)?.text ?? null, at: new Date().toISOString() } },
+      { merge: true },
+    ).catch((e) => console.error("hire notes copy failed:", e));
+  }
   // The plan picked at Accept (offer email names it). Format creators get their own-concept slots.
   if (chosen.plan) {
     await getFirebaseAdmin().db.collection(CREATORS_COLLECTION).doc(id).update({

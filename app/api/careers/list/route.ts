@@ -113,6 +113,8 @@ export async function GET() {
         nudge_calendar_sent_at: x.nudge_calendar_sent_at ?? null,
         // Research on their TikTok (fit, what to mention, watch-outs, questions).
         research_notes: x.research_notes && typeof x.research_notes === "object" ? x.research_notes : null,
+        call_notes: typeof x.call_notes === "string" ? x.call_notes : "",
+        call_notes_tidy: x.call_notes_tidy && typeof x.call_notes_tidy === "object" ? x.call_notes_tidy : null,
         calendly_event_start_time: x.calendly_event_start_time ?? null,
         calendly_join_url: x.calendly_join_url ?? null,
         has_video: !!(typeof x.video_object_path === "string" && x.video_object_path.trim()),
