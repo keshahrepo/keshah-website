@@ -772,10 +772,17 @@ export const PINNED_CTA =
 export const BIO_CTA =
   "A lot of people ask me what's the scalp massage app. I've put it in my bio. Please don't DM me that you can't find it, it's the only link there. Go to my profile and you'll see it.";
 
+/**
+ * The app ending (cta_style "app", Isai from Oct 29 2026): the app as the solution
+ * at the end, after the video has built trust, then one free tip so it doesn't end on an ask.
+ */
+export const APP_CTA =
+  "The thing is, the right techniques depend on where you're losing hair. There's an app called KESHAH that shows you exactly what to do for your pattern, every day. It's in my bio, and it's free to try for a week. And even if you don't use it, start loosening your scalp a few minutes every day. That alone usually makes a difference.";
+
 export function ctaFor(creator: Pick<CreatorProfile, "cta_style">, v: PublicProven): PublicProven {
   // Line-by-line scripts (the 3-step format) carry their own ending.
   if (v.lines?.length) return v;
-  return { ...v, cta_line: creator.cta_style === "bio" ? BIO_CTA : PINNED_CTA };
+  return { ...v, cta_line: creator.cta_style === "bio" ? BIO_CTA : creator.cta_style === "app" ? APP_CTA : PINNED_CTA };
 }
 
 /** Full docs for just these videos (the day's picks). */

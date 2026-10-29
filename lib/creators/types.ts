@@ -211,7 +211,7 @@ export interface CreatorPortalFields {
    * profile (Isai); unset/"bio" sends them to the app link in their bio (new
    * creators have no pinned video).
    */
-  cta_style?: "pinned" | "bio";
+  cta_style?: "pinned" | "bio" | "app";
   /** The @keshah.com address KESHAH set up for them (accounts are owned by KESHAH). */
   keshah_email: string;
   tiktok_handle: string;
