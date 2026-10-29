@@ -97,6 +97,10 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/cron/outreach-sync",
+      "schedule": "2-59/5 * * * *"
+    },
+    {
       "path": "/api/cron/outreach-discover",
       "schedule": "*/30 * * * *"
     }

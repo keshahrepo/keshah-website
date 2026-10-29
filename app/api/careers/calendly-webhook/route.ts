@@ -160,7 +160,8 @@ export async function POST(req: Request) {
       const hits = snap.docs.filter((d) => [d.get("name"), d.get("legal_name")].some((n) => String(n ?? "").trim().toLowerCase() === name));
       if (hits.length === 1) creatorId = hits[0].id;
     }
-    if (!creatorId) return NextResponse.json({ ok: true, kickoff: true, matched: false });
+    // Not a creator yet (the founder booked an applicant on this event type): handle it as an interview booking below.
+    if (creatorId) {
     const ref = db.collection(CREATORS_COLLECTION).doc(creatorId);
     if (body.event === "invitee.canceled") {
       if (p.rescheduled === true) return NextResponse.json({ ok: true, kickoff: true, ignored: "reschedule" });
@@ -173,6 +174,7 @@ export async function POST(req: Request) {
     }
     await ref.set({ kickoff_call: { start_time: startTime, event_uri: eventUri, join_url: joinUrl, booked_at: new Date().toISOString(), canceled_at: null } }, { merge: true });
     return NextResponse.json({ ok: true, kickoff: true, id: creatorId });
+    }
   }
 
   let docId: string | null = null;
@@ -250,7 +252,10 @@ export async function POST(req: Request) {
   const ref = db.collection(APPLICATIONS).doc(docId);
 
   // US-only hiring: a booking from a non-US time zone is cancelled, the application closed, and the applicant told.
-  if (outsideUsTimezone(inviteeTimezone)) {
+  // US-only: outreach creators were already picked as US by the daily search, and the
+  // founder sometimes books for them from India, so only applicants who booked themselves are checked.
+  const isOutreach = String((await ref.get()).get("source") ?? "") === OUTREACH_SOURCE;
+  if (!isOutreach && outsideUsTimezone(inviteeTimezone)) {
     const closed = await db.runTransaction(async (tx) => {
       const cur = ((await tx.get(ref)).data() ?? {}) as Record<string, unknown>;
       if (isDecided(cur.status)) return null;

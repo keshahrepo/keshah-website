@@ -9,11 +9,12 @@ import { requireDashboardSession } from "@/lib/support/auth";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { denialEmailDue } from "@/lib/interview-decisions";
 import { recruitStage, type CreatorLite } from "@/lib/outreach";
-import { QUEUE, QUEUE_DEFAULT_CAP } from "@/lib/outreach-db";
+import { QUEUE, QUEUE_DEFAULT_CAP, syncOutreachReplies } from "@/lib/outreach-db";
 import { easternNow } from "@/lib/outreach-nudges";
 import { warningsOf } from "@/lib/outreach-health";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 /** The Recruit header: today's first emails against the daily cap, what's queued, and totals. */
 async function outreachStats(db: FirebaseFirestore.Firestore) {
@@ -35,10 +36,25 @@ async function outreachStats(db: FirebaseFirestore.Firestore) {
   };
 }
 
+/** Runs the reply sync when the last one was over a minute ago. */
+async function syncIfStale(): Promise<void> {
+  const ref = getFirebaseAdmin().db.collection("Settings").doc("outreach_daily");
+  const due = await getFirebaseAdmin().db.runTransaction(async (tx) => {
+    const last = Date.parse(String((await tx.get(ref)).get("last_sync_at") ?? ""));
+    if (Number.isFinite(last) && Date.now() - last < 60_000) return false;
+    tx.set(ref, { last_sync_at: new Date().toISOString() }, { merge: true });
+    return true;
+  });
+  if (due) await syncOutreachReplies();
+}
+
 export async function GET() {
   if (!(await requireDashboardSession())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  // Opening or refreshing Recruit checks Gmail right away (at most once a minute),
+  // so a reply shows up without waiting for the 5-minute sync.
+  await syncIfStale().catch((e) => console.error("recruit sync:", e instanceof Error ? e.message : e));
   try {
     const { db } = getFirebaseAdmin();
     const snap = await db
