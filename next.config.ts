@@ -53,6 +53,13 @@ const nextConfig: NextConfig = {
           { key: "Content-Type", value: "application/json" },
         ],
       },
+      // The booked-page story images and video: versioned with ?v=, so cache them for a year.
+      {
+        source: "/creator-call/:path*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+        ],
+      },
     ];
   },
 };
