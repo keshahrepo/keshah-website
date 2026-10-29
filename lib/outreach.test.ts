@@ -1,7 +1,7 @@
 // Run: npx tsx --test lib/outreach.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addressOf, recruitStage, replySnippet, freshText } from "./outreach";
+import { addressOf, recruitStage, replySnippet, freshText, outreachNameMatch } from "./outreach";
 
 test("stages follow the pipeline", () => {
   assert.equal(recruitStage({ status: "emailed" }), "emailed");
@@ -42,4 +42,20 @@ test("freshText drops the quoted thread, so a quoted Calendly link isn't the fou
   const reply = "Sounds great, talk soon!\n\nOn Wed, Oct 28, 2026 at 10:16 AM Aadi <contact@keshah.com> wrote:\n> grab a 15-minute call here: https://calendly.com/aadi-keshah/creator-interview";
   assert.equal(/calendly\.com/.test(freshText(reply)), false);
   assert.equal(/calendly\.com/.test(freshText("Here's my calendar: https://calendly.com/x\n\nOn Tue wrote stuff")), true);
+});
+
+test("outreachNameMatch: full name, then a unique first name (invited first)", () => {
+  const apps = [
+    { id: "a", full_name: "Asia", status: "invited" },
+    { id: "r", full_name: "Raf", status: "invited" },
+    { id: "b", full_name: "Ben", status: "booked" },
+    { id: "e1", full_name: "Emma", status: "emailed" },
+    { id: "e2", full_name: "Emma Stone", status: "emailed" },
+  ];
+  assert.equal(outreachNameMatch("Asia Moore", apps), "a");
+  assert.equal(outreachNameMatch("Rafael Santana", apps), "r");
+  assert.equal(outreachNameMatch("Ben Lee", apps), null, "already booked");
+  assert.equal(outreachNameMatch("Emma", apps), "e1", "exact full name wins");
+  assert.equal(outreachNameMatch("Emma Watson", apps), null, "two Emmas: not clear");
+  assert.equal(outreachNameMatch("Kadin", apps), null);
 });

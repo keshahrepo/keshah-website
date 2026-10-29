@@ -33,7 +33,7 @@ import { APPLICATIONS, ensureSessionForStart, findApplicationByEmail } from "@/l
 import { BOOKING_FIELDS, OUTSIDE_US_REASON, cancelDecision, isDecided, outsideUsEmail, outsideUsTimezone, statusAfterCancel } from "@/lib/interview-decisions";
 import { emailConfigured, sendEmail } from "@/lib/email";
 import { CREATOR_FROM_NAME } from "@/lib/creators/invite";
-import { OUTREACH_SOURCE } from "@/lib/outreach";
+import { OUTREACH_SOURCE, outreachNameMatch } from "@/lib/outreach";
 import { CREATORS_COLLECTION } from "@/lib/creators/db";
 import { findCreatorByEmail } from "@/lib/mobile/firestore";
 
@@ -200,11 +200,9 @@ export async function POST(req: Request) {
   const name = (p.name ?? [p.first_name, p.last_name].filter(Boolean).join(" ")).trim().toLowerCase();
   if (!docId && name && body.event === "invitee.created") {
     const snap = await db.collection(APPLICATIONS).where("source", "==", OUTREACH_SOURCE).get();
-    const hits = snap.docs.filter(
-      (d) => ["emailed", "replied", "invited"].includes(String(d.get("status") ?? "")) && String(d.get("full_name") ?? "").trim().toLowerCase() === name,
-    );
-    if (hits.length === 1) {
-      docId = hits[0].id;
+    const hit = outreachNameMatch(name, snap.docs.map((d) => ({ id: d.id, full_name: d.get("full_name"), status: d.get("status") })));
+    if (hit) {
+      docId = hit;
       otherEmail = true;
     }
   }
@@ -242,9 +240,19 @@ export async function POST(req: Request) {
   }
 
   if (!docId) {
-    // No matching application — accept the webhook but note it so we
-    // don't throw a signature-looking error back at Calendly.
-    return NextResponse.json({ ok: true, matched: false, session });
+    // Nobody matched (the link reached them another way): every interview booking
+    // still shows up in Recruit, as a new creator who booked directly.
+    if (!email) return NextResponse.json({ ok: true, matched: false, session });
+    const created = await db.collection(APPLICATIONS).add({
+      full_name: (p.name ?? [p.first_name, p.last_name].filter(Boolean).join(" ")).trim() || email,
+      email,
+      source: OUTREACH_SOURCE,
+      direct_booking: true,
+      status: "replied",
+      submitted_at: FieldValue.serverTimestamp(),
+      last_updated_at: FieldValue.serverTimestamp(),
+    });
+    docId = created.id;
   }
 
   const ref = db.collection(APPLICATIONS).doc(docId);

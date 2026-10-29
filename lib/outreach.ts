@@ -100,3 +100,27 @@ export function firstOutreachEmail(greet: string, line: string): { subject: stri
     ].join("\n"),
   };
 }
+
+/**
+ * Which outreach creator a Calendly booking under another email belongs to, by
+ * name: the full name, else the first name (equal, or one starts with the other:
+ * "Raf" / "Rafael"). People we sent the calendar to come first; only a single
+ * match counts. Null when it's not clear.
+ */
+export function outreachNameMatch(bookingName: string, apps: { id: string; full_name?: unknown; status?: unknown }[]): string | null {
+  const name = bookingName.trim().toLowerCase().replace(/\s+/g, " ");
+  if (!name) return null;
+  const open = apps.filter((a) => ["emailed", "replied", "invited"].includes(String(a.status ?? "")));
+  const full = open.filter((a) => String(a.full_name ?? "").trim().toLowerCase() === name);
+  if (full.length === 1) return full[0].id;
+  const first = name.split(" ")[0];
+  if (first.length < 3) return null;
+  const same = (a: { full_name?: unknown }) => {
+    const f = String(a.full_name ?? "").trim().toLowerCase().split(/\s+/)[0] ?? "";
+    return f.length >= 3 && (f === first || f.startsWith(first) || first.startsWith(f));
+  };
+  const invited = open.filter((a) => a.status === "invited" && same(a));
+  if (invited.length === 1) return invited[0].id;
+  const any = open.filter(same);
+  return any.length === 1 ? any[0].id : null;
+}
