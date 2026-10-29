@@ -160,8 +160,7 @@ export async function POST(req: Request) {
       const hits = snap.docs.filter((d) => [d.get("name"), d.get("legal_name")].some((n) => String(n ?? "").trim().toLowerCase() === name));
       if (hits.length === 1) creatorId = hits[0].id;
     }
-    // Not a creator yet (the founder booked an applicant on this event type): handle it as an interview booking below.
-    if (creatorId) {
+    if (!creatorId) return NextResponse.json({ ok: true, kickoff: true, matched: false });
     const ref = db.collection(CREATORS_COLLECTION).doc(creatorId);
     if (body.event === "invitee.canceled") {
       if (p.rescheduled === true) return NextResponse.json({ ok: true, kickoff: true, ignored: "reschedule" });
@@ -174,7 +173,6 @@ export async function POST(req: Request) {
     }
     await ref.set({ kickoff_call: { start_time: startTime, event_uri: eventUri, join_url: joinUrl, booked_at: new Date().toISOString(), canceled_at: null } }, { merge: true });
     return NextResponse.json({ ok: true, kickoff: true, id: creatorId });
-    }
   }
 
   let docId: string | null = null;
