@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { fetchRecentPosts, parseInstagramPage, parseTikTokPage, postKey, type ScrapedPost } from "./scrape";
+import { expandTikTokShortLink, fetchRecentPosts, parseInstagramPage, parseTikTokPage, postKey, type ScrapedPost } from "./scrape";
 import {
   ALERT_CREDIT_DAYS,
   DEEP_MAX_PAGES,
@@ -16,6 +16,8 @@ import {
   applyObservation,
   autoClaimId,
   bonusAction,
+  duplicateClaimCloses,
+  COUNTED_AUTOMATICALLY_NOTE,
   bonusPushInfo,
   bucketByLocalDate,
   detectDay,
@@ -531,4 +533,36 @@ test("bonusAction: bonus_start_date lets videos from before start_date earn", ()
   const ctx = { startDate: "2026-10-01", timezone: "UTC", nowIso: "2026-10-07T00:00:00Z" };
   assert.equal(bonusAction(post, [], ctx).op, "none");
   assert.equal(bonusAction(post, [], { ...ctx, bonusStartDate: "2026-09-01" }).op, "create");
+});
+
+test("bonus: a manual claim under review for a video the auto claim paid is closed, and the video pays once", () => {
+  const a = bonusAction(rec(), [], bctx);
+  assert.equal(a.op, "create");
+  if (a.op !== "create") return;
+  const manual = { id: "m1", video_url: "https://www.tiktok.com/@h/video/6000000001?_r=1", platform: "tiktok" as const, posted_on: "2026-09-30", views_claimed: 120_000, status: "claimed" as const };
+  const other = { ...manual, id: "m2", video_url: "https://www.tiktok.com/@h/video/6000000999" };
+  const claims = [{ ...a.claim, id: a.id }, manual, other];
+  const closes = duplicateClaimCloses(rec(), claims, bctx.nowIso);
+  assert.deepEqual(closes.map((c) => c.id), ["m1"]);
+  assert.equal(closes[0].patch.status, "approved");
+  assert.equal(closes[0].patch.video_url, a.claim.video_url);
+  assert.equal(closes[0].patch.posted_on, "2026-10-01");
+  assert.equal(closes[0].patch.admin_note, COUNTED_AUTOMATICALLY_NOTE);
+  const after: BonusClaim[] = [a.claim, { ...manual, ...closes[0].patch } as BonusClaim];
+  const lines = bonusLinesForMonth(after, "2026-10");
+  assert.equal(lines.length, 1);
+  assert.equal(lines[0].amount_cents, 1500);
+  // nothing left to close once it's done; no auto claim -> nothing closed
+  assert.equal(duplicateClaimCloses(rec(), [{ ...a.claim, id: a.id }, { ...manual, ...closes[0].patch } as typeof manual], bctx.nowIso).length, 0);
+  assert.equal(duplicateClaimCloses(rec(), [manual], bctx.nowIso).length, 0);
+});
+
+test("expandTikTokShortLink: short share links become the full video link; others are untouched", async () => {
+  const fake = (async () => new Response(null, { status: 301, headers: { location: "https://www.tiktok.com/@isai/video/7693661905914776845?_r=1&_t=x" } })) as typeof fetch;
+  assert.equal(await expandTikTokShortLink("https://www.tiktok.com/t/ZTyKSQByd/", fake), "https://www.tiktok.com/@isai/video/7693661905914776845");
+  assert.equal(await expandTikTokShortLink("https://vm.tiktok.com/ZMabc/", fake), "https://www.tiktok.com/@isai/video/7693661905914776845");
+  const full = "https://www.tiktok.com/@isai/video/1234567890123";
+  assert.equal(await expandTikTokShortLink(full, fake), full);
+  const broken = (async () => { throw new Error("offline"); }) as typeof fetch;
+  assert.equal(await expandTikTokShortLink("https://www.tiktok.com/t/ZTyKSQByd/", broken), "https://www.tiktok.com/t/ZTyKSQByd/");
 });

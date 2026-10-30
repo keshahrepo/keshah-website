@@ -214,6 +214,28 @@ export function postKey(url: string, platform: Platform): string {
   return `${platform}:${s.replace(/[?#].*$/, "").replace(/\/+$/, "").toLowerCase()}`;
 }
 
+/** Full video link for a TikTok short share link (vm./vt.tiktok.com, tiktok.com/t/…); the link itself when it isn't one or can't be resolved. */
+export async function expandTikTokShortLink(url: string, fetchFn: typeof fetch = fetch): Promise<string> {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return url;
+  }
+  if (!/^(vm|vt)\.tiktok\.com$/i.test(u.hostname) && !/^\/t\//.test(u.pathname)) return url;
+  try {
+    const r = await fetchFn(url, { redirect: "manual", signal: AbortSignal.timeout(4000), headers: { "User-Agent": "Mozilla/5.0" } });
+    const loc = r.headers.get("location");
+    if (loc) {
+      const full = new URL(loc, url);
+      if (/(^|\.)tiktok\.com$/i.test(full.hostname) && /\/(?:video|photo)\/\d{8,}/.test(full.pathname)) return `https://www.tiktok.com${full.pathname}`;
+    }
+  } catch {
+    // Offline / blocked: keep the short link.
+  }
+  return url;
+}
+
 // ---------------------------------------------------------------- fetching
 
 export interface FetchPostsOptions {

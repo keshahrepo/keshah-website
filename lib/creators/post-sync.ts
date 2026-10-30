@@ -297,6 +297,29 @@ export function bonusAction(
   return { op: "create", id, claim };
 }
 
+/**
+ * Manual claims still "under review" for a video the approved auto claim already
+ * pays. They're closed by approving them under the auto claim's link and date, so
+ * bonusVideos groups them with it and the video still pays once.
+ */
+export function duplicateClaimCloses(
+  post: CreatorPost,
+  claims: ({ id: string } & BonusClaim)[],
+  nowIso: string,
+): { id: string; patch: Partial<BonusClaim> }[] {
+  const auto = claims.find((c) => c.id === autoClaimId(post.platform, post.post_id));
+  if (!auto || auto.status !== "approved") return [];
+  const key = postKey(post.url, post.platform);
+  return claims
+    .filter((c) => c.id !== auto.id && c.status === "claimed" && c.platform === post.platform && postKey(c.video_url, c.platform) === key)
+    .map((c) => ({
+      id: c.id,
+      patch: { status: "approved", video_url: auto.video_url, posted_on: auto.posted_on, admin_note: COUNTED_AUTOMATICALLY_NOTE, reviewed_at: nowIso },
+    }));
+}
+
+export const COUNTED_AUTOMATICALLY_NOTE = "Already counted automatically";
+
 export interface CreditEstimate {
   creators: number;
   /** creators x SHALLOW_RUNS_PER_DAY x 2 + deep pages (last deep run per creator). */
@@ -562,6 +585,11 @@ export async function syncCreatorPosts(creatorOrId: string | CreatorProfile, dep
         result.claims_upgraded.push(a.id);
         const push = deps.notifyBonus ?? (deps.db ? null : defaultNotifyBonus);
         if (push && info) await push({ id: creator.id, email: creator.email }, info).catch((e) => log(`[creator-posts] bonus push failed: ${errMsg(e)}`));
+      }
+      for (const d of duplicateClaimCloses(rec, claims, nowIso)) {
+        await ref.collection("bonus_claims").doc(d.id).update(d.patch);
+        const at = claims.findIndex((c) => c.id === d.id);
+        if (at >= 0) claims[at] = { ...claims[at], ...d.patch };
       }
     }
   };

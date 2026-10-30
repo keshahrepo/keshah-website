@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { addBonusClaim, getHistory } from "@/lib/creators/db";
+import { COUNTED_AUTOMATICALLY_NOTE } from "@/lib/creators/post-sync";
 import { errorResponse, requireCreator, requireOnboarded } from "../_auth";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +12,8 @@ export async function GET(req: NextRequest) {
   try {
     const { bonusClaims } = await getHistory(creator.id);
     return NextResponse.json({
-      claims: bonusClaims.map((c) => ({
+      // A manual claim closed as a duplicate of an auto one isn't shown twice.
+      claims: bonusClaims.filter((c) => c.admin_note !== COUNTED_AUTOMATICALLY_NOTE).map((c) => ({
         id: c.id,
         video_url: c.video_url,
         platform: c.platform,

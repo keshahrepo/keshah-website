@@ -37,7 +37,7 @@ import {
 } from "./pay";
 import { FOUNDER_VIDEOS, QUIZ, WARMUP_DAYS, suggestedHandle } from "./onboarding-content";
 import { handleOwner, pickHandle, takenHandles, type CreatorDoc } from "./uniqueness";
-import { handleExists, postKey } from "./scrape";
+import { expandTikTokShortLink, handleExists, postKey } from "./scrape";
 import { isValidTimezone } from "./time";
 import { autoSubmitFields, disputeUpdate, InvoiceRuleError } from "./invoice-auto";
 import { adjustmentTarget, approvedClaimDates, carriedNote, firstPostingDay, fmtWeekdayLong } from "./lifecycle";
@@ -825,8 +825,10 @@ export async function addBonusClaim(
   const creator = await getCreator(id);
   if (!creator) throw new CreatorDataError("Creator not found", 404);
   if (input.platform !== "tiktok" && input.platform !== "instagram") throw new CreatorDataError("Pick TikTok or Instagram");
-  const video_url = checkUrl(String(input.video_url ?? ""), input.platform);
-  if (!video_url) throw new CreatorDataError("Paste the video link");
+  const pasted = checkUrl(String(input.video_url ?? ""), input.platform);
+  if (!pasted) throw new CreatorDataError("Paste the video link");
+  // Short share links (tiktok.com/t/…) become the full video link so claims match the synced post.
+  const video_url = input.platform === "tiktok" ? await expandTikTokShortLink(pasted) : pasted;
   if (!isYyyyMmDd(input.posted_on)) throw new CreatorDataError("Pick the date the video was posted");
   const now = opts.now ?? new Date();
   if (input.posted_on > creatorToday(creator, now)) throw new CreatorDataError("The posted date can't be in the future");
@@ -836,8 +838,15 @@ export async function addBonusClaim(
     throw new CreatorDataError("Invalid screenshot");
   }
   const col = creatorRef(id).collection("bonus_claims");
-  const pending = await col.where("video_url", "==", video_url).get();
-  if (pending.docs.some((d) => d.data().platform === input.platform && d.data().status === "claimed")) {
+  const key = postKey(video_url, input.platform);
+  const same = (await col.get()).docs
+    .map((d) => d.data() as BonusClaim)
+    .filter((c) => c.platform === input.platform && postKey(c.video_url, c.platform) === key);
+  // The post sync usually pays 100K+ videos on its own; don't leave a duplicate "under review".
+  if (same.some((c) => c.status === "approved")) {
+    throw new CreatorDataError("This video's bonus is already counted. You'll see it on your pay.", 409);
+  }
+  if (same.some((c) => c.status === "claimed")) {
     throw new CreatorDataError("You already have a claim waiting for this video. We'll review it soon.", 409);
   }
   const doc: BonusClaim = {
