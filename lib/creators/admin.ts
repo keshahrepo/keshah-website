@@ -358,6 +358,7 @@ export function progressFor(c: AdminCreator, h: CreatorHistory, now: Date = new 
       onboarding: h.onboarding.raw,
       trackingUrl: c.tracking_url,
       campaignTags: c.campaign_tags,
+      timezone: c.timezone,
       startDate: c.start_date,
       trialPlan: c.trial_plan ?? null,
       trial: c.pay_ready ? trialStatus(h.postingDays, payProfileOf(c)) : null,

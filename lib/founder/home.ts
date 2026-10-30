@@ -155,6 +155,7 @@ export async function founderHome(now = new Date()): Promise<FounderHome> {
             onboarding: onb?.exists ? onb.data()! : null,
             trackingUrl: a.tracking_url,
             campaignTags: a.campaign_tags,
+            timezone: a.timezone,
             startDate: a.start_date,
             trialPlan: a.trial_plan ?? null,
           },

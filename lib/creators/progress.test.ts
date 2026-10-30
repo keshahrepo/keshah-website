@@ -219,3 +219,24 @@ test("contract deadline: 'Due Oct 14' while pending, then 'Past due · 1 day' an
   const unsent = creatorProgress({ ...base, contract: { status: "none" } }, new Date("2026-10-17T14:00:00Z"));
   assert.equal(unsent.steps.find((s) => s.key === "contract")!.detail, "Contract not sent yet");
 });
+
+test("warm-up: stuck counts days on the creator's calendar, not UTC", () => {
+  const onboarding = {
+    contract_signed_at: "2026-10-26T01:13:00Z",
+    slack_joined_at: "2026-10-26T01:16:00Z",
+    videos_watched: { "reversed-hair-loss": "2026-10-27T04:10:00Z", "science-of-hair-loss": "2026-10-27T04:22:00Z" },
+    quiz_passed_at: "2026-10-27T04:22:00Z",
+    accounts_done_at: "2026-10-27T04:31:00Z",
+    warmup_days: ["2026-10-27", "2026-10-28"],
+  };
+  const inp = { ...accepted, contract: { status: "signed" }, onboarding, timezone: "America/New_York" };
+  // 11:38 pm Oct 29 in New York (Oct 30 UTC): ticked yesterday, today still open.
+  const tonight = creatorProgress(inp, new Date("2026-10-30T03:38:00Z"));
+  assert.equal(tonight.current, "warmup");
+  assert.equal(tonight.days, 1);
+  assert.equal(tonight.stuck, false);
+  // A whole local day with no tick: stuck.
+  const nextDay = creatorProgress(inp, new Date("2026-10-31T03:38:00Z"));
+  assert.equal(nextDay.days, 2);
+  assert.equal(nextDay.stuck, true);
+});

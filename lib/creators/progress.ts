@@ -20,6 +20,7 @@
  */
 import { FOUNDER_VIDEOS, WARMUP_DAYS } from "./onboarding-content";
 import { daysPastDue, deadlineShort } from "./deadline";
+import { localDateIn } from "./time";
 import type { AcceptRecord } from "./types";
 
 export type ProgressKey =
@@ -93,6 +94,8 @@ export interface ProgressInput {
   trackingUrl?: string;
   /** Campaign tags (attribution). Omitted = not checked. */
   campaignTags?: string[];
+  /** Creator's IANA time zone: warm-up days count on their own calendar. */
+  timezone?: string;
   /** "" until the first posting day. */
   startDate?: string;
   /** Legacy start date (old program fallback): not a real first posting day. */
@@ -295,7 +298,17 @@ export function creatorProgress(input: ProgressInput, now: Date = new Date()): C
   if (cur.key === "first_post") before.push(str(o.completed_at));
   const since = latest(before);
   const sinceMs = ms(since);
-  const days = Number.isFinite(sinceMs) ? Math.max(0, Math.floor((now.getTime() - sinceMs) / DAY_MS)) : null;
+  let days = Number.isFinite(sinceMs) ? Math.max(0, Math.floor((now.getTime() - sinceMs) / DAY_MS)) : null;
+  // Warm-up ticks are local dates: count whole days on the creator's calendar, so
+  // "ticked yesterday, not yet today" is 1 day, not 2 once UTC passes midnight.
+  if (cur.key === "warmup" && warmupDays.length && since === warmupDays[warmupDays.length - 1] && input.timezone) {
+    try {
+      const today = localDateIn(now, input.timezone);
+      days = Math.max(0, Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${since}T00:00:00Z`)) / DAY_MS));
+    } catch {
+      // Unknown zone: keep the UTC count.
+    }
+  }
   let stuck = false;
   const onCreator = cur.waitingOn === "creator" && cur.key !== "trial";
   if (onCreator && days !== null) {
