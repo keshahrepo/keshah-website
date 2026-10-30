@@ -30,9 +30,7 @@ import crypto from "crypto";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { APPLICATIONS, ensureSessionForStart, findApplicationByEmail } from "@/lib/interview";
-import { BOOKING_FIELDS, OUTSIDE_US_REASON, cancelDecision, isDecided, outsideUsEmail, outsideUsTimezone, statusAfterCancel } from "@/lib/interview-decisions";
-import { emailConfigured, sendEmail } from "@/lib/email";
-import { CREATOR_FROM_NAME } from "@/lib/creators/invite";
+import { BOOKING_FIELDS, OUTSIDE_US_REASON, cancelDecision, isDecided, outsideUsTimezone, statusAfterCancel } from "@/lib/interview-decisions";
 import { OUTREACH_SOURCE, outreachNameMatch } from "@/lib/outreach";
 import { CREATORS_COLLECTION } from "@/lib/creators/db";
 import { findCreatorByEmail } from "@/lib/mobile/firestore";
@@ -41,7 +39,7 @@ export const runtime = "nodejs";
 export const maxDuration = 15;
 
 const SIGNING_KEY = process.env.CALENDLY_WEBHOOK_SIGNING_KEY ?? "";
-/** Calendly personal access token, used to cancel bookings from outside the US. Without it they're only denied + emailed. */
+/** Calendly personal access token, used to cancel bookings from outside the US. Without it they're only denied. */
 const CALENDLY_API_TOKEN = process.env.CALENDLY_API_TOKEN ?? "";
 
 /** Cancels a scheduled Calendly event (its api.calendly.com URI). Returns whether it worked. */
@@ -257,7 +255,7 @@ export async function POST(req: Request) {
 
   const ref = db.collection(APPLICATIONS).doc(docId);
 
-  // US-only hiring: a booking from a non-US time zone is cancelled, the application closed, and the applicant told.
+  // US-only hiring: a booking from a non-US time zone is cancelled and the application closed. No email is sent.
   // US-only: outreach creators were already picked as US by the daily search, and the
   // founder sometimes books for them from India, so only applicants who booked themselves are checked.
   const isOutreach = String((await ref.get()).get("source") ?? "") === OUTREACH_SOURCE;
@@ -284,17 +282,9 @@ export async function POST(req: Request) {
     });
     if (!closed) return NextResponse.json({ ok: true, matched: true, id: docId, decided: true });
     const canceled = eventUri ? await cancelCalendlyEvent(eventUri, "This role is only open to people living in the US for now.") : false;
-    let emailed = false;
-    if (closed.email && emailConfigured()) {
-      try {
-        await sendEmail({ to: closed.email, fromName: CREATOR_FROM_NAME, ...outsideUsEmail(closed.first) });
-        emailed = true;
-      } catch (e) {
-        console.error("calendly webhook: outside-US email failed:", e instanceof Error ? e.message : e);
-      }
-    }
-    await ref.set({ outside_us_booking_canceled: canceled, outside_us_emailed: emailed }, { merge: true });
-    return NextResponse.json({ ok: true, matched: true, id: docId, outside_us: true, canceled, emailed });
+    // No email to non-US applicants: the booking is just closed (and cancelled when the token is set).
+    await ref.set({ outside_us_booking_canceled: canceled }, { merge: true });
+    return NextResponse.json({ ok: true, matched: true, id: docId, outside_us: true, canceled });
   }
 
   const decided = await db.runTransaction(async (tx) => {
