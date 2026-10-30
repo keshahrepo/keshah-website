@@ -70,10 +70,12 @@ export async function GET(req: NextRequest, { params }: Ctx) {
     { postingDays: h.postingDays, daysOff: h.daysOff },
   );
   // The founder's notes from their interview call (copied on Accept).
-  const hireNotes = (await db().collection(CREATORS_COLLECTION).doc(id).get()).get("hire_notes") ?? null;
+  const rawDoc = await db().collection(CREATORS_COLLECTION).doc(id).get();
+  const hireNotes = rawDoc.get("hire_notes") ?? null;
+  const hirePrediction = rawDoc.get("hire_prediction") ?? null;
   return NextResponse.json({
     days,
-    creator: { ...creator, pinned_live: pinnedLive, pinned_overdue: pinnedOverdue, pinned_missing_since: pinnedMissingSince, hire_notes: hireNotes },
+    creator: { ...creator, pinned_live: pinnedLive, pinned_overdue: pinnedOverdue, pinned_missing_since: pinnedMissingSince, hire_notes: hireNotes, hire_prediction: hirePrediction },
     month,
     today,
     summary,
