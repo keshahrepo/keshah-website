@@ -39,6 +39,32 @@ export interface Release {
 // probably doesn't shift any user-visible cohort — don't add an entry.
 export const RELEASES: Release[] = [
   {
+    // Live in the stores 2026-10-31 (founder confirmed). The Day 1 change
+    // (Science + 4 Questions videos removed, Firestore Day1) went live the
+    // same hour, so this cohort is the "clean flow" baseline.
+    slug: "5_20",
+    label: "5.20 launch",
+    date: "2026-10-31",
+    time: "01:37",
+    description:
+      "Session-first clean flow: Day 1 cut to Scalp Pressing + Pinching " +
+      "(~10 min, Science + 4 Questions videos removed), no proof card " +
+      "under the tasks, no member spotlight / proof card on all-done, " +
+      "scalp check-ins + Day-0 baseline off, starter-photos prompt once " +
+      "and only after the day is done, no check-in promises in " +
+      "onboarding, instant return to the dashboard after a session, " +
+      "~2x faster launch, Home tab on the left, paywall member wall + " +
+      "'every 3 mo.' price line, new founder story ending, regrowth " +
+      "surfaces buyer-only.",
+    tracks: [
+      "funnel_day_gte_1",
+      "funnel_day_gte_3",
+      "funnel_started",
+      "outcome_converted",
+    ],
+    audience: "mobile",
+  },
+  {
     // Live in the stores 2026-10-06 (founder confirmed).
     slug: "5_19_next",
     label: "5.19 launch",
