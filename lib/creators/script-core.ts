@@ -178,11 +178,11 @@ export function coreLines(provenId: string, daySeed: string, slot = 0): ScriptLi
   const product = item("products", PRODUCTS, (p) => p.product !== take.product);
 
   const lines: ScriptLine[] = [
-    { label: "Hook", text: hook.text, hands: "Do the test on yourself while you say it. Copy the hook from the original. After that, follow these cards, not the original." },
+    { label: "Hook", text: hook.text, hands: "Do the test on yourself while you say it." },
     {
       label: "It's not",
       text: `${item("cause", NOT_CAUSE)} ${take.text} ${item("absurd", NOT_ABSURD)}`,
-      hands: "Say the last one fed up, almost mocking it, like you've heard every excuse.",
+      tone: "Say the last one fed up, almost mocking it, like you've heard every excuse.",
     },
   ];
   if (why) lines.push({ label: "Why I make these", text: `${why} I went down a rabbithole and this is why you're ACTUALLY ${verdictWord(hook.text)}.` });
@@ -191,7 +191,7 @@ export function coreLines(provenId: string, daySeed: string, slot = 0): ScriptLi
   lines.push(
     { label: "Chain", text: CHAIN },
     { label: "Products", text: product.text },
-    { label: "The fix", text: FIX, hands: "Say \"keep taking your pills\" mocking. Show each technique on your scalp while you name it." },
+    { label: "The fix", text: FIX, tone: "Say \"keep taking your pills\" mocking.", hands: "Show each technique on your scalp while you name it." },
     { label: "Ending", text: CORE_ENDING },
   );
   return lines;

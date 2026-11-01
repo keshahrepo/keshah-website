@@ -152,7 +152,10 @@ export interface TiredCheck {
 export interface ScriptLine {
   label?: string;
   text: string;
+  /** What to do with your hands (✋ in the app). */
   hands?: string;
+  /** How to say it (🎭 in the app). */
+  tone?: string;
   photo?: { url: string; caption?: string };
 }
 
@@ -170,6 +173,7 @@ export function cleanLines(v: unknown): ScriptLine[] {
       ...(typeof r.label === "string" && r.label.trim() ? { label: r.label.trim() } : {}),
       text,
       ...(typeof r.hands === "string" && r.hands.trim() ? { hands: r.hands.trim() } : {}),
+      ...(typeof r.tone === "string" && r.tone.trim() ? { tone: r.tone.trim() } : {}),
       ...(url ? { photo: { url, ...(p && typeof p.caption === "string" && p.caption ? { caption: p.caption } : {}) } } : {}),
     });
   }

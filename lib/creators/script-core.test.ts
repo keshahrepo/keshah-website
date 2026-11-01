@@ -66,7 +66,7 @@ test("rabbit hole line takes the verdict's word", () => {
 test("it's not = one cause, one thing people take, one absurd, with the tone note", () => {
   for (const s of scripts) {
     assert.equal((s[1].text.match(/It's not/g) ?? []).length, 3);
-    assert.match(s[1].hands ?? "", /fed up, almost mocking/);
+    assert.match(s[1].tone ?? "", /fed up, almost mocking/);
   }
 });
 
