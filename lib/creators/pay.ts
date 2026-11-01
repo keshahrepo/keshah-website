@@ -786,7 +786,7 @@ export function draftInvoiceLines(summary: MonthSummary): InvoiceLine[] {
   if (trialDays > 0) {
     lines.push({
       kind: "trial",
-      label: `Trial ${fmtMonth(summary.month)}: ${trialDays} posting day${trialDays === 1 ? "" : "s"} at ${fmtUsd(Math.round(summary.trialCents / trialDays))}/day`,
+      label: `Trial ${fmtMonth(summary.month)}: ${trialDays} posting day${trialDays === 1 ? "" : "s"}`,
       amount_cents: summary.trialCents,
     });
   }

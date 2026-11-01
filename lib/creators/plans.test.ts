@@ -15,7 +15,7 @@ test("trial days pay the profile's own rate ($30)", () => {
   const pd = weekdaysBetween("2026-10-01", "2026-10-09").map((d) => day(d, 3));
   const s = monthSummary(prof({ pay_plan: "full" }), "2026-10", pd, [], [], [], { today: "2026-10-12" });
   assert.equal(s.trialCents, 7 * 3000);
-  assert.match(draftInvoiceLines(s)[0].label, /at \$30(\.00)?\/day/);
+  assert.doesNotMatch(draftInvoiceLines(s)[0].label, /\/day/);
   const t = trialStatus(pd, prof({ pay_plan: "full" }));
   assert.equal(t.dayCents, 3000);
   assert.equal(t.totalCents, 60000);
