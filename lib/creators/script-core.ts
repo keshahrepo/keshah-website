@@ -60,7 +60,7 @@ const NOT_TAKE: { text: string; product?: "oils" | "minoxidil" | "pills" }[] = [
   { text: "It's not taking minoxidil.", product: "minoxidil" },
   { text: "It's not taking finasteride." },
   { text: "It's not getting a transplant." },
-  { text: "It's not more pills.", product: "pills" },
+  { text: "It's not taking more pills.", product: "pills" },
 ];
 
 const NOT_ABSURD = [
@@ -78,15 +78,15 @@ const WHY = [
   "I make these videos because I'm tired of all the scamming people are doing.",
 ];
 
-const SCIENCE_BLOOD = "When your scalp is tight, it's 2.6 times less blood flow than when it's loose.";
+const SCIENCE_BLOOD = "When your scalp is tight, it gets 2.6 times less blood flow than when it's loose.";
 const SCIENCE_JAPAN = "Japanese research shows with 99% accuracy that we go bald EXACTLY where our scalp is the tightest.";
 
 const NOTICED: { text: string; hands?: string }[] = [
   { text: "Have you noticed bald men always have hair on the back and sides? It's because it's not as tight there." },
-  { text: "Have you noticed how bald men have a dome like head shape? It's because of all the built up tension.", hands: "Show the dome with your hand." },
+  { text: "Have you noticed how bald men have a shiny, dome like head shape? It's because of all the built up tension.", hands: "Show the dome with your hand." },
 ];
 
-const CHAIN = "When your scalp is tight, your hair gets less blood. And when blood does not reach your hair follicle, it just thins and falls out.";
+const CHAIN = "When your scalp is tight, your hair gets less blood. And when blood does not reach your hair follicles, it just thins and falls out.";
 
 const PRODUCTS: { text: string; product: "oils" | "minoxidil" | "pills" }[] = [
   { text: "You can keep applying all these magical oils from the himalayas but that's not going to fix a tight scalp.", product: "oils" },
@@ -98,7 +98,7 @@ const FIX =
   "The actual fix takes work and consistency. So if you can't do that keep taking your pills. It's called mechanical therapy or mechanotherapy. These are specific scalp techniques like pinching, sliding, pressing that loosen up your scalp, get the blood flowing, and get your hair to stop falling. They have to be done with FORCE.";
 
 export const CORE_ENDING =
-  "So go to the pinned video on my profile. It's the one that says, watch this first. It's gonna tell you my step-by-step routine to fix your hair loss without any products. It's a separate video because I don't want to keep repeating myself. Also don't DM me you can't find it. It's the only pinned video and it says in caps WATCH THIS FIRST.";
+  "Go to the pinned video on my profile. It's the one that says, watch this first. It's gonna tell you my step-by-step routine to fix your hair loss without any products. It's a separate video because I don't want to keep repeating myself. Also don't DM me you can't find it. It's the only pinned video and it says in caps WATCH THIS FIRST.";
 
 const CORE_BY_ID = new Map([...CORE_PROVEN_HOOKS, ...CORE_NEW_HOOKS].map((h) => [h.proven_id, h]));
 export const CORE_PROVEN_IDS = new Set(CORE_PROVEN_HOOKS.map((h) => h.proven_id));
