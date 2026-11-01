@@ -138,3 +138,13 @@ test("old apps get the tone note inside hands; build 25+ gets them apart", () =>
   assert.deepEqual(linesForBuild(l, null)[1], { text: "y", hands: "Fed up." });
   assert.equal(linesForBuild(l, 25), l);
 });
+
+test("reason bridge: the first not-line opens with the reason, still three nots; avoid words never show up", () => {
+  for (let slot = 0; slot < 5; slot++) {
+    const s = lines0("Guys, stop and listen.", "x", `d${slot}|2026-11-02`, slot, { bridge: "reason", avoid: ["minoxidil", "finasteride"] });
+    assert.match(s[1].text, /^The reason you're losing hair is not your (genetics|age|hormones)\./);
+    assert.equal(s[1].text.split(/(?<=\.) /).length, 3, s[1].text);
+    const body = s.map((l) => l.text).join(" ").toLowerCase();
+    assert.ok(!/minoxidil|finasteride/.test(body), body);
+  }
+});

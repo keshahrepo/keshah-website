@@ -9,7 +9,7 @@
  * line-by-line script (the app's ScriptLines view).
  */
 
-import type { ScriptLine } from "./proven";
+import type { CoreHookState, ScriptLine } from "./proven";
 
 export interface CoreHook {
   /** The ProvenVideos doc shown as the reference ("Watch the original"). */
@@ -174,24 +174,29 @@ export function verdictWord(hook: string): "balding" | "losing hair" {
  * science line is the Japanese research one, so the 2.6x line never sits
  * right before the chain saying the same thing.
  */
-export function coreLines(hookText: string, provenId: string, daySeed: string, slot = 0): ScriptLine[] {
+export function coreLines(hookText: string, provenId: string, daySeed: string, slot = 0, opts: Pick<CoreHookState, "bridge" | "avoid"> = {}): ScriptLine[] {
   const hook = { text: hookText };
   const r = rng(`${daySeed}|${slot}|${provenId}`);
+  const avoid = (opts.avoid ?? []).map((w) => w.toLowerCase());
+  const fresh = (t: string) => !avoid.some((w) => t.toLowerCase().includes(w));
   const item = <T>(pool: string, xs: T[], ok?: (x: T) => boolean) => dayItem(daySeed, pool, xs, slot, ok);
-  const take = item("take", NOT_TAKE);
+  const take = item("take", NOT_TAKE, (t) => fresh(t.text));
   const why = dayHalf(daySeed, "why", WHY, slot);
   const noticed = dayHalf(daySeed, "noticed", NOTICED, slot);
   const science = noticed ? pick(r, [SCIENCE_BLOOD, SCIENCE_JAPAN]) : SCIENCE_JAPAN;
-  const product = item("products", PRODUCTS, (p) => p.product !== take.product);
+  const product = item("products", PRODUCTS, (p) => p.product !== take.product && fresh(p.text));
   const absurd = item("absurd", NOT_ABSURD);
   // Never echoes the products line, and no second god joke.
-  const keep = item("keep", KEEP, (k) => k.product !== product.product && !(k.god && /god/.test(absurd)));
+  const keep = item("keep", KEEP, (k) => k.product !== product.product && !(k.god && /god/.test(absurd)) && fresh(k.text));
+  const cause = item("cause", NOT_CAUSE);
+  // A non-test opener: the first not-line is the bridge into the core.
+  const first = opts.bridge === "reason" ? cause.replace(/^It's not /, "The reason you're losing hair is not ") : cause;
 
   const lines: ScriptLine[] = [
     { label: "Hook", text: hook.text, hands: "Do the test on yourself while you say it." },
     {
       label: "It's not",
-      text: `${item("cause", NOT_CAUSE)} ${take.text} ${absurd}`,
+      text: `${first} ${take.text} ${absurd}`,
       tone: "Say the last one fed up, almost mocking it, like you've heard every excuse.",
     },
   ];

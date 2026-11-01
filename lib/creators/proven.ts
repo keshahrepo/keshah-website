@@ -290,6 +290,10 @@ export interface CoreHookState {
   retired_at?: string;
   /** A creator's core-era post that beat the original: shown as the reference instead. */
   reference?: CoreReference;
+  /** "reason": a non-test opener; the first not-line becomes "The reason you're losing hair is not ...". */
+  bridge?: "reason";
+  /** Words the opener already covers (e.g. "minoxidil"): the not-list, products line and dare skip lines with them. */
+  avoid?: string[];
 }
 
 /** First day creators got core scripts. */
@@ -331,6 +335,8 @@ export function cleanCore(v: unknown): CoreHookState | undefined {
     ...(typeof r.promoted_at === "string" ? { promoted_at: r.promoted_at } : {}),
     ...(typeof r.retired_at === "string" ? { retired_at: r.retired_at } : {}),
     ...(cleanReference(r.reference) ? { reference: cleanReference(r.reference) } : {}),
+    ...(r.bridge === "reason" ? { bridge: "reason" as const } : {}),
+    ...(Array.isArray(r.avoid) && r.avoid.length ? { avoid: r.avoid.map(String).filter(Boolean) } : {}),
   };
 }
 

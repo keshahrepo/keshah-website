@@ -786,10 +786,10 @@ export function withCoreScript(
   date: YyyyMmDd,
   slot: number,
   v: PublicProven,
-  hook: string | undefined,
+  core: ProvenVideo["core"],
 ): PublicProven {
-  if (!creator.script_core || !hook) return v;
-  return { ...v, lines: coreLines(hook, v.id, `${creator.id}|${date}`, slot) };
+  if (!creator.script_core || !core) return v;
+  return { ...v, lines: coreLines(core.text, v.id, `${creator.id}|${date}`, slot, core) };
 }
 
 /** The ending every video uses (Oct 28 2026): one short ask to the pinned video, the same each time. */
@@ -848,7 +848,7 @@ function payload(
   return {
     date,
     given,
-    picks: shown.map((p) => ({ slot: p.slot, video: ctaFor(creator, withCoreScript({ id: creator.id ?? "", script_core: creator.script_core }, date, p.slot, publicProven(p.proven_id, byId.get(p.proven_id)!), byId.get(p.proven_id)!.core?.text)), posted: pickPosted(attribution[String(p.slot)]) })),
+    picks: shown.map((p) => ({ slot: p.slot, video: ctaFor(creator, withCoreScript({ id: creator.id ?? "", script_core: creator.script_core }, date, p.slot, publicProven(p.proven_id, byId.get(p.proven_id)!), byId.get(p.proven_id)!.core)), posted: pickPosted(attribution[String(p.slot)]) })),
     extra_posted: Object.entries(attribution)
       .filter(([k]) => !pickSlots.has(Number(k)))
       .map(([k, a]) => ({ slot: Number(k), posted: pickPosted(a) }))
