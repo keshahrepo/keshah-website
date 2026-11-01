@@ -116,7 +116,7 @@ const fix = (keep: string) =>
   `The actual fix takes work and consistency. So if you can't do that keep ${keep}. It's called mechanical therapy or mechanotherapy. These are specific scalp techniques like pinching, sliding, pressing that loosen up your scalp, get the blood flowing, and get your hair to stop falling. They have to be done with FORCE.`;
 
 export const CORE_ENDING =
-  "Go to the pinned video on my profile. It's the one that says, watch this first. It's gonna tell you my step-by-step routine to fix your hair loss without any products. It's a separate video because I don't want to keep repeating myself. Also don't DM me you can't find it. It's the only pinned video and it says in caps WATCH THIS FIRST.";
+  "Go to the pinned video on my profile. It's the one that says, watch this first. It's gonna tell you my step-by-step routine to fix your hair loss without any products. It's a separate video because I don't want to keep repeating myself. Also don't DM me you can't find it. It's the only pinned video that says in caps WATCH THIS FIRST.";
 
 
 /** Small seeded generator, so a video's script is the same every time it's opened. */
