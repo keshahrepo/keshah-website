@@ -212,7 +212,7 @@ export interface CreatorPortalFields {
    * creators have no pinned video).
    */
   cta_style?: "pinned" | "bio" | "app";
-  /** Core script (Isai from Nov 2 2026): test hooks only, each with the same middle and ending (script-core.ts). */
+  /** Core script (everyone from Nov 2 2026, unless false): test hooks only, each with the same middle and ending (script-core.ts). */
   script_core?: boolean;
   /** The @keshah.com address KESHAH set up for them (accounts are owned by KESHAH). */
   keshah_email: string;

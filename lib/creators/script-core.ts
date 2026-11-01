@@ -4,8 +4,9 @@
  * changes, so hook tests are clean. Lines are the founder's words from the
  * "Isai's winning video structure" doc; don't reword them here.
  *
- * Creators with `script_core` get 3 proven hooks + 2 new hooks a day, each
- * shown as a line-by-line script (the app's ScriptLines view).
+ * Every creator (unless `script_core` is false) gets proven hooks + 2 new
+ * hooks a day (5-video days; shorter days are proven only), each shown as a
+ * line-by-line script (the app's ScriptLines view).
  */
 
 import type { ScriptLine } from "./proven";
@@ -177,7 +178,7 @@ export function coreLines(provenId: string, daySeed: string, slot = 0): ScriptLi
   const product = item("products", PRODUCTS, (p) => p.product !== take.product);
 
   const lines: ScriptLine[] = [
-    { label: "Hook", text: hook.text, hands: "Do the test on yourself while you say it." },
+    { label: "Hook", text: hook.text, hands: "Do the test on yourself while you say it. Copy the hook from the original. After that, follow these cards, not the original." },
     {
       label: "It's not",
       text: `${item("cause", NOT_CAUSE)} ${take.text} ${item("absurd", NOT_ABSURD)}`,

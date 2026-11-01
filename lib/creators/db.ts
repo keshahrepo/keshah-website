@@ -170,7 +170,8 @@ function toProfile(id: string, d: DocumentData, legacyStart: boolean): CreatorPr
     ...(isYyyyMmDd(d.trial_completed_on) ? { trial_completed_on: d.trial_completed_on } : {}),
     ...planFieldsOf(d),
     ...(d.cta_style === "pinned" || d.cta_style === "bio" || d.cta_style === "app" ? { cta_style: d.cta_style } : {}),
-    ...(d.script_core === true ? { script_core: true } : {}),
+    // Core script for everyone from Nov 2 2026; false turns it off for one creator.
+    script_core: d.script_core !== false,
     campaign_tags: Array.isArray(d.campaign_tags) ? d.campaign_tags : [],
     status: mapCreatorStatus(d.status),
     ...(isYyyyMmDd(d.ended_on) ? { ended_on: d.ended_on } : {}),

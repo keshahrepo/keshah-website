@@ -15,6 +15,7 @@ import { notifyFounder } from "@/lib/staff";
 import { CREATORS_COLLECTION, CreatorDataError, creatorToday, listCreators } from "./db";
 import { isWeekday, localDate } from "./pay";
 import {
+  DAILY_GIVEN,
   IDEAS_PER_DAY,
   MIX_OTHER,
   MIX_SELF_TEST,
@@ -60,7 +61,7 @@ import {
   type ProvenStatus,
   type ProvenVideo,
   type SlotAttribution, cleanLines, type ScriptLine } from "./proven";
-import { CORE_PROVEN_IDS, chooseNewHooks, coreLines, isCoreHook } from "./script-core";
+import { CORE_NEW_PER_DAY, CORE_PROVEN_IDS, chooseNewHooks, coreLines, isCoreHook } from "./script-core";
 import { fetchRecentPosts, fetchTranscript, fetchVideoViews, postKey, type ScrapedPost } from "./scrape";
 import type { CreatorPost, CreatorProfile, Platform, YyyyMmDd } from "./types";
 
@@ -724,7 +725,7 @@ async function pickContext(db: Firestore, creator: CreatorProfile, date: YyyyMmD
   // Core script creators: the day's new test hooks. Otherwise ideas scheduled
   // for this creator today (full creators only, at most IDEAS_PER_DAY).
   const forced = core
-    ? chooseNewHooks(history0(histSnap.docs, date), date).filter((id) => active.some((v) => v.id === id))
+    ? chooseNewHooks(history0(histSnap.docs, date), date, givenFor(creator, date) >= DAILY_GIVEN ? CORE_NEW_PER_DAY : 0).filter((id) => active.some((v) => v.id === id))
     : full
     ? active
         .filter((v) => v.added_by === "founder_idea" && (v.idea_assignments ?? []).some((a) => a.creator_id === creator.id && a.date === date))
