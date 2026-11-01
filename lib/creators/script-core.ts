@@ -227,7 +227,7 @@ export function coreLines(hookText: string, provenId: string, daySeed: string, s
   lines.push({ label: "Science", text: science });
   if (noticed) lines.push({ label: "Have you noticed", text: noticed.text, ...(noticed.hands ? { hands: noticed.hands } : {}) });
   lines.push(
-    { label: "Chain", text: CHAIN, hands: "Make a fist with your other hand while you show the blood vessels getting compressed." },
+    { label: "Chain", text: CHAIN, hands: "Make a fist with your other hand to show the blood vessels getting compressed." },
     { label: "Products", text: product.text },
     { label: "The fix", text: fix(keep.text), tone: `Say "keep ${keep.text}" mocking.`, hands: "Show each technique on your scalp while you name it." },
     { label: "Ending", text: CORE_ENDING },
