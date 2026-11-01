@@ -146,3 +146,9 @@ test("Japanese sources only with 'Have you noticed', always followed by the 2.6x
   }
   assert.ok(seen > 0);
 });
+
+test("a hook's photo goes on the Hook card", () => {
+  const s = lines0("Losing hair like that photo?", "x", "d", 0, { photo: { url: "https://x/p.jpg", caption: "c" } });
+  assert.deepEqual(s[0].photo, { url: "https://x/p.jpg", caption: "c" });
+  assert.equal(lines0("No photo.", "x", "d", 0)[0].photo, undefined);
+});

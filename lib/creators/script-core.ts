@@ -196,7 +196,7 @@ export function verdictWord(hook: string): "balding" | "losing hair" {
  * science line is the Japanese research one, so the 2.6x line never sits
  * right before the chain saying the same thing.
  */
-export function coreLines(hookText: string, provenId: string, daySeed: string, slot = 0, opts: Pick<CoreHookState, "bridge" | "avoid"> = {}): ScriptLine[] {
+export function coreLines(hookText: string, provenId: string, daySeed: string, slot = 0, opts: Pick<CoreHookState, "bridge" | "avoid" | "photo"> = {}): ScriptLine[] {
   const hook = { text: hookText };
   const r = rng(`${daySeed}|${slot}|${provenId}`);
   const avoid = (opts.avoid ?? []).map((w) => w.toLowerCase());
@@ -216,7 +216,7 @@ export function coreLines(hookText: string, provenId: string, daySeed: string, s
   const first = opts.bridge === "reason" ? cause.replace(/^It's not /, "The reason you're losing hair is not ") : cause;
 
   const lines: ScriptLine[] = [
-    { label: "Hook", text: hook.text, hands: "Do the test on yourself while you say it." },
+    { label: "Hook", text: hook.text, hands: "Do the test on yourself while you say it.", ...(opts.photo ? { photo: opts.photo } : {}) },
     {
       label: "It's not",
       text: `${first} ${take.text} ${absurd}`,

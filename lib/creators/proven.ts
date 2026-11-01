@@ -294,6 +294,8 @@ export interface CoreHookState {
   bridge?: "reason";
   /** Words the opener already covers (e.g. "minoxidil"): the not-list, products line and dare skip lines with them. */
   avoid?: string[];
+  /** A photo the hook points at ("like that photo"): shown on the Hook card to save and put on screen. */
+  photo?: { url: string; caption?: string };
 }
 
 /** First day creators got core scripts. */
@@ -337,6 +339,9 @@ export function cleanCore(v: unknown): CoreHookState | undefined {
     ...(cleanReference(r.reference) ? { reference: cleanReference(r.reference) } : {}),
     ...(r.bridge === "reason" ? { bridge: "reason" as const } : {}),
     ...(Array.isArray(r.avoid) && r.avoid.length ? { avoid: r.avoid.map(String).filter(Boolean) } : {}),
+    ...(r.photo && typeof r.photo === "object" && typeof (r.photo as Record<string, unknown>).url === "string"
+      ? { photo: { url: String((r.photo as Record<string, unknown>).url), ...(typeof (r.photo as Record<string, unknown>).caption === "string" ? { caption: String((r.photo as Record<string, unknown>).caption) } : {}) } }
+      : {}),
   };
 }
 
