@@ -98,3 +98,14 @@ test("a day's 5 videos don't repeat the absurd line or the slot 2 line", () => {
     assert.equal(new Set(take).size, 5, take.join(" / "));
   }
 });
+
+test("why + noticed: 2 or 3 of the day's 5 videos each, and their lines alternate", () => {
+  for (let d = 0; d < 200; d++) {
+    const day = Array.from({ length: 5 }, (_, slot) => coreLines(ids[slot], `c${d}|2026-11-02`, slot)!);
+    for (const label of ["Why I make these", "Have you noticed"]) {
+      const got = day.map((s) => s.find((l) => l.label === label)?.text.split(". ")[0]).filter((x): x is string => !!x);
+      assert.ok(got.length === 2 || got.length === 3, `${label}: ${got.length}`);
+      for (let i = 1; i < got.length; i++) assert.notEqual(got[i], got[i - 1], `${label} repeats: ${got.join(" / ")}`);
+    }
+  }
+});

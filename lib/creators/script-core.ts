@@ -122,6 +122,23 @@ function rng(seed: string): () => number {
 const pick = <T>(r: () => number, xs: T[]): T => xs[Math.floor(r() * xs.length)];
 
 /** The pool in a fixed order for the day; slot n takes item n, so a day's videos don't repeat a line until the pool runs out. */
+/** Videos in a creator's day (3 proven + 2 new hooks). */
+const SLOTS_PER_DAY = 5;
+
+/**
+ * A half-in beat for the day: exactly 2 or 3 of the day's videos get it (which
+ * ones is random), and those take the pool's lines in turn, so it alternates.
+ * null = this video leaves the beat out.
+ */
+function dayHalf<T>(daySeed: string, pool: string, xs: T[], slot: number): T | null {
+  const r = rng(`${daySeed}|${pool}|half`);
+  const order = Array.from({ length: SLOTS_PER_DAY }, (_, i) => ({ i, k: r() })).sort((a, b) => a.k - b.k).map((o) => o.i);
+  const on = new Set(order.slice(0, r() < 0.5 ? 2 : 3));
+  if (!on.has(slot % SLOTS_PER_DAY)) return null;
+  const rank = [...on].filter((i) => i < slot % SLOTS_PER_DAY).length;
+  return xs[(Math.floor(r() * xs.length) + rank) % xs.length];
+}
+
 function dayItem<T>(daySeed: string, pool: string, xs: T[], slot: number, ok: (x: T) => boolean = () => true): T {
   const r = rng(`${daySeed}|${pool}`);
   const order = xs.map((x) => ({ x, k: r() })).sort((a, b) => a.k - b.k).map((o) => o.x);
@@ -142,7 +159,8 @@ export function verdictWord(hook: string): "balding" | "losing hair" {
  * `slot` is the video's place in the day, so the day's videos get different
  * lines. Unknown proven id -> null (the video keeps its normal script).
  *
- * Rules: "Why I make these" and "Have you noticed" each in a random half;
+ * Rules: "Why I make these" and "Have you noticed" each in 2 or 3 of the
+ * day's 5 videos, alternating their lines;
  * the products line never repeats slot 2; without "Have you noticed" the
  * science line is the Japanese research one, so the 2.6x line never sits
  * right before the chain saying the same thing.
@@ -153,11 +171,9 @@ export function coreLines(provenId: string, daySeed: string, slot = 0): ScriptLi
   const r = rng(`${daySeed}|${slot}|${provenId}`);
   const item = <T>(pool: string, xs: T[], ok?: (x: T) => boolean) => dayItem(daySeed, pool, xs, slot, ok);
   const take = item("take", NOT_TAKE);
-  const withWhy = r() < 0.5;
-  const withNoticed = r() < 0.5;
-  const why = item("why", WHY);
-  const noticed = item("noticed", NOTICED);
-  const science = withNoticed ? pick(r, [SCIENCE_BLOOD, SCIENCE_JAPAN]) : SCIENCE_JAPAN;
+  const why = dayHalf(daySeed, "why", WHY, slot);
+  const noticed = dayHalf(daySeed, "noticed", NOTICED, slot);
+  const science = noticed ? pick(r, [SCIENCE_BLOOD, SCIENCE_JAPAN]) : SCIENCE_JAPAN;
   const product = item("products", PRODUCTS, (p) => p.product !== take.product);
 
   const lines: ScriptLine[] = [
@@ -168,9 +184,9 @@ export function coreLines(provenId: string, daySeed: string, slot = 0): ScriptLi
       hands: "Say the last one fed up, almost mocking it, like you've heard every excuse.",
     },
   ];
-  if (withWhy) lines.push({ label: "Why I make these", text: `${why} I went down a rabbithole and this is why you're ACTUALLY ${verdictWord(hook.text)}.` });
+  if (why) lines.push({ label: "Why I make these", text: `${why} I went down a rabbithole and this is why you're ACTUALLY ${verdictWord(hook.text)}.` });
   lines.push({ label: "Science", text: science });
-  if (withNoticed) lines.push({ label: "Have you noticed", text: noticed.text, ...(noticed.hands ? { hands: noticed.hands } : {}) });
+  if (noticed) lines.push({ label: "Have you noticed", text: noticed.text, ...(noticed.hands ? { hands: noticed.hands } : {}) });
   lines.push(
     { label: "Chain", text: CHAIN },
     { label: "Products", text: product.text },
