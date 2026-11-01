@@ -11,6 +11,8 @@ import type { Firestore } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { CORE_START, PROVEN_COLLECTION, coreReferenceViews, type CoreHookStatus, type ProvenRemake } from "@/lib/creators/proven";
 import { toProven } from "@/lib/creators/proven-db";
+import { coreLines } from "@/lib/creators/script-core";
+import type { ScriptLine } from "@/lib/creators/proven";
 
 export { CORE_START };
 /** A testing hook with a post at this many views is ready for a call right away. */
@@ -146,4 +148,12 @@ export async function setHookStatus(id: string, action: "promote" | "retire" | "
     if (core.status !== "retired") return;
     await ref.update({ "core.status": "testing", "core.retired_at": null });
   }
+}
+
+/** The full script a creator would get for this hook (`version` picks another rotation of the lines). */
+export async function previewHook(id: string, version = 0, opts: { db?: Firestore } = {}): Promise<ScriptLine[]> {
+  const snap = await db(opts.db).collection(PROVEN_COLLECTION).doc(id).get();
+  const core = snap.exists ? toProven(snap.data()!).core : undefined;
+  if (!core) throw new HookInputError("That hook doesn't exist.");
+  return coreLines(core.text, id, `preview|${version}`, version % 5, core);
 }
