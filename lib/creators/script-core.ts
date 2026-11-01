@@ -94,7 +94,7 @@ const NOTICED: { text: string; hands?: string }[] = [
   { text: "Have you noticed how bald men have a shiny, dome like head shape? It's because of all the built up tension.", hands: "Show the dome with your hand." },
 ];
 
-const CHAIN = "When your scalp is tight, your hair gets less blood. And when blood does not reach your hair follicles, it just thins and falls out.";
+const CHAIN = "When your scalp is tight, your hair gets less blood, because your blood vessels get compressed. And when blood does not reach your hair follicles, it just thins and falls out.";
 
 const PRODUCTS: { text: string; product: "oils" | "minoxidil" | "pills" }[] = [
   { text: "You can keep applying all these magical oils from the himalayas but that's not going to fix a tight scalp.", product: "oils" },
@@ -227,7 +227,7 @@ export function coreLines(hookText: string, provenId: string, daySeed: string, s
   lines.push({ label: "Science", text: science });
   if (noticed) lines.push({ label: "Have you noticed", text: noticed.text, ...(noticed.hands ? { hands: noticed.hands } : {}) });
   lines.push(
-    { label: "Chain", text: CHAIN },
+    { label: "Chain", text: CHAIN, hands: "Make a fist with your other hand while you show the blood vessels getting compressed." },
     { label: "Products", text: product.text },
     { label: "The fix", text: fix(keep.text), tone: `Say "keep ${keep.text}" mocking.`, hands: "Show each technique on your scalp while you name it." },
     { label: "Ending", text: CORE_ENDING },
