@@ -77,9 +77,13 @@ const NOT_ABSURD = [
   "It's not because god hates you.",
 ];
 
-const WHY = [
-  "I make these videos because I'm tired of all the bullshit going around.",
-  "I make these videos because I'm tired of all the scamming people are doing.",
+/** Where the creator found it: the bridge from the not-list into the science, in every video. */
+const SOURCES: { text: string; japanese?: true }[] = [
+  { text: "I found this one YouTube video with, like, 300 views from a Japanese researcher, and this is why we're ACTUALLY losing hair.", japanese: true },
+  { text: "I went down this rabbithole, and this is why we're ACTUALLY losing hair." },
+  { text: "I found this reddit thread with, like, so many comments agreeing, and this is why we're ACTUALLY losing hair." },
+  { text: "I came across these Japanese papers and put them into chatgpt, and this is why we're ACTUALLY losing hair.", japanese: true },
+  { text: "I found this study from, like, the 1980s that nobody talks about anymore, and this is why we're ACTUALLY losing hair." },
 ];
 
 const SCIENCE_BLOOD = "When your scalp is tight, it gets 2.6 times less blood flow than when it's loose.";
@@ -147,6 +151,23 @@ function dayHalf<T>(daySeed: string, pool: string, xs: T[], slot: number): T | n
   return xs[(Math.floor(r() * xs.length) + rank) % xs.length];
 }
 
+/**
+ * The day's sources, dealt so all 5 videos differ: videos without "Have you
+ * noticed" take the non-Japanese ones first, the rest get what's left.
+ */
+function daySource(daySeed: string, slot: number): (typeof SOURCES)[number] {
+  const r = rng(`${daySeed}|source`);
+  const shuffled = SOURCES.map((x) => ({ x, k: r() })).sort((a, b) => a.k - b.k).map((o) => o.x);
+  const withNoticed = Array.from({ length: SLOTS_PER_DAY }, (_, i) => dayHalf(daySeed, "noticed", NOTICED, i) != null);
+  const plain = shuffled.filter((x) => !x.japanese);
+  const left = [...shuffled.filter((x) => x.japanese)];
+  const out: (typeof SOURCES)[number][] = [];
+  for (let i = 0; i < SLOTS_PER_DAY; i++) if (!withNoticed[i]) out[i] = plain.shift() ?? shuffled[i % shuffled.length];
+  left.push(...plain);
+  for (let i = 0; i < SLOTS_PER_DAY; i++) if (withNoticed[i]) out[i] = left.shift() ?? shuffled[i % shuffled.length];
+  return out[slot];
+}
+
 function dayItem<T>(daySeed: string, pool: string, xs: T[], slot: number, ok: (x: T) => boolean = () => true): T {
   const r = rng(`${daySeed}|${pool}`);
   const order = xs.map((x) => ({ x, k: r() })).sort((a, b) => a.k - b.k).map((o) => o.x);
@@ -167,8 +188,9 @@ export function verdictWord(hook: string): "balding" | "losing hair" {
  * `daySeed` is unique per creator and day; `slot` is the video's place in the
  * day, so the day's videos get different lines.
  *
- * Rules: "Why I make these" and "Have you noticed" each in 2 or 3 of the
- * day's 5 videos, alternating their lines;
+ * Rules: a "where I found it" source line in every video (Japanese ones
+ * only with "Have you noticed", followed by the 2.6x line); "Have you
+ * noticed" in 2 or 3 of the day's 5 videos, alternating its lines;
  * the products line never repeats slot 2; the fix's "keep ..." dare never
  * echoes the products line or adds a second god joke; without "Have you noticed" the
  * science line is the Japanese research one, so the 2.6x line never sits
@@ -181,9 +203,10 @@ export function coreLines(hookText: string, provenId: string, daySeed: string, s
   const fresh = (t: string) => !avoid.some((w) => t.toLowerCase().includes(w));
   const item = <T>(pool: string, xs: T[], ok?: (x: T) => boolean) => dayItem(daySeed, pool, xs, slot, ok);
   const take = item("take", NOT_TAKE, (t) => fresh(t.text));
-  const why = dayHalf(daySeed, "why", WHY, slot);
   const noticed = dayHalf(daySeed, "noticed", NOTICED, slot);
-  const science = noticed ? pick(r, [SCIENCE_BLOOD, SCIENCE_JAPAN]) : SCIENCE_JAPAN;
+  // Japanese sources need the 2.6x line after them (never "Japanese research" twice), and the 2.6x line only runs with "Have you noticed".
+  const source = daySource(daySeed, slot % SLOTS_PER_DAY);
+  const science = source.japanese ? SCIENCE_BLOOD : noticed ? pick(r, [SCIENCE_BLOOD, SCIENCE_JAPAN]) : SCIENCE_JAPAN;
   const product = item("products", PRODUCTS, (p) => p.product !== take.product && fresh(p.text));
   const absurd = item("absurd", NOT_ABSURD);
   // Never echoes the products line, and no second god joke.
@@ -200,7 +223,7 @@ export function coreLines(hookText: string, provenId: string, daySeed: string, s
       tone: "Say the last one fed up, almost mocking it, like you've heard every excuse.",
     },
   ];
-  if (why) lines.push({ label: "Why I make these", text: `${why} I went down a rabbithole and this is why you're ACTUALLY ${verdictWord(hook.text)}.` });
+  lines.push({ label: "Where I found it", text: source.text });
   lines.push({ label: "Science", text: science });
   if (noticed) lines.push({ label: "Have you noticed", text: noticed.text, ...(noticed.hands ? { hands: noticed.hands } : {}) });
   lines.push(
@@ -213,8 +236,8 @@ export function coreLines(hookText: string, provenId: string, daySeed: string, s
 }
 
 /** Which beats a script includes, for the half-and-half tests. */
-export function coreBeats(lines: ScriptLine[]): { why: boolean; noticed: boolean } {
-  return { why: lines.some((l) => l.label === "Why I make these"), noticed: lines.some((l) => l.label === "Have you noticed") };
+export function coreBeats(lines: ScriptLine[]): { noticed: boolean } {
+  return { noticed: lines.some((l) => l.label === "Have you noticed") };
 }
 
 /**

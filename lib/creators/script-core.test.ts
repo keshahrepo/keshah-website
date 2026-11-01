@@ -32,15 +32,6 @@ test("every script runs hook → it's not → ... → fix → ending, with the f
   }
 });
 
-test("why + noticed each show up in about half the videos, independently", () => {
-  const why = scripts.filter((s) => coreBeats(s).why).length / scripts.length;
-  const noticed = scripts.filter((s) => coreBeats(s).noticed).length / scripts.length;
-  assert.ok(why > 0.38 && why < 0.62, `why ${why}`);
-  assert.ok(noticed > 0.38 && noticed < 0.62, `noticed ${noticed}`);
-  const both = scripts.filter((s) => coreBeats(s).why && coreBeats(s).noticed).length / scripts.length;
-  assert.ok(both > 0.15 && both < 0.35, `both ${both}`);
-});
-
 test("the 2.6x line only runs with 'Have you noticed' (never right before the chain)", () => {
   for (const s of scripts) {
     const sci = s.find((l) => l.label === "Science")!.text;
@@ -55,16 +46,6 @@ test("products line never repeats slot 2", () => {
     const not = s[1].text;
     const prod = s.find((l) => l.label === "Products")!.text;
     for (const [a, b] of pairs) assert.ok(!(a.test(not) && b.test(prod)), `${not} / ${prod}`);
-  }
-});
-
-test("rabbit hole line takes the verdict's word", () => {
-  assert.equal(verdictWord("That's probably why you're balding."), "balding");
-  assert.equal(verdictWord("that could be the reason you're losing hair."), "losing hair");
-  for (const s of scripts) {
-    const why = s.find((l) => l.label === "Why I make these");
-    if (!why) continue;
-    assert.ok(why.text.endsWith(`this is why you're ACTUALLY ${verdictWord(s[0].text)}.`));
   }
 });
 
@@ -104,10 +85,12 @@ test("a day's 5 videos don't repeat the absurd line or the slot 2 line", () => {
   }
 });
 
-test("why + noticed: 2 or 3 of the day's 5 videos each, and their lines alternate", () => {
+test("noticed: 2 or 3 of the day's 5 videos, alternating; every video has a source, all different within the day", () => {
   for (let d = 0; d < 200; d++) {
     const day = Array.from({ length: 5 }, (_, slot) => coreLines(ids[slot], `c${d}|2026-11-02`, slot)!);
-    for (const label of ["Why I make these", "Have you noticed"]) {
+    const src = day.map((s) => s.find((l) => l.label === "Where I found it")!.text);
+    assert.equal(new Set(src).size, 5, src.join(" / "));
+    for (const label of ["Have you noticed"]) {
       const got = day.map((s) => s.find((l) => l.label === label)?.text.split(". ")[0]).filter((x): x is string => !!x);
       assert.ok(got.length === 2 || got.length === 3, `${label}: ${got.length}`);
       for (let i = 1; i < got.length; i++) assert.notEqual(got[i], got[i - 1], `${label} repeats: ${got.join(" / ")}`);
@@ -147,4 +130,19 @@ test("reason bridge: the first not-line opens with the reason, still three nots;
     const body = s.map((l) => l.text).join(" ").toLowerCase();
     assert.ok(!/minoxidil|finasteride/.test(body), body);
   }
+});
+
+test("Japanese sources only with 'Have you noticed', always followed by the 2.6x line", () => {
+  let seen = 0;
+  for (const s of scripts) {
+    const src = s.find((l) => l.label === "Where I found it")!.text;
+    const sci = s.find((l) => l.label === "Science")!.text;
+    assert.ok(s.indexOf(s.find((l) => l.label === "Where I found it")!) === 2, "source right after the not-list");
+    if (/Japanese/.test(src)) {
+      seen++;
+      assert.ok(coreBeats(s).noticed);
+      assert.match(sci, /2\.6/);
+    }
+  }
+  assert.ok(seen > 0);
 });
