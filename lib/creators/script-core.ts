@@ -121,37 +121,50 @@ function rng(seed: string): () => number {
 
 const pick = <T>(r: () => number, xs: T[]): T => xs[Math.floor(r() * xs.length)];
 
+/** The pool in a fixed order for the day; slot n takes item n, so a day's videos don't repeat a line until the pool runs out. */
+function dayItem<T>(daySeed: string, pool: string, xs: T[], slot: number, ok: (x: T) => boolean = () => true): T {
+  const r = rng(`${daySeed}|${pool}`);
+  const order = xs.map((x) => ({ x, k: r() })).sort((a, b) => a.k - b.k).map((o) => o.x);
+  for (let i = 0; i < order.length; i++) {
+    const x = order[(slot + i) % order.length];
+    if (ok(x)) return x;
+  }
+  return order[0];
+}
+
 /** The verdict's word, repeated in the rabbit hole line. */
 export function verdictWord(hook: string): "balding" | "losing hair" {
   return /balding/i.test(hook) ? "balding" : "losing hair";
 }
 
 /**
- * The full script for one video. `seed` should be unique per creator, day and
- * slot. Unknown proven id -> null (the video keeps its normal script).
+ * The full script for one video. `daySeed` is unique per creator and day;
+ * `slot` is the video's place in the day, so the day's videos get different
+ * lines. Unknown proven id -> null (the video keeps its normal script).
  *
  * Rules: "Why I make these" and "Have you noticed" each in a random half;
  * the products line never repeats slot 2; without "Have you noticed" the
  * science line is the Japanese research one, so the 2.6x line never sits
  * right before the chain saying the same thing.
  */
-export function coreLines(provenId: string, seed: string): ScriptLine[] | null {
+export function coreLines(provenId: string, daySeed: string, slot = 0): ScriptLine[] | null {
   const hook = CORE_BY_ID.get(provenId);
   if (!hook) return null;
-  const r = rng(`${seed}|${provenId}`);
-  const take = pick(r, NOT_TAKE);
+  const r = rng(`${daySeed}|${slot}|${provenId}`);
+  const item = <T>(pool: string, xs: T[], ok?: (x: T) => boolean) => dayItem(daySeed, pool, xs, slot, ok);
+  const take = item("take", NOT_TAKE);
   const withWhy = r() < 0.5;
   const withNoticed = r() < 0.5;
-  const why = pick(r, WHY);
-  const noticed = pick(r, NOTICED);
+  const why = item("why", WHY);
+  const noticed = item("noticed", NOTICED);
   const science = withNoticed ? pick(r, [SCIENCE_BLOOD, SCIENCE_JAPAN]) : SCIENCE_JAPAN;
-  const product = pick(r, PRODUCTS.filter((p) => p.product !== take.product));
+  const product = item("products", PRODUCTS, (p) => p.product !== take.product);
 
   const lines: ScriptLine[] = [
     { label: "Hook", text: hook.text, hands: "Do the test on yourself while you say it." },
     {
       label: "It's not",
-      text: `${pick(r, NOT_CAUSE)} ${take.text} ${pick(r, NOT_ABSURD)}`,
+      text: `${item("cause", NOT_CAUSE)} ${take.text} ${item("absurd", NOT_ABSURD)}`,
       hands: "Say the last one fed up, almost mocking it, like you've heard every excuse.",
     },
   ];

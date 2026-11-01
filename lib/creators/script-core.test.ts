@@ -3,14 +3,14 @@ import assert from "node:assert/strict";
 import { CORE_ENDING, CORE_NEW_IDS, CORE_PROVEN_HOOKS, chooseNewHooks, coreBeats, coreLines, verdictWord } from "./script-core";
 
 const ids = [...CORE_PROVEN_HOOKS.map((h) => h.proven_id), ...CORE_NEW_IDS];
-const scripts = Array.from({ length: 400 }, (_, i) => coreLines(ids[i % ids.length], `c1|2026-11-0${(i % 5) + 2}|${i}`)!);
+const scripts = Array.from({ length: 400 }, (_, i) => coreLines(ids[i % ids.length], `c${Math.floor(i / 5)}|2026-11-02`, i % 5)!);
 
 test("unknown video keeps its normal script", () => {
   assert.equal(coreLines("tiktok_not_core", "s"), null);
 });
 
 test("same seed, same script (stable all day)", () => {
-  assert.deepEqual(coreLines(ids[0], "c1|2026-11-02|0"), coreLines(ids[0], "c1|2026-11-02|0"));
+  assert.deepEqual(coreLines(ids[0], "c1|2026-11-02", 0), coreLines(ids[0], "c1|2026-11-02", 0));
 });
 
 test("every script runs hook → it's not → ... → fix → ending, with the fixed beats always in", () => {
@@ -87,4 +87,14 @@ test("new hooks: two a day, least recently given first, never repeated within th
     }
   }
   assert.equal(new Set(seen).size, seen.length);
+});
+
+test("a day's 5 videos don't repeat the absurd line or the slot 2 line", () => {
+  for (let d = 0; d < 50; d++) {
+    const day = Array.from({ length: 5 }, (_, slot) => coreLines(ids[slot], `c${d}|2026-11-02`, slot)!);
+    const absurd = day.map((s) => s[1].text.split(". ").at(-1));
+    assert.equal(new Set(absurd).size, 5, absurd.join(" / "));
+    const take = day.map((s) => s[1].text.split(". ")[1]);
+    assert.equal(new Set(take).size, 5, take.join(" / "));
+  }
 });

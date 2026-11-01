@@ -777,7 +777,7 @@ function history0(docs: { data(): DocumentData }[], date: YyyyMmDd): Record<stri
 /** A core script creator's video: the core's line-by-line script (hook + middle + ending). */
 export function withCoreScript(creator: Pick<CreatorProfile, "id" | "script_core">, date: YyyyMmDd, slot: number, v: PublicProven): PublicProven {
   if (!creator.script_core || !isCoreHook(v.id)) return v;
-  const lines = coreLines(v.id, `${creator.id}|${date}|${slot}`);
+  const lines = coreLines(v.id, `${creator.id}|${date}`, slot);
   return lines ? { ...v, lines } : v;
 }
 
