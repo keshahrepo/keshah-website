@@ -60,7 +60,7 @@ import {
   type ProvenRemake,
   type ProvenStatus,
   type ProvenVideo,
-  type SlotAttribution, cleanLines, cleanCore, type ScriptLine } from "./proven";
+  type SlotAttribution, cleanLines, cleanCore, type ScriptLine, betterReference, coreReferenceViews } from "./proven";
 import { CORE_NEW_PER_DAY, chooseNewHooks, coreLines } from "./script-core";
 import { fetchRecentPosts, fetchTranscript, fetchVideoViews, postKey, type ScrapedPost } from "./scrape";
 import type { CreatorPost, CreatorProfile, Platform, YyyyMmDd } from "./types";
@@ -816,13 +816,21 @@ export function ctaFor(creator: Pick<CreatorProfile, "cta_style">, v: PublicProv
   return { ...v, cta_line: creator.cta_style === "bio" ? BIO_CTA : creator.cta_style === "app" ? APP_CTA : PINNED_CTA };
 }
 
+/** A core hook whose best creator post beat its original: that post is what creators see and copy. */
+function withCoreReference(v: ProvenVideo): ProvenVideo {
+  const ref = v.core?.reference;
+  if (!ref) return v;
+  const { media: _m, thumbnail_url: _t, ...rest } = v;
+  return { ...rest, source_url: ref.url, platform: ref.platform, handle: ref.handle || null, views: ref.views, source_creator_id: ref.creator_id, added_by: v.added_by === "founder_idea" ? "auto" : v.added_by };
+}
+
 /** Full docs for just these videos (the day's picks). */
 async function loadFull(db: Firestore, ids: string[]): Promise<Map<string, ProvenVideo>> {
   const out = new Map<string, ProvenVideo>();
   const uniq = [...new Set(ids)];
   if (!uniq.length) return out;
   const snaps = await db.getAll(...uniq.map((id) => db.collection(PROVEN_COLLECTION).doc(id)));
-  for (const s of snaps) if (s.exists) out.set(s.id, toProven(s.data()!));
+  for (const s of snaps) if (s.exists) out.set(s.id, withCoreReference(toProven(s.data()!)));
   return out;
 }
 
@@ -1177,6 +1185,7 @@ export async function runProvenDaily(opts: {
   }
 
   // 3. stats + tired flags
+  const handles = Object.fromEntries(creators.map((c) => [c.id, { tiktok: c.tiktok_handle ?? "", instagram: c.instagram_handle ?? "" }]));
   const all = await listProven({ db });
   const byId = new Map(all.map((v) => [v.id, v]));
   for (const id of touched) {
@@ -1186,6 +1195,11 @@ export async function runProvenDaily(opts: {
       const rs = (await provenCol.doc(id).collection("remakes").get()).docs.map((d) => d.data() as ProvenRemake);
       const stats = statsFrom(rs, localDate(nowIso, "America/New_York"));
       const patch: Record<string, unknown> = { stats, remake_count: stats.remakes };
+      // Core hooks: a creator's post that beats the current reference becomes the reference.
+      if (v.core) {
+        const ref = betterReference(v.core.reference && rs.some((r) => r.tiktok_url === v.core!.reference!.url || r.instagram_url === v.core!.reference!.url) ? 0 : coreReferenceViews(v), rs, handles, nowIso);
+        if (ref && (!v.core.reference || ref.url !== v.core.reference.url || ref.views !== v.core.reference.views)) patch["core.reference"] = ref;
+      }
       if (v.status === "active" && !v.tired?.kept_at && remakesLookTired(rs)) {
         let history = v.views_history ?? [];
         if (apiKey && v.source_url && v.platform && weeklyGain(history) == null && timeLeft() > 20_000) {

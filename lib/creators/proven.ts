@@ -273,12 +273,49 @@ export interface ProvenMedia {
 
 export type CoreHookStatus = "testing" | "proven" | "retired";
 
+export interface CoreReference {
+  url: string;
+  platform: Platform;
+  views: number;
+  creator_id: string;
+  handle: string;
+  set_at: string;
+}
+
 export interface CoreHookState {
   text: string;
   status: CoreHookStatus;
   added_at: string;
   promoted_at?: string;
   retired_at?: string;
+  /** A creator's core-era post that beat the original: shown as the reference instead. */
+  reference?: CoreReference;
+}
+
+/** First day creators got core scripts. */
+export const CORE_START = "2026-11-02";
+
+/**
+ * The best core-era post of a hook, when it beats `currentViews` (the reference
+ * creators see now). Same post as the current reference -> its fresh views.
+ */
+export function betterReference(
+  currentViews: number,
+  remakes: Pick<ProvenRemake, "date" | "creator_id" | "tiktok_url" | "instagram_url" | "views">[],
+  handles: Record<string, { tiktok: string; instagram: string }>,
+  nowIso: string,
+): CoreReference | null {
+  let best: CoreReference | null = null;
+  for (const r of remakes) {
+    if (r.date < CORE_START) continue;
+    for (const platform of ["tiktok", "instagram"] as const) {
+      const views = r.views[platform];
+      const url = platform === "tiktok" ? r.tiktok_url : r.instagram_url;
+      if (typeof views !== "number" || !url || (best && views <= best.views)) continue;
+      best = { url, platform, views, creator_id: r.creator_id, handle: handles[r.creator_id]?.[platform] ?? "", set_at: nowIso };
+    }
+  }
+  return best && best.views > currentViews ? best : null;
 }
 
 export function cleanCore(v: unknown): CoreHookState | undefined {
@@ -293,7 +330,27 @@ export function cleanCore(v: unknown): CoreHookState | undefined {
     added_at: typeof r.added_at === "string" ? r.added_at : "",
     ...(typeof r.promoted_at === "string" ? { promoted_at: r.promoted_at } : {}),
     ...(typeof r.retired_at === "string" ? { retired_at: r.retired_at } : {}),
+    ...(cleanReference(r.reference) ? { reference: cleanReference(r.reference) } : {}),
   };
+}
+
+function cleanReference(v: unknown): CoreReference | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const r = v as Record<string, unknown>;
+  if (typeof r.url !== "string" || !r.url || (r.platform !== "tiktok" && r.platform !== "instagram")) return undefined;
+  return {
+    url: r.url,
+    platform: r.platform,
+    views: Number(r.views ?? 0),
+    creator_id: String(r.creator_id ?? ""),
+    handle: String(r.handle ?? ""),
+    set_at: String(r.set_at ?? ""),
+  };
+}
+
+/** Views of the reference creators see for a core hook now. */
+export function coreReferenceViews(v: Pick<ProvenVideo, "core" | "source_url" | "views">): number {
+  return v.core?.reference?.views ?? (v.source_url ? v.views : 0);
 }
 
 export interface ProvenRemake {

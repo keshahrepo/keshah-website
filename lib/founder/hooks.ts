@@ -9,12 +9,13 @@
 import { randomBytes } from "node:crypto";
 import type { Firestore } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
-import { PROVEN_COLLECTION, type CoreHookStatus, type ProvenRemake } from "@/lib/creators/proven";
+import { CORE_START, PROVEN_COLLECTION, coreReferenceViews, type CoreHookStatus, type ProvenRemake } from "@/lib/creators/proven";
 import { toProven } from "@/lib/creators/proven-db";
 
-/** First day creators got core scripts. */
-export const CORE_START = "2026-11-02";
-/** Judged posts a testing hook needs before Promote / Retire is suggested. */
+export { CORE_START };
+/** A testing hook with a post at this many views is ready for a call right away. */
+export const HOOK_READY_VIEWS = 100_000;
+/** Judged posts a testing hook needs before Promote / Retire is suggested (or one post at HOOK_READY_VIEWS). */
 export const HOOK_READY_JUDGED = 6;
 
 export interface FounderHook {
@@ -31,7 +32,7 @@ export interface FounderHook {
   judged: number;
   vs_normal: number | null;
   best_views: number | null;
-  /** A testing hook with enough judged posts for a call. */
+  /** A testing hook ready for a call: enough judged posts, or one post at 100K+. */
   ready: boolean;
 }
 
@@ -71,11 +72,11 @@ export async function listHooks(opts: { db?: Firestore } = {}): Promise<FounderH
         id: d.id,
         text: v.core.text,
         status: v.core.status,
-        video_url: v.source_url || v.reference_url || null,
-        original_views: v.source_url ? v.views : 0,
+        video_url: v.core.reference?.url || v.source_url || v.reference_url || null,
+        original_views: coreReferenceViews(v),
         added_at: v.core.added_at,
         ...perf,
-        ready: v.core.status === "testing" && perf.judged >= HOOK_READY_JUDGED,
+        ready: v.core.status === "testing" && (perf.judged >= HOOK_READY_JUDGED || (perf.best_views ?? 0) >= HOOK_READY_VIEWS),
       };
       return hook;
     }),
