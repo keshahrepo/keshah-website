@@ -60,8 +60,8 @@ import {
   type ProvenRemake,
   type ProvenStatus,
   type ProvenVideo,
-  type SlotAttribution, cleanLines, type ScriptLine } from "./proven";
-import { CORE_NEW_PER_DAY, CORE_PROVEN_IDS, chooseNewHooks, coreLines, isCoreHook } from "./script-core";
+  type SlotAttribution, cleanLines, cleanCore, type ScriptLine } from "./proven";
+import { CORE_NEW_PER_DAY, chooseNewHooks, coreLines } from "./script-core";
 import { fetchRecentPosts, fetchTranscript, fetchVideoViews, postKey, type ScrapedPost } from "./scrape";
 import type { CreatorPost, CreatorProfile, Platform, YyyyMmDd } from "./types";
 
@@ -152,6 +152,7 @@ export function toProven(d: DocumentData): ProvenVideo {
     ...(d.photo && typeof d.photo === "object" && typeof d.photo.url === "string" && d.photo.url ? { photo: d.photo } : {}),
     ...(cleanLines(d.lines).length ? { lines: cleanLines(d.lines) } : {}),
     ...(typeof d.content_script_id === "string" && d.content_script_id ? { content_script_id: d.content_script_id } : {}),
+    ...(cleanCore(d.core) ? { core: cleanCore(d.core) } : {}),
   };
 }
 
@@ -713,7 +714,7 @@ async function pickContext(db: Firestore, creator: CreatorProfile, date: YyyyMmD
       .where("status", "==", "active")
       .select(
         "added_by", "created_at", "idea_assignments", "test_result", "audience", "stats.recent_wins", "views",
-        "hook_first_person", "hook_third_person", "hook_line", "hook_full", "talking_points", "format", "hook_family",
+        "hook_first_person", "hook_third_person", "hook_line", "hook_full", "talking_points", "format", "hook_family", "core",
       )
       .get(),
     cref.collection("daily_picks").where("date", ">=", addDaysTo(date, -30)).get(),
@@ -725,7 +726,12 @@ async function pickContext(db: Firestore, creator: CreatorProfile, date: YyyyMmD
   // Core script creators: the day's new test hooks. Otherwise ideas scheduled
   // for this creator today (full creators only, at most IDEAS_PER_DAY).
   const forced = core
-    ? chooseNewHooks(history0(histSnap.docs, date), date, givenFor(creator, date) >= DAILY_GIVEN ? CORE_NEW_PER_DAY : 0).filter((id) => active.some((v) => v.id === id))
+    ? chooseNewHooks(
+        history0(histSnap.docs, date),
+        date,
+        givenFor(creator, date) >= DAILY_GIVEN ? CORE_NEW_PER_DAY : 0,
+        active.filter((v) => v.core?.status === "testing").map((v) => v.id).sort(),
+      )
     : full
     ? active
         .filter((v) => v.added_by === "founder_idea" && (v.idea_assignments ?? []).some((a) => a.creator_id === creator.id && a.date === date))
@@ -740,9 +746,8 @@ async function pickContext(db: Firestore, creator: CreatorProfile, date: YyyyMmD
     // Ideas only once their test promoted them.
     // Hooks that claim the speaker's own results ("I fixed my hair loss") aren't given out, unless there's a third-person version.
     // ...and only videos with a script to remake (talking points come from a real transcript).
-    .filter((v) => inRotation(v) && hookPickable(v) && (v.added_by === "founder_idea" || (v.talking_points?.length ?? 0) > 0))
-    // Core script creators get the core's proven test hooks only.
-    .filter((v) => !core || CORE_PROVEN_IDS.has(v.id))
+    // Core script creators get the core's proven hooks only (any proven core hook is pickable).
+    .filter((v) => (core ? v.core?.status === "proven" : inRotation(v) && hookPickable(v) && (v.added_by === "founder_idea" || (v.talking_points?.length ?? 0) > 0)))
     .map((v) => ({
       id: v.id,
       format: formats.get(v.id),
@@ -776,10 +781,15 @@ function history0(docs: { data(): DocumentData }[], date: YyyyMmDd): Record<stri
 }
 
 /** A core script creator's video: the core's line-by-line script (hook + middle + ending). */
-export function withCoreScript(creator: Pick<CreatorProfile, "id" | "script_core">, date: YyyyMmDd, slot: number, v: PublicProven): PublicProven {
-  if (!creator.script_core || !isCoreHook(v.id)) return v;
-  const lines = coreLines(v.id, `${creator.id}|${date}`, slot);
-  return lines ? { ...v, lines } : v;
+export function withCoreScript(
+  creator: Pick<CreatorProfile, "id" | "script_core">,
+  date: YyyyMmDd,
+  slot: number,
+  v: PublicProven,
+  hook: string | undefined,
+): PublicProven {
+  if (!creator.script_core || !hook) return v;
+  return { ...v, lines: coreLines(hook, v.id, `${creator.id}|${date}`, slot) };
 }
 
 /** The ending every video uses (Oct 28 2026): one short ask to the pinned video, the same each time. */
@@ -830,7 +840,7 @@ function payload(
   return {
     date,
     given,
-    picks: shown.map((p) => ({ slot: p.slot, video: ctaFor(creator, withCoreScript({ id: creator.id ?? "", script_core: creator.script_core }, date, p.slot, publicProven(p.proven_id, byId.get(p.proven_id)!))), posted: pickPosted(attribution[String(p.slot)]) })),
+    picks: shown.map((p) => ({ slot: p.slot, video: ctaFor(creator, withCoreScript({ id: creator.id ?? "", script_core: creator.script_core }, date, p.slot, publicProven(p.proven_id, byId.get(p.proven_id)!), byId.get(p.proven_id)!.core?.text)), posted: pickPosted(attribution[String(p.slot)]) })),
     extra_posted: Object.entries(attribution)
       .filter(([k]) => !pickSlots.has(Number(k)))
       .map(([k, a]) => ({ slot: Number(k), posted: pickPosted(a) }))

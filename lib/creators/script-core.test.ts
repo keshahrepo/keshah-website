@@ -1,12 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CORE_ENDING, CORE_NEW_IDS, CORE_PROVEN_HOOKS, chooseNewHooks, coreBeats, coreLines, verdictWord } from "./script-core";
+import { appBuild, linesForBuild, CORE_ENDING, CORE_NEW_HOOKS, CORE_PROVEN_HOOKS, chooseNewHooks as choose, coreBeats, coreLines as lines0, verdictWord } from "./script-core";
 
+const HOOKS = new Map([...CORE_PROVEN_HOOKS, ...CORE_NEW_HOOKS].map((h) => [h.proven_id, h.text]));
+const CORE_NEW_IDS = CORE_NEW_HOOKS.map((h) => h.proven_id);
+const coreLines = (id: string, seed: string, slot = 0) => (HOOKS.has(id) ? lines0(HOOKS.get(id)!, id, seed, slot) : null);
+const chooseNewHooks = (h: Record<string, string[]>, d: string) => choose(h, d, 2, CORE_NEW_IDS);
 const ids = [...CORE_PROVEN_HOOKS.map((h) => h.proven_id), ...CORE_NEW_IDS];
 const scripts = Array.from({ length: 400 }, (_, i) => coreLines(ids[i % ids.length], `c${Math.floor(i / 5)}|2026-11-02`, i % 5)!);
 
-test("unknown video keeps its normal script", () => {
-  assert.equal(coreLines("tiktok_not_core", "s"), null);
+test("the hook text is the first line, as given", () => {
+  assert.equal(lines0("My own hook. That could be the reason why you're losing hair.", "x", "s")[0].text, "My own hook. That could be the reason why you're losing hair.");
+  assert.equal(choose({}, "2026-11-02", 2, []).length, 0);
 });
 
 test("same seed, same script (stable all day)", () => {
@@ -123,4 +128,13 @@ test("the fix's dare rotates, never echoes the products line, never a second god
     if (/god/.test(s[1].text)) assert.notEqual(keep, "hoping for god to save you");
   }
   assert.equal(seen.size, 5);
+});
+
+test("old apps get the tone note inside hands; build 25+ gets them apart", () => {
+  assert.equal(appBuild("1.0.0+24"), 24);
+  assert.equal(appBuild(null), null);
+  const l = [{ text: "x", hands: "Show it.", tone: "Say it mocking." }, { text: "y", tone: "Fed up." }];
+  assert.deepEqual(linesForBuild(l, 24), [{ text: "x", hands: "Show it. Say it mocking." }, { text: "y", hands: "Fed up." }]);
+  assert.deepEqual(linesForBuild(l, null)[1], { text: "y", hands: "Fed up." });
+  assert.equal(linesForBuild(l, 25), l);
 });

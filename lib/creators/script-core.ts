@@ -18,7 +18,11 @@ export interface CoreHook {
   text: string;
 }
 
-/** Proven test hooks (posted, 0.2M to 3.75M views). */
+/**
+ * The hooks the core started with (Nov 1 2026). Seed data only: the live list
+ * is the `core` field on ProvenVideos docs (founder app Content tab adds,
+ * promotes and retires them).
+ */
 export const CORE_PROVEN_HOOKS: CoreHook[] = [
   { proven_id: "tiktok_7663840250380225823", text: "Take two fingers and a thumb and pinch this. Now take the same two fingers and a thumb and pinch on the top. If it's very hard to pinch on the top, and if it's not as flexible as this, that could be the reason you're losing hair." },
   { proven_id: "tiktok_7639010477657443614", text: "If you cannot pinch and separate the skin from your scalp, if you cannot move your scalp skin like this, that could be the reason you're losing hair." },
@@ -34,7 +38,7 @@ export const CORE_PROVEN_HOOKS: CoreHook[] = [
   { proven_id: "tiktok_7657196568864623903", text: "Can you move your scalp like this? If not, that's why. That's probably why you're balding." },
 ];
 
-/** New test hooks (never posted): the two "own concept" slots of the day. */
+/** New test hooks at the start (seed data, see above). */
 export const CORE_NEW_HOOKS: CoreHook[] = [
   { proven_id: "idea_c20261026s01_292afef77b50", text: "If you're losing hair, pinch the spot where it's thinning. Now pinch where your hair is still thick. Feel the difference? If the thin spot is tighter, that could be the reason why you're losing hair." },
   { proven_id: "idea_c20261026s02_5cd9478e538a", text: "Put your fingertips on top of your head and try to slide the skin. Not your hair, the skin. Does it move? If it doesn't, that could be the reason why you're losing hair." },
@@ -110,13 +114,6 @@ const fix = (keep: string) =>
 export const CORE_ENDING =
   "Go to the pinned video on my profile. It's the one that says, watch this first. It's gonna tell you my step-by-step routine to fix your hair loss without any products. It's a separate video because I don't want to keep repeating myself. Also don't DM me you can't find it. It's the only pinned video and it says in caps WATCH THIS FIRST.";
 
-const CORE_BY_ID = new Map([...CORE_PROVEN_HOOKS, ...CORE_NEW_HOOKS].map((h) => [h.proven_id, h]));
-export const CORE_PROVEN_IDS = new Set(CORE_PROVEN_HOOKS.map((h) => h.proven_id));
-export const CORE_NEW_IDS = CORE_NEW_HOOKS.map((h) => h.proven_id);
-
-export function isCoreHook(provenId: string): boolean {
-  return CORE_BY_ID.has(provenId);
-}
 
 /** Small seeded generator, so a video's script is the same every time it's opened. */
 function rng(seed: string): () => number {
@@ -166,9 +163,9 @@ export function verdictWord(hook: string): "balding" | "losing hair" {
 }
 
 /**
- * The full script for one video. `daySeed` is unique per creator and day;
- * `slot` is the video's place in the day, so the day's videos get different
- * lines. Unknown proven id -> null (the video keeps its normal script).
+ * The full script for one video: `hookText` (hook + verdict) then the core.
+ * `daySeed` is unique per creator and day; `slot` is the video's place in the
+ * day, so the day's videos get different lines.
  *
  * Rules: "Why I make these" and "Have you noticed" each in 2 or 3 of the
  * day's 5 videos, alternating their lines;
@@ -177,9 +174,8 @@ export function verdictWord(hook: string): "balding" | "losing hair" {
  * science line is the Japanese research one, so the 2.6x line never sits
  * right before the chain saying the same thing.
  */
-export function coreLines(provenId: string, daySeed: string, slot = 0): ScriptLine[] | null {
-  const hook = CORE_BY_ID.get(provenId);
-  if (!hook) return null;
+export function coreLines(hookText: string, provenId: string, daySeed: string, slot = 0): ScriptLine[] {
+  const hook = { text: hookText };
   const r = rng(`${daySeed}|${slot}|${provenId}`);
   const item = <T>(pool: string, xs: T[], ok?: (x: T) => boolean) => dayItem(daySeed, pool, xs, slot, ok);
   const take = item("take", NOT_TAKE);
@@ -220,14 +216,29 @@ export function coreBeats(lines: ScriptLine[]): { why: boolean; noticed: boolean
  * The day's two new hooks: least recently given first, then in list order
  * rotated by date so a creator doesn't always start at the same one.
  */
-export function chooseNewHooks(history: Record<string, string[]>, date: string, count = CORE_NEW_PER_DAY, exclude: string[] = []): string[] {
-  const skip = new Set(exclude);
-  const offset = Math.floor(rng(date)() * CORE_NEW_IDS.length);
-  const ordered = CORE_NEW_IDS.map((_, i) => CORE_NEW_IDS[(i + offset) % CORE_NEW_IDS.length]).filter((id) => !skip.has(id));
+export function chooseNewHooks(history: Record<string, string[]>, date: string, count: number, ids: string[]): string[] {
+  if (!ids.length || count <= 0) return [];
+  const offset = Math.floor(rng(date)() * ids.length);
+  const ordered = ids.map((_, i) => ids[(i + offset) % ids.length]);
   const last = (id: string) => (history[id] ?? []).reduce((a, b) => (b > a ? b : a), "");
   return ordered
     .map((id, i) => ({ id, i, last: last(id) }))
     .sort((a, b) => (a.last === b.last ? a.i - b.i : a.last < b.last ? -1 : 1))
     .slice(0, count)
     .map((x) => x.id);
+}
+
+/** First Creators app build that shows `tone` (🎭) separately from `hands`. */
+export const TONE_APP_BUILD = 25;
+
+/** Build number from X-App-Version ("1.0.0+25" -> 25), null when missing. */
+export function appBuild(header: string | null | undefined): number | null {
+  const m = /\+(\d+)\s*$/.exec(header ?? "");
+  return m ? Number(m[1]) : null;
+}
+
+/** Older apps (and unknown clients) only show `hands`: fold the tone note into it so nothing is lost. */
+export function linesForBuild(lines: ScriptLine[], build: number | null): ScriptLine[] {
+  if (build != null && build >= TONE_APP_BUILD) return lines;
+  return lines.map(({ tone, ...l }) => (tone ? { ...l, hands: [l.hands, tone].filter(Boolean).join(" ") } : l));
 }

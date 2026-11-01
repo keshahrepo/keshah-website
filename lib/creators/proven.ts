@@ -252,6 +252,8 @@ export interface ProvenVideo {
   lines?: ScriptLine[];
   /** The ContentScripts doc this idea came from. */
   content_script_id?: string;
+  /** A core script hook (script-core.ts): the hook + verdict creators say, and where it stands. */
+  core?: CoreHookState;
   /** Beat generation bookkeeping (proven-beats.ts). */
   beats?: { generated_at?: string; model?: string; attempts?: number; last_error?: string; last_attempt_at?: string };
 }
@@ -267,6 +269,31 @@ export interface ProvenMedia {
   attempts?: number;
   last_error?: string;
   last_attempt_at?: string;
+}
+
+export type CoreHookStatus = "testing" | "proven" | "retired";
+
+export interface CoreHookState {
+  text: string;
+  status: CoreHookStatus;
+  added_at: string;
+  promoted_at?: string;
+  retired_at?: string;
+}
+
+export function cleanCore(v: unknown): CoreHookState | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const r = v as Record<string, unknown>;
+  const text = typeof r.text === "string" ? r.text.trim() : "";
+  const status = r.status === "testing" || r.status === "proven" || r.status === "retired" ? r.status : null;
+  if (!text || !status) return undefined;
+  return {
+    text,
+    status,
+    added_at: typeof r.added_at === "string" ? r.added_at : "",
+    ...(typeof r.promoted_at === "string" ? { promoted_at: r.promoted_at } : {}),
+    ...(typeof r.retired_at === "string" ? { retired_at: r.retired_at } : {}),
+  };
 }
 
 export interface ProvenRemake {
