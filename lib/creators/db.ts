@@ -170,6 +170,7 @@ function toProfile(id: string, d: DocumentData, legacyStart: boolean): CreatorPr
     ...(isYyyyMmDd(d.trial_completed_on) ? { trial_completed_on: d.trial_completed_on } : {}),
     ...planFieldsOf(d),
     ...(d.cta_style === "pinned" || d.cta_style === "bio" || d.cta_style === "app" ? { cta_style: d.cta_style } : {}),
+    ...(d.script_core === true ? { script_core: true } : {}),
     campaign_tags: Array.isArray(d.campaign_tags) ? d.campaign_tags : [],
     status: mapCreatorStatus(d.status),
     ...(isYyyyMmDd(d.ended_on) ? { ended_on: d.ended_on } : {}),

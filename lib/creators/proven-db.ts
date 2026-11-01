@@ -60,6 +60,7 @@ import {
   type ProvenStatus,
   type ProvenVideo,
   type SlotAttribution, cleanLines, type ScriptLine } from "./proven";
+import { CORE_PROVEN_IDS, chooseNewHooks, coreLines, isCoreHook } from "./script-core";
 import { fetchRecentPosts, fetchTranscript, fetchVideoViews, postKey, type ScrapedPost } from "./scrape";
 import type { CreatorPost, CreatorProfile, Platform, YyyyMmDd } from "./types";
 
@@ -719,8 +720,12 @@ async function pickContext(db: Firestore, creator: CreatorProfile, date: YyyyMmD
   ]);
   const active = activeSnap.docs.map((d) => ({ id: d.id, ...toProven(d.data()) }));
   const full = isFullCreator(creator, date);
-  // Ideas scheduled for this creator today (full creators only, at most IDEAS_PER_DAY).
-  const forced = full
+  const core = !!creator.script_core;
+  // Core script creators: the day's new test hooks. Otherwise ideas scheduled
+  // for this creator today (full creators only, at most IDEAS_PER_DAY).
+  const forced = core
+    ? chooseNewHooks(history0(histSnap.docs, date), date).filter((id) => active.some((v) => v.id === id))
+    : full
     ? active
         .filter((v) => v.added_by === "founder_idea" && (v.idea_assignments ?? []).some((a) => a.creator_id === creator.id && a.date === date))
         .map((v) => v.id)
@@ -735,6 +740,8 @@ async function pickContext(db: Firestore, creator: CreatorProfile, date: YyyyMmD
     // Hooks that claim the speaker's own results ("I fixed my hair loss") aren't given out, unless there's a third-person version.
     // ...and only videos with a script to remake (talking points come from a real transcript).
     .filter((v) => inRotation(v) && hookPickable(v) && (v.added_by === "founder_idea" || (v.talking_points?.length ?? 0) > 0))
+    // Core script creators get the core's proven test hooks only.
+    .filter((v) => !core || CORE_PROVEN_IDS.has(v.id))
     .map((v) => ({
       id: v.id,
       format: formats.get(v.id),
@@ -745,20 +752,33 @@ async function pickContext(db: Firestore, creator: CreatorProfile, date: YyyyMmD
       recent_wins: v.stats.recent_wins,
       views: v.views,
     }));
-  const history: Record<string, YyyyMmDd[]> = {};
-  for (const d of histSnap.docs) {
-    const p = d.data() as DailyPicks;
-    if (p.date >= date) continue;
-    for (const x of p.picks ?? []) (history[x.proven_id] ??= []).push(p.date);
-  }
+  const history = history0(histSnap.docs, date);
   return {
     activeIds: new Set(active.map((v) => v.id)),
     candidates,
     forced,
     history,
     audience: asAudience(raw.data()?.audience),
-    ...(full ? { mix: { selfTest: MIX_SELF_TEST, other: MIX_OTHER } } : {}),
+    ...(full && !core ? { mix: { selfTest: MIX_SELF_TEST, other: MIX_OTHER } } : {}),
   };
+}
+
+/** Days each video was given to this creator before `date`. */
+function history0(docs: { data(): DocumentData }[], date: YyyyMmDd): Record<string, YyyyMmDd[]> {
+  const history: Record<string, YyyyMmDd[]> = {};
+  for (const d of docs) {
+    const p = d.data() as DailyPicks;
+    if (p.date >= date) continue;
+    for (const x of p.picks ?? []) (history[x.proven_id] ??= []).push(p.date);
+  }
+  return history;
+}
+
+/** A core script creator's video: the core's line-by-line script (hook + middle + ending). */
+export function withCoreScript(creator: Pick<CreatorProfile, "id" | "script_core">, date: YyyyMmDd, slot: number, v: PublicProven): PublicProven {
+  if (!creator.script_core || !isCoreHook(v.id)) return v;
+  const lines = coreLines(v.id, `${creator.id}|${date}|${slot}`);
+  return lines ? { ...v, lines } : v;
 }
 
 /** The ending every video uses (Oct 28 2026): one short ask to the pinned video, the same each time. */
@@ -802,14 +822,14 @@ function payload(
   byId: Map<string, ProvenVideo>,
   canSwap: boolean,
   attribution: Record<string, SlotAttribution> = {},
-  creator: Pick<CreatorProfile, "cta_style"> = {},
+  creator: Partial<Pick<CreatorProfile, "id" | "cta_style" | "script_core">> = {},
 ): PicksPayload {
   const shown = picks.filter((p) => byId.has(p.proven_id));
   const pickSlots = new Set(shown.map((p) => p.slot));
   return {
     date,
     given,
-    picks: shown.map((p) => ({ slot: p.slot, video: ctaFor(creator, publicProven(p.proven_id, byId.get(p.proven_id)!)), posted: pickPosted(attribution[String(p.slot)]) })),
+    picks: shown.map((p) => ({ slot: p.slot, video: ctaFor(creator, withCoreScript({ id: creator.id ?? "", script_core: creator.script_core }, date, p.slot, publicProven(p.proven_id, byId.get(p.proven_id)!))), posted: pickPosted(attribution[String(p.slot)]) })),
     extra_posted: Object.entries(attribution)
       .filter(([k]) => !pickSlots.has(Number(k)))
       .map(([k, a]) => ({ slot: Number(k), posted: pickPosted(a) }))
