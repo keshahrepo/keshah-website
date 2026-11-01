@@ -109,3 +109,18 @@ test("why + noticed: 2 or 3 of the day's 5 videos each, and their lines alternat
     }
   }
 });
+
+test("the fix's dare rotates, never echoes the products line, never a second god joke", () => {
+  const seen = new Set<string>();
+  for (const s of scripts) {
+    const fix = s.find((l) => l.label === "The fix")!;
+    const keep = /keep ([^.]+)\./.exec(fix.text)![1];
+    seen.add(keep);
+    assert.equal(fix.tone, `Say "keep ${keep}" mocking.`);
+    const prod = s.find((l) => l.label === "Products")!.text;
+    if (/oils/.test(prod)) assert.notEqual(keep, "applying your oils");
+    if (/pills/.test(prod)) assert.notEqual(keep, "taking your pills");
+    if (/god/.test(s[1].text)) assert.notEqual(keep, "hoping for god to save you");
+  }
+  assert.equal(seen.size, 5);
+});

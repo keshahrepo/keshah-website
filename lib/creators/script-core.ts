@@ -94,8 +94,18 @@ const PRODUCTS: { text: string; product: "oils" | "minoxidil" | "pills" }[] = [
   { text: "You can keep stuffing pills into your body, but that's not going to fix a tight scalp.", product: "pills" },
 ];
 
-const FIX =
-  "The actual fix takes work and consistency. So if you can't do that keep taking your pills. It's called mechanical therapy or mechanotherapy. These are specific scalp techniques like pinching, sliding, pressing that loosen up your scalp, get the blood flowing, and get your hair to stop falling. They have to be done with FORCE.";
+/** The dare in the fix ("So if you can't do that keep ..."). Pills is the proven one, so it's in twice. */
+const KEEP: { text: string; product?: "oils" | "pills"; god?: true }[] = [
+  { text: "taking your pills", product: "pills" },
+  { text: "taking your pills", product: "pills" },
+  { text: "applying your oils", product: "oils" },
+  { text: "scrolling" },
+  { text: "hoping for god to save you", god: true },
+  { text: "buying the next viral product" },
+];
+
+const fix = (keep: string) =>
+  `The actual fix takes work and consistency. So if you can't do that keep ${keep}. It's called mechanical therapy or mechanotherapy. These are specific scalp techniques like pinching, sliding, pressing that loosen up your scalp, get the blood flowing, and get your hair to stop falling. They have to be done with FORCE.`;
 
 export const CORE_ENDING =
   "Go to the pinned video on my profile. It's the one that says, watch this first. It's gonna tell you my step-by-step routine to fix your hair loss without any products. It's a separate video because I don't want to keep repeating myself. Also don't DM me you can't find it. It's the only pinned video and it says in caps WATCH THIS FIRST.";
@@ -162,7 +172,8 @@ export function verdictWord(hook: string): "balding" | "losing hair" {
  *
  * Rules: "Why I make these" and "Have you noticed" each in 2 or 3 of the
  * day's 5 videos, alternating their lines;
- * the products line never repeats slot 2; without "Have you noticed" the
+ * the products line never repeats slot 2; the fix's "keep ..." dare never
+ * echoes the products line or adds a second god joke; without "Have you noticed" the
  * science line is the Japanese research one, so the 2.6x line never sits
  * right before the chain saying the same thing.
  */
@@ -176,12 +187,15 @@ export function coreLines(provenId: string, daySeed: string, slot = 0): ScriptLi
   const noticed = dayHalf(daySeed, "noticed", NOTICED, slot);
   const science = noticed ? pick(r, [SCIENCE_BLOOD, SCIENCE_JAPAN]) : SCIENCE_JAPAN;
   const product = item("products", PRODUCTS, (p) => p.product !== take.product);
+  const absurd = item("absurd", NOT_ABSURD);
+  // Never echoes the products line, and no second god joke.
+  const keep = item("keep", KEEP, (k) => k.product !== product.product && !(k.god && /god/.test(absurd)));
 
   const lines: ScriptLine[] = [
     { label: "Hook", text: hook.text, hands: "Do the test on yourself while you say it." },
     {
       label: "It's not",
-      text: `${item("cause", NOT_CAUSE)} ${take.text} ${item("absurd", NOT_ABSURD)}`,
+      text: `${item("cause", NOT_CAUSE)} ${take.text} ${absurd}`,
       tone: "Say the last one fed up, almost mocking it, like you've heard every excuse.",
     },
   ];
@@ -191,7 +205,7 @@ export function coreLines(provenId: string, daySeed: string, slot = 0): ScriptLi
   lines.push(
     { label: "Chain", text: CHAIN },
     { label: "Products", text: product.text },
-    { label: "The fix", text: FIX, tone: "Say \"keep taking your pills\" mocking.", hands: "Show each technique on your scalp while you name it." },
+    { label: "The fix", text: fix(keep.text), tone: `Say "keep ${keep.text}" mocking.`, hands: "Show each technique on your scalp while you name it." },
     { label: "Ending", text: CORE_ENDING },
   );
   return lines;
