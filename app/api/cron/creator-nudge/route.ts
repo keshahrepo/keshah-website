@@ -35,6 +35,7 @@ import { firstPostingDay } from "@/lib/creators/lifecycle";
 import { firstDayEvePush, warmupReminderPush } from "@/lib/creators/notices";
 import { WARMUP_DAYS } from "@/lib/creators/onboarding-content";
 import { syncCreatorPosts } from "@/lib/creators/post-sync";
+import { processOutbox } from "@/lib/creators/outbox";
 import { FIRST_DAY_EVE_HOUR, WARMUP_NUDGE_HOUR, firstDayEveDate, localHour, postingNudgeDate, syncIsFresh, warmupNudgeDate } from "@/lib/creators/nudges";
 
 export const dynamic = "force-dynamic";
@@ -87,6 +88,22 @@ export async function GET(req: Request) {
   try {
     const { db } = getFirebaseAdmin();
     const creators = await listCreators();
+    // One-off messages from McKenzie queued in CreatorOutbox (lib/creators/outbox.ts).
+    if (!dry && emailConfigured()) {
+      const byId = new Map(creators.map((c) => [c.id, c]));
+      const ob = await processOutbox({
+        db,
+        creatorEmail: async (id) => {
+          const c = byId.get(id);
+          return c ? { email: c.email, name: c.name } : null;
+        },
+        sendEmail: (to, subject, text) => sendEmail({ to, subject, text, fromName: CREATOR_FROM_NAME }),
+        push: async (creatorId, title, body) => {
+          await notify({ creatorId }, { title, body, data: { type: "onboarding" } });
+        },
+      }).catch((e) => ({ sent: [], failed: [{ id: "outbox", error: String(e) }] }));
+      if (ob.sent.length || ob.failed.length) console.log("creator outbox:", JSON.stringify(ob));
+    }
     for (const c of creators) {
       let hour: number;
       try {
