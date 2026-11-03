@@ -151,7 +151,6 @@ export function creatorProgress(input: ProgressInput, now: Date = new Date()): C
   // ---- raw facts
   const watched = (o.videos_watched && typeof o.videos_watched === "object" ? o.videos_watched : {}) as Record<string, unknown>;
   const videosDone = FOUNDER_VIDEOS.every((v) => !!str(watched[v.id]));
-  const videosAt = videosDone ? latest(FOUNDER_VIDEOS.map((v) => str(watched[v.id]))) : null;
   const warmupDays = (Array.isArray(o.warmup_days) ? o.warmup_days : []).filter((d): d is string => typeof d === "string").sort();
   const warmupDone = warmupDays.length >= WARMUP_DAYS;
   const contractSignedAt = str(contract.signed_at) ?? str(o.contract_signed_at);
@@ -227,8 +226,6 @@ export function creatorProgress(input: ProgressInput, now: Date = new Date()): C
 
   const onbDone = (k: keyof typeof onb) => !!onb[k] || allOnboarded || started || finished;
   d.push({ key: "slack", label: "Slack", at: onb.slack, done: onbDone("slack"), waitingOn: "creator" });
-  d.push({ key: "videos", label: "Videos", at: videosAt, done: videosDone || allOnboarded || started || finished, waitingOn: "creator" });
-  d.push({ key: "quiz", label: "Quiz", at: onb.quiz, done: onbDone("quiz"), waitingOn: "creator" });
   d.push({ key: "accounts", label: "Accounts created", at: onb.accounts, done: onbDone("accounts"), waitingOn: "creator" });
   const warmDone = warmupDone || allOnboarded || started || finished;
   d.push({

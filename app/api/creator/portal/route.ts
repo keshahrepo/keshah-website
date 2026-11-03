@@ -22,7 +22,6 @@ import type { CreatorProfile } from "@/lib/creators/types";
 import {
   ACCOUNTS_GUIDE_URL,
   ACCOUNTS_STEP_TEXT,
-  FOUNDER_VIDEOS,
   KESHAH_SITE_URL,
   POSTING_GUIDE_URL,
   POSTING_RULES,
@@ -33,7 +32,6 @@ import {
   WARMUP_DONE_TEXT,
   WARMUP_HEADLINE,
   WARMUP_TEXT,
-  publicQuiz,
 } from "@/lib/creators/onboarding-content";
 import { isWeekday, monthOf, planBaseCents, planVideos, trialDayCents, videosRequiredOn } from "@/lib/creators/pay";
 import { msUntilLocalDeadline } from "@/lib/creators/time";
@@ -100,6 +98,7 @@ export async function GET(req: NextRequest) {
       agreement: creator.status === "ended" && creator.ended_on && creator.contract.status === "signed" ? await agreementSummary(creator, history, now) : null,
       onboarding: {
         ...onboarding,
+        quiz_passed_at: onboarding.quiz_passed_at ?? onboarding.contract_signed_at ?? creator.contract.signed_at ?? null,
         complete,
         waiting_for_link: waitingForLink,
         link_wait_text: waitingForLink ? LINK_WAIT_TEXT : null,
@@ -120,8 +119,10 @@ export async function GET(req: NextRequest) {
         pinned_reference_url: settings.pinned_reference_url,
         pinned_howto_url: settings.pinned_howto_url,
         site_url: KESHAH_SITE_URL,
-        founder_videos: FOUNDER_VIDEOS,
-        quiz: publicQuiz(),
+        // Learn KESHAH + Quick check were removed (2026-11-03). Empty lists, and quiz_passed_at
+        // filled in below, make builds that still draw those rows show them as done.
+        founder_videos: [],
+        quiz: [],
         accounts_step_text: ACCOUNTS_STEP_TEXT,
         verification_code_text: VERIFICATION_CODE_TEXT,
         suggested_handle: await assignedHandleFor(creator.id, creator.name),

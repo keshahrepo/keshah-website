@@ -66,8 +66,9 @@ test("uses the creator's own step timestamps; unknown sign-in time is done witho
   assert.equal(signIn.state, "done");
   assert.equal(signIn.at, null);
   assert.equal(p.steps.find((s) => s.key === "slack")!.at, "2026-10-04T00:00:00Z");
-  assert.equal(p.current, "videos");
-  // Half-watched videos don't count; since = Slack.
+  // Videos and quiz are no longer steps (Nov 2026): after Slack comes accounts; since = Slack.
+  assert.equal(p.current, "accounts");
+  assert.equal(p.steps.find((s) => s.key === "videos"), undefined);
   assert.equal(p.currentSince, "2026-10-04T00:00:00Z");
   assert.equal(p.stuck, true);
 });
@@ -83,7 +84,6 @@ test("the link doesn't hold up the warm-up; after it, the link waits on the foun
   };
   const p = creatorProgress({ ...accepted, contract: { status: "signed" }, trackingUrl: "", onboarding }, NOW);
   assert.equal(p.current, "warmup");
-  assert.equal(p.steps.find((s) => s.key === "videos")!.at, "2026-10-05T01:00:00Z");
 
   const warmed = { ...onboarding, warmup_days: ["2026-10-07", "2026-10-08", "2026-10-09"] };
   const noLink = creatorProgress({ ...accepted, contract: { status: "signed" }, trackingUrl: "", campaignTags: [], onboarding: warmed }, NOW);

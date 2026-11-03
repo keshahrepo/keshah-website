@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
       report: body.report === true,
     });
     const complete = isOnboardingComplete(state, { contractSigned: creator.contract.status === "signed" });
-    return NextResponse.json({ onboarding: { ...state, complete }, quiz: quiz ?? null, accounts: accounts ?? null });
+    return NextResponse.json({ onboarding: { ...state, quiz_passed_at: state.quiz_passed_at ?? state.contract_signed_at ?? null, complete }, quiz: quiz ?? null, accounts: accounts ?? null });
   } catch (e) {
     return errorResponse(e, "onboarding");
   }

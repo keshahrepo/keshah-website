@@ -943,7 +943,9 @@ function onboardingRef(id: string) {
 /** Getting started steps in portal order. Shared by the portal and admin progress counts. */
 // Portal order. Warm-up is last: it runs over the 3 days after everything else is done.
 // The posting guide ("rules") isn't a setup step any more: the app shows it on their first posting day.
-export const ONBOARDING_STEP_KEYS: OnboardingStepKey[] = ["contract", "slack", "videos", "quiz", "accounts", "link", "warmup"];
+// "videos" and "quiz" were dropped from getting started on 2026-11-03 (they stalled
+// new creators and the core script gives them the words); they always count as done.
+export const ONBOARDING_STEP_KEYS: OnboardingStepKey[] = ["contract", "slack", "accounts", "link", "warmup"];
 export const ONBOARDING_STEP_COUNT = ONBOARDING_STEP_KEYS.length;
 
 export interface OnboardingCheckOpts {
@@ -956,8 +958,8 @@ export function onboardingSteps(s: Partial<OnboardingState> | null | undefined, 
   const st = s ?? {};
   return {
     contract: !!st.contract_signed_at || !!opts.contractSigned,
-    videos: FOUNDER_VIDEOS.every((v) => !!st.videos_watched?.[v.id]),
-    quiz: !!st.quiz_passed_at,
+    videos: true,
+    quiz: true,
     accounts: !!st.accounts_done_at,
     slack: !!st.slack_joined_at,
     warmup: (Array.isArray(st.warmup_days) ? st.warmup_days.length : 0) >= WARMUP_DAYS,

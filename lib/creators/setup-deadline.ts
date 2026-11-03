@@ -31,7 +31,7 @@ export const LINK_GRACE_DAYS = 1;
 export const GET_STARTED_AFTER_MS = 24 * 3_600_000;
 
 export type SetupStepKey = "contract" | "slack" | "videos" | "quiz" | "accounts" | "link";
-export const SETUP_STEP_KEYS: SetupStepKey[] = ["contract", "slack", "videos", "quiz", "accounts", "link"];
+export const SETUP_STEP_KEYS: SetupStepKey[] = ["contract", "slack", "accounts", "link"];
 
 /** What the creator sees on a step ("Next: set up your TikTok and Instagram"). */
 export const SETUP_STEP_LABELS: Record<SetupStepKey, string> = {

@@ -8,8 +8,9 @@ const base = { timezone: "America/Toronto", signedAt: "2026-10-15T17:35:22Z", tr
 test("due 3 days after the signing day, in their timezone", () => {
   const st = setupState({ ...base, steps: { ...all(false), contract: true, slack: true } }, new Date("2026-10-16T15:00:00Z"));
   assert.equal(st.due_date, "2026-10-18");
-  assert.equal(st.steps_left, 4);
-  assert.equal(st.next_step, "videos");
+  // Videos and quiz were removed (Nov 2026): accounts and link are left.
+  assert.equal(st.steps_left, 2);
+  assert.equal(st.next_step, "accounts");
   assert.equal(st.overdue_days, 0);
 });
 
@@ -61,7 +62,7 @@ test("nudge: daily from the day after signing, last day on the due date, none af
   assert.equal(setupNudgeKind(st, "2026-10-16", "2026-10-15"), "daily");
   assert.equal(setupNudgeKind(st, "2026-10-18", "2026-10-15"), "last_day");
   assert.equal(setupNudgeKind(st, "2026-10-19", "2026-10-15"), null);
-  assert.match(setupNudgePush("daily", st).body, /4 steps left\. Next: watch the Learn KESHAH videos\./);
+  assert.match(setupNudgePush("daily", st).body, /2 steps left\. Next: set up your TikTok and Instagram\./);
 });
 
 const offer = {
