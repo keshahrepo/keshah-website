@@ -62,6 +62,8 @@ import {
   type ProvenVideo,
   type SlotAttribution, cleanLines, cleanCore, type ScriptLine, betterReference, coreReferenceViews } from "./proven";
 import { CORE_NEW_PER_DAY, chooseNewHooks, coreLines } from "./script-core";
+import { postingKitFor, type PostingKit } from "./posting-kit";
+import { KESHAH_SITE_URL } from "./onboarding-content";
 import { fetchRecentPosts, fetchTranscript, fetchVideoViews, postKey, type ScrapedPost } from "./scrape";
 import type { CreatorPost, CreatorProfile, Platform, YyyyMmDd } from "./types";
 
@@ -656,6 +658,8 @@ export interface PicksPayload {
   extra_posted: { slot: number; posted: PickPosted }[];
   /** No more active videos to swap in today. */
   can_swap: boolean;
+  /** What to add when posting (caption link, stickers, profile screenshot); only for creators with posting_kit. */
+  posting_kit?: PostingKit;
 }
 
 export function publicProven(id: string, v: ProvenVideo): PublicProven {
@@ -841,7 +845,7 @@ function payload(
   byId: Map<string, ProvenVideo>,
   canSwap: boolean,
   attribution: Record<string, SlotAttribution> = {},
-  creator: Partial<Pick<CreatorProfile, "id" | "cta_style" | "script_core">> = {},
+  creator: Partial<Pick<CreatorProfile, "id" | "cta_style" | "script_core" | "posting_kit">> = {},
 ): PicksPayload {
   const shown = picks.filter((p) => byId.has(p.proven_id));
   const pickSlots = new Set(shown.map((p) => p.slot));
@@ -855,6 +859,7 @@ function payload(
       .filter((x): x is { slot: number; posted: PickPosted } => Number.isInteger(x.slot) && !!x.posted)
       .sort((a, b) => a.slot - b.slot),
     can_swap: canSwap,
+    ...(creator.posting_kit && creator.id ? { posting_kit: postingKitFor(creator.id, KESHAH_SITE_URL) } : {}),
   };
 }
 

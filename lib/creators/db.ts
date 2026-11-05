@@ -172,6 +172,7 @@ function toProfile(id: string, d: DocumentData, legacyStart: boolean): CreatorPr
     ...(d.cta_style === "pinned" || d.cta_style === "bio" || d.cta_style === "app" ? { cta_style: d.cta_style } : {}),
     // Core script for everyone from Nov 2 2026; false turns it off for one creator.
     script_core: d.script_core !== false,
+    ...(d.posting_kit === true ? { posting_kit: true } : {}),
     campaign_tags: Array.isArray(d.campaign_tags) ? d.campaign_tags : [],
     status: mapCreatorStatus(d.status),
     ...(isYyyyMmDd(d.ended_on) ? { ended_on: d.ended_on } : {}),

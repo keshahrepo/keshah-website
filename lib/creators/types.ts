@@ -214,6 +214,8 @@ export interface CreatorPortalFields {
   cta_style?: "pinned" | "bio" | "app";
   /** Core script (everyone from Nov 2 2026, unless false): test hooks only, each with the same middle and ending (script-core.ts). */
   script_core?: boolean;
+  /** Posting kit on (posting-kit.ts): caption link + stickers + profile screenshot in Film this. */
+  posting_kit?: boolean;
   /** The @keshah.com address KESHAH set up for them (accounts are owned by KESHAH). */
   keshah_email: string;
   tiktok_handle: string;
