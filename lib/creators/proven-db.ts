@@ -660,6 +660,8 @@ export interface PicksPayload {
   can_swap: boolean;
   /** What to add when posting (caption link, stickers, profile screenshot); only for creators with posting_kit. */
   posting_kit?: PostingKit;
+  /** Format creators: the ending to use on their own-concept videos. */
+  own_ending?: string;
 }
 
 export function publicProven(id: string, v: ProvenVideo): PublicProven {
@@ -845,7 +847,7 @@ function payload(
   byId: Map<string, ProvenVideo>,
   canSwap: boolean,
   attribution: Record<string, SlotAttribution> = {},
-  creator: Partial<Pick<CreatorProfile, "id" | "cta_style" | "script_core" | "posting_kit">> = {},
+  creator: Partial<Pick<CreatorProfile, "id" | "cta_style" | "script_core" | "posting_kit" | "format_creator">> = {},
 ): PicksPayload {
   const shown = picks.filter((p) => byId.has(p.proven_id));
   const pickSlots = new Set(shown.map((p) => p.slot));
@@ -860,6 +862,8 @@ function payload(
       .sort((a, b) => a.slot - b.slot),
     can_swap: canSwap,
     ...(creator.posting_kit && creator.id ? { posting_kit: postingKitFor(creator.id, KESHAH_SITE_URL) } : {}),
+    // Format creators' own concepts have no script: the ending they still use (contract §5.2).
+    ...(creator.format_creator ? { own_ending: ctaFor(creator, {} as PublicProven).cta_line ?? PINNED_CTA } : {}),
   };
 }
 
