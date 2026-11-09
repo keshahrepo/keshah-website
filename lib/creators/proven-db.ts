@@ -693,7 +693,7 @@ function pickPosted(a: SlotAttribution | undefined): PickPosted | null {
   return { tiktok_url: a.tiktok_url || null, instagram_url: a.instagram_url || null };
 }
 
-export function givenCount(c: Pick<CreatorProfile, "format_creator" | "trial_plan" | "trial_outcome" | "trial_decided_on">, date: YyyyMmDd): number {
+export function givenCount(c: Pick<CreatorProfile, "format_creator" | "trial_plan" | "trial_outcome" | "trial_decided_on"> & Partial<Pick<CreatorProfile, "pay_plan" | "format_videos" | "format_own">>, date: YyyyMmDd): number {
   return givenFor(c, date);
 }
 

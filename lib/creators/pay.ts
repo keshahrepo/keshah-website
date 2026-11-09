@@ -51,33 +51,54 @@ export const TRIAL_V2_TOTAL_CENTS = TRIAL_V2_DAYS * TRIAL_V2_DAY_CENTS;
 /**
  * Monthly plans for creators who start from Oct 2026 (pay_plan on the
  * profile): a flat base, no ladder. Lite 3 videos a day, Full 5, Format
- * creator 5 (3 given + 2 own) at a custom base the founder sets.
+ * creator: the founder sets the videos a day (format_videos, default 5), how
+ * many are the creator's own concepts (format_own, default 2) and the base.
  */
 export type PayPlan = "lite" | "full" | "format";
 export const PLAN_BASE_CENTS: Record<"lite" | "full", Cents> = { lite: 60000, full: 100000 };
 export const PLAN_VIDEOS: Record<PayPlan, number> = { lite: 3, full: 5, format: 5 };
+/** Format creator defaults when the founder hasn't set them: 5 a day, 2 of them their own. */
+export const FORMAT_DEFAULT_VIDEOS = 5;
+export const FORMAT_DEFAULT_OWN = 2;
+/** Most videos a day a format plan can ask for. */
+export const FORMAT_MAX_VIDEOS = 10;
 /** Format creator base when the founder hasn't set one. */
 export const FORMAT_DEFAULT_BASE_CENTS: Cents = 120000;
 /** Trial pay per posting day for new offers ($30, $600 for the 20 days). */
 export const TRIAL_NEW_DAY_CENTS: Cents = 3000;
 
-type PlanFields = { pay_plan?: PayPlan; custom_base_cents?: number; trial_day_cents?: number };
+type PlanFields = { pay_plan?: PayPlan; custom_base_cents?: number; trial_day_cents?: number; format_videos?: number; format_own?: number };
 
 /** The plan fields from a raw ContentCreators doc (only valid values). */
 export function planFieldsOf(d: Record<string, unknown>): PlanFields {
   const plan = d.pay_plan === "lite" || d.pay_plan === "full" || d.pay_plan === "format" ? d.pay_plan : undefined;
   const custom = Number(d.custom_base_cents);
   const trialDay = Number(d.trial_day_cents);
+  const fv = Number(d.format_videos);
+  const fo = Number(d.format_own);
   return {
     ...(plan ? { pay_plan: plan } : {}),
     ...(Number.isFinite(custom) && custom > 0 ? { custom_base_cents: Math.round(custom) } : {}),
     ...(Number.isFinite(trialDay) && trialDay > 0 ? { trial_day_cents: Math.round(trialDay) } : {}),
+    ...(Number.isInteger(fv) && fv >= 1 && fv <= FORMAT_MAX_VIDEOS ? { format_videos: fv } : {}),
+    ...(Number.isInteger(fo) && fo >= 0 && fo <= FORMAT_MAX_VIDEOS ? { format_own: fo } : {}),
   };
 }
 
 /** Videos a weekday needs once past the trial: the plan's count, else 5. */
 export function planVideos(p?: PlanFields): number {
+  if (p?.pay_plan === "format") return p.format_videos ?? FORMAT_DEFAULT_VIDEOS;
   return p?.pay_plan ? PLAN_VIDEOS[p.pay_plan] : VIDEOS_PER_WEEKDAY;
+}
+
+/**
+ * A format creator's (callers check format_creator) own-concept videos on a day that needs `dayVideos`
+ * (their plan's count, or 3 in the trial): format_own capped by the day.
+ * Without format_own (the original 5 = 3 given + 2 own) the trial is all given.
+ */
+export function planOwnVideos(p: PlanFields | undefined, dayVideos: number): number {
+  if (p?.format_own === undefined) return dayVideos >= FORMAT_DEFAULT_VIDEOS ? FORMAT_DEFAULT_OWN : 0;
+  return Math.min(p.format_own, dayVideos);
 }
 
 /** Trial pay per posting day: the profile's own rate, else the original $15. */
@@ -231,7 +252,7 @@ export interface TrialWindow {
 }
 
 type TrialProfile = Pick<PayProfile, "start_date" | "trial_plan"> &
-  Partial<Pick<PayProfile, "ended_on" | "trial_outcome" | "trial_decided_on" | "pay_plan" | "custom_base_cents" | "trial_day_cents">>;
+  Partial<Pick<PayProfile, "ended_on" | "trial_outcome" | "trial_decided_on" | "pay_plan" | "custom_base_cents" | "trial_day_cents" | "format_videos" | "format_own">>;
 
 /** The v2 trial for this profile, or null on the original plan. */
 export function trialWindow(profile: TrialProfile | undefined, postingDays: PostingDay[]): TrialWindow | null {

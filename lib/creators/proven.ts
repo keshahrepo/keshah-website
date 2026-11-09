@@ -27,6 +27,7 @@
  *   - Tired: flag only. >= 6 remakes by >= 3 creators over >= 2 weeks, most
  *     below each remaker's normal, and the original isn't still pulling views.
  */
+import { FORMAT_DEFAULT_VIDEOS, planOwnVideos } from "./pay";
 import type { CreatorProfile, Platform, YyyyMmDd } from "./types";
 
 export const PROVEN_COLLECTION = "ProvenVideos";
@@ -36,6 +37,7 @@ export const SUGGEST_MULTIPLE_MIN_VIEWS = 20_000;
 export const NORMAL_WINDOW_DAYS = 30;
 export const SUGGEST_WINDOW_DAYS = 30;
 export const DAILY_GIVEN = 5;
+/** A default format creator's given videos (5 a day, 2 their own); see givenFor. */
 export const DAILY_GIVEN_FORMAT = 3;
 export const MAX_PER_WEEK = 2;
 /** Remakes that beat normal in this many days count as "recent wins". */
@@ -750,9 +752,18 @@ export function inTrialV2(c: TrialFields, date: YyyyMmDd): boolean {
   return !(c.trial_outcome === "keep" && c.trial_decided_on && date > c.trial_decided_on);
 }
 
-/** Picks a day: 3 for format creators and trial v2 creators, else 5. */
-export function givenFor(c: Pick<CreatorProfile, "format_creator"> & TrialFields, date: YyyyMmDd): number {
-  if (c.format_creator) return DAILY_GIVEN_FORMAT;
+type FormatFields = Partial<Pick<CreatorProfile, "pay_plan" | "format_videos" | "format_own">>;
+
+/**
+ * Picks a day: 3 for trial v2 creators, else 5. Format creators get the day's
+ * videos (3 in the trial, else their plan's) minus their own concepts
+ * (default 5 with 2 own = 3 given, and 3 given in the trial).
+ */
+export function givenFor(c: Pick<CreatorProfile, "format_creator"> & TrialFields & FormatFields, date: YyyyMmDd): number {
+  if (c.format_creator) {
+    const day = inTrialV2(c, date) ? DAILY_GIVEN_TRIAL : c.format_videos ?? FORMAT_DEFAULT_VIDEOS;
+    return Math.max(0, day - planOwnVideos(c, day));
+  }
   return inTrialV2(c, date) ? DAILY_GIVEN_TRIAL : DAILY_GIVEN;
 }
 

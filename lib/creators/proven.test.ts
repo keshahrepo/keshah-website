@@ -330,6 +330,14 @@ test("trial v2 creators get 3 picks until the day after a keep decision; never i
   assert.equal(givenFor(kept, "2026-10-08"), 5);
   assert.equal(isFullCreator(kept, "2026-10-08"), true);
   assert.equal(givenFor(prof({ format_creator: true }), "2026-10-07"), 3);
+  // Format: day's videos minus their own (default 5 with 2 own; all given in the original trial)
+  assert.equal(givenFor(prof({ format_creator: true, trial_plan: "v2" }), "2026-10-07"), 3);
+  const own3 = prof({ format_creator: true, pay_plan: "format", format_videos: 3, format_own: 3, trial_plan: "v2" });
+  assert.equal(givenFor(own3, "2026-10-07"), 0);
+  assert.equal(givenFor({ ...own3, trial_outcome: "keep", trial_decided_on: "2026-10-07" } as typeof own3, "2026-10-08"), 0);
+  const mix = prof({ format_creator: true, pay_plan: "format", format_videos: 6, format_own: 2, trial_plan: "v2" });
+  assert.equal(givenFor(mix, "2026-10-07"), 1);
+  assert.equal(givenFor({ ...mix, trial_outcome: "keep", trial_decided_on: "2026-10-07" } as typeof mix, "2026-10-08"), 4);
   assert.equal(isFullCreator(prof({ format_creator: true }), "2026-10-07"), false);
   assert.equal(givenFor(prof(), "2026-10-07"), 5);
   assert.equal(isFullCreator(prof({ status: "trial" }), "2026-10-07"), true); // original-plan trial

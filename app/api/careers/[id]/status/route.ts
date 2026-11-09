@@ -18,11 +18,12 @@ import { emailConfigured, sendEmail } from "@/lib/email";
 import { CREATOR_FROM_NAME, DENIAL_EMAIL_FIELD, denialEmail, denialEmailDue } from "@/lib/interview-decisions";
 import { CREATORS_COLLECTION, DEFAULT_TIMEZONE } from "@/lib/creators/db";
 import { isValidTimezone } from "@/lib/creators/time";
+import { FORMAT_MAX_VIDEOS } from "@/lib/creators/pay";
 
 export const maxDuration = 60;
 
 /** Creates (or finds) the creator for an accepted application and runs Accept. Never throws. */
-type AcceptPlan = { plan?: "lite" | "full" | "format"; custom_base_cents?: number };
+type AcceptPlan = { plan?: "lite" | "full" | "format"; custom_base_cents?: number; format_videos?: number; format_own?: number };
 
 async function creatorFromApplication(appId: string, a: Record<string, unknown>, req: Request, chosen: AcceptPlan = {}) {
   const email = String(a.email ?? "").trim().toLowerCase();
@@ -57,7 +58,14 @@ async function creatorFromApplication(appId: string, a: Record<string, unknown>,
   if (chosen.plan) {
     await getFirebaseAdmin().db.collection(CREATORS_COLLECTION).doc(id).update({
       pay_plan: chosen.plan,
-      ...(chosen.plan === "format" ? { format_creator: true, ...(chosen.custom_base_cents ? { custom_base_cents: chosen.custom_base_cents } : {}) } : {}),
+      ...(chosen.plan === "format"
+        ? {
+            format_creator: true,
+            ...(chosen.custom_base_cents ? { custom_base_cents: chosen.custom_base_cents } : {}),
+            ...(chosen.format_videos !== undefined ? { format_videos: chosen.format_videos } : {}),
+            ...(chosen.format_own !== undefined ? { format_own: Math.min(chosen.format_own, chosen.format_videos ?? FORMAT_MAX_VIDEOS) } : {}),
+          }
+        : {}),
     }).catch((e) => console.error("accept plan save failed:", e));
   }
   try {
@@ -106,10 +114,15 @@ export async function POST(
   }
   try {
     const { id } = await params;
-    const body = (await req.json()) as { status?: string; plan?: string; custom_base_cents?: number };
+    const body = (await req.json()) as { status?: string; plan?: string; custom_base_cents?: number; format_videos?: number; format_own?: number };
+    const count = (v: unknown, min: number) => (Number.isInteger(v) && Number(v) >= min && Number(v) <= FORMAT_MAX_VIDEOS ? Number(v) : undefined);
+    const fv = count(body.format_videos, 1);
+    const fo = count(body.format_own, 0);
     const chosen: AcceptPlan = {
       ...(body.plan === "lite" || body.plan === "full" || body.plan === "format" ? { plan: body.plan } : {}),
       ...(Number.isInteger(body.custom_base_cents) && Number(body.custom_base_cents) > 0 ? { custom_base_cents: Number(body.custom_base_cents) } : {}),
+      ...(fv !== undefined ? { format_videos: fv } : {}),
+      ...(fo !== undefined ? { format_own: fo } : {}),
     };
     const status = (body.status ?? "").trim();
     if (!ALLOWED.has(status)) {

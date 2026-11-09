@@ -12,7 +12,7 @@ import PaymentsSetup, { type PaymentView } from "./PaymentsSetup";
 import DayComplete, { dayCompleteSeen, markDayCompleteSeen } from "./DayComplete";
 import type { DayComplete as DayCompleteData } from "@/lib/creators/pay";
 import { POSTING_GUIDE } from "@/lib/creators/guide-content";
-import { CONCEPT_LABEL, CONCEPT_ROW_INDEXES, INSPIRED_BY_LABEL, TEST_TIPS, TEST_TIPS_TITLE } from "@/lib/creators/test-tips";
+import { CONCEPT_LABEL, INSPIRED_BY_LABEL, TEST_TIPS, TEST_TIPS_TITLE, isConceptRow } from "@/lib/creators/test-tips";
 import { HomeHeader, Screen, StreakChip, TaskRow, TaskThumb, usePushed, useJustDone } from "./AppShell";
 import { AllDone, Button, C, Card, Eyebrow, Field, Group, H, Icon, Msg, P, ProfileRow, SectionLabel, api, inputStyle } from "./ui";
 
@@ -319,7 +319,7 @@ export default function TodayTab({ data, onSaved, onProfile }: { data: PortalDat
   }
 
   const rowLabel = (i: number) =>
-    data.creator.format_creator && CONCEPT_ROW_INDEXES.includes(i) ? `Video ${i + 1} · ${CONCEPT_LABEL}` : `Video ${i + 1}`;
+    isConceptRow(data.creator.format_creator, i, picks?.given) ? `Video ${i + 1} · ${CONCEPT_LABEL}` : `Video ${i + 1}`;
 
   // Deadline + sync status, in the app's all-done card (_buildDayCompleteCard).
   const statusCard = (
@@ -336,7 +336,7 @@ export default function TodayTab({ data, onSaved, onProfile }: { data: PortalDat
 
   const i = detail.value;
   const dRow = i !== null ? rows[i] : null;
-  const isTest = i !== null && data.creator.format_creator && CONCEPT_ROW_INDEXES.includes(i);
+  const isTest = i !== null && isConceptRow(data.creator.format_creator, i, picks?.given);
   const ttViews = dRow ? viewsOf(dRow.tiktok_url, "tiktok") : undefined;
   const igViews = dRow ? viewsOf(dRow.instagram_url, "instagram") : undefined;
   const dAuto = dRow ? isAuto(dRow.tiktok_url, "tiktok") || isAuto(dRow.instagram_url, "instagram") : false;
@@ -385,7 +385,7 @@ export default function TodayTab({ data, onSaved, onProfile }: { data: PortalDat
           label={rowLabel(idx)}
           hook={
             pickAt(idx)?.hook_line ??
-            (picks && !(data.creator.format_creator && CONCEPT_ROW_INDEXES.includes(idx))
+            (picks && !isConceptRow(data.creator.format_creator, idx, picks.given)
               ? "Your video for this slot is on its way. Check back soon."
               : undefined)
           }

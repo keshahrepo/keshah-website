@@ -491,7 +491,7 @@ export async function getMonthOverview(
  * by an admin, or credited with earlier months (Isai's September).
  */
 export function creatorTrial(
-  creator: Pick<CreatorProfile, "status" | "starting_completed_months" | "start_date" | "trial_plan" | "ended_on" | "trial_outcome" | "trial_decided_on" | "pay_plan" | "custom_base_cents" | "trial_day_cents">,
+  creator: Pick<CreatorProfile, "status" | "starting_completed_months" | "start_date" | "trial_plan" | "ended_on" | "trial_outcome" | "trial_decided_on" | "pay_plan" | "custom_base_cents" | "trial_day_cents" | "format_videos" | "format_own">,
   postingDays: PostingDay[],
 ) {
   const t = trialStatus(postingDays, creator);
@@ -509,7 +509,7 @@ export type DayState = "posted" | "off" | "off_requested" | "missed" | "pending"
  * the calculator: posted = >= VIDEOS_PER_WEEKDAY videos on BOTH platforms.
  */
 export function monthDayStates(
-  creator: Pick<CreatorProfile, "start_date" | "ended_on" | "timezone" | "trial_plan" | "trial_outcome" | "trial_decided_on" | "pay_plan" | "custom_base_cents" | "trial_day_cents">,
+  creator: Pick<CreatorProfile, "start_date" | "ended_on" | "timezone" | "trial_plan" | "trial_outcome" | "trial_decided_on" | "pay_plan" | "custom_base_cents" | "trial_day_cents" | "format_videos" | "format_own">,
   month: YyyyMm,
   history: Pick<CreatorHistory, "postingDays" | "daysOff">,
   now: Date = new Date(),

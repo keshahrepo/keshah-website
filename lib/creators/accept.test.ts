@@ -318,6 +318,8 @@ test("Format offer: named as a Format Creator, by invitation, 2 in their own sty
   const m = welcomeEmail({ firstName: "Jay", link: "https://x/l", contractReady: true, kickoffUrl: "https://k", plan: offerPlan({ pay_plan: "format", custom_base_cents: 125000 }) });
   assert.ok(m.text.includes("we're excited to invite you to join as one of our Format Creators. It's a small group we invite because we love their style"));
   assert.ok(m.text.includes("If you pass your trial: the Format Creator plan, 5 videos a weekday (2 of them in your own style), $1,250/month"));
+  const own = welcomeEmail({ firstName: "Dwanell", link: "https://x/l", contractReady: true, kickoffUrl: "https://k", plan: offerPlan({ pay_plan: "format", custom_base_cents: 100000, format_videos: 3, format_own: 3 }) });
+  assert.ok(own.text.includes("If you pass your trial: the Format Creator plan, 3 videos a weekday, all in your own style, $1,000/month"));
   const full = welcomeEmail({ firstName: "Jay", link: "https://x/l", contractReady: true, kickoffUrl: "https://k", plan: offerPlan({ pay_plan: "full" }) });
   assert.ok(!full.text.includes("Format"));
 });

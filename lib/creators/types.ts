@@ -174,13 +174,18 @@ export interface CreatorPayFields {
   trial_plan?: "v2";
   /**
    * The monthly plan after the trial (new creators, Oct 2026): "lite" 3 videos
-   * a day $600, "full" 5 a day $1,000, "format" 5 a day (3 given + 2 own) at
+   * a day $600, "full" 5 a day $1,000, "format" format_videos a day
+   * (format_own of them their own concepts; default 5 with 2 own) at
    * custom_base_cents. A flat monthly base, no ladder. Unset: the original
    * ladder ($500 growing to $1,100) at 5 a day.
    */
   pay_plan?: "lite" | "full" | "format";
   /** Format creator's monthly base (cents), set by the founder. */
   custom_base_cents?: number;
+  /** Format creator's videos a weekday after the trial (founder sets; unset: 5). */
+  format_videos?: number;
+  /** How many of a format creator's daily videos are their own concepts (founder sets; unset: 2 of 5). */
+  format_own?: number;
   /** Trial pay per posting day (cents). Unset: $15 (the original v2 trial). */
   trial_day_cents?: number;
   /**
@@ -265,7 +270,7 @@ export type CreatorProfile = { id: string } & ContentCreatorLegacyFields &
 
 /** The subset of a profile the pay calculator needs. */
 export type PayProfile = Pick<CreatorPayFields, "start_date" | "starting_completed_months"> &
-  Partial<Pick<CreatorPayFields, "ended_on" | "legal_name" | "timezone" | "trial_plan" | "trial_outcome" | "trial_decided_on" | "pay_plan" | "custom_base_cents" | "trial_day_cents">>;
+  Partial<Pick<CreatorPayFields, "ended_on" | "legal_name" | "timezone" | "trial_plan" | "trial_outcome" | "trial_decided_on" | "pay_plan" | "custom_base_cents" | "trial_day_cents" | "format_videos" | "format_own">>;
 
 export type Platform = "tiktok" | "instagram";
 

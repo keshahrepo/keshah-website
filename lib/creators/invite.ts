@@ -67,17 +67,21 @@ export const SYSTEM_FOOTER = "This is an automatic email from the KESHAH Creator
 
 /** The pay lines in offer emails (Oct 2026 plans). */
 export const TRIAL_TEXT = "your first 20 posting days, 3 videos a weekday, $600";
-/** The plan an offer names. format: a Format Creator (by invitation, 2 of the videos in their own style). */
+/** The plan an offer names. format: a Format Creator (by invitation, `own` of the videos in their own style). */
 export interface OfferPlan {
   videos: number;
   baseCents: number;
   format?: boolean;
+  /** Format creators: how many of the daily videos are their own concepts (default 2). */
+  own?: number;
 }
 
 /** "5 videos a weekday, $1,000/month, plus bonuses (...)" for one plan ("Format Creator plan: ..." for Format). */
 export function afterTrialText(plan: OfferPlan): string {
   const usd = `$${(plan.baseCents / 100).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
-  const videos = plan.format ? `the Format Creator plan, ${plan.videos} videos a weekday (2 of them in your own style)` : `${plan.videos} videos a weekday`;
+  const own = Math.min(plan.own ?? 2, plan.videos);
+  const style = own >= plan.videos ? ", all in your own style" : own > 0 ? ` (${own} of them in your own style)` : "";
+  const videos = plan.format ? `the Format Creator plan, ${plan.videos} videos a weekday${style}` : `${plan.videos} videos a weekday`;
   return `${videos}, ${usd}/month, plus bonuses ($15 when a video hits 100K views, $100 total at 1M)`;
 }
 

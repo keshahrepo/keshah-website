@@ -3,7 +3,7 @@
 // or Format creator (custom base). Flat base, no ladder.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { draftInvoiceLines, monthSummary, nextLevel, planBaseCents, planFieldsOf, planVideos, trialStatus, videosRequiredOn, weekdaysBetween } from "./pay";
+import { draftInvoiceLines, monthSummary, nextLevel, planBaseCents, planFieldsOf, planOwnVideos, planVideos, trialStatus, videosRequiredOn, weekdaysBetween } from "./pay";
 import type { PayProfile, PostingDay } from "./types";
 
 const vids = (n: number) => Array.from({ length: n }, (_, i) => ({ tiktok_url: `https://www.tiktok.com/@x/video/${i}`, instagram_url: `https://www.instagram.com/reel/${i}` }));
@@ -40,6 +40,23 @@ test("Full: 5 a day, $1,000; Format: custom base (default $1,200)", () => {
   const nov3 = weekdaysBetween("2026-11-02", "2026-11-30").map((d) => day(d, 3));
   // 3 videos isn't a full day on Full
   assert.equal(monthSummary(p, "2026-11", [...trialOct(), ...nov3], [], [], [], { today: "2026-12-01" }).baseDueCents, 0);
+});
+
+test("Format: the founder sets videos a day and own concepts (default 5 with 2 own)", () => {
+  assert.equal(planVideos({ pay_plan: "format" }), 5);
+  assert.equal(planOwnVideos({ pay_plan: "format" }, 5), 2);
+  assert.equal(planOwnVideos({ pay_plan: "format" }, 3), 0); // original format trial: all given
+  const d = planFieldsOf({ pay_plan: "format", custom_base_cents: 100000, format_videos: 3, format_own: 3 });
+  assert.deepEqual(d, { pay_plan: "format", custom_base_cents: 100000, format_videos: 3, format_own: 3 });
+  assert.equal(planVideos(d), 3);
+  assert.equal(planOwnVideos(d, 3), 3);
+  assert.equal(planOwnVideos({ pay_plan: "format", format_own: 4 }, 3), 3); // capped by the day
+  assert.deepEqual(planFieldsOf({ pay_plan: "format", format_videos: 0, format_own: -1 }), { pay_plan: "format" });
+  assert.deepEqual(planFieldsOf({ pay_plan: "format", format_videos: 11, format_own: 2.5 }), { pay_plan: "format" });
+  // 3 a day is a full day on a 3-video format plan
+  const p = prof({ pay_plan: "format", custom_base_cents: 100000, format_videos: 3, format_own: 3, trial_outcome: "keep", trial_decided_on: "2026-10-28" });
+  const nov3 = weekdaysBetween("2026-11-02", "2026-11-30").map((x) => day(x, 3));
+  assert.equal(monthSummary(p, "2026-11", [...trialOct(), ...nov3], [], [], [], { today: "2026-12-01" }).baseDueCents, 100000);
 });
 
 test("no plan: the original ladder and 5 a day, unchanged", () => {

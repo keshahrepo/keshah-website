@@ -1,6 +1,7 @@
 /**
- * Format creators (invite only, ContentCreators.format_creator) make 2 of
- * their own new concepts a day: Today rows 4 and 5 are labelled "Your concept"
+ * Format creators (invite only, ContentCreators.format_creator) make some of
+ * their videos as their own new concepts (format_own a day; default 2 of 5):
+ * the last Today rows, after the given ones, are labelled "Your concept"
  * with an optional "Inspired by (link)" field and the tips card below.
  * Everyone else posts 5 given videos and sees none of this.
  * Founder-approved copy: keep the wording exactly as is.
@@ -13,8 +14,14 @@ export interface TestTipsSection {
   items: string[];
 }
 
-/** Zero-based Today rows that are a format creator's own concepts (videos 4 and 5). */
+/** Zero-based Today rows that are a default format creator's own concepts (videos 4 and 5), before the day's picks load. */
 export const CONCEPT_ROW_INDEXES: readonly number[] = [3, 4];
+
+/** A format creator's own-concept row: every row after the day's given videos (picks.given), else CONCEPT_ROW_INDEXES. */
+export function isConceptRow(formatCreator: boolean, i: number, given?: number | null): boolean {
+  if (!formatCreator) return false;
+  return typeof given === "number" ? i >= given : CONCEPT_ROW_INDEXES.includes(i);
+}
 export const CONCEPT_LABEL = "Your concept";
 export const INSPIRED_BY_LABEL = "Inspired by (link)";
 export const TEST_TIPS_TITLE = "How to find a new concept";

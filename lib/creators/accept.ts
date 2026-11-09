@@ -19,7 +19,7 @@ import { groupsClientFromEnv, groupsConfigured, provisionCreatorGroup } from "./
 import { newInvite, setPasswordUrl, welcomeEmail, type OfferPlan } from "./invite";
 import { contractDeadlineFor, deadlineLong, deadlineOf, getsDeadline } from "./deadline";
 import { assignPooledLink } from "./link-pool";
-import { TRIAL_NEW_DAY_CENTS, planBaseCents, planFieldsOf, planVideos } from "./pay";
+import { TRIAL_NEW_DAY_CENTS, planBaseCents, planFieldsOf, planOwnVideos, planVideos } from "./pay";
 import type { AcceptRecord, AcceptStepKey, AcceptStepRecord } from "./types";
 
 export const ACCEPT_STEPS: AcceptStepKey[] = ["group", "invite", "contract"];
@@ -31,8 +31,9 @@ function isNewOffer(d: DocumentData): boolean {
 
 /** The plan an offer email names: the creator's pay_plan, Full by default. */
 export function offerPlan(d: DocumentData): OfferPlan {
-  const p = planFieldsOf({ pay_plan: d.pay_plan || "full", custom_base_cents: d.custom_base_cents });
-  return { videos: planVideos(p), baseCents: planBaseCents(p) ?? 100000, ...((d.pay_plan || "full") === "format" ? { format: true } : {}) };
+  const p = planFieldsOf({ ...d, pay_plan: d.pay_plan || "full" });
+  const videos = planVideos(p);
+  return { videos, baseCents: planBaseCents(p) ?? 100000, ...(p.pay_plan === "format" ? { format: true, own: planOwnVideos(p, videos) } : {}) };
 }
 const LOCK_MS = 120_000;
 

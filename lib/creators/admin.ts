@@ -30,6 +30,7 @@ import {
   baseForCompletedMonths,
   planBaseCents,
   planFieldsOf,
+  FORMAT_MAX_VIDEOS,
   completedMonthsAsOf,
   trialStatus,
   monthSummary,
@@ -194,6 +195,9 @@ export interface AdminCreator {
   pay_plan?: "lite" | "full" | "format";
   custom_base_cents?: number;
   trial_day_cents?: number;
+  /** Format plan: videos a weekday after the trial, and how many are their own concepts. */
+  format_videos?: number;
+  format_own?: number;
   campaign_tags: string[];
   /** Raw ContentCreators.status (kept for the editor). */
   status: string;
@@ -339,6 +343,8 @@ export function payProfileOf(c: AdminCreator): PayProfile {
     ...(c.pay_plan ? { pay_plan: c.pay_plan } : {}),
     ...(c.custom_base_cents ? { custom_base_cents: c.custom_base_cents } : {}),
     ...(c.trial_day_cents ? { trial_day_cents: c.trial_day_cents } : {}),
+    ...(c.format_videos !== undefined ? { format_videos: c.format_videos } : {}),
+    ...(c.format_own !== undefined ? { format_own: c.format_own } : {}),
     legal_name: c.legal_name,
     timezone: c.timezone || "UTC",
   };
@@ -801,13 +807,20 @@ export function sanitizeProfile(
     const p = String(body.pay_plan ?? "");
     if (p && p !== "lite" && p !== "full" && p !== "format") return { error: "pay_plan must be lite, full or format" };
     u.pay_plan = p || null;
-    // Format creators make 2 of their 5 a day as their own concepts (rows 4 and 5).
+    // Format creators make format_own of their format_videos a day as their own concepts (the last rows).
     if (p === "format") u.format_creator = true;
   }
   if (body.custom_base_cents !== undefined) {
     const n = Number(body.custom_base_cents);
     if (body.custom_base_cents !== null && (!Number.isInteger(n) || n < 0 || n > 1_000_000)) return { error: "custom_base_cents must be whole cents" };
     u.custom_base_cents = body.custom_base_cents === null ? null : n;
+  }
+  for (const k of ["format_videos", "format_own"] as const) {
+    if (body[k] === undefined) continue;
+    const n = Number(body[k]);
+    const min = k === "format_videos" ? 1 : 0;
+    if (body[k] !== null && (!Number.isInteger(n) || n < min || n > FORMAT_MAX_VIDEOS)) return { error: `${k} must be a whole number from ${min} to ${FORMAT_MAX_VIDEOS}` };
+    u[k] = body[k] === null ? null : n;
   }
   if (body.trial_day_cents !== undefined) {
     const n = Number(body.trial_day_cents);
