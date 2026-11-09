@@ -59,6 +59,13 @@ test("Format: the founder sets videos a day and own concepts (default 5 with 2 o
   assert.equal(monthSummary(p, "2026-11", [...trialOct(), ...nov3], [], [], [], { today: "2026-12-01" }).baseDueCents, 100000);
 });
 
+test("no trial: a flat plan pays its base from the first posting day", () => {
+  const p = prof({ start_date: "2026-11-02", pay_plan: "format", custom_base_cents: 100000, format_videos: 3, format_own: 3 });
+  delete (p as Partial<PayProfile>).trial_plan;
+  const nov = weekdaysBetween("2026-11-02", "2026-11-30").map((x) => day(x, 3));
+  assert.equal(monthSummary(p, "2026-11", nov, [], [], [], { today: "2026-12-01" }).baseDueCents, 100000);
+});
+
 test("no plan: the original ladder and 5 a day, unchanged", () => {
   assert.equal(planBaseCents({}), null);
   assert.equal(planVideos({}), 5);

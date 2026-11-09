@@ -13,6 +13,7 @@ import { getFirebaseAdmin } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { notify, PUSH_COPY } from "@/lib/push";
 import { CreatorExistsError, createCreatorRecord, onCreatorAccepted } from "@/lib/creators/admin";
+import { NO_TRIAL_CONTRACT_VERSION } from "@/lib/creators/accept";
 import { claimOnce, releaseClaim } from "@/lib/interview";
 import { emailConfigured, sendEmail } from "@/lib/email";
 import { CREATOR_FROM_NAME, DENIAL_EMAIL_FIELD, denialEmail, denialEmailDue } from "@/lib/interview-decisions";
@@ -23,7 +24,7 @@ import { FORMAT_MAX_VIDEOS } from "@/lib/creators/pay";
 export const maxDuration = 60;
 
 /** Creates (or finds) the creator for an accepted application and runs Accept. Never throws. */
-type AcceptPlan = { plan?: "lite" | "full" | "format"; custom_base_cents?: number; format_videos?: number; format_own?: number };
+type AcceptPlan = { plan?: "lite" | "full" | "format"; custom_base_cents?: number; format_videos?: number; format_own?: number; no_trial?: boolean };
 
 async function creatorFromApplication(appId: string, a: Record<string, unknown>, req: Request, chosen: AcceptPlan = {}) {
   const email = String(a.email ?? "").trim().toLowerCase();
@@ -58,6 +59,8 @@ async function creatorFromApplication(appId: string, a: Record<string, unknown>,
   if (chosen.plan) {
     await getFirebaseAdmin().db.collection(CREATORS_COLLECTION).doc(id).update({
       pay_plan: chosen.plan,
+      // No trial: the plan from day 1, on the contract without a trial period.
+      ...(chosen.no_trial ? { no_trial: true, contract_template_version: NO_TRIAL_CONTRACT_VERSION } : {}),
       ...(chosen.plan === "format"
         ? {
             format_creator: true,
@@ -114,7 +117,7 @@ export async function POST(
   }
   try {
     const { id } = await params;
-    const body = (await req.json()) as { status?: string; plan?: string; custom_base_cents?: number; format_videos?: number; format_own?: number };
+    const body = (await req.json()) as { status?: string; plan?: string; custom_base_cents?: number; format_videos?: number; format_own?: number; no_trial?: boolean };
     const count = (v: unknown, min: number) => (Number.isInteger(v) && Number(v) >= min && Number(v) <= FORMAT_MAX_VIDEOS ? Number(v) : undefined);
     const fv = count(body.format_videos, 1);
     const fo = count(body.format_own, 0);
@@ -123,6 +126,7 @@ export async function POST(
       ...(Number.isInteger(body.custom_base_cents) && Number(body.custom_base_cents) > 0 ? { custom_base_cents: Number(body.custom_base_cents) } : {}),
       ...(fv !== undefined ? { format_videos: fv } : {}),
       ...(fo !== undefined ? { format_own: fo } : {}),
+      ...(body.no_trial === true ? { no_trial: true } : {}),
     };
     const status = (body.status ?? "").trim();
     if (!ALLOWED.has(status)) {

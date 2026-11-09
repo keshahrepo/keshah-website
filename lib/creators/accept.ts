@@ -24,6 +24,9 @@ import type { AcceptRecord, AcceptStepKey, AcceptStepRecord } from "./types";
 
 export const ACCEPT_STEPS: AcceptStepKey[] = ["group", "invite", "contract"];
 
+/** The contract for a creator with no trial (no §5.4 trial period); set on them at Accept. */
+export const NO_TRIAL_CONTRACT_VERSION = "v6-direct";
+
 /** A brand-new offer (not someone already paid or credited with months, like Isai). */
 function isNewOffer(d: DocumentData): boolean {
   return !d.accepted_at && !d.trial_plan && !d.start_date && !Number(d.starting_completed_months ?? 0);
@@ -33,7 +36,12 @@ function isNewOffer(d: DocumentData): boolean {
 export function offerPlan(d: DocumentData): OfferPlan {
   const p = planFieldsOf({ ...d, pay_plan: d.pay_plan || "full" });
   const videos = planVideos(p);
-  return { videos, baseCents: planBaseCents(p) ?? 100000, ...(p.pay_plan === "format" ? { format: true, own: planOwnVideos(p, videos) } : {}) };
+  return {
+    videos,
+    baseCents: planBaseCents(p) ?? 100000,
+    ...(p.pay_plan === "format" ? { format: true, own: planOwnVideos(p, videos) } : {}),
+    ...(d.no_trial === true ? { noTrial: true } : {}),
+  };
 }
 const LOCK_MS = 120_000;
 
@@ -206,12 +214,16 @@ export async function acceptCreator(id: string, opts: AcceptOptions): Promise<Ac
     const top: Record<string, unknown> = { "accept.last_run_at": now() };
     if (!d.accepted_at) {
       top.accepted_at = now();
-      // New creators start on the 20-day trial (3 videos, $15 a day). Anyone
+      // New creators start on the 20-day trial (3 videos, $15 a day), unless the
+      // founder chose no trial (no_trial: the plan starts on day 1). Anyone
       // already paid or credited with earlier months (Isai) keeps their terms.
       if (!d.trial_plan && !d.start_date && !Number(d.starting_completed_months ?? 0)) {
-        top.trial_plan = "v2";
-        // New pay (Oct 2026): $30 a trial day, then a flat plan. Full until the founder picks another.
-        if (!d.trial_day_cents) top.trial_day_cents = TRIAL_NEW_DAY_CENTS;
+        if (d.no_trial !== true) {
+          top.trial_plan = "v2";
+          // New pay (Oct 2026): $30 a trial day, then a flat plan.
+          if (!d.trial_day_cents) top.trial_day_cents = TRIAL_NEW_DAY_CENTS;
+        }
+        // Full until the founder picks another.
         if (!d.pay_plan) top.pay_plan = "full";
       }
       const mapped = mapCreatorStatus(d.status);

@@ -320,6 +320,14 @@ test("Format offer: named as a Format Creator, by invitation, 2 in their own sty
   assert.ok(m.text.includes("If you pass your trial: the Format Creator plan, 5 videos a weekday (2 of them in your own style), $1,250/month"));
   const own = welcomeEmail({ firstName: "Dwanell", link: "https://x/l", contractReady: true, kickoffUrl: "https://k", plan: offerPlan({ pay_plan: "format", custom_base_cents: 100000, format_videos: 3, format_own: 3 }) });
   assert.ok(own.text.includes("If you pass your trial: the Format Creator plan, 3 videos a weekday, all in your own style, $1,000/month"));
+  assert.ok(own.text.includes("so all of your daily videos are in your own format"));
+  assert.ok(own.text.includes("• Paid trial: "));
+  const direct = welcomeEmail({ firstName: "Dwanell", link: "https://x/l", contractReady: true, kickoffUrl: "https://k", plan: offerPlan({ pay_plan: "format", custom_base_cents: 100000, format_videos: 3, format_own: 3, no_trial: true }) });
+  assert.ok(direct.text.includes("• Pay: the Format Creator plan, 3 videos a weekday, all in your own style, $1,000/month"));
+  assert.ok(!direct.text.includes("trial"));
+  assert.ok(!direct.html.includes("trial"));
+  const selfServe = welcomeEmail({ firstName: "D", link: "https://x/l", contractReady: true, kickoffUrl: null, plan: offerPlan({ pay_plan: "full", no_trial: true }) });
+  assert.ok(selfServe.text.includes("• Pay: 5 videos a weekday, $1,000/month") && !selfServe.text.includes("Paid trial"));
   const full = welcomeEmail({ firstName: "Jay", link: "https://x/l", contractReady: true, kickoffUrl: "https://k", plan: offerPlan({ pay_plan: "full" }) });
   assert.ok(!full.text.includes("Format"));
 });

@@ -74,6 +74,13 @@ export interface OfferPlan {
   format?: boolean;
   /** Format creators: how many of the daily videos are their own concepts (default 2). */
   own?: number;
+  /** No trial: the plan starts on their first posting day (ContentCreators.no_trial). */
+  noTrial?: boolean;
+}
+
+/** "The role" lines of an offer: the paid trial then the plan, or just the plan with no trial. */
+function roleLines(afterText: string, noTrial = false): [string, string][] {
+  return noTrial ? [["Pay", afterText]] : [["Paid trial", TRIAL_TEXT], ["If you pass your trial", afterText]];
 }
 
 /** "5 videos a weekday, $1,000/month, plus bonuses (...)" for one plan ("Format Creator plan: ..." for Format). */
@@ -155,7 +162,7 @@ export function welcomeEmail(input: {
   const app = creatorAppUrl();
   const kickoff = input.kickoffUrl === undefined ? creatorKickoffUrl() : input.kickoffUrl;
   const afterText = input.plan ? afterTrialText(input.plan) : AFTER_TRIAL_TEXT;
-  if (kickoff) return kickoffOfferEmail(first, app, input.link, input.signInEmail, input.deadlineText, afterText, !!input.plan?.format);
+  if (kickoff) return kickoffOfferEmail(first, app, input.link, input.signInEmail, input.deadlineText, afterText, !!input.plan?.format, input.plan);
   // The @keshah.com address isn't in this email on purpose: the app's Accounts
   // step shows it when they need it, with how to use it.
   //
@@ -169,8 +176,7 @@ export function welcomeEmail(input: {
   const step3 = input.contractReady
     ? "Sign your contract. It's the first step in the app, and the app walks you through the rest."
     : "Sign your contract. It'll be the first step in the app shortly, and the app walks you through the rest.";
-  const trial = TRIAL_TEXT;
-  const after = afterText;
+  const role = roleLines(afterText, input.plan?.noTrial);
   const closing = "We are excited to have you on the team. If you have any questions, feel free to reply to this email.";
 
   const text = [
@@ -192,8 +198,7 @@ export function welcomeEmail(input: {
     "",
     "The role",
     "",
-    `• Paid trial: ${trial}`,
-    `• If you pass your trial: ${after}`,
+    ...role.map(([k, v]) => `• ${k}: ${v}`),
     "",
     closing,
     "",
@@ -217,8 +222,7 @@ export function welcomeEmail(input: {
     `</ol>`,
     `<p style="margin:0 0 6px"><b>The role</b></p>`,
     `<ul style="margin:0 0 16px;padding-left:20px">`,
-    `<li style="margin-bottom:6px"><b>Paid trial:</b> ${esc(trial)}</li>`,
-    `<li><b>If you pass your trial:</b> ${esc(after)}</li>`,
+    ...role.map(([k, v], n) => `<li${n < role.length - 1 ? ' style="margin-bottom:6px"' : ""}><b>${esc(k)}:</b> ${esc(v)}</li>`),
     `</ul>`,
     p(esc(closing)),
     `<p style="margin:0">${esc(CREATOR_SIGNOFF).replace(/\n/g, "<br>")}</p>`,
@@ -240,10 +244,14 @@ function kickoffOfferEmail(
   deadlineText?: string,
   afterText: string = AFTER_TRIAL_TEXT,
   format = false,
+  plan?: OfferPlan,
 ): { subject: string; text: string; html: string; fromName: string } {
+  const own = Math.min(plan?.own ?? 2, plan?.videos ?? 5);
+  const yours = own >= (plan?.videos ?? 5) ? "all of your daily videos are" : `${own} of your daily videos can be`;
   const opener = format
-    ? "Thanks for chatting with Aadi! After meeting with several creators, we're excited to invite you to join as one of our Format Creators. It's a small group we invite because we love their style, so 2 of your daily videos can be in your own format instead of our scripts."
+    ? `Thanks for chatting with Aadi! After meeting with several creators, we're excited to invite you to join as one of our Format Creators. It's a small group we invite because we love their style, so ${yours} in your own format instead of our scripts.`
     : "Thanks for chatting with Aadi! After meeting with several creators, we're excited to offer you a spot on the team.";
+  const role = roleLines(afterText, plan?.noTrial);
   const deadline = deadlineText ? `Please sign your contract by ${deadlineText} to confirm your spot.` : null;
   const testflight = "It's on TestFlight, Apple's app for early access, so install TestFlight first if it asks.";
   const step1 = app
@@ -268,8 +276,7 @@ function kickoffOfferEmail(
     "",
     "The role",
     "",
-    `• Paid trial: ${TRIAL_TEXT}`,
-    `• If you pass your trial: ${afterText}`,
+    ...role.map(([k, v]) => `• ${k}: ${v}`),
     "",
     closing,
     "",
@@ -291,8 +298,7 @@ function kickoffOfferEmail(
     `</ol>`,
     `<p style="margin:0 0 6px"><b>The role</b></p>`,
     `<ul style="margin:0 0 16px;padding-left:20px">`,
-    `<li style="margin-bottom:6px"><b>Paid trial:</b> ${esc(TRIAL_TEXT)}</li>`,
-    `<li><b>If you pass your trial:</b> ${esc(afterText)}</li>`,
+    ...role.map(([k, v], n) => `<li${n < role.length - 1 ? ' style="margin-bottom:6px"' : ""}><b>${esc(k)}:</b> ${esc(v)}</li>`),
     `</ul>`,
     p(esc(closing)),
     `<p style="margin:0">${esc(CREATOR_SIGNOFF).replace(/\n/g, "<br>")}</p>`,

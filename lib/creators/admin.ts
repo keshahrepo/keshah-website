@@ -198,6 +198,8 @@ export interface AdminCreator {
   /** Format plan: videos a weekday after the trial, and how many are their own concepts. */
   format_videos?: number;
   format_own?: number;
+  /** No trial: Accept skips the 20-day trial and their plan starts on day 1. */
+  no_trial?: boolean;
   campaign_tags: string[];
   /** Raw ContentCreators.status (kept for the editor). */
   status: string;
@@ -271,6 +273,7 @@ export function toAdminCreator(id: string, d: DocumentData): AdminCreator {
     ...(d.trial_outcome === "keep" || d.trial_outcome === "end" ? { trial_outcome: d.trial_outcome as "keep" | "end" } : {}),
     ...(isDate(d.trial_decided_on) ? { trial_decided_on: d.trial_decided_on as string } : {}),
     ...planFieldsOf(d),
+    ...(d.no_trial === true ? { no_trial: true } : {}),
     campaign_tags: Array.isArray(d.campaign_tags) ? d.campaign_tags.map(String) : [],
     status: String(d.status ?? ""),
     status_display: mapCreatorStatus(d.status),
@@ -834,6 +837,8 @@ export function sanitizeProfile(
     u.campaign_tags = [...new Set(raw.map((t) => String(t).trim()).filter(Boolean))].slice(0, 30);
   }
   if (body.w9_on_file !== undefined) u.w9_on_file = !!body.w9_on_file;
+  // Before Accept only: once accepted, the trial (or not) is already set.
+  if (body.no_trial !== undefined) u.no_trial = body.no_trial === true;
   if (body.format_creator !== undefined) u.format_creator = body.format_creator === true;
   if (body.contract_template_version !== undefined) {
     const v = String(body.contract_template_version ?? "").trim();

@@ -1,6 +1,6 @@
 // The offer email exactly as Accept would send it for this plan, without
 // sending anything (the founder app shows it before "Send offer").
-// POST { plan: "lite" | "full" | "format", custom_base_cents?, format_videos?, format_own? }
+// POST { plan: "lite" | "full" | "format", custom_base_cents?, format_videos?, format_own?, no_trial? }
 import { NextResponse } from "next/server";
 import { requireDashboardSession } from "@/lib/support/auth";
 import { getFirebaseAdmin } from "@/lib/firebase-admin";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!(await requireDashboardSession())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
-  const body = (await req.json().catch(() => ({}))) as { plan?: string; custom_base_cents?: number; format_videos?: number; format_own?: number };
+  const body = (await req.json().catch(() => ({}))) as { plan?: string; custom_base_cents?: number; format_videos?: number; format_own?: number; no_trial?: boolean };
   const plan = body.plan === "lite" || body.plan === "format" ? body.plan : "full";
   const custom = Number.isInteger(body.custom_base_cents) && Number(body.custom_base_cents) > 0 ? Number(body.custom_base_cents) : undefined;
   const snap = await getFirebaseAdmin().db.collection("careers_applications").doc(id).get();
@@ -26,7 +26,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     signInEmail: to,
     contractReady: true,
     deadlineText: deadlineLong(contractDeadlineFor(new Date())),
-    plan: offerPlan({ pay_plan: plan, custom_base_cents: custom, format_videos: body.format_videos, format_own: body.format_own }),
+    plan: offerPlan({ pay_plan: plan, custom_base_cents: custom, format_videos: body.format_videos, format_own: body.format_own, no_trial: body.no_trial === true }),
   });
   return NextResponse.json({ to, from: mail.fromName, subject: mail.subject, text: mail.text });
 }
