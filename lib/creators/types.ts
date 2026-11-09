@@ -186,6 +186,8 @@ export interface CreatorPayFields {
   format_videos?: number;
   /** How many of a format creator's daily videos are their own concepts (founder sets; unset: 2 of 5). */
   format_own?: number;
+  /** No 20-day trial: Accept put them on their plan from day 1 (founder's choice). */
+  no_trial?: boolean;
   /** Trial pay per posting day (cents). Unset: $15 (the original v2 trial). */
   trial_day_cents?: number;
   /**

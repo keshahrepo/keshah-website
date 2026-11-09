@@ -26,7 +26,7 @@ import { emailConfigured, sendEmail } from "@/lib/email";
 import { CREATOR_FROM_NAME, SYSTEM_FOOTER, SYSTEM_FROM_NAME, lightEmailHtml } from "@/lib/creators/invite";
 import { SETUP_DAILY_HOUR, SETUP_LAST_DAY_HOUR, setupInputFromDoc, setupNudgeEmail, setupNudgeKind, setupNudgePush, setupState } from "@/lib/creators/setup-deadline";
 import { localDateIn } from "@/lib/creators/time";
-import { completeVideoCount, isScheduledDay, videosRequiredOn } from "@/lib/creators/pay";
+import { completeVideoCount, isScheduledDay, planVideos, videosRequiredOn } from "@/lib/creators/pay";
 import type { CreatorProfile, PostingDay } from "@/lib/creators/types";
 import { claimOnce } from "@/lib/interview";
 import { NUDGE_HOUR, nudgeNeeded } from "@/lib/mobile/nudge";
@@ -141,10 +141,11 @@ export async function GET(req: Request) {
       if (eve && firstDay) {
         const row: Row = { id: c.id, name: c.name, kind: "first_day_eve", date: eve, first_day: firstDay };
         report.push(row);
-        const need = videosRequiredOn(c.trial_plan === "v2" ? { start_date: firstDay, trial_plan: "v2" } : undefined, [], firstDay);
+        // The trial's 3, else their plan's count (no trial: e.g. a 3-a-day format plan).
+        const need = c.trial_plan === "v2" ? videosRequiredOn({ start_date: firstDay, trial_plan: "v2" }, [], firstDay) : planVideos(c);
         // New creators' Day 1 is the 2 pinned posts (unless their pinned video was turned off).
         const pinnedDay = (await ref.get()).get("pinned_video.skipped") !== true;
-        if (!dry) await sendOnce(markerRef, "first_day_eve_date", eve, target, firstDayEvePush(firstDay, need, pinnedDay), row, now);
+        if (!dry) await sendOnce(markerRef, "first_day_eve_date", eve, target, firstDayEvePush(firstDay, need, pinnedDay, c.trial_plan === "v2"), row, now);
       }
 
       // ---- posting nudge (8 PM)

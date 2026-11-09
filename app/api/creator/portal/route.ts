@@ -24,7 +24,7 @@ import {
   ACCOUNTS_STEP_TEXT,
   KESHAH_SITE_URL,
   POSTING_GUIDE_URL,
-  POSTING_RULES,
+  postingRulesFor,
   FIRST_POSTING_DAY_TEXT,
   HANDLE_TAKEN_TEXT,
   VERIFICATION_CODE_TEXT,
@@ -135,7 +135,7 @@ export async function GET(req: NextRequest) {
         first_posting_day_text: FIRST_POSTING_DAY_TEXT,
         link_wait_text: LINK_WAIT_TEXT,
         posting_guide_url: POSTING_GUIDE_URL || null,
-        posting_rules: POSTING_RULES,
+        posting_rules: postingRulesFor({ trial_plan: creator.trial_plan, no_trial: creator.no_trial }, planVideos(creator)),
         // 3 during a v2 trial, 5 after (and always 5 on the original plan).
         videos_per_weekday: videosRequiredOn(creator.start_date ? creator : { ...creator, start_date: today }, history.postingDays, today),
         // Their monthly plan after the trial (null on the original ladder), and their trial day pay.

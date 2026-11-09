@@ -110,6 +110,12 @@ export const WARMUP_TEXT =
 export const FIRST_POSTING_DAY_TEXT = "Your first posting day is the weekday after your warm-up.";
 export const WARMUP_DONE_TEXT = "Warm-up done. You can start posting on your first posting day.";
 
+/** Posting rules for a creator: the first line names the trial, or just their plan's count with no trial. */
+export function postingRulesFor(c: { trial_plan?: string; no_trial?: boolean }, planVideos: number): string[] {
+  if (c.trial_plan === "v2" || !c.no_trial) return POSTING_RULES;
+  return [`Post ${planVideos} unique videos every weekday, Monday to Friday.`, ...POSTING_RULES.slice(1)];
+}
+
 export const POSTING_RULES: string[] = [
   "Post unique videos every weekday, Monday to Friday: 3 a day during your 20-day paid trial, then the number in your plan once you pass.",
   "Post each video on both TikTok and Instagram.",

@@ -114,5 +114,7 @@ export function publicCreator(c: CreatorProfile) {
     history_start_date: c.bonus_start_date && c.bonus_start_date < (c.start_date || "9999") ? c.bonus_start_date : c.start_date,
     tracking_url: c.tracking_url,
     format_creator: c.format_creator,
+    // No 20-day trial (the founder's choice at Accept): the app drops trial wording.
+    no_trial: c.no_trial === true,
   };
 }

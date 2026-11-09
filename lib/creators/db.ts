@@ -169,6 +169,7 @@ function toProfile(id: string, d: DocumentData, legacyStart: boolean): CreatorPr
     ...(isYyyyMmDd(d.trial_decided_on) ? { trial_decided_on: d.trial_decided_on } : {}),
     ...(isYyyyMmDd(d.trial_completed_on) ? { trial_completed_on: d.trial_completed_on } : {}),
     ...planFieldsOf(d),
+    ...(d.no_trial === true ? { no_trial: true } : {}),
     ...(d.cta_style === "pinned" || d.cta_style === "bio" || d.cta_style === "app" ? { cta_style: d.cta_style } : {}),
     // Core script for everyone from Nov 2 2026; false turns it off for one creator.
     script_core: d.script_core !== false,
